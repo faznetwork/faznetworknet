@@ -589,7 +589,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="google_map">Google Map</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.loadGoogleMapTracking(); return false;"><i class="bi bi-map me-2"></i><span data-key="google_map">Google Maps</span></a></li>
                 </ul>
             </li>
 
@@ -1638,7 +1638,7 @@
                 'account_support':'Account & Support','account_dashboard':'Dashboard','manage':'Manage','support':'Support','support_tickets':'Support Tickets','software_support_tickets':'Software Support Tickets','website_support_tickets':'Website Support Tickets',
                 'expenses':'Expenses','add_expenses':'Add Expenses','all_expenses':'All Expenses','expenses_report':'Expenses Report',
                 'human_resource':'Human Resource','department':'Department','all_employees':'All Employees','added_employees':'Added Employees',
-                'live_tracking':'Live Tracking','google_map':'Google Map','user_reseller':'User & Reseller','sub_staff':'Sub-Staff',
+                'live_tracking':'Live Tracking','google_map':'Google Maps','user_reseller':'User & Reseller','sub_staff':'Sub-Staff',
                 'hotspot_dashboard_title':'Hotspot Dashboard','total_hotspot_accounts':'Total Hotspot Accounts','currently_online_clients':'Currently Online Clients','total_vouchers_generated':'Total Vouchers Generated','hotspot_revenue':'Hotspot Revenue','live_hotspot_overview':'Live Hotspot Overview','hotspot_accounts':'Hotspot Accounts','search_hotspot':'Search username, profile, IP or MAC...','hotspot_user_profiles':'Hotspot User Profiles','rate_limit':'Rate Limit','shared_users':'Shared Users','idle_timeout':'Idle Timeout','keepalive':'Keepalive','hotspot_address':'Hotspot Address','dns_name':'DNS Name','html_directory':'HTML Directory','login_by':'Login By','radius':'RADIUS','yes':'Yes','no':'No','quantity':'Quantity','user_prefix':'User Prefix','character_length':'Character Length','profile':'Profile','price':'Price','validity':'Validity','generate_batch_vouchers':'Generate Batch Vouchers','print_voucher_cards':'Print Voucher Cards','printable_voucher_cards':'Printable Voucher Cards','username_label':'Username','password_pin':'Password / PIN','package_speed':'Package Speed / Profile','instructions':'<span data-key="instructions">Connect to Wi-Fi → Open Portal → Enter PIN</span>','remove_user_confirm':'Remove Hotspot user','generate_first':'Generate a voucher batch first.','generating':'Generating...','loading_profiles':'Loading profiles...','no_profiles':'No MikroTik profiles found','no_hotspot_users':'No Hotspot users found.','bytes_in_out':'Bytes In/Out', 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
                 'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details',
@@ -1651,13 +1651,13 @@
                 'report':'রিপোর্ট','monthly_collection_due':'মাসিক কালেকশন ও বকেয়া','monthly_sales':'মাসিক বিক্রয়','invoice_report':'ইনভয়েস রিপোর্ট',
                 'payments':'পেমেন্টস','pending_invoice':'পেন্ডিং ইনভয়েস','all_payments':'অল পেমেন্টস','payment_request':'পেমেন্ট রিকোয়েস্ট','bkash_payments':'বিকাশ পেমেন্টস','nagad_payments':'নগদ পেমেন্টস','rocket_payments':'রকেট পেমেন্টস',
                 'hotspot':'হটস্পট','hotspot_dashboard':'ড্যাশবোর্ড','hotspot_all_users':'অল ইউজার','hotspot_active_users':'অ্যাক্টিভ ইউজার','hotspot_profile':'প্রোফাইল','gen_print_vouchers':'ভাউচার তৈরি ও প্রিন্ট','add_hotspot_user':'হটস্পট ইউজার যুক্ত করুন','create_single_hotspot_customer':'একক হটস্পট কাস্টমার / ভাউচার তৈরি করুন','select_profile_plan':'প্রোফাইল / প্ল্যান নির্বাচন করুন','hotspot_server':'হটস্পট সার্ভার','customer_mobile':'কাস্টমার মোবাইল / ফোন','time_limit':'টাইম লিমিট','data_limit':'ডাটা লিমিট','package_price':'প্যাকেজ মূল্য (৳ BDT)','customer_note':'কাস্টমার নোট / মন্তব্য','clear_form':'ফর্ম পরিষ্কার করুন','save_enable_mikrotik':'MikroTik-এ সেভ ও এনাবল','hotspot_sales_today':'আজকের হটস্পট বিক্রয়','active_bandwidth_usage':'মোট অ্যাক্টিভ ব্যান্ডউইথ ব্যবহার','add_single_user':'একক ইউজার যুক্ত করুন','batch_generator':'ব্যাচ জেনারেটর','live_connected_clients':'রিয়েল-টাইম কানেক্টেড ক্লায়েন্ট',
-                'core_system':'কোর সিস্টেম','pppoe':'PPPoE','devices':'ডিভাইস','plan_packages':'প্ল্যান ও প্যাকেজ','ip_pools':'IP পুলস','olt_management':'OLT ম্যানেজমেন্ট','monitor':'মনিটর','usage':'ইউসেজ','online':'অনলাইন','network_diagram':'নেটওয়ার্ক ডায়াগ্রাম',
+                'core_system':'কোর সিস্টেম','pppoe':'PPPoE','devices':'MikroTik ডিভাইস','plan_packages':'প্ল্যান ও প্যাকেজ','ip_pools':'IP পুলস','olt_management':'OLT ম্যানেজমেন্ট','monitor':'মনিটর','usage':'ইউসেজ','online':'অনলাইন','network_diagram':'নেটওয়ার্ক ডায়াগ্রাম',
                 'general_setting':'জেনারেল সেটিং','website_setting':'ওয়েবসাইট সেটিং','sms_setting':'SMS সেটিং','backup_restore':'ব্যাকআপ ও রিস্টোর',
                 'vpn_server':'VPN সার্ভার','vpn':'VPN','vpn_port_forwarding':'VPN পোর্ট ফরওয়ার্ডিং',
                 'account_support':'অ্যাকাউন্ট ও সাপোর্ট','account_dashboard':'ড্যাশবোর্ড','manage':'ম্যানেজ','support':'সাপোর্ট','support_tickets':'সাপোর্ট টিকেট','software_support_tickets':'সফটওয়্যার সাপোর্ট টিকেট','website_support_tickets':'ওয়েবসাইট সাপোর্ট টিকেট',
                 'expenses':'খরচ','add_expenses':'খরচ যোগ করুন','all_expenses':'সব খরচ','expenses_report':'খরচের রিপোর্ট',
                 'human_resource':'হিউম্যান রিসোর্স','department':'ডিপার্টমেন্ট','all_employees':'সব কর্মচারী','added_employees':'যুক্ত কর্মচারী',
-                'live_tracking':'লাইভ ট্র্যাকিং','google_map':'গুগল ম্যাপ','user_reseller':'ইউজার ও রিসেলার','sub_staff':'সাব-স্টাফ',
+                'live_tracking':'লাইভ ট্র্যাকিং','google_map':'গুগল ম্যাপস','user_reseller':'ইউজার ও রিসেলার','sub_staff':'সাব-স্টাফ',
                 'hotspot_dashboard_title':'হটস্পট ড্যাশবোর্ড','total_hotspot_accounts':'মোট হটস্পট অ্যাকাউন্ট','currently_online_clients':'বর্তমানে অনলাইন ক্লায়েন্ট','total_vouchers_generated':'মোট তৈরি ভাউচার','hotspot_revenue':'হটস্পট আয়','live_hotspot_overview':'লাইভ হটস্পট ওভারভিউ','hotspot_accounts':'হটস্পট অ্যাকাউন্ট','search_hotspot':'ইউজারনেম, প্রোফাইল, IP বা MAC খুঁজুন...','hotspot_user_profiles':'হটস্পট ইউজার প্রোফাইল','rate_limit':'রেট লিমিট','shared_users':'শেয়ার্ড ইউজার','idle_timeout':'আইডল টাইমআউট','keepalive':'কিপঅ্যালাইভ','hotspot_address':'হটস্পট অ্যাড্রেস','dns_name':'DNS নাম','html_directory':'HTML ডিরেক্টরি','login_by':'লগইন পদ্ধতি','radius':'RADIUS','yes':'হ্যাঁ','no':'না','quantity':'পরিমাণ','user_prefix':'ইউজার প্রিফিক্স','character_length':'ক্যারেক্টার দৈর্ঘ্য','profile':'প্রোফাইল','price':'মূল্য','validity':'মেয়াদ','generate_batch_vouchers':'ব্যাচ ভাউচার তৈরি করুন','print_voucher_cards':'ভাউচার কার্ড প্রিন্ট','printable_voucher_cards':'প্রিন্টযোগ্য ভাউচার কার্ড','username_label':'ইউজারনেম','password_pin':'পাসওয়ার্ড / PIN','package_speed':'প্যাকেজ স্পিড / প্রোফাইল','instructions':'Wi-Fi-তে কানেক্ট করুন → পোর্টাল খুলুন → PIN দিন','remove_user_confirm':'হটস্পট ইউজারটি মুছে ফেলবেন?','generate_first':'আগে একটি ভাউচার ব্যাচ তৈরি করুন।','generating':'তৈরি হচ্ছে...','loading_profiles':'প্রোফাইল লোড হচ্ছে...','no_profiles':'কোনো MikroTik প্রোফাইল পাওয়া যায়নি','no_hotspot_users':'কোনো হটস্পট ইউজার পাওয়া যায়নি।','bytes_in_out':'বাইট ইন/আউট', 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
                 'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য',
@@ -4043,6 +4043,76 @@ async function deletePlan(id,name){
                 childList: true, subtree: true, attributes: true, attributeFilter: ['type']
             });
         }
+
+        // Bangladesh customer-address map: searchable Google Maps embed; no API key required.
+        // This locates an entered address, not a customer's GPS/device-based live position.
+        window.loadGoogleMapTracking = function() {
+            purgeStuckBackdrops();
+            currentCustomerTitleKey = '';
+            currentPaymentTitleKey = '';
+            setPageTitleSafe('Google Maps');
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return;
+            dynamic.innerHTML = \`
+                <section class="admin-view p-3">
+                    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+                        <div class="rounded-3 d-flex align-items-center justify-content-center" style="width:54px;height:54px;background:#e0f2fe;color:#0369a1;font-size:25px"><i class="bi bi-geo-alt-fill"></i></div>
+                        <div class="me-auto"><div class="small text-primary fw-bold">LIVE TRACKING / BANGLADESH</div><h3 class="mb-1 fw-bold">Google Maps — Customer Location</h3><div class="text-muted">Find a customer address from division and district down to upazila, union, village, road and house.</div></div>
+                        <span class="badge rounded-pill text-bg-light border px-3 py-2"><i class="bi bi-map me-1"></i>Bangladesh map search</span>
+                    </div>
+                    <div class="card border-0 shadow-sm rounded-4 mb-4">
+                        <div class="card-body p-3 p-lg-4">
+                            <form id="bdGoogleMapSearchForm">
+                                <div class="row g-3">
+                                    <div class="col-12"><label for="bdMapCustomerName" class="form-label fw-semibold">Customer name / location label <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapCustomerName" class="form-control" maxlength="120" placeholder="e.g. Rahim Uddin — Home connection"></div>
+                                    <div class="col-md-6"><label for="bdMapHouseRoad" class="form-label fw-semibold">House, road, village / bazar</label><input id="bdMapHouseRoad" class="form-control" maxlength="220" placeholder="House no., road, village, bazar"></div>
+                                    <div class="col-md-6"><label for="bdMapUnion" class="form-label fw-semibold">Union / ward</label><input id="bdMapUnion" class="form-control" maxlength="120" placeholder="Union or ward name"></div>
+                                    <div class="col-md-4"><label for="bdMapUpazila" class="form-label fw-semibold">Upazila / Thana</label><input id="bdMapUpazila" class="form-control" maxlength="120" placeholder="Upazila or thana"></div>
+                                    <div class="col-md-4"><label for="bdMapDistrict" class="form-label fw-semibold">District <span class="text-danger">*</span></label><input id="bdMapDistrict" class="form-control" maxlength="120" required placeholder="District name"></div>
+                                    <div class="col-md-4"><label for="bdMapDivision" class="form-label fw-semibold">Division</label><select id="bdMapDivision" class="form-select"><option value="">Select division (optional)</option><option>Barishal</option><option>Chattogram</option><option>Dhaka</option><option>Khulna</option><option>Mymensingh</option><option>Rajshahi</option><option>Rangpur</option><option>Sylhet</option></select></div>
+                                    <div class="col-12"><label for="bdMapExtraAddress" class="form-label fw-semibold">Landmark / extra address details <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapExtraAddress" class="form-control" maxlength="220" placeholder="Nearby mosque, school, market, holding number, postal code"></div>
+                                    <div class="col-12 d-flex flex-wrap gap-2 align-items-center"><button class="btn btn-primary px-4" type="submit"><i class="bi bi-search me-2"></i>Find on Google Maps</button><button class="btn btn-outline-secondary" id="bdMapResetBtn" type="reset"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear</button><span class="small text-muted">Enter the most specific address available for a better match.</span></div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div id="bdMapResult" class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                        <div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">Enter a district and any known upazila, union, village, road or house details, then select Find on Google Maps.</p></div>
+                    </div>
+                    <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Google Maps shows the closest result it can identify from the address. Rural addresses may need a village name, union, nearby landmark or postal code for better accuracy. This feature locates an entered address; it does not show a customer's live GPS position.</div>
+                </section>\`;
+            const form = document.getElementById('bdGoogleMapSearchForm');
+            const result = document.getElementById('bdMapResult');
+            const makeQuery = () => {
+                const district = String(document.getElementById('bdMapDistrict')?.value || '').trim();
+                if (!district) throw new Error('Please enter at least the district name.');
+                const fields = ['bdMapHouseRoad','bdMapUnion','bdMapUpazila','bdMapDistrict','bdMapDivision','bdMapExtraAddress']
+                    .map(id => String(document.getElementById(id)?.value || '').trim())
+                    .filter(Boolean);
+                fields.push('Bangladesh');
+                return fields.join(', ');
+            };
+            const showMap = (query, label) => {
+                const encoded = encodeURIComponent(query);
+                const embedUrl = 'https://maps.google.com/maps?q=' + encoded + '&z=16&output=embed';
+                const openUrl = 'https://www.google.com/maps/search/?api=1&query=' + encoded;
+                result.innerHTML = '<div class="p-3 p-lg-4 border-bottom d-flex flex-wrap align-items-center gap-2"><div class="me-auto"><div class="small text-success fw-bold">ADDRESS SEARCH RESULT</div><h5 class="fw-bold mb-1">' + escapeHtml(label || 'Customer location') + '</h5><div class="small text-muted">' + escapeHtml(query) + '</div></div><a class="btn btn-outline-primary" href="' + openUrl + '" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Open in Google Maps</a></div><div style="width:100%;height:clamp(360px,62vh,680px);background:#e2e8f0"><iframe title="Google Maps customer address" src="' + embedUrl + '" width="100%" height="100%" style="border:0" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div><div class="p-3 bg-light small text-muted"><i class="bi bi-crosshair me-1"></i>Zoom in/out and inspect the result. If the pin is not exact, add more village, union, road or landmark details and search again.</div>';
+            };
+            form?.addEventListener('submit', function(event) {
+                event.preventDefault();
+                try {
+                    const query = makeQuery();
+                    showMap(query, String(document.getElementById('bdMapCustomerName')?.value || '').trim());
+                } catch (error) {
+                    window.alert(error.message || 'Please enter a valid Bangladesh address.');
+                }
+            });
+            form?.addEventListener('reset', function() {
+                window.setTimeout(() => {
+                    if (result) result.innerHTML = '<div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">Enter a district and any known upazila, union, village, road or house details, then select Find on Google Maps.</p></div>';
+                }, 0);
+            });
+        };
 
         function initializeAdminRuntime() {
             try { initializeCustomerDateFormatGuard(); }
