@@ -400,8 +400,65 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).map((item) => ({
         id: this._str(item[".id"]), username: this._str(item.name), password: this._str(item.password),
         profile: this._str(item.profile), disabled: this._bool(item.disabled), server: this._str(item.server),
-        comment: this._str(item.comment), limitUptime: this._str(item["limit-uptime"]), raw: item
+        comment: this._str(item.comment), uptime: this._str(item.uptime),
+        limitUptime: this._str(item["limit-uptime"]), limitBytesTotal: this._number(item["limit-bytes-total"]),
+        bytesIn: this._number(item["bytes-in"]), bytesOut: this._number(item["bytes-out"]), raw: item
       })).filter((item) => item.username);
+    });
+  }
+
+  async getHotspotExpirationSnapshot() {
+    return this._withConnection("Hotspot expiry snapshot", async (connection) => {
+      const [userRows, schedulerRows] = await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/system/scheduler/print")
+      ]);
+      const users = (Array.isArray(userRows) ? userRows : []).map((item) => ({
+        id: this._str(item[".id"]),
+        username: this._str(item.name),
+        profile: this._str(item.profile),
+        disabled: this._bool(item.disabled),
+        comment: this._str(item.comment),
+        uptime: this._str(item.uptime),
+        limitUptime: this._str(item["limit-uptime"]),
+        limitBytesTotal: this._number(item["limit-bytes-total"]),
+        bytesIn: this._number(item["bytes-in"]),
+        bytesOut: this._number(item["bytes-out"])
+      })).filter((item) => item.username);
+      const schedulerNames = (Array.isArray(schedulerRows) ? schedulerRows : [])
+        .map((item) => this._str(item.name))
+        .filter(Boolean);
+      return { users, schedulerNames };
+    });
+  }
+
+  async cleanupExpiredHotspotUser(usernameValue) {
+    const username = this._str(usernameValue).trim();
+    if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
+    return this._withConnection("expired Hotspot user cleanup", async (connection) => {
+      const [userRows, activeRows, schedulerRows] = await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/active/print"),
+        connection.write("/system/scheduler/print")
+      ]);
+      const matches = (Array.isArray(userRows) ? userRows : []).filter(item =>
+        this._str(item.name).trim().toLowerCase() === username.toLowerCase() && item[".id"]);
+      const activeMatches = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
+        this._str(item.user).trim().toLowerCase() === username.toLowerCase() && item[".id"]);
+      const schedulerName = ("faz-exp-" + username).toLowerCase();
+      const schedulerMatches = (Array.isArray(schedulerRows) ? schedulerRows : []).filter(item =>
+        this._str(item.name).trim().toLowerCase() === schedulerName && item[".id"]);
+
+      for (const session of activeMatches) {
+        await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
+      }
+      for (const scheduler of schedulerMatches) {
+        await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
+      }
+      for (const user of matches) {
+        await connection.write("/ip/hotspot/user/remove", ["=.id=" + user[".id"]]);
+      }
+      return { username, sessionsRemoved: activeMatches.length, usersRemoved: matches.length, schedulersRemoved: schedulerMatches.length, alreadyAbsent: matches.length === 0 };
     });
   }
   async getHotspotUser(usernameValue) {
