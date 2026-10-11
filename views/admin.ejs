@@ -3500,6 +3500,129 @@ async function deletePlan(id,name){
             }
         };
 
+
+        const currentAdminCanInvitePrivileged = <%- JSON.stringify(typeof currentRole !== 'undefined' && currentRole === 'super_admin') %>;
+        let currentStaffMode = 'all';
+        window.loadStaffInvitations = async function(mode = currentStaffMode) {
+            const body = document.getElementById('rbacInvitationsBody');
+            if (!body) return false;
+            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            window.__fazStaffMode = currentStaffMode;
+            body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading invitations…</td></tr>';
+            try {
+                const data = await window.jsonFetch('/api/admin/users/invitations');
+                let invitations = Array.isArray(data.invitations) ? data.invitations : [];
+                if (currentStaffMode === 'sub-staff') invitations = invitations.filter(item => item.role === 'staff');
+                body.innerHTML = invitations.length ? invitations.map(item => {
+                    const created = item.created_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(item.created_at) : item.created_at) : '—';
+                    const expires = item.expires_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(item.expires_at) : item.expires_at) : '—';
+                    const action = item.status === 'pending' ? '<button type="button" class="btn btn-sm btn-outline-danger" data-invitation-cancel="' + Number(item.id) + '">Cancel</button>' : '<span class="badge text-bg-warning">Needs attention</span>';
+                    return '<tr><td class="fw-semibold">' + escapeHtml(item.username) + '</td><td class="text-break">' + escapeHtml(item.email) + '</td><td>' + escapeHtml(item.role) + '</td><td class="text-nowrap">' + escapeHtml(created) + '</td><td class="text-nowrap">' + escapeHtml(expires) + '</td><td>' + action + '</td></tr>';
+                }).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No pending invitations.</td></tr>';
+                body.querySelectorAll('[data-invitation-cancel]').forEach(button => button.addEventListener('click', async () => {
+                    if (!window.confirm('Cancel this invitation? Its link will no longer work.')) return;
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/invitations/' + button.dataset.invitationCancel, {method:'DELETE'}); await window.loadStaffInvitations(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to cancel invitation.'); button.disabled = false; }
+                }));
+                return true;
+            } catch(error) {
+                body.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load invitations.') + '</td></tr>';
+                return false;
+            }
+        };
+
+        window.loadStaffManagement = async function(mode = 'all') {
+            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            window.__fazStaffMode = currentStaffMode;
+            if (typeof window.switchView === 'function') window.switchView('staff-management');
+            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : 'Staff Management';
+            setPageTitleSafe(title);
+            const heading = document.getElementById('rbacStaffHeading');
+            const createHeading = document.getElementById('rbacCreateAccountHeading');
+            const accountsHeading = document.getElementById('rbacAccountsHeading');
+            const invitesHeading = document.getElementById('rbacInvitationsHeading');
+            if (heading) heading.textContent = title;
+            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : 'Create Admin / Staff Account';
+            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : 'Accounts';
+            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : 'Pending Invitations';
+            const roleSelect = document.getElementById('rbacRole');
+            if (roleSelect) {
+                Array.from(roleSelect.options).forEach(option => {
+                    const hidden = option.value !== 'staff' && (!currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff');
+                    option.hidden = hidden; option.disabled = hidden;
+                });
+                if (!currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff') roleSelect.value = 'staff';
+                roleSelect.disabled = !currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff';
+            }
+            const usersBody = document.getElementById('rbacUsersBody');
+            if (!usersBody) return false;
+            usersBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading accounts…</td></tr>';
+            try {
+                const data = await window.jsonFetch('/api/admin/users');
+                let users = Array.isArray(data.users) ? data.users : [];
+                if (currentStaffMode === 'sub-staff') users = users.filter(user => user.role === 'staff');
+                usersBody.innerHTML = users.length ? users.map(user => {
+                    const created = user.created_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(user.created_at) : user.created_at) : '—';
+                    const firstLogin = user.is_first_login ? '<span class="badge text-bg-warning">Pending verification</span>' : '<span class="badge text-bg-success">Complete</span>';
+                    const status = user.status === 'disabled' ? '<span class="badge text-bg-secondary">Disabled</span>' : '<span class="badge text-bg-success">Active</span>';
+                    const nextStatus = user.status === 'disabled' ? 'active' : 'disabled';
+                    const statusLabel = user.status === 'disabled' ? 'Activate' : 'Disable';
+                    const resend = user.is_first_login ? '<button type="button" class="btn btn-sm btn-outline-primary" data-user-resend="' + Number(user.id) + '">Resend invite</button>' : '';
+                    return '<tr><td class="fw-semibold">' + escapeHtml(user.username) + '</td><td class="text-break">' + escapeHtml(user.email) + '</td><td><span class="badge text-bg-light border">' + escapeHtml(user.role) + '</span></td><td>' + firstLogin + '</td><td>' + status + '</td><td class="text-nowrap">' + escapeHtml(created) + '</td><td><div class="d-flex flex-wrap gap-1">' + resend + '<button type="button" class="btn btn-sm btn-outline-success" data-user-status="' + Number(user.id) + '" data-next-status="' + nextStatus + '">' + statusLabel + '</button><button type="button" class="btn btn-sm btn-outline-danger" data-user-delete="' + Number(user.id) + '">Delete</button></div></td></tr>';
+                }).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">No accounts found for this view.</td></tr>';
+                usersBody.querySelectorAll('[data-user-status]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userStatus + '/status', {method:'PATCH',body:JSON.stringify({status:button.dataset.nextStatus})}); await window.loadStaffManagement(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to update account status.'); button.disabled = false; }
+                }));
+                usersBody.querySelectorAll('[data-user-delete]').forEach(button => button.addEventListener('click', async () => {
+                    if (!window.confirm('Delete this account? This action cannot be undone.')) return;
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userDelete, {method:'DELETE'}); await window.loadStaffManagement(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to delete account.'); button.disabled = false; }
+                }));
+                usersBody.querySelectorAll('[data-user-resend]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userResend + '/resend-invitation', {method:'POST',body:JSON.stringify({})}); window.alert('Invitation resent.'); await window.loadStaffInvitations(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to resend invitation.'); button.disabled = false; }
+                }));
+                await window.loadStaffInvitations(currentStaffMode);
+                const form = document.getElementById('rbacCreateUserForm');
+                if (form && !form.dataset.rbacSubmitBound) {
+                    form.dataset.rbacSubmitBound = '1';
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        const result = document.getElementById('rbacCreateUserResult');
+                        const button = document.getElementById('rbacCreateUserBtn');
+                        const payload = {
+                            username:document.getElementById('rbacUsername')?.value || '',
+                            email:document.getElementById('rbacEmail')?.value || '',
+                            role:currentStaffMode === 'sub-staff' || !currentAdminCanInvitePrivileged ? 'staff' : (document.getElementById('rbacRole')?.value || 'staff')
+                        };
+                        if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending…'; }
+                        if (result) { result.className = 'small'; result.textContent = ''; }
+                        try {
+                            await window.jsonFetch('/api/admin/users', {method:'POST',body:JSON.stringify(payload)});
+                            if (result) { result.className = 'small text-success'; result.textContent = 'Invitation sent successfully. The account activates after email verification.'; }
+                            form.reset();
+                            if (roleSelect) roleSelect.value = 'staff';
+                            await window.loadStaffManagement(currentStaffMode);
+                        } catch(error) {
+                            if (result) { result.className = 'small text-danger'; result.textContent = error.message || 'Unable to send invitation.'; }
+                        } finally {
+                            if (button) { button.disabled = false; button.innerHTML = '<i class="bi bi-envelope-paper me-1"></i>Send invitation'; }
+                        }
+                    });
+                }
+                return true;
+            } catch(error) {
+                usersBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load accounts.') + '</td></tr>';
+                await window.loadStaffInvitations(currentStaffMode);
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
