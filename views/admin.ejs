@@ -311,6 +311,33 @@
         .billing-presets .billing-preset:hover,.billing-presets .billing-preset.active{background:#0a3d2e;color:#fff;border-color:#0a3d2e}
         .customer-add-actions{position:sticky;bottom:12px;z-index:20;border:1px solid #e2e8f0}
         @media(max-width:768px){.customer-add-hero{align-items:flex-start;flex-direction:column}.customer-add-hero-meta{white-space:normal}.customer-add-actions{position:static}.customer-add-shell{padding-bottom:8px}}
+        /* Responsive customer onboarding: scoped to Add Customer so other admin modules stay untouched. */
+        #view-add-customer{--customer-ink:#0f172a;--customer-muted:#64748b;--customer-line:#e2e8f0;--customer-soft:#f8fafc}
+        #view-add-customer .customer-add-shell{width:100%;max-width:1240px;margin-inline:auto;padding:clamp(10px,2vw,24px) 0 32px}
+        #view-add-customer .customer-add-hero{border:1px solid var(--customer-line);border-radius:18px;padding:clamp(16px,2.4vw,30px);background:linear-gradient(135deg,#fff 0%,#f2fbf6 100%);box-shadow:0 8px 24px rgba(15,23,42,.045)}
+        #view-add-customer .customer-add-hero h2{font-family:'Plus Jakarta Sans',Inter,sans-serif;font-size:clamp(1.25rem,2vw,1.65rem);letter-spacing:-.035em;color:var(--customer-ink)}
+        #view-add-customer .customer-add-hero p{max-width:720px;font-size:clamp(.84rem,1vw,.95rem);line-height:1.65}
+        #view-add-customer .card-custom{border:1px solid var(--customer-line);border-radius:16px;overflow:hidden;box-shadow:0 5px 20px rgba(15,23,42,.035)}
+        #view-add-customer .card-custom-header{padding:clamp(14px,1.8vw,21px) clamp(15px,2vw,26px);background:linear-gradient(180deg,#fff,#fbfdfc);font-family:'Plus Jakarta Sans',Inter,sans-serif;font-size:.98rem;line-height:1.4}
+        #view-add-customer .card-custom-header>i{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;border:1px solid #d1fae5;border-radius:12px;background:#ecfdf5}
+        #view-add-customer .card-custom-header small{display:block;margin-top:3px;line-height:1.5}
+        #view-add-customer .card-body{padding:clamp(14px,2.2vw,28px)!important}
+        #view-add-customer .card-body>.row{--bs-gutter-x:clamp(12px,1.8vw,24px);--bs-gutter-y:clamp(16px,2vw,24px)}
+        #view-add-customer .form-label{display:block;margin-bottom:8px;font-size:.82rem;font-weight:700;color:#334155}
+        #view-add-customer .customer-input-group{min-width:0}
+        #view-add-customer .customer-input-group .input-group-text{min-width:44px;border-color:#d6e0e8;border-radius:10px 0 0 10px}
+        #view-add-customer .customer-input-group .form-control,#view-add-customer .customer-input-group .form-select{min-width:0;min-height:46px;border-color:#d6e0e8;padding:10px 12px;font-size:14px}
+        #view-add-customer .customer-input-group .form-control:focus,#view-add-customer .customer-input-group .form-select:focus,#view-add-customer .form-control:focus,#view-add-customer .form-select:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+        #view-add-customer .form-text{font-size:.76rem;line-height:1.55;color:#64748b}
+        #view-add-customer .billing-validity-panel{border-radius:14px;background:linear-gradient(135deg,#f7fdf9,#fff);padding:clamp(14px,2vw,22px)}
+        #view-add-customer .customer-helper-switch{display:flex;align-items:center;gap:10px;min-height:66px;padding:12px 14px}
+        #view-add-customer .customer-helper-switch .form-check-input{flex:0 0 auto;margin:0}
+        #view-add-customer .customer-add-actions{border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08);padding:12px!important;backdrop-filter:blur(12px)}
+        #view-add-customer .customer-add-actions .btn{min-height:44px;border-radius:10px;font-weight:700}
+        @media(min-width:1200px){#view-add-customer .card-body>.row{--bs-gutter-x:24px}#view-add-customer .customer-add-shell{padding-top:18px}}
+        @media(min-width:768px) and (max-width:1199.98px){#view-add-customer .customer-add-shell{padding-inline:4px}#view-add-customer .customer-add-hero{gap:14px}#view-add-customer .customer-add-hero-meta{font-size:12px}#view-add-customer .card-body{padding:20px!important}#view-add-customer .card-body>.row{--bs-gutter-x:16px;--bs-gutter-y:18px}#view-add-customer .form-label{font-size:.8rem}}
+        @media(max-width:767.98px){#view-add-customer .customer-add-shell{padding:8px 0 18px}#view-add-customer .customer-add-hero{margin-bottom:14px!important;border-radius:14px;gap:12px}#view-add-customer .customer-add-hero-meta{align-self:flex-start;white-space:normal}#view-add-customer .customer-add-icon{width:38px;height:38px;flex:0 0 38px}#view-add-customer .card-custom{margin-bottom:14px!important;border-radius:14px}#view-add-customer .card-custom-header{align-items:flex-start;padding:14px;font-size:.92rem}#view-add-customer .card-custom-header>i{width:36px;height:36px;flex-basis:36px;font-size:1rem!important}#view-add-customer .card-body{padding:14px!important}#view-add-customer .card-body>.row{--bs-gutter-x:12px;--bs-gutter-y:16px}#view-add-customer .form-label{margin-bottom:6px;font-size:.8rem}#view-add-customer .customer-input-group .form-control,#view-add-customer .customer-input-group .form-select{min-height:48px;font-size:16px}#view-add-customer .customer-input-group .input-group-text{min-width:40px;padding-inline:10px}#view-add-customer .billing-validity-panel{padding:14px;border-radius:12px}#view-add-customer .billing-presets{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important}#view-add-customer .billing-presets .billing-preset{min-height:42px;padding:8px 10px}#view-add-customer .customer-helper-switch{align-items:flex-start;min-height:0;padding:12px!important}#view-add-customer .customer-add-actions{position:sticky;bottom:8px;display:flex;flex-wrap:wrap;gap:8px!important;margin-inline:0;padding:10px!important}#view-add-customer .customer-add-actions .btn{flex:1 1 145px;min-height:46px;white-space:normal}#view-add-customer .customer-add-actions .btn:only-child{flex-basis:100%}}
+        @media(max-width:380px){#view-add-customer .customer-add-hero{padding:14px}#view-add-customer .card-custom-header{gap:9px}#view-add-customer .billing-presets{grid-template-columns:1fr 1fr}#view-add-customer .customer-add-actions .btn{flex-basis:100%}}
         /* Bootstrap modal hardening: keep dynamically-created Hotspot modals above every backdrop. */
         .modal-backdrop { z-index: 1040 !important; }
         .modal { z-index: 1055 !important; }
