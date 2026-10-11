@@ -325,6 +325,51 @@
             .hotspot-search,.customer-search-wrap,.payment-search-wrap{min-width:0;width:100%}
         }
 
+        /* Premium Hotspot user management: aligned with the Customer 360 profile visual language. */
+        .hotspot-dynamic-view .card-custom{border:1px solid #dce8e2;border-radius:16px;overflow:hidden;box-shadow:0 8px 26px rgba(15,23,42,.055)}
+        .hotspot-dynamic-view .card-custom-header{padding:18px 22px;background:linear-gradient(110deg,#fff 0%,#ecfdf5 100%);border-bottom:1px solid #d1fae5;gap:12px}
+        .hotspot-dynamic-view .card-custom-header>div:first-child{font-size:16px;font-weight:800;color:#0a3d2e}
+        .hotspot-dynamic-view .card-custom-header .badge{font-size:12px;padding:7px 10px;border-radius:999px}
+        .hotspot-premium-table{border-collapse:separate;border-spacing:0;background:#fff;min-width:900px}
+        .hotspot-premium-table thead th{position:sticky;top:0;z-index:1;padding:14px 13px;background:#f8fafc!important;color:#64748b;font-size:11px;font-weight:800;letter-spacing:.065em;border-bottom:1px solid #dfe7ef;white-space:nowrap}
+        .hotspot-premium-table tbody td{padding:14px 13px;vertical-align:middle;font-size:13px;border-bottom:1px solid #edf2f7;background:#fff}
+        .hotspot-premium-table tbody tr:hover td{background:#f0fdf4}
+        .hotspot-premium-table tbody tr td:first-child{color:#64748b;font:800 11px ui-monospace,monospace}
+        .hotspot-premium-table tbody td strong{color:#0f172a;font-weight:800}
+        .hotspot-premium-table .btn{min-width:42px;min-height:40px;padding:8px 12px;border-radius:9px;font-size:13px;font-weight:700}
+        .hotspot-premium-table .btn i{font-size:15px}
+        .hotspot-dynamic-view .hotspot-search{min-width:280px}
+        .hotspot-dynamic-view #hotspotSearch{min-height:42px;font-size:14px}
+        .hotspot-dynamic-view .input-group-text{border-color:#cbd5e1}
+        .hotspot-dynamic-view .card-custom-header>.btn{min-width:42px;min-height:42px;border-radius:10px}
+        @media(max-width:768px){
+          .hotspot-dynamic-view .card-custom-header{padding:15px;align-items:stretch}
+          .hotspot-dynamic-view .card-custom-header>div:first-child{width:100%;font-size:15px}
+          .hotspot-dynamic-view .hotspot-search{min-width:0;width:100%;flex:1 1 100%}
+          .hotspot-dynamic-view .card-custom-header>.btn{margin-left:0!important;margin-top:8px!important;min-width:46px;min-height:44px}
+          .hotspot-premium-table thead th{padding:12px 11px}
+          .hotspot-premium-table tbody td{padding:12px 11px}
+          .hotspot-premium-table .btn{min-width:44px;min-height:44px}
+        }
+        /* Make dashboard shortcuts and module actions easier to tap on both phone and desktop. */
+        .dashboard-round-button{width:176px;height:176px;flex-basis:176px;gap:5px;padding:15px}
+        .dashboard-round-icon{width:42px;height:42px;font-size:20px}
+        .dashboard-round-button>strong{font-size:25px}
+        .dashboard-round-label{font-size:13px}
+        .dashboard-round-hint{font-size:11px}
+        .dashboard-module-card{min-height:164px;padding:20px;gap:12px}
+        .dashboard-module-icon{font-size:1.8rem;line-height:1.35}
+        .dashboard-module-card .btn,.dashboard-shortcuts .btn{min-height:42px;padding:9px 14px;font-size:14px}
+        @media(max-width:575.98px){
+          .dashboard-shortcuts{gap:12px}
+          .dashboard-round-button{width:calc(50vw - 24px);height:calc(50vw - 24px);flex-basis:calc(50vw - 24px);max-width:176px;max-height:176px;min-width:144px;min-height:144px;padding:11px}
+          .dashboard-round-icon{width:38px;height:38px;font-size:18px}
+          .dashboard-round-button>strong{font-size:22px}
+          .dashboard-round-label{font-size:11.5px}
+          .dashboard-round-hint{font-size:10px}
+          .dashboard-module-card{min-height:144px;padding:15px}
+          .dashboard-module-icon{font-size:1.65rem}
+        }
         .hotspot-kpi { border-left: 4px solid var(--accent-color); }
         .hotspot-live-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
         .hotspot-live-table td { vertical-align: middle; font-size: 13px; }
@@ -2221,7 +2266,7 @@
             '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active</div><span id="hsVoucherActive" class="fs-3 fw-bold d-block mt-1 text-success">—</span></div></div></div>'+
             '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expired</div><span id="hsVoucherExpired" class="fs-3 fw-bold d-block mt-1 text-danger">—</span><div class="small text-muted"><span id="hsVoucherCleanupPending">0</span> cleanup pending</div></div></div></div></div>'+
             '<div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-theme" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill"></i> + Add Hotspot User</button><button type="button" class="btn btn-outline-success" onclick="window.loadVoucherGeneratorSection()"><i class="bi bi-lightning-charge-fill"></i> ⚡ Batch Generator</button></div>'+
-            '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>Real-Time Active Users</div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="4" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
+            '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>Real-Time Active Users</div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table hotspot-premium-table"><thead class="table-light"><tr><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="4" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
             window.refreshHotspotVoucherStats();
             await refreshHotspotDashboardMetrics();
         }
@@ -2304,11 +2349,11 @@
                     return '<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(u.username||'-')+'</strong></td><td class="font-monospace">'+escapeHtml(u.address||'-')+'</td><td class="font-monospace">'+escapeHtml(u.mac_address||u.macAddress||'-')+'</td><td>'+escapeHtml(u.uptime||'-')+'</td><td>'+formatBytes(u.bytes_in||u.bytesIn)+' / '+formatBytes(u.bytes_out||u.bytesOut)+'</td><td><button class="btn btn-sm btn-outline-warning" onclick="kickHotspotSession('+JSON.stringify(sid)+','+JSON.stringify(u.username||'')+')"><i class="bi bi-box-arrow-right"></i> Kick</button></td></tr>';
                 }).join('');
                 if(!rows) rows='<tr><td colspan="7" class="text-center py-5 text-muted">No active Hotspot devices are connected right now.</td></tr>';
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span></div><div class="ms-auto"><span class="badge bg-success">Live MikroTik</span><button class="btn btn-outline-success btn-sm ms-2" onclick="refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise"></i></button></div></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>#</th><th>User / Code</th><th>Assigned IP</th><th>MAC Address</th><th>Current Uptime</th><th>Download / Upload</th><th>Action</th></tr></thead><tbody id="hotspotUserBody">'+rows+'</tbody></table></div></div></section>');
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span></div><div class="ms-auto"><span class="badge bg-success">Live MikroTik</span><button class="btn btn-outline-success btn-sm ms-2" onclick="refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise"></i></button></div></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table hotspot-premium-table"><thead class="table-light"><tr><th>#</th><th>User / Code</th><th>Assigned IP</th><th>MAC Address</th><th>Current Uptime</th><th>Download / Upload</th><th>Action</th></tr></thead><tbody id="hotspotUserBody">'+rows+'</tbody></table></div></div></section>');
             } else {
                 rows=users.map(function(u,i){ return '<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(u.username)+'</strong></td><td class="font-monospace">'+escapeHtml(u.password||u.mikrotik?.password||'-')+'</td><td>'+escapeHtml(u.profile||u.mikrotik?.profile||'-')+'</td><td>'+escapeHtml(u.online?.address||'-')+'</td><td>'+escapeHtml(u.online?.macAddress||'-')+'</td><td>'+escapeHtml(u.online?.uptime||'-')+'</td><td>'+hotspotStatusBadge(u)+'</td><td><button class="btn btn-sm btn-outline-warning" '+(u.online?'':'disabled')+' onclick="kickHotspotUser('+JSON.stringify(u.username)+')"><i class="bi bi-box-arrow-right"></i></button> <button class="btn btn-sm btn-outline-danger" onclick="removeHotspotUser('+JSON.stringify(u.username)+')"><i class="bi bi-trash"></i></button></td></tr>'; }).join('');
                 if(!rows) rows='<tr><td colspan="10" class="text-center py-5 text-muted">No Hotspot users found.</td></tr>';
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-wifi text-success fs-5 me-2"></i>'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span></div><div class="hotspot-search ms-auto mt-2 mt-md-0"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="hotspotSearch" class="form-control" placeholder="Search username, profile, IP or MAC..." data-placeholder-key="search_hotspot" oninput="filterHotspotRows(this.value)"></div></div><button class="btn btn-outline-success btn-sm ms-2 mt-2 mt-md-0" onclick="refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise"></i></button></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>#</th><th>Username</th><th>Password</th><th>Profile</th><th>IP</th><th>MAC Address</th><th>Uptime</th><th data-key="bytes_in_out">Bytes In/Out</th><th>Status</th><th>Actions</th></tr></thead><tbody id="hotspotUserBody">'+rows+'</tbody></table></div></div></section>');
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-wifi text-success fs-5 me-2"></i>'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span></div><div class="hotspot-search ms-auto mt-2 mt-md-0"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="hotspotSearch" class="form-control" placeholder="Search username, profile, IP or MAC..." data-placeholder-key="search_hotspot" oninput="filterHotspotRows(this.value)"></div></div><button class="btn btn-outline-success btn-sm ms-2 mt-2 mt-md-0" onclick="refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise"></i></button></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table hotspot-premium-table"><thead class="table-light"><tr><th>#</th><th>Username</th><th>Password</th><th>Profile</th><th>IP</th><th>MAC Address</th><th>Uptime</th><th data-key="bytes_in_out">Bytes In/Out</th><th>Status</th><th>Actions</th></tr></thead><tbody id="hotspotUserBody">'+rows+'</tbody></table></div></div></section>');
             }
             updateLanguage(lang);
         }
