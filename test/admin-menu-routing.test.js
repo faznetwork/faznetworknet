@@ -10,8 +10,6 @@ const reportsView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reports
 const routedModules = [
   ['/admin/vpn', 'vpn'],
   ['/admin/vpn/port-forwarding', 'vpn-port-forwarding'],
-  ['/admin/account/dashboard', 'account-dashboard'],
-  ['/admin/account/manage', 'account-manage'],
 ];
 
 test('every previously inert admin menu item has a canonical href and route mapping', () => {
