@@ -5,6 +5,7 @@ router.post("/users/create",controller.createUser);
 router.get("/dashboard-metrics",controller.dashboardMetrics);
 router.get("/voucher-stats",controller.voucherStats);
 router.get("/voucher-records",controller.voucherRecords);
+router.get("/voucher-sales",controller.voucherSales);
 router.get("/profiles",controller.profiles);
 router.post("/profiles/create",controller.createProfile);
 router.post("/profiles/update",controller.updateProfile);
