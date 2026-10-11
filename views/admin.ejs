@@ -548,6 +548,382 @@
         }
         @media(max-width:420px){.hotspot-dynamic-view .voucher-grid{grid-template-columns:1fr}}
 
+
+        /* FAZ NETWORK mobile-first navigation and dashboard refinement. */
+        @media (max-width: 767.98px) {
+            :root { --sidebar-width: min(300px, 86vw); }
+
+            .main-content {
+                box-sizing: border-box;
+                padding: 10px 12px max(16px, env(safe-area-inset-bottom));
+                min-width: 0;
+                overflow-x: clip;
+            }
+
+            .main-content > .navbar {
+                position: sticky;
+                top: 0;
+                z-index: 1020;
+                min-height: 56px;
+                margin: -10px -12px 14px !important;
+                padding: 8px 10px !important;
+                border-radius: 0 !important;
+                border-bottom: 1px solid #e2e8f0;
+                box-shadow: 0 3px 12px rgba(15,23,42,.06) !important;
+            }
+
+            .main-content > .navbar > .container-fluid {
+                flex-wrap: nowrap;
+                gap: 8px !important;
+                min-width: 0;
+            }
+
+            #mobileSidebarToggle {
+                display: inline-grid;
+                place-items: center;
+                flex: 0 0 40px;
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                border-radius: 10px;
+                font-size: 20px;
+                touch-action: manipulation;
+            }
+
+            #pageTitle {
+                min-width: 0;
+                margin: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 15px !important;
+            }
+
+            .main-content > .navbar .text-end { display: none !important; }
+            .main-content > .navbar form[action="/logout"] { display: none !important; }
+
+            /* Stable drawer: animate transform rather than competing left/width transitions. */
+            .sidebar {
+                display: flex;
+                flex-direction: column;
+                left: 0 !important;
+                top: 0;
+                bottom: 0;
+                width: var(--sidebar-width);
+                max-width: 86vw;
+                padding-bottom: max(8px, env(safe-area-inset-bottom));
+                overflow: hidden;
+                overscroll-behavior: contain;
+                transform: translateX(-102%);
+                visibility: hidden;
+                transition: transform 220ms ease, visibility 0s linear 220ms;
+                will-change: transform;
+                z-index: 1041;
+                box-shadow: 8px 0 30px rgba(0,0,0,.22);
+            }
+
+            .sidebar.show {
+                left: 0 !important;
+                transform: translateX(0);
+                visibility: visible;
+                transition-delay: 0s;
+            }
+
+            .sidebar-backdrop {
+                display: block;
+                position: fixed;
+                inset: 0;
+                z-index: 1040;
+                background: rgba(15,23,42,.48);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                transition: opacity 180ms ease, visibility 0s linear 180ms;
+                touch-action: manipulation;
+            }
+
+            .sidebar-backdrop.show {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+                transition-delay: 0s;
+            }
+
+            body.sidebar-open {
+                overflow: hidden;
+                overscroll-behavior: none;
+            }
+
+            .sidebar-header {
+                flex: 0 0 auto;
+                min-height: 58px;
+                padding: 12px 14px;
+                font-size: 16px;
+            }
+
+            .sidebar-header > span {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sidebar-header .btn {
+                display: inline-grid;
+                place-items: center;
+                width: 40px;
+                height: 40px;
+                margin: -4px -6px -4px 0;
+                font-size: 22px;
+                text-decoration: none;
+            }
+
+            .lang-switcher {
+                flex: 0 0 auto;
+                padding: 8px 14px;
+                gap: 8px;
+                border-bottom: 1px solid rgba(255,255,255,.12);
+            }
+
+            .lang-switcher select {
+                width: 100%;
+                min-width: 0;
+                padding: 6px 8px;
+                font-size: 13px;
+            }
+
+            .sidebar-menu {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-x: hidden;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                margin: 6px 0 0;
+                padding: 0 0 8px;
+            }
+
+            .menu-item a,
+            .menu-item .dropdown-toggle {
+                min-height: 44px;
+                padding: 10px 15px;
+                gap: 2px;
+                touch-action: manipulation;
+            }
+
+            .menu-item i { margin-right: 10px; }
+            .submenu a, .submenu button { padding-left: 42px; }
+
+            .drawer-account {
+                flex: 0 0 auto;
+                padding: 8px 12px 4px;
+                border-top: 1px solid rgba(255,255,255,.16);
+                background: var(--primary-color);
+            }
+
+            .drawer-account-user {
+                display: grid;
+                grid-template-columns: 22px minmax(0,1fr);
+                align-items: center;
+                gap: 2px 8px;
+                padding: 4px 4px 10px;
+                color: #fff;
+                font-size: 13px;
+                font-weight: 700;
+            }
+
+            .drawer-account-user i { grid-row: span 2; font-size: 19px; }
+            .drawer-account-user span { overflow-wrap: anywhere; }
+            .drawer-account-user small {
+                color: #a7f3d0;
+                font-size: 11px;
+                font-weight: 500;
+            }
+
+            .drawer-account form { margin: 0 !important; }
+            .drawer-account form button {
+                width: 100%;
+                min-height: 44px;
+                border-color: rgba(254,202,202,.6);
+                border-radius: 10px;
+                background: rgba(255,255,255,.06);
+                color: #fecaca;
+                text-align: left;
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+
+            /* Balanced compact 2x2 metrics + full-width router status. */
+            .dashboard-shortcuts {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                justify-content: stretch;
+                align-items: stretch;
+                gap: 10px;
+                padding: 2px 0;
+                margin-bottom: 16px !important;
+            }
+
+            .dashboard-round-button {
+                width: auto;
+                height: auto;
+                min-width: 0;
+                min-height: 104px;
+                max-width: none;
+                max-height: none;
+                flex: initial;
+                padding: 12px 8px;
+                border-radius: 14px;
+                gap: 5px;
+            }
+
+            .dashboard-round-icon {
+                width: 30px;
+                height: 30px;
+                font-size: 15px;
+                margin-bottom: 0;
+            }
+
+            .dashboard-round-button > strong {
+                max-width: 100%;
+                font-size: 19px;
+            }
+
+            .dashboard-round-button > strong.dashboard-round-amount {
+                font-size: 14px;
+            }
+
+            .dashboard-round-label { max-width: 100%; font-size: 11px; }
+            .dashboard-round-hint { font-size: 10px; }
+
+            .dashboard-round-router {
+                grid-column: 1 / -1;
+                width: 100%;
+                min-height: 54px;
+                flex-direction: row;
+                justify-content: flex-start;
+                text-align: left;
+                gap: 10px;
+                padding: 10px 13px;
+                border-radius: 12px;
+            }
+
+            .dashboard-round-router .dashboard-round-icon {
+                flex: 0 0 32px;
+                width: 32px;
+                height: 32px;
+            }
+
+            .dashboard-round-router > strong {
+                max-width: 34%;
+                font-size: 15px;
+                overflow-wrap: anywhere;
+            }
+
+            .dashboard-round-router .dashboard-round-label {
+                flex: 1 1 auto;
+                text-align: left;
+                font-size: 12px;
+            }
+
+            .dashboard-round-router .dashboard-round-hint { display: none; }
+
+            .dashboard-section-divider { margin: 6px 0 16px; }
+
+            .dashboard-monitor-row { row-gap: 12px !important; }
+            .dashboard-monitor-row .card-custom-header {
+                min-height: 48px;
+                padding: 12px 14px;
+                font-size: 14px;
+            }
+            .dashboard-monitor-row .card-body { padding: 13px !important; }
+            .dashboard-monitor-row .traffic-monitor-tiles {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 9px;
+                padding: 0;
+            }
+            .traffic-digital-card {
+                width: auto;
+                height: auto;
+                min-width: 0;
+                min-height: 126px;
+                max-width: none;
+                max-height: none;
+                flex: initial;
+                padding: 12px 7px;
+                border-radius: 14px;
+                gap: 5px;
+            }
+            .traffic-digital-card:after { inset: 4px; border-radius: 10px; }
+            .traffic-digital-icon { width: 30px; height: 30px; flex-basis: 30px; font-size: 15px; }
+            .traffic-digital-label { font-size: 10px; }
+            .traffic-digital-value span { font-size: clamp(16px, 5vw, 22px); }
+            .traffic-digital-value small { font-size: 10px; }
+            .traffic-digital-caption { font-size: 10px; }
+
+            .dashboard-module-card {
+                min-height: 100px;
+                padding: 12px;
+                gap: 6px;
+                border-radius: 12px;
+            }
+            .dashboard-module-icon { font-size: 1.2rem; }
+            .dashboard-module-card .small { font-size: 11px; }
+
+            #view-general-settings > .d-flex[role="tablist"] {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                gap: 8px !important;
+                width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding: 2px 2px 10px;
+                margin-bottom: 14px !important;
+                overscroll-behavior-x: contain;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            #view-general-settings > .d-flex[role="tablist"]::-webkit-scrollbar { display: none; }
+            #view-general-settings .general-settings-tab {
+                flex: 0 0 auto;
+                min-height: 40px;
+                padding: 8px 12px;
+                border-radius: 999px;
+                white-space: nowrap;
+                font-size: 12px;
+            }
+
+            .table-responsive {
+                max-width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior-x: contain;
+                border-radius: 10px;
+            }
+
+            .table-responsive > .table { width: max-content; min-width: 100%; }
+            .form-control, .form-select, .form-control-plaintext { font-size: 16px; }
+            .card-custom-header { padding: 13px 14px; }
+            .card-body { min-width: 0; }
+            .btn { touch-action: manipulation; }
+        }
+
+        @media (max-width: 380px) {
+            .dashboard-round-button { min-height: 96px; padding: 10px 6px; }
+            .dashboard-round-router > strong { max-width: 28%; font-size: 13px; }
+            .traffic-digital-card { min-height: 116px; }
+            .main-content > .navbar { gap: 6px; }
+            #pageTitle { font-size: 14px !important; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .sidebar, .sidebar-backdrop { transition: none !important; }
+        }
+
     </style>
 <script src="/js/date-format.js"></script>
 
@@ -822,6 +1198,19 @@
                 </ul>
             </li>
         </ul>
+
+        <div class="drawer-account">
+            <div class="drawer-account-user d-md-none">
+                <i class="bi bi-person-circle"></i>
+                <span><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></span>
+                <small><%= String(typeof currentRole !== 'undefined' ? currentRole : 'super_admin').replace('_', ' ') %></small>
+            </div>
+            <form method="POST" action="/logout" class="m-0" onsubmit="return confirm('Are you sure you want to sign out?');">
+                        <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap" aria-label="Sign out of admin panel">
+                            <i class="bi bi-box-arrow-right me-1"></i><span>Sign Out</span>
+                        </button>
+                    </form>
+        </div>
     </div>
 
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarMobile(); return false;" aria-hidden="true"></div>
@@ -833,18 +1222,14 @@
                     <button id="mobileSidebarToggle" type="button" class="btn btn-outline-success d-md-none" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(); return false;">
                         <span aria-hidden="true">☰</span>
                     </button>
-                    <span class="fs-5 fw-semibold text-secondary d-none d-md-block" id="pageTitle" data-key="customer_management">Customer Management</span>
+                    <span class="fs-6 fw-semibold text-secondary" id="pageTitle" data-key="dashboard">Dashboard</span>
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-auto">
                     <div class="text-end d-none d-sm-block">
                         <div class="small fw-semibold text-dark"><i class="bi bi-person-circle me-1"></i><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></div>
                         <div class="small text-muted"><%= String(typeof currentRole !== 'undefined' ? currentRole : 'super_admin').replace('_', ' ') %></div>
                     </div>
-                    <form method="POST" action="/logout" class="m-0" onsubmit="return confirm('Are you sure you want to sign out?');">
-                        <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap" aria-label="Sign out of admin panel">
-                            <i class="bi bi-box-arrow-right me-1"></i><span>Sign Out</span>
-                        </button>
-                    </form>
+                    
                 </div>
             </div>
         </nav>
@@ -2010,7 +2395,7 @@
         function purgeStuckBackdrops() {
             document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
             document.querySelectorAll('.offcanvas-backdrop').forEach(function(el) { el.remove(); });
-            document.querySelectorAll('.sidebar-backdrop').forEach(function(el) { el.classList.remove('show'); el.remove(); });
+            document.querySelectorAll('.sidebar-backdrop:not(#sidebarBackdrop)').forEach(function(el) { el.classList.remove('show'); el.remove(); });
             document.querySelectorAll('.offcanvas.show, .offcanvas.showing, .offcanvas.hiding').forEach(function(el) {
                 el.classList.remove('show', 'showing', 'hiding');
                 el.setAttribute('aria-hidden', 'true');
