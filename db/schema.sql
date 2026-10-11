@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS customers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Customer contact channels are optional and independent from sender configuration.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(40);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_link VARCHAR(255);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS facebook_link VARCHAR(500);
+
 -- General application settings (non-customer configuration).
 CREATE TABLE IF NOT EXISTS app_settings (
   key VARCHAR(150) PRIMARY KEY,
