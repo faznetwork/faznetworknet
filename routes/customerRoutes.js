@@ -24,6 +24,8 @@ router.post("/",controller.createCustomer);
 router.post("/provision",controller.createCustomer);
 router.post("/customers",controller.createCustomer);
 router.get("/profile",controller.profile);
+// REST-compatible Customer 360 endpoint: GET /api/customers/:id
+router.get("/:id",controller.getCustomerProfileById);
 router.get("/:id/audit-logs",controller.getAuditLogs);
 router.get("/:id/live-session",controller.getCustomerLiveSession);
 router.get("/:id/usage-records",controller.getCustomerUsageRecords);
