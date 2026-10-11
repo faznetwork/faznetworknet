@@ -3170,6 +3170,121 @@ async function deletePlan(id,name){
 
         window.switchView = switchView;
 
+        let currentSupportCategory = 'all';
+        window.loadSupportTickets = async function(category = currentSupportCategory) {
+            const validCategories = ['all', 'general', 'software', 'website'];
+            currentSupportCategory = validCategories.includes(String(category || '').toLowerCase())
+                ? String(category || 'all').toLowerCase() : 'all';
+            window.__fazSupportCategory = currentSupportCategory;
+            const section = document.getElementById('view-support-tickets');
+            const body = document.getElementById('rbacTicketsBody');
+            const form = document.getElementById('rbacTicketForm');
+            const createCard = document.getElementById('rbacTicketCreateCard');
+            if (!section || !body) return false;
+            if (typeof window.switchView === 'function') window.switchView('support-tickets');
+            const titles = {all:'Support Tickets',general:'General Support Tickets',software:'Software Support Tickets',website:'Website Support Tickets'};
+            setPageTitleSafe(titles[currentSupportCategory] || titles.all);
+            const canManageTickets = <%- JSON.stringify(['super_admin','admin'].includes(typeof currentRole !== 'undefined' ? currentRole : 'super_admin')) %>;
+            if (createCard) createCard.classList.toggle('d-none', !canManageTickets);
+            const categorySelect = document.getElementById('ticketCategory');
+            if (categorySelect) {
+                categorySelect.value = currentSupportCategory === 'software' || currentSupportCategory === 'website' ? currentSupportCategory : 'general';
+                categorySelect.disabled = currentSupportCategory === 'software' || currentSupportCategory === 'website';
+            }
+            body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading tickets…</td></tr>';
+            try {
+                const results = await Promise.all([
+                    window.jsonFetch('/api/admin/security/tickets?category=' + encodeURIComponent(currentSupportCategory)),
+                    canManageTickets ? window.jsonFetch('/api/admin/security/staff').catch(() => ({staff:[]})) : Promise.resolve({staff:[]})
+                ]);
+                const tickets = Array.isArray(results[0].tickets) ? results[0].tickets : [];
+                const staff = Array.isArray(results[1].staff) ? results[1].staff : [];
+                if (categorySelect && canManageTickets) {
+                    const selected = categorySelect.value || 'general';
+                    categorySelect.innerHTML = '<option value="general">General</option><option value="software">Software</option><option value="website">Website</option>';
+                    categorySelect.value = currentSupportCategory === 'software' || currentSupportCategory === 'website' ? currentSupportCategory : selected;
+                    categorySelect.disabled = currentSupportCategory === 'software' || currentSupportCategory === 'website';
+                }
+                body.innerHTML = tickets.length ? tickets.map(ticket => {
+                    const id = Number(ticket.id);
+                    const categoryBadge = '<span class="badge text-bg-light border">' + escapeHtml(ticket.category || 'general') + '</span>';
+                    const statusOptions = ['open','in_progress','resolved','closed'].map(status =>
+                        '<option value="' + status + '"' + (ticket.status === status ? ' selected' : '') + '>' +
+                        ({open:'Open',in_progress:'In progress',resolved:'Resolved',closed:'Closed'}[status]) + '</option>'
+                    ).join('');
+                    const staffOptions = '<option value="">Unassigned</option>' + staff.map(user =>
+                        '<option value="' + Number(user.id) + '"' + (Number(ticket.assigned_to_user_id) === Number(user.id) ? ' selected' : '') + '>' +
+                        escapeHtml(user.username) + '</option>'
+                    ).join('');
+                    const statusCell = canManageTickets
+                        ? '<select class="form-select form-select-sm" aria-label="Ticket status" data-ticket-status="' + id + '">' + statusOptions + '</select>'
+                        : '<span class="badge ' + (ticket.status === 'resolved' || ticket.status === 'closed' ? 'text-bg-success' : 'text-bg-warning') + '">' + escapeHtml(ticket.status || 'open') + '</span>';
+                    const assigneeCell = canManageTickets
+                        ? '<select class="form-select form-select-sm" aria-label="Assigned staff" data-ticket-assignee="' + id + '">' + staffOptions + '</select>'
+                        : escapeHtml(ticket.assigned_to_username || 'Assigned staff');
+                    const actionCell = canManageTickets
+                        ? '<button type="button" class="btn btn-sm btn-outline-success text-nowrap" data-ticket-save="' + id + '"><i class="bi bi-check2 me-1"></i>Save</button>'
+                        : '<span class="small text-muted">View only</span>';
+                    return '<tr><td><strong>#' + id + ' · ' + escapeHtml(ticket.title) + '</strong><div class="small text-muted mt-1">' + escapeHtml(ticket.description || '') + '</div><div class="mt-1">' + categoryBadge + '</div></td>' +
+                        '<td>' + escapeHtml(ticket.customer_username || '—') + '</td>' +
+                        '<td><span class="badge ' + (ticket.priority === 'urgent' || ticket.priority === 'high' ? 'text-bg-danger' : 'text-bg-secondary') + '">' + escapeHtml(ticket.priority || 'normal') + '</span></td>' +
+                        '<td>' + statusCell + '</td><td>' + assigneeCell + '</td>' +
+                        '<td class="text-nowrap">' + escapeHtml(typeof FazDate !== 'undefined' ? FazDate.formatDateTime(ticket.created_at) : ticket.created_at || '—') + '</td>' +
+                        '<td>' + actionCell + '</td></tr>';
+                }).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">No tickets in this category.</td></tr>';
+                body.querySelectorAll('[data-ticket-save]').forEach(button => {
+                    button.addEventListener('click', async () => {
+                        const id = Number(button.dataset.ticketSave);
+                        const status = body.querySelector('[data-ticket-status="' + id + '"]')?.value || 'open';
+                        const assignee = body.querySelector('[data-ticket-assignee="' + id + '"]')?.value || null;
+                        button.disabled = true;
+                        try {
+                            await window.jsonFetch('/api/admin/security/tickets/' + id, {
+                                method: 'PATCH', body: JSON.stringify({status, assigned_to_user_id: assignee})
+                            });
+                            await window.loadSupportTickets(currentSupportCategory);
+                        } catch (error) {
+                            window.alert(error.message || 'Unable to update ticket.');
+                            button.disabled = false;
+                        }
+                    });
+                });
+                if (form && !form.dataset.supportSubmitBound) {
+                    form.dataset.supportSubmitBound = '1';
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        const submit = document.getElementById('rbacTicketSubmit');
+                        const result = document.getElementById('rbacTicketResult');
+                        const payload = {
+                            title: document.getElementById('ticketTitle')?.value || '',
+                            description: document.getElementById('ticketDescription')?.value || '',
+                            priority: document.getElementById('ticketPriority')?.value || 'normal',
+                            customer_username: document.getElementById('ticketCustomer')?.value || '',
+                            category: currentSupportCategory === 'software' || currentSupportCategory === 'website'
+                                ? currentSupportCategory : (document.getElementById('ticketCategory')?.value || 'general'),
+                            assigned_to_user_id: document.getElementById('ticketAssignee')?.value || null
+                        };
+                        if (submit) { submit.disabled = true; submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…'; }
+                        if (result) { result.className = 'small text-muted'; result.textContent = ''; }
+                        try {
+                            await window.jsonFetch('/api/admin/security/tickets', {method:'POST',body:JSON.stringify(payload)});
+                            form.reset();
+                            if (result) { result.className = 'small text-success'; result.textContent = 'Ticket created successfully.'; }
+                            await window.loadSupportTickets(currentSupportCategory);
+                        } catch (error) {
+                            if (result) { result.className = 'small text-danger'; result.textContent = error.message || 'Unable to create ticket.'; }
+                        } finally {
+                            if (submit) { submit.disabled = false; submit.innerHTML = 'Create ticket'; }
+                        }
+                    });
+                }
+                return true;
+            } catch (error) {
+                body.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load support tickets.') + '</td></tr>';
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
