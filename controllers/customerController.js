@@ -204,11 +204,12 @@ async function createCustomer(req, res) {
   };
   if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
   if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
-  if(customer.email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
-  const whatsappDigits=customer.whatsappPhone.replace(/[^0-9]/g,"");
-  customer.whatsappPhone=whatsappDigits?(/^(?:8801[3-9]\\d{8}|01[3-9]\\d{8})$/.test(whatsappDigits)?whatsappDigits:""):null;
-  if(customer.whatsappPhone=== "" )return res.status(400).json({success:false,message:"Enter a valid Bangladesh WhatsApp number or leave it blank."});
-  const safeContactLink=(value,kind)=>{if(!value)return null;const v=String(value).trim();if(kind==="telegram"&&/^@[A-Za-z0-9_]{5,32}$/.test(v))return v;if(kind==="telegram"&&/^t\\.me\\/[A-Za-z0-9_]{5,32}\\/?$/i.test(v))return "https://"+v;if(!/^https:\\/\\//i.test(v))return null;try{const u=new URL(v);const host=u.hostname.toLowerCase();if(kind==="telegram"&&![ "t.me","www.t.me","telegram.me","www.telegram.me"].includes(host))return null;if(kind==="facebook"&&![ "facebook.com","www.facebook.com","m.facebook.com","fb.me","www.messenger.com","messenger.com"].includes(host))return null;return u.toString();}catch(_){return null;}};
+  if(customer.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
+  const whatsappRaw=customer.whatsappPhone;
+  const whatsappDigits=whatsappRaw.replace(/[^0-9]/g,"");
+  customer.whatsappPhone=whatsappDigits?(/^(?:8801[3-9]\d{8}|01[3-9]\d{8})$/.test(whatsappDigits)?whatsappDigits:null):null;
+  if(whatsappRaw&&!customer.whatsappPhone)return res.status(400).json({success:false,message:"Enter a valid Bangladesh WhatsApp number or leave it blank."});
+  const safeContactLink=(value,kind)=>{if(!value)return null;const v=String(value).trim();if(kind==="telegram"&&/^@[A-Za-z0-9_]{5,32}$/.test(v))return v;if(kind==="telegram"&&/^t\.me\/[A-Za-z0-9_]{5,32}\/?$/i.test(v))return "https://"+v;if(!/^https:\/\//i.test(v))return null;try{const u=new URL(v);const host=u.hostname.toLowerCase();if(kind==="telegram"&&![ "t.me","www.t.me","telegram.me","www.telegram.me"].includes(host))return null;if(kind==="facebook"&&![ "facebook.com","www.facebook.com","m.facebook.com","fb.me","www.messenger.com","messenger.com"].includes(host))return null;return u.toString();}catch(_){return null;}};
   const telegramRaw=customer.telegramLink,facebookRaw=customer.facebookLink;
   customer.telegramLink=safeContactLink(telegramRaw,"telegram");customer.facebookLink=safeContactLink(facebookRaw,"facebook");
   if(telegramRaw&&!customer.telegramLink)return res.status(400).json({success:false,message:"Telegram must be an @username or a valid t.me link."});
