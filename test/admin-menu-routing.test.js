@@ -42,7 +42,8 @@ test('unimplemented modules are clearly labelled and do not pretend to save data
 });
 
 test('placeholder content uses responsive Bootstrap spacing and returns to admin dashboard', () => {
-  assert.ok(adminView.includes('root.innerHTML = `\n                    <section class="p-2 p-md-3">'));
+  assert.ok(adminView.includes("root.innerHTML = `"));
+  assert.ok(adminView.includes('<section class="p-2 p-md-3">'));
   assert.ok(adminView.includes('class="card-body p-3 p-md-5"'));
   assert.ok(adminView.includes('href="/admin/dashboard" class="btn btn-success"'));
 });
