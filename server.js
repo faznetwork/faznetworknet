@@ -70,7 +70,7 @@ app.get("/admin/reports/hotspot-revenue",requireRole(["super_admin","admin"]),(r
 app.get("/admin/reports/expenses",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
  // The Expenses submenu reuses the existing authenticated expense CRUD/reporting UI.
  // /add opens the form, /all shows the expense ledger, and /report shows totals.
- app.get(/^\\/admin\\/expenses\\/(add|all|report)\\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Expense Sheet"}));
+ app.get(/^\/admin\/expenses\/(add|all|report)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Expense Sheet"}));
 app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   const adminPath=String(req.path||"").replace(/\/+$/,"")||"/admin";
   const customerRoute=adminPath.match(/^\/admin\/customers\/([^/]+)$/);
