@@ -8,8 +8,6 @@ const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'u
 const reportsView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reports.ejs'), 'utf8');
 
 const routedModules = [
-  ['/admin/monitor/usage', 'usage'],
-  ['/admin/monitor/online', 'monitor-online'],
   ['/admin/vpn', 'vpn'],
   ['/admin/vpn/port-forwarding', 'vpn-port-forwarding'],
   ['/admin/account/dashboard', 'account-dashboard'],

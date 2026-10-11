@@ -3445,6 +3445,61 @@ async function deletePlan(id,name){
             }
         };
 
+
+        window.loadNetworkMonitor = async function(mode = 'online') {
+            mode = String(mode || 'online') === 'usage' ? 'usage' : 'online';
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return false;
+            if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+            const isUsage = mode === 'usage';
+            const title = isUsage ? 'Monitor — Usage' : 'Monitor — Online';
+            setPageTitleSafe(title);
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · PPPoE Monitor</div><h2 class="h5 fw-bold mb-1">' + escapeHtml(title) + '</h2><p class="small text-muted mb-0">' + (isUsage ? 'Current active-session byte counters only; these are not lifetime billing totals.' : 'Active PPPoE sessions reported by MikroTik or the latest available snapshot.') + '</p></div><button type="button" class="btn btn-outline-success" onclick="window.loadNetworkMonitor(\'' + mode + '\')"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></div><div id="pppoeMonitorContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading active sessions…</div></div></div></div></section>';
+            const content = root.querySelector('#pppoeMonitorContent');
+            try {
+                const data = await window.jsonFetch('/api/pppoe/active');
+                const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+                const toBig = value => { try { const s = String(value ?? '0').trim(); return /^\d+$/.test(s) ? BigInt(s) : 0n; } catch (_) { return 0n; } };
+                const formatBytes = value => {
+                    const n = typeof value === 'bigint' ? value : toBig(value);
+                    const units = ['B','KB','MB','GB','TB','PB'];
+                    let scale = 0, size = Number(n);
+                    while (size >= 1024 && scale < units.length - 1) { size /= 1024; scale++; }
+                    return (scale ? size.toFixed(1) : size.toFixed(0)) + ' ' + units[scale];
+                };
+                const totalIn = sessions.reduce((sum, item) => sum + toBig(item.bytesIn), 0n);
+                const totalOut = sessions.reduce((sum, item) => sum + toBig(item.bytesOut), 0n);
+                const source = data.source === 'mikrotik-live' ? 'MikroTik live' : data.source === 'recent-router-snapshot' ? 'Recent snapshot · fallback' : 'Source not specified';
+                const sourceClass = data.source === 'mikrotik-live' ? 'text-bg-success' : 'text-bg-warning';
+                const summary = isUsage
+                    ? '<div class="row g-3 mb-4"><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Active sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">RX · Downloaded this session</div><div class="h4 fw-bold mb-0 text-success">' + formatBytes(totalIn) + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">TX · Uploaded this session</div><div class="h4 fw-bold mb-0 text-primary">' + formatBytes(totalOut) + '</div></div></div></div>'
+                    : '<div class="row g-3 mb-4"><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Online PPPoE sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Data source</div><div class="mt-1"><span class="badge ' + sourceClass + '">' + escapeHtml(source) + '</span></div></div></div></div>';
+                const rows = sessions.map(session => {
+                    const user = escapeHtml(session.username || '—');
+                    const ip = escapeHtml(session.address || '—');
+                    const uptime = escapeHtml(session.uptime || '—');
+                    const service = escapeHtml(session.service || 'PPPoE');
+                    const caller = escapeHtml(session.callerId || '—');
+                    return '<tr><td class="fw-semibold text-break">' + user + '</td><td class="text-nowrap">' + ip + '</td><td class="text-nowrap">' + uptime + '</td><td>' + service + '</td><td class="text-break">' + caller + '</td>' + (isUsage ? '<td class="text-nowrap">' + formatBytes(session.bytesIn) + '</td><td class="text-nowrap">' + formatBytes(session.bytesOut) + '</td>' : '') + '</tr>';
+                }).join('');
+                content.innerHTML = summary + (data.source === 'recent-router-snapshot' ? '<div class="alert alert-warning small">MikroTik live query was unavailable. These rows came from a recent stored snapshot and may not reflect the exact current state.</div>' : '') +
+                    '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h3 class="h6 fw-bold mb-0">' + (isUsage ? 'Session traffic counters' : 'Online sessions') + '</h3><span class="small text-muted">Source: ' + escapeHtml(source) + '</span></div>' +
+                    '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>IP address</th><th>Uptime</th><th>Service</th><th>Caller ID</th>' + (isUsage ? '<th>RX · Download</th><th>TX · Upload</th>' : '') + '</tr></thead><tbody>' +
+                    (sessions.length ? rows : '<tr><td colspan="' + (isUsage ? 7 : 5) + '" class="text-center text-muted py-4">No active PPPoE sessions were returned.</td></tr>') +
+                    '</tbody></table></div>';
+                return true;
+            } catch (error) {
+                content.innerHTML = '<div class="alert alert-danger mb-0" role="alert">' + escapeHtml(error.message || 'Unable to load active PPPoE sessions.') + '</div>';
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
@@ -5395,8 +5450,6 @@ async function deletePlan(id,name){
                 bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
             };
             const moduleTitles = {
-                'usage': 'Monitor — Usage',
-                'monitor-online': 'Monitor — Online',
                 'vpn': 'VPN Server',
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
@@ -5443,6 +5496,7 @@ async function deletePlan(id,name){
                     return { view: 'hr', section };
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
+                if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5491,8 +5545,8 @@ async function deletePlan(id,name){
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support', category: 'all' },
                     '/admin/settings': { view: 'page', page: 'general-settings' },
-                    '/admin/monitor/usage': { view: 'module', module: 'usage' },
-                    '/admin/monitor/online': { view: 'module', module: 'monitor-online' },
+                    '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
+                    '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
                     '/admin/vpn': { view: 'module', module: 'vpn' },
                     '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
@@ -5566,6 +5620,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'support') return normalized.category === 'software' ? '/admin/support/software' : normalized.category === 'website' ? '/admin/support/website' : '/admin/support/tickets';
                 if (normalized.view === 'hr') return normalized.section === 'departments' ? '/admin/hr/departments' : normalized.section === 'added' ? '/admin/hr/employees/added' : '/admin/hr/employees';
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
+                if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5637,6 +5692,7 @@ async function deletePlan(id,name){
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
                     case 'hr': return callIfAvailable('loadHRModule', [r.section]);
                     case 'network-diagram': return callIfAvailable('loadNetworkDiagram');
+                    case 'monitor': return callIfAvailable('loadNetworkMonitor', [r.mode || 'online']);
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
@@ -5732,6 +5788,7 @@ async function deletePlan(id,name){
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
                     case 'loadHRModule': return { view: 'hr', section: ['departments','employees','added'].includes(String(args[0] || 'employees')) ? String(args[0] || 'employees') : 'employees' };
                     case 'loadNetworkDiagram': return { view: 'network-diagram' };
+                    case 'loadNetworkMonitor': return { view: 'monitor', mode: String(args[0] || 'online') === 'usage' ? 'usage' : 'online' };
                     default: return null;
                 }
             }
@@ -5769,7 +5826,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
