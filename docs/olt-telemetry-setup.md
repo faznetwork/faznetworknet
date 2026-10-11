@@ -1,27 +1,26 @@
 # V-SOL OLT read-only RX telemetry
 
-This collector is for the V-SOL V1601E04-DP on the local management network. Render cannot reach the OLT's private management address directly; a RouterOS v7.8+ device on the same network must poll SNMP and push readings to the existing authenticated API.
+Target OLT: V-SOL V1601E04-DP / V1600D4 family at management IP `172.21.21.2:161`. Prior MikroTik SNMPv2c read-only testing returned `sysDescr=V1600D4`. The old address `103.54.37.182` returned `SUMON_RB4011_VPN` and is not the OLT endpoint.
+
+## Current status
+
+The checked-in script is a **safe discovery guard**, not an active telemetry collector. It verifies the target's SNMP description and prints the known V-SOL enterprise ONU table branch. It intentionally does not poll guessed RX/MAC columns or POST any readings until the actual column OIDs, index order, and RX value encoding are verified against this firmware.
 
 ## Safety boundaries
 
-- Uses SNMP v2c read-only community only; do not use the `private` read-write community.
+- Uses SNMP v2c read-only community `public`; never use the `private` read-write community.
 - Does not write to the OLT or change MikroTik PPPoE, firewall, routing, or billing settings.
-- The collector template is a manual import and is not installed or scheduled automatically.
-- First run manually, check logs and the API response, and only then add the five-minute scheduler.
-- The RX OID is documented as OCTET STRING for the V1600D family. The server accepts only a plain numeric value in the expected optical range or a value explicitly marked dBm. It intentionally stores unknown encodings as NULL instead of guessing a scale.
+- Does not create a scheduler and does not POST telemetry.
+- Do not enable a five-minute scheduler until verified RX/MAC readings are being sent successfully.
 
-## Configuration
+## Confirmed SNMP exploration
 
-1. Set a strong `OLT_COLLECTOR_TOKEN` environment variable on the Render `faznetwork-web` service.
-2. Replace `__OLT_COLLECTOR_TOKEN__` in `scripts/mikrotik/olt-telemetry-collector.rsc` with that exact token. Never commit a real token to Git.
-3. Confirm SNMP read-only access from the MikroTik to OLT `103.54.37.182:161`. If the OLT has a source-IP allow list, allow only the MikroTik management source IP; do not enable SNMP writes or open SNMP to the Internet.
-4. Replace the token placeholder locally, upload the `.rsc` file to Files, then run `/import file-name=olt-telemetry-collector.rsc`. This creates the named script `faz-olt-telemetry` without scheduling it. Run `/system script run faz-olt-telemetry` manually once. It reads candidate indexes 1–4 / 1–64, sends only entries with both a MAC and RX object, and logs the server response. The first scan may take time.
-5. Check the server response `success:true` and then open Customer 360. The customer ONU MAC must match the OLT MAC exactly for RX to appear on that customer. Unknown/unparseable RX encodings remain blank by design.
-6. Only after a successful manual run, add a scheduler interval of `5m` with policy `ftp,read,test` for script `faz-olt-telemetry`. Do not run overlapping copies.
+- OLT `sysDescr`: `V1600D4`
+- Enterprise: `1.3.6.1.4.1.37950`
+- Candidate ONU table branch: `1.3.6.1.4.1.37950.1.1.5.10`
+- Previously tried branches `.1.3.6.1.4.1.37950.1.1.5.2.1.8` and `.1.3.6.1.4.1.37950.1.1.5.2.1` returned empty.
+- A next lookup entered `.1.3.6.1.4.1.37950.1.1.5.10.1.1.1.1.1.1` with integer value `1`. This is not yet identified as RX power or ONU MAC.
 
-## MIB branches used
+## Next engineering step
 
-- RX optical power: `1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.7.<PON>.<ONU>`
-- ONU MAC: `1.3.6.1.4.1.37950.1.1.5.12.2.1.2.1.5.<PON>.<ONU>`
-
-The exact index ordering and RX value encoding must be confirmed from the live firmware response before treating values as validated dBm. This template is intentionally read-only and must not be described as active until a real push is received.
+Inspect the V-SOL MIB/table definitions for the `.5.10` branch and verify actual live column values and index order. Only then restore telemetry POST, with unknown OCTET STRING RX encodings remaining NULL rather than guessed as dBm.
