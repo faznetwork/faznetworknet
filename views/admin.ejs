@@ -921,6 +921,19 @@
                         </div>
 
                         <div class="card card-custom mb-4">
+                            <div class="card-custom-header"><i class="bi bi-bell text-success fs-5"></i><div><div class="fw-semibold">Contact &amp; Notification Channels</div><small class="text-muted fw-normal">One shared set of customer contact details used by Customer 360 and Edit Customer</small></div></div>
+                            <div class="card-body p-4">
+                                <div class="row g-4">
+                                    <div class="col-md-6"><label for="customerEmail" class="form-label">Email Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-envelope"></i></span><input type="email" class="form-control" id="customerEmail" maxlength="254" placeholder="customer@example.com" autocomplete="email"></div></div>
+                                    <div class="col-md-6"><label for="customerWhatsappPhone" class="form-label">WhatsApp Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-whatsapp"></i></span><input type="tel" class="form-control" id="customerWhatsappPhone" maxlength="40" placeholder="Leave blank to use primary phone" autocomplete="tel"></div><div class="form-text">Optional override; primary phone remains the default.</div></div>
+                                    <div class="col-md-6"><label for="customerTelegramLink" class="form-label">Telegram Username / Link</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-telegram"></i></span><input type="text" class="form-control" id="customerTelegramLink" maxlength="255" placeholder="@username or https://t.me/username"></div></div>
+                                    <div class="col-md-6"><label for="customerFacebookLink" class="form-label">Facebook / Messenger Link</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-messenger"></i></span><input type="url" class="form-control" id="customerFacebookLink" maxlength="500" placeholder="https://m.me/... or Facebook profile link"></div></div>
+                                    <div class="col-12"><div class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>These details are saved to the customer record and shared across Add Customer, Edit Customer and Customer 360. Actual message delivery requires the relevant provider to be configured.</div></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card card-custom mb-4">
                             <div class="card-custom-header p-0">
                                 <button class="btn w-100 text-start px-4 py-3 d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#customerComplianceCollapse" aria-expanded="false" aria-controls="customerComplianceCollapse">
                                     <i class="bi bi-file-earmark-text text-success fs-5"></i><span><span class="fw-semibold d-block">Optional Compliance &amp; Network Info</span><small class="text-muted fw-normal">NID, installation and network reference details</small></span><i class="bi bi-chevron-down ms-auto"></i>
@@ -3215,6 +3228,7 @@ async function deletePlan(id,name){
             set('password',customer.password||'');set('nidNumber',customer.nid||'');
             set('installationAddress',customer.installationAddress||customer.installation_address||'');set('areaZone',customer.areaZone||customer.area_zone||'');
             set('fiberBox',customer.distributionBox||customer.distribution_box||customer.fiberBox||customer.fiber_box||customer.splitterBox||'');
+            set('customerEmail',customer.email||'');set('customerWhatsappPhone',customer.whatsapp_phone||customer.whatsappPhone||'');set('customerTelegramLink',customer.telegram_link||customer.telegramLink||'');set('customerFacebookLink',customer.facebook_link||customer.facebookLink||'');
             set('alternativePhone',customer.alternativePhone||customer.alternative_phone||'');set('oltPonPort',customer.oltPonPort||customer.olt_pon_port||'');
             set('onuMac',customer.onuMac||customer.onu_mac||'');set('onuSerial',customer.onuSerial||customer.onu_serial||'');set('fiberDropCore',customer.fiberDropCore||customer.fiber_drop_core||'');
             set('customerBillingCycle',customer.billingCycle||customer.billing_cycle||'monthly');set('customerBillingDays',customer.billingDurationDays??customer.billing_duration_days??'');
@@ -3791,6 +3805,10 @@ async function deletePlan(id,name){
                     package: option?.textContent?.split(' — ৳')[0]?.trim() || profile,
                     profile,
                     packageProfile: profile,
+                    email: String(valueOf('customerEmail')).trim(),
+                    whatsappPhone: String(valueOf('customerWhatsappPhone')).trim(),
+                    telegramLink: String(valueOf('customerTelegramLink')).trim(),
+                    facebookLink: String(valueOf('customerFacebookLink')).trim(),
                     package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
