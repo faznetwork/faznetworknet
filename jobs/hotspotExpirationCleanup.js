@@ -75,12 +75,21 @@ function createHotspotExpirationCleanup(deps = {}) {
     const startedAt = Date.now();
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
     try {
-      const snapshot = await router.getHotspotExpirationSnapshot();
-      const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
-      const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
       const result = await database.query(
         "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
+
+      // Database expiry must continue even during a temporary RouterOS outage.
+      // In that case, persist expired/pending state and let the targeted router
+      // cleanup fail safely so the next hourly run can retry it.
+      let snapshot = { users: [], schedulerNames: [] };
+      try {
+        snapshot = await router.getHotspotExpirationSnapshot();
+      } catch (error) {
+        logger.warn("[HOTSPOT EXPIRY] RouterOS snapshot unavailable; using persisted expiry and retrying cleanup later:", error.message);
+      }
+      const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
+      const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
 
       for (const voucher of result.rows || []) {
         checked++;
@@ -106,29 +115,44 @@ function createHotspotExpirationCleanup(deps = {}) {
           continue;
         }
 
-        if (!user) continue;
-        const comment = String(user.comment || "");
+        const comment = String(user?.comment || "");
         const firstLogin = parseFirstLoginAt(comment);
-        const hasLoginMarker = /FAZ\|PROFILE=/i.test(comment);
+        const hasLoginMarker = Boolean(user && /FAZ\|PROFILE=/i.test(comment));
+        let effectiveStatus = voucher.status;
+        let expiryAt = voucher.expires_at ? new Date(voucher.expires_at) : null;
+        if (expiryAt && Number.isNaN(expiryAt.getTime())) expiryAt = null;
+
         if (voucher.status === "unused" && hasLoginMarker) {
+          const validity = parseValidityMs(comment.match(/VALIDITY=([^|]+)/i)?.[1]);
+          if (!expiryAt && firstLogin && validity) expiryAt = new Date(firstLogin.getTime() + validity);
           await database.query(
             "UPDATE hotspot_vouchers SET status='active',first_login_at=COALESCE(first_login_at,$1),expires_at=COALESCE(expires_at,$2),updated_at=NOW() WHERE id=$3 AND status='unused'",
-            [firstLogin, firstLogin && parseValidityMs(comment.match(/VALIDITY=([^|]+)/i)?.[1]) ? new Date(firstLogin.getTime() + parseValidityMs(comment.match(/VALIDITY=([^|]+)/i)?.[1])) : null, voucher.id]
+            [firstLogin, expiryAt, voucher.id]
           );
           activated++;
+          effectiveStatus = "active";
         } else if (voucher.status === "active" && hasLoginMarker && firstLogin) {
           const validity = parseValidityMs(comment.match(/VALIDITY=([^|]+)/i)?.[1]);
+          if (!expiryAt && validity) expiryAt = new Date(firstLogin.getTime() + validity);
           await database.query(
             "UPDATE hotspot_vouchers SET first_login_at=COALESCE(first_login_at,$1),expires_at=COALESCE(expires_at,$2),updated_at=NOW() WHERE id=$3",
-            [firstLogin, validity ? new Date(firstLogin.getTime() + validity) : null, voucher.id]
+            [firstLogin, expiryAt, voucher.id]
           );
         }
 
-        if (!routerUserExpired(user, schedulerNames)) continue;
+        // PostgreSQL's first-login expiry is authoritative when available. This
+        // covers missed RouterOS scheduler events and users already absent from
+        // the router, without ever expiring an unused voucher by creation date.
+        const currentTime = now();
+        const databaseExpiryReached = effectiveStatus === "active" &&
+          expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
+          expiryAt.getTime() <= currentTime.getTime();
+        const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
+        if (!databaseExpiryReached && !routerExpiryReached) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, now(), voucher.id]
+          [firstLogin, databaseExpiryReached ? expiryAt : currentTime, voucher.id]
         );
         expired++;
         try {
