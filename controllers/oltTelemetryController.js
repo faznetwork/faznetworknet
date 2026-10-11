@@ -88,10 +88,15 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
             onu_mac=COALESCE(EXCLUDED.onu_mac,olt_telemetry.onu_mac),
             pppoe_username=COALESCE(EXCLUDED.pppoe_username,olt_telemetry.pppoe_username),
             pon_port=COALESCE(EXCLUDED.pon_port,olt_telemetry.pon_port),
-            status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
-            observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
-          WHERE EXCLUDED.observed_at >= olt_telemetry.observed_at
-             OR olt_telemetry.received_at < NOW() - INTERVAL '15 minutes'
+            -- Refresh liveness on every authenticated arrival even if the device clock/observedAt lags.
+            -- Keep optical measurements monotonic so an out-of-order sample cannot overwrite newer power data.
+            status=EXCLUDED.status,
+            rx_power_dbm=CASE WHEN EXCLUDED.observed_at >= olt_telemetry.observed_at THEN EXCLUDED.rx_power_dbm ELSE olt_telemetry.rx_power_dbm END,
+            tx_power_dbm=CASE WHEN EXCLUDED.observed_at >= olt_telemetry.observed_at THEN EXCLUDED.tx_power_dbm ELSE olt_telemetry.tx_power_dbm END,
+            observed_at=GREATEST(EXCLUDED.observed_at,olt_telemetry.observed_at),
+            source_agent=COALESCE(EXCLUDED.source_agent,olt_telemetry.source_agent),
+            raw=EXCLUDED.raw,
+            received_at=NOW()
         `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
         count++;
       }
