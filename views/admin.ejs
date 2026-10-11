@@ -5242,9 +5242,6 @@ async function deletePlan(id,name){
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
                 'account-manage': 'Account & Support — Manage',
-                'hr-departments': 'Human Resource — Department',
-                'hr-employees': 'Human Resource — All Employees',
-                'hr-added-employees': 'Human Resource — Added Employees',
                 'sub-staff': 'User & Reseller — Sub-Staff'
             };
             const state = { depth: 0, restoring: false, current: null };
@@ -5281,6 +5278,10 @@ async function deletePlan(id,name){
                 if (route.view === 'support') {
                     const category = ['all','software','website'].includes(String(route.category || 'all')) ? String(route.category || 'all') : 'all';
                     return { view: 'support', category };
+                }
+                if (route.view === 'hr') {
+                    const section = ['departments','employees','added'].includes(String(route.section || 'employees')) ? String(route.section || 'employees') : 'employees';
+                    return { view: 'hr', section };
                 }
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
@@ -5339,9 +5340,9 @@ async function deletePlan(id,name){
                     '/admin/account/manage': { view: 'module', module: 'account-manage' },
                     '/admin/support/software': { view: 'support', category: 'software' },
                     '/admin/support/website': { view: 'support', category: 'website' },
-                    '/admin/hr/departments': { view: 'module', module: 'hr-departments' },
-                    '/admin/hr/employees': { view: 'module', module: 'hr-employees' },
-                    '/admin/hr/employees/added': { view: 'module', module: 'hr-added-employees' },
+                    '/admin/hr/departments': { view: 'hr', section: 'departments' },
+                    '/admin/hr/employees': { view: 'hr', section: 'employees' },
+                    '/admin/hr/employees/added': { view: 'hr', section: 'added' },
                     '/admin/resellers/sub-staff': { view: 'module', module: 'sub-staff' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
@@ -5403,6 +5404,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'audit') return '/admin/audit-logs';
                 if (normalized.view === 'maps') return '/admin/network/maps';
                 if (normalized.view === 'support') return normalized.category === 'software' ? '/admin/support/software' : normalized.category === 'website' ? '/admin/support/website' : '/admin/support/tickets';
+                if (normalized.view === 'hr') return normalized.section === 'departments' ? '/admin/hr/departments' : normalized.section === 'added' ? '/admin/hr/employees/added' : '/admin/hr/employees';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5472,6 +5474,7 @@ async function deletePlan(id,name){
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
+                    case 'hr': return callIfAvailable('loadHRModule', [r.section]);
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
@@ -5559,6 +5562,7 @@ async function deletePlan(id,name){
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
+                    case 'loadHRModule': return { view: 'hr', section: ['departments','employees','added'].includes(String(args[0] || 'employees')) ? String(args[0] || 'employees') : 'employees' };
                     default: return null;
                 }
             }
@@ -5596,7 +5600,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
