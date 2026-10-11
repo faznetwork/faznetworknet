@@ -12,11 +12,16 @@ test("public homepage never opens a live MikroTik connection", () => {
   assert.match(server, /Saved hotspot metadata unavailable/);
 });
 
-test("MikroTik connection and operation timeouts are three seconds", () => {
+test("MikroTik API uses a persistent serialized connection with 10-second timeouts", () => {
   const service = read("services/mikrotikService.js");
-  assert.match(service, /const CONNECTION_TIMEOUT_MS = 3000/);
-  assert.match(service, /const OPERATION_TIMEOUT_MS = 3000/);
-  assert.match(service, /MikroTik connection timed out after 3 seconds/);
+  assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
+  assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
+  assert.match(service, /this\._connection = null/);
+  assert.match(service, /this\._operationQueue = Promise\.resolve\(\)/);
+  assert.match(service, /_getPersistentConnection\(config\)/);
+  assert.match(service, /connection\.write = \(\.\.\.args\) =>/);
+  assert.match(service, /_resetPersistentConnection\(connection\)/);
+  assert.match(service, /MikroTik connection handshake/);
   assert.match(service, /this\._safeClose\(connection\);/);
   assert.doesNotMatch(service, /await this\._safeClose\(connection\)/);
 });
