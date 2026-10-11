@@ -578,7 +578,6 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('hotspot-webhook'); return false;"><i class="bi bi-webhook me-2"></i><span>Hotspot Webhook</span></a></li>
                 </ul>
             </li>
 
@@ -877,28 +876,6 @@
                   </div><div id="generalMfsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalMfsSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Numbers</button></div></form></div>
                 </div>
               </div>
-            </section>
-
-            <!-- VIEW: HOTSPOT WEBHOOK SETTINGS -->
-            <section id="view-hotspot-webhook" class="admin-view" style="display:none">
-                <div class="mb-3"><h2 class="h4 fw-bold mb-1">Hotspot Webhook Settings</h2><p class="text-muted mb-0">Configure the inbound payment webhook and match payments to MikroTik Hotspot profiles.</p></div>
-                <div class="row g-4"><div class="col-12"><div class="card card-custom shadow-sm border-0">
-                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Hotspot Webhook &amp; Gateway Integration</div><small class="text-muted fw-normal">Configure the inbound webhook used by your payment automation.</small></div></div><span id="paymentWebhookStatus" class="badge bg-secondary ms-auto">Not configured</span></div>
-                    <div class="card-body p-4"><form id="paymentWebhookSettingsForm" novalidate><div class="row g-4">
-                        <div class="col-12"><label for="paymentWebhookUrl" class="form-label fw-semibold">Webhook URL / Custom Path</label><input id="paymentWebhookUrl" type="text" class="form-control font-monospace" placeholder="/my-sms-hook or https://example.com/my-sms-hook" autocomplete="url" autocapitalize="off" spellcheck="false"><div class="form-text">Enter any absolute path (for example <code>/my-sms-hook</code>, <code>/api/custom-forwarder</code>) or a full HTTP/HTTPS URL. Forwarder requests must use POST.</div><div class="mt-2 p-3 rounded border bg-light"><div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><div class="small fw-semibold text-muted"><i class="bi bi-link-45deg me-1"></i>Full incoming endpoint</div><button type="button" id="copyWebhookEndpointBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copy endpoint</button></div><code id="webhookEndpointDisplay" class="d-block text-break mt-2">Loading endpoint…</code></div></div>
-                        <div class="col-lg-8"><label for="paymentWebhookSecret" class="form-label fw-semibold">Webhook Secret Key / Token</label><input id="paymentWebhookSecret" type="password" class="form-control font-monospace" placeholder="Leave blank to keep the existing secret" autocomplete="new-password"><div id="paymentWebhookSecretHint" class="form-text">The saved secret is never returned to the browser.</div></div>
-                        <div class="col-lg-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" role="switch" id="paymentWebhookEnabled"><label class="form-check-label fw-semibold" for="paymentWebhookEnabled">Enable automation</label></div></div>
-                    </div><div id="paymentWebhookSettingsResult" class="small mt-3"></div><div class="d-flex justify-content-end mt-4"><button id="paymentWebhookSaveBtn" type="submit" class="btn btn-success px-4"><i class="bi bi-check2-circle me-1"></i>Save Webhook Settings</button></div></form></div>
-                </div></div></div>
-                <div class="row g-4 mt-1"><div class="col-12"><div class="card card-custom shadow-sm border-0">
-                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-wifi text-primary fs-5"></i><div><div class="fw-semibold">Live Hotspot Profile Prices &amp; Validity</div><small class="text-muted fw-normal">Automatic synchronization with the Profile menu and database.</small></div></div><span id="hotspotProfileSyncStatus" class="badge bg-secondary ms-auto">Not loaded</span></div>
-                    <div class="card-body p-4">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div class="small text-muted">Price and validity are read directly from the latest saved profile metadata. No manual amount mapping or save step is required; TrxID verification uses the current values.</div><button type="button" id="hotspotProfilesRefreshBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Profiles</button></div>
-                        <div class="small text-muted mb-3" id="hotspotProfileSource">Waiting for MikroTik and database…</div>
-                        <div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead class="table-light"><tr><th>Profile</th><th>Price (৳)</th><th>Validity</th><th>Rate Limit</th><th>Data Quota</th></tr></thead><tbody id="hotspotPriceProfileRows"><tr><td colspan="5" class="text-muted text-center py-4">Loading live profile data…</td></tr></tbody></table></div>
-                        <div id="hotspotProfileSettingsResult" class="small mt-3" role="status" aria-live="polite"></div>
-                    </div>
-                </div></div></div>
             </section>
 
             <!-- Shared Add/Edit Customer Form Modal. The existing Add Customer form is moved here for editing and restored when closed. -->
@@ -1838,7 +1815,6 @@
             'all-customer': 'All Customer (PPPoE)',
             payments: 'All Payments',
             'general-settings': 'General Settings',
-            'hotspot-webhook': 'Hotspot Webhook Settings'
         };
 
         let currentIpPoolEdit = null; let ipPoolCache = {};
@@ -2464,9 +2440,6 @@ async function deletePlan(id,name){
                     fetchPayments(currentPaymentChannel);
                 } else if (target === 'general-settings') {
                     loadGeneralSettings();
-                } else if (target === 'hotspot-webhook') {
-                    loadHotspotWebhookSettings();
-                    loadHotspotProfileSettings();
                 }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
@@ -2474,7 +2447,7 @@ async function deletePlan(id,name){
 
         window.switchView = switchView;
 
-        if (window.location.hash === '#hotspot-webhook') switchView('hotspot-webhook');
+        if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
             const id = String(sectionId || '').trim();
