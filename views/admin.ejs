@@ -1231,7 +1231,7 @@
                 </ul>
             </li>
 
-            <li class="menu-item">
+            <li class="menu-item" data-rbac-roles="super_admin,admin">
                 <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
                     <i class="bi bi-person-vcard"></i> <span data-key="user_reseller">User & Reseller</span>
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
@@ -1377,8 +1377,8 @@
             </section>
             <!-- VIEW: ROLE-RESTRICTED STAFF MANAGEMENT -->
             <section id="view-staff-management" class="admin-view" style="display:none">
-              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Staff Management</h2><p class="text-muted mb-0">Create and manage individual accounts with first-login email verification.</p></div><span class="badge text-bg-success">RBAC enabled</span></div>
-              <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-person-plus text-success fs-5"></i><span>Create Admin / Staff Account</span></div><div class="card-body p-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 id="rbacStaffHeading" class="h4 fw-bold mb-1">Staff Management</h2><p class="text-muted mb-0">Create and manage individual accounts with first-login email verification.</p></div><span class="badge text-bg-success">RBAC enabled</span></div>
+              <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-person-plus text-success fs-5"></i><span id="rbacCreateAccountHeading">Create Admin / Staff Account</span></div><div class="card-body p-4">
                 <form id="rbacCreateUserForm" class="row g-3">
                   <div class="col-md-6"><label class="form-label" for="rbacUsername">Username</label><input id="rbacUsername" name="username" class="form-control" minlength="3" maxlength="60" pattern="[A-Za-z0-9._-]+" autocomplete="off" required></div>
                   <div class="col-md-6"><label class="form-label" for="rbacEmail">Email</label><input id="rbacEmail" name="email" type="email" class="form-control" maxlength="254" required></div>
@@ -1387,8 +1387,8 @@
                   <div class="col-12"><div id="rbacCreateUserResult" class="small" role="status" aria-live="polite"></div><button class="btn btn-success" type="submit" id="rbacCreateUserBtn"><i class="bi bi-envelope-paper me-1"></i>Send invitation</button></div>
                 </form>
               </div></div>
-              <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-envelope-check text-success fs-5"></i><span>Pending Invitations</span><button class="btn btn-outline-success btn-sm ms-auto" type="button" onclick="window.loadStaffInvitations()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Email</th><th>Role</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead><tbody id="rbacInvitationsBody"><tr><td colspan="6" class="text-center text-muted py-4">Loading invitations…</td></tr></tbody></table></div></div>
-              <div class="card card-custom"><div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>Accounts</span><button class="btn btn-outline-success btn-sm ms-auto" type="button" onclick="window.loadStaffManagement()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Email</th><th>Role</th><th>First Login</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody id="rbacUsersBody"><tr><td colspan="7" class="text-center text-muted py-4">Loading accounts…</td></tr></tbody></table></div></div>
+              <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-envelope-check text-success fs-5"></i><span id="rbacInvitationsHeading">Pending Invitations</span><button class="btn btn-outline-success btn-sm ms-auto" type="button" onclick="window.loadStaffInvitations()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Email</th><th>Role</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead><tbody id="rbacInvitationsBody"><tr><td colspan="6" class="text-center text-muted py-4">Loading invitations…</td></tr></tbody></table></div></div>
+              <div class="card card-custom"><div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span id="rbacAccountsHeading">Accounts</span><button class="btn btn-outline-success btn-sm ms-auto" type="button" onclick="window.loadStaffManagement(window.__fazStaffMode || 'all')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Email</th><th>Role</th><th>First Login</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody id="rbacUsersBody"><tr><td colspan="7" class="text-center text-muted py-4">Loading accounts…</td></tr></tbody></table></div></div>
             </section>
 
             <!-- VIEW: CENTRALIZED GENERAL SETTINGS -->
@@ -3500,6 +3500,129 @@ async function deletePlan(id,name){
             }
         };
 
+
+        const currentAdminCanInvitePrivileged = <%- JSON.stringify(typeof currentRole !== 'undefined' && currentRole === 'super_admin') %>;
+        let currentStaffMode = 'all';
+        window.loadStaffInvitations = async function(mode = currentStaffMode) {
+            const body = document.getElementById('rbacInvitationsBody');
+            if (!body) return false;
+            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            window.__fazStaffMode = currentStaffMode;
+            body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading invitations…</td></tr>';
+            try {
+                const data = await window.jsonFetch('/api/admin/users/invitations');
+                let invitations = Array.isArray(data.invitations) ? data.invitations : [];
+                if (currentStaffMode === 'sub-staff') invitations = invitations.filter(item => item.role === 'staff');
+                body.innerHTML = invitations.length ? invitations.map(item => {
+                    const created = item.created_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(item.created_at) : item.created_at) : '—';
+                    const expires = item.expires_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(item.expires_at) : item.expires_at) : '—';
+                    const action = item.status === 'pending' ? '<button type="button" class="btn btn-sm btn-outline-danger" data-invitation-cancel="' + Number(item.id) + '">Cancel</button>' : '<span class="badge text-bg-warning">Needs attention</span>';
+                    return '<tr><td class="fw-semibold">' + escapeHtml(item.username) + '</td><td class="text-break">' + escapeHtml(item.email) + '</td><td>' + escapeHtml(item.role) + '</td><td class="text-nowrap">' + escapeHtml(created) + '</td><td class="text-nowrap">' + escapeHtml(expires) + '</td><td>' + action + '</td></tr>';
+                }).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No pending invitations.</td></tr>';
+                body.querySelectorAll('[data-invitation-cancel]').forEach(button => button.addEventListener('click', async () => {
+                    if (!window.confirm('Cancel this invitation? Its link will no longer work.')) return;
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/invitations/' + button.dataset.invitationCancel, {method:'DELETE'}); await window.loadStaffInvitations(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to cancel invitation.'); button.disabled = false; }
+                }));
+                return true;
+            } catch(error) {
+                body.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load invitations.') + '</td></tr>';
+                return false;
+            }
+        };
+
+        window.loadStaffManagement = async function(mode = 'all') {
+            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            window.__fazStaffMode = currentStaffMode;
+            if (typeof window.switchView === 'function') window.switchView('staff-management');
+            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : 'Staff Management';
+            setPageTitleSafe(title);
+            const heading = document.getElementById('rbacStaffHeading');
+            const createHeading = document.getElementById('rbacCreateAccountHeading');
+            const accountsHeading = document.getElementById('rbacAccountsHeading');
+            const invitesHeading = document.getElementById('rbacInvitationsHeading');
+            if (heading) heading.textContent = title;
+            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : 'Create Admin / Staff Account';
+            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : 'Accounts';
+            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : 'Pending Invitations';
+            const roleSelect = document.getElementById('rbacRole');
+            if (roleSelect) {
+                Array.from(roleSelect.options).forEach(option => {
+                    const hidden = option.value !== 'staff' && (!currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff');
+                    option.hidden = hidden; option.disabled = hidden;
+                });
+                if (!currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff') roleSelect.value = 'staff';
+                roleSelect.disabled = !currentAdminCanInvitePrivileged || currentStaffMode === 'sub-staff';
+            }
+            const usersBody = document.getElementById('rbacUsersBody');
+            if (!usersBody) return false;
+            usersBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading accounts…</td></tr>';
+            try {
+                const data = await window.jsonFetch('/api/admin/users');
+                let users = Array.isArray(data.users) ? data.users : [];
+                if (currentStaffMode === 'sub-staff') users = users.filter(user => user.role === 'staff');
+                usersBody.innerHTML = users.length ? users.map(user => {
+                    const created = user.created_at ? (typeof FazDate !== 'undefined' ? FazDate.formatDateTime(user.created_at) : user.created_at) : '—';
+                    const firstLogin = user.is_first_login ? '<span class="badge text-bg-warning">Pending verification</span>' : '<span class="badge text-bg-success">Complete</span>';
+                    const status = user.status === 'disabled' ? '<span class="badge text-bg-secondary">Disabled</span>' : '<span class="badge text-bg-success">Active</span>';
+                    const nextStatus = user.status === 'disabled' ? 'active' : 'disabled';
+                    const statusLabel = user.status === 'disabled' ? 'Activate' : 'Disable';
+                    const resend = user.is_first_login ? '<button type="button" class="btn btn-sm btn-outline-primary" data-user-resend="' + Number(user.id) + '">Resend invite</button>' : '';
+                    return '<tr><td class="fw-semibold">' + escapeHtml(user.username) + '</td><td class="text-break">' + escapeHtml(user.email) + '</td><td><span class="badge text-bg-light border">' + escapeHtml(user.role) + '</span></td><td>' + firstLogin + '</td><td>' + status + '</td><td class="text-nowrap">' + escapeHtml(created) + '</td><td><div class="d-flex flex-wrap gap-1">' + resend + '<button type="button" class="btn btn-sm btn-outline-success" data-user-status="' + Number(user.id) + '" data-next-status="' + nextStatus + '">' + statusLabel + '</button><button type="button" class="btn btn-sm btn-outline-danger" data-user-delete="' + Number(user.id) + '">Delete</button></div></td></tr>';
+                }).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">No accounts found for this view.</td></tr>';
+                usersBody.querySelectorAll('[data-user-status]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userStatus + '/status', {method:'PATCH',body:JSON.stringify({status:button.dataset.nextStatus})}); await window.loadStaffManagement(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to update account status.'); button.disabled = false; }
+                }));
+                usersBody.querySelectorAll('[data-user-delete]').forEach(button => button.addEventListener('click', async () => {
+                    if (!window.confirm('Delete this account? This action cannot be undone.')) return;
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userDelete, {method:'DELETE'}); await window.loadStaffManagement(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to delete account.'); button.disabled = false; }
+                }));
+                usersBody.querySelectorAll('[data-user-resend]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try { await window.jsonFetch('/api/admin/users/' + button.dataset.userResend + '/resend-invitation', {method:'POST',body:JSON.stringify({})}); window.alert('Invitation resent.'); await window.loadStaffInvitations(currentStaffMode); }
+                    catch(error) { window.alert(error.message || 'Unable to resend invitation.'); button.disabled = false; }
+                }));
+                await window.loadStaffInvitations(currentStaffMode);
+                const form = document.getElementById('rbacCreateUserForm');
+                if (form && !form.dataset.rbacSubmitBound) {
+                    form.dataset.rbacSubmitBound = '1';
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        const result = document.getElementById('rbacCreateUserResult');
+                        const button = document.getElementById('rbacCreateUserBtn');
+                        const payload = {
+                            username:document.getElementById('rbacUsername')?.value || '',
+                            email:document.getElementById('rbacEmail')?.value || '',
+                            role:currentStaffMode === 'sub-staff' || !currentAdminCanInvitePrivileged ? 'staff' : (document.getElementById('rbacRole')?.value || 'staff')
+                        };
+                        if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending…'; }
+                        if (result) { result.className = 'small'; result.textContent = ''; }
+                        try {
+                            await window.jsonFetch('/api/admin/users', {method:'POST',body:JSON.stringify(payload)});
+                            if (result) { result.className = 'small text-success'; result.textContent = 'Invitation sent successfully. The account activates after email verification.'; }
+                            form.reset();
+                            if (roleSelect) roleSelect.value = 'staff';
+                            await window.loadStaffManagement(currentStaffMode);
+                        } catch(error) {
+                            if (result) { result.className = 'small text-danger'; result.textContent = error.message || 'Unable to send invitation.'; }
+                        } finally {
+                            if (button) { button.disabled = false; button.innerHTML = '<i class="bi bi-envelope-paper me-1"></i>Send invitation'; }
+                        }
+                    });
+                }
+                return true;
+            } catch(error) {
+                usersBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load accounts.') + '</td></tr>';
+                await window.loadStaffInvitations(currentStaffMode);
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
@@ -5454,7 +5577,6 @@ async function deletePlan(id,name){
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
                 'account-manage': 'Account & Support — Manage',
-                'sub-staff': 'User & Reseller — Sub-Staff'
             };
             const state = { depth: 0, restoring: false, current: null };
 
@@ -5497,6 +5619,7 @@ async function deletePlan(id,name){
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
+                if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5557,7 +5680,7 @@ async function deletePlan(id,name){
                     '/admin/hr/departments': { view: 'hr', section: 'departments' },
                     '/admin/hr/employees': { view: 'hr', section: 'employees' },
                     '/admin/hr/employees/added': { view: 'hr', section: 'added' },
-                    '/admin/resellers/sub-staff': { view: 'module', module: 'sub-staff' }
+                    '/admin/resellers/sub-staff': { view: 'sub-staff' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
@@ -5621,6 +5744,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'hr') return normalized.section === 'departments' ? '/admin/hr/departments' : normalized.section === 'added' ? '/admin/hr/employees/added' : '/admin/hr/employees';
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
                 if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
+                if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5686,7 +5810,8 @@ async function deletePlan(id,name){
                     case 'packages': return callIfAvailable('loadPlanPackages');
                     case 'ip-pools': return callIfAvailable('loadIpPools');
                     case 'olt': return callIfAvailable('loadOltManagement', [r.mode]);
-                    case 'staff': return callIfAvailable('loadStaffManagement');
+                    case 'staff': return callIfAvailable('loadStaffManagement', ['all']);
+                    case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
@@ -5782,7 +5907,7 @@ async function deletePlan(id,name){
                     case 'loadPlanPackages': return { view: 'packages' };
                     case 'loadIpPools': return { view: 'ip-pools' };
                     case 'loadOltManagement': return { view: 'olt', mode: args[0] || 'overview' };
-                    case 'loadStaffManagement': return { view: 'staff' };
+                    case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : 'staff' };
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
