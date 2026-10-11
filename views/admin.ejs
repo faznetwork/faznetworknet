@@ -4044,8 +4044,9 @@ async function deletePlan(id,name){
             });
         }
 
-        // Bangladesh customer-address map: searchable Google Maps embed; no API key required.
-        // This locates an entered address, not a customer's GPS/device-based live position.
+        // Bangladesh customer-address map with cascading administrative dropdowns.
+        // Location catalogue is loaded from BDAPIS; free-text details remain for house/village/landmarks.
+        // This searches an entered address and is not GPS-based live tracking.
         window.loadGoogleMapTracking = function() {
             purgeStuckBackdrops();
             currentCustomerTitleKey = '';
@@ -4053,65 +4054,188 @@ async function deletePlan(id,name){
             setPageTitleSafe('Google Maps');
             const dynamic = document.getElementById('dynamicPageContent');
             if (!dynamic) return;
-            dynamic.innerHTML = `
+            dynamic.innerHTML = \`
                 <section class="admin-view p-3">
                     <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
-                        <div class="rounded-3 d-flex align-items-center justify-content-center" style="width:54px;height:54px;background:#e0f2fe;color:#0369a1;font-size:25px"><i class="bi bi-geo-alt-fill"></i></div>
-                        <div class="me-auto"><div class="small text-primary fw-bold">LIVE TRACKING / BANGLADESH</div><h3 class="mb-1 fw-bold">Google Maps — Customer Location</h3><div class="text-muted">Find a customer address from division and district down to upazila, union, village, road and house.</div></div>
-                        <span class="badge rounded-pill text-bg-light border px-3 py-2"><i class="bi bi-map me-1"></i>Bangladesh map search</span>
+                        <div class="rounded-4 d-flex align-items-center justify-content-center shadow-sm" style="width:58px;height:58px;background:linear-gradient(135deg,#dcfce7,#d1fae5);color:#065f46;font-size:26px"><i class="bi bi-geo-alt-fill"></i></div>
+                        <div class="me-auto"><div class="small text-success fw-bold text-uppercase">Live Tracking / Bangladesh</div><h3 class="mb-1 fw-bold">Google Maps — Customer Location</h3><div class="text-muted">বিভাগ থেকে ইউনিয়ন পর্যন্ত ড্রপডাউন থেকে নির্বাচন করুন, তারপর বাড়ি/গ্রামের বিস্তারিত দিন।</div></div>
+                        <span class="badge rounded-pill text-bg-light border px-3 py-2"><i class="bi bi-map me-1"></i>Bangladesh address finder</span>
                     </div>
                     <div class="card border-0 shadow-sm rounded-4 mb-4">
                         <div class="card-body p-3 p-lg-4">
+                            <div class="d-flex align-items-center gap-2 mb-3"><i class="bi bi-list-check text-success fs-5"></i><h5 class="fw-bold mb-0">ঠিকানা নির্বাচন</h5><span id="bdGeoStatus" class="small text-muted ms-auto">লোকেশনের তালিকা লোড হচ্ছে…</span></div>
                             <form id="bdGoogleMapSearchForm">
                                 <div class="row g-3">
-                                    <div class="col-12"><label for="bdMapCustomerName" class="form-label fw-semibold">Customer name / location label <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapCustomerName" class="form-control" maxlength="120" placeholder="e.g. Rahim Uddin — Home connection"></div>
-                                    <div class="col-md-6"><label for="bdMapHouseRoad" class="form-label fw-semibold">House, road, village / bazar</label><input id="bdMapHouseRoad" class="form-control" maxlength="220" placeholder="House no., road, village, bazar"></div>
-                                    <div class="col-md-6"><label for="bdMapUnion" class="form-label fw-semibold">Union / ward</label><input id="bdMapUnion" class="form-control" maxlength="120" placeholder="Union or ward name"></div>
-                                    <div class="col-md-4"><label for="bdMapUpazila" class="form-label fw-semibold">Upazila / Thana</label><input id="bdMapUpazila" class="form-control" maxlength="120" placeholder="Upazila or thana"></div>
-                                    <div class="col-md-4"><label for="bdMapDistrict" class="form-label fw-semibold">District <span class="text-danger">*</span></label><input id="bdMapDistrict" class="form-control" maxlength="120" required placeholder="District name"></div>
-                                    <div class="col-md-4"><label for="bdMapDivision" class="form-label fw-semibold">Division</label><select id="bdMapDivision" class="form-select"><option value="">Select division (optional)</option><option>Barishal</option><option>Chattogram</option><option>Dhaka</option><option>Khulna</option><option>Mymensingh</option><option>Rajshahi</option><option>Rangpur</option><option>Sylhet</option></select></div>
-                                    <div class="col-12"><label for="bdMapExtraAddress" class="form-label fw-semibold">Landmark / extra address details <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapExtraAddress" class="form-control" maxlength="220" placeholder="Nearby mosque, school, market, holding number, postal code"></div>
-                                    <div class="col-12 d-flex flex-wrap gap-2 align-items-center"><button class="btn btn-primary px-4" type="submit"><i class="bi bi-search me-2"></i>Find on Google Maps</button><button class="btn btn-outline-secondary" id="bdMapResetBtn" type="reset"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear</button><span class="small text-muted">Enter the most specific address available for a better match.</span></div>
+                                    <div class="col-12"><label for="bdMapCustomerName" class="form-label fw-semibold">Customer name / location label <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapCustomerName" class="form-control" maxlength="120" placeholder="যেমন: Rahim Uddin — Home connection"></div>
+                                    <div class="col-md-6"><label for="bdMapDivision" class="form-label fw-semibold">বিভাগ (Division) <span class="text-danger">*</span></label><select id="bdMapDivision" class="form-select" required><option value="">বিভাগ নির্বাচন করুন</option></select></div>
+                                    <div class="col-md-6"><label for="bdMapDistrict" class="form-label fw-semibold">জেলা (District) <span class="text-danger">*</span></label><select id="bdMapDistrict" class="form-select" required disabled><option value="">আগে বিভাগ নির্বাচন করুন</option></select></div>
+                                    <div class="col-md-6"><label for="bdMapUpazila" class="form-label fw-semibold">উপজেলা / থানা (Upazila / Thana) <span class="text-danger">*</span></label><select id="bdMapUpazila" class="form-select" required disabled><option value="">আগে জেলা নির্বাচন করুন</option></select></div>
+                                    <div class="col-md-6"><label for="bdMapUnion" class="form-label fw-semibold">ইউনিয়ন / স্থানীয় এলাকা (Union)</label><select id="bdMapUnion" class="form-select" disabled><option value="">আগে উপজেলা নির্বাচন করুন</option></select></div>
+                                    <div class="col-md-4"><label for="bdMapWard" class="form-label fw-semibold">ওয়ার্ড নম্বর (Ward)</label><select id="bdMapWard" class="form-select"><option value="">ওয়ার্ড নির্বাচন করুন</option>\${Array.from({length:9},(_,i)=>\`<option value="\${i+1}">\${i+1} নং ওয়ার্ড</option>\`).join('')}<option value="other">তালিকায় নেই / Other</option></select><input id="bdMapWardOther" class="form-control mt-2 d-none" maxlength="60" placeholder="ওয়ার্ড নম্বর / নাম লিখুন"></div>
+                                    <div class="col-md-4"><label for="bdMapLocality" class="form-label fw-semibold">গ্রাম / মহল্লা / বাজার</label><input id="bdMapLocality" class="form-control" maxlength="180" placeholder="গ্রাম, পাড়া বা বাজারের নাম"></div>
+                                    <div class="col-md-4"><label for="bdMapHouseRoad" class="form-label fw-semibold">বাড়ি / রোড / হোল্ডিং</label><input id="bdMapHouseRoad" class="form-control" maxlength="180" placeholder="বাড়ি নম্বর, রোড বা হোল্ডিং"></div>
+                                    <div class="col-md-6"><label for="bdMapMunicipality" class="form-label fw-semibold">পৌরসভা / সিটি কর্পোরেশন <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapMunicipality" class="form-control" maxlength="120" placeholder="প্রযোজ্য হলে নাম লিখুন"></div>
+                                    <div class="col-md-6"><label for="bdMapExtraAddress" class="form-label fw-semibold">ল্যান্ডমার্ক / পোস্টকোড <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapExtraAddress" class="form-control" maxlength="220" placeholder="মসজিদ, স্কুল, বাজার বা পোস্টকোড"></div>
+                                    <div class="col-12 d-flex flex-wrap gap-2 align-items-center"><button class="btn btn-success px-4" type="submit"><i class="bi bi-search me-2"></i>Find on Google Maps</button><button class="btn btn-outline-secondary" type="reset"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear</button><span class="small text-muted">যত বেশি সঠিক বিবরণ দেবেন, ম্যাপে সঠিক অবস্থান পাওয়ার সম্ভাবনা তত বাড়বে।</span></div>
                                 </div>
                             </form>
                         </div>
                     </div>
                     <div id="bdMapResult" class="card border-0 shadow-sm rounded-4 overflow-hidden">
-                        <div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">Enter a district and any known upazila, union, village, road or house details, then select Find on Google Maps.</p></div>
+                        <div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">বিভাগ, জেলা ও উপজেলা নির্বাচন করে ঠিকানার বিস্তারিত দিন, তারপর Google Maps-এ খুঁজুন।</p></div>
                     </div>
-                    <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Google Maps shows the closest result it can identify from the address. Rural addresses may need a village name, union, nearby landmark or postal code for better accuracy. This feature locates an entered address; it does not show a customer's live GPS position.</div>
-                </section>`;
+                    <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>এটি নির্বাচিত ঠিকানা Google Maps-এ খুঁজে দেখায়; গ্রাহকের ফোনের GPS থেকে লাইভ অবস্থান সংগ্রহ করে না। গ্রাম বা ওয়ার্ডের নির্ভুল পিন Google Maps-এর তথ্যের ওপরও নির্ভর করে।</div>
+                </section>\`;
             const form = document.getElementById('bdGoogleMapSearchForm');
             const result = document.getElementById('bdMapResult');
+            const status = document.getElementById('bdGeoStatus');
+            const divisionSelect = document.getElementById('bdMapDivision');
+            const districtSelect = document.getElementById('bdMapDistrict');
+            const upazilaSelect = document.getElementById('bdMapUpazila');
+            const unionSelect = document.getElementById('bdMapUnion');
+            const wardSelect = document.getElementById('bdMapWard');
+            const wardOther = document.getElementById('bdMapWardOther');
+            const apiBase = 'https://bdapis.vercel.app/geo/v2.0';
+            const unwrap = payload => {
+                if (Array.isArray(payload)) return payload;
+                for (const key of ['data','results','items','divisions','districts','upazilas','unions']) {
+                    if (Array.isArray(payload?.[key])) return payload[key];
+                }
+                return [];
+            };
+            const getId = item => String(item?.id ?? item?._id ?? item?.division_id ?? item?.district_id ?? item?.upazila_id ?? item?.union_id ?? item?.code ?? '');
+            const getName = item => {
+                const bn = item?.name_bn ?? item?.bn_name ?? item?.name?.bn ?? item?.name?.local ?? item?.bangla ?? item?.nameBangla ?? '';
+                const en = item?.name_en ?? item?.en_name ?? item?.name?.en ?? item?.english ?? item?.nameEnglish ?? (typeof item?.name === 'string' ? item.name : '');
+                return {bn:String(bn || ''), en:String(en || '')};
+            };
+            const setPlaceholder = (select, text, disabled = true) => {
+                select.replaceChildren(new Option(text, ''));
+                select.disabled = disabled;
+            };
+            const fillSelect = (select, items, placeholder) => {
+                setPlaceholder(select, placeholder, false);
+                const fragment = document.createDocumentFragment();
+                items.forEach(item => {
+                    const id = getId(item);
+                    const names = getName(item);
+                    const label = [names.bn, names.en].filter((v,i,a)=>v && a.indexOf(v)===i).join(' — ') || names.en || names.bn || String(item?.name || id);
+                    if (!id || !label) return;
+                    fragment.appendChild(new Option(label, id));
+                });
+                select.appendChild(fragment);
+                if (select.options.length <= 1) setPlaceholder(select, 'তথ্য পাওয়া যায়নি', true);
+            };
+            const fetchLocations = async path => {
+                const response = await fetch(apiBase + path, {headers:{'Accept':'application/json'}});
+                if (!response.ok) throw new Error('Location list request failed (' + response.status + ')');
+                return unwrap(await response.json());
+            };
+            const loadChildren = async (path, select, placeholder) => {
+                setPlaceholder(select, 'তালিকা লোড হচ্ছে…', true);
+                try {
+                    const items = await fetchLocations(path);
+                    fillSelect(select, items, placeholder);
+                    return items.length;
+                } catch (error) {
+                    setPlaceholder(select, 'তালিকা লোড হয়নি — আবার চেষ্টা করুন', true);
+                    throw error;
+                }
+            };
+            const resetBelowDivision = () => {
+                setPlaceholder(districtSelect,'আগে বিভাগ নির্বাচন করুন');
+                setPlaceholder(upazilaSelect,'আগে জেলা নির্বাচন করুন');
+                setPlaceholder(unionSelect,'আগে উপজেলা নির্বাচন করুন');
+            };
+            const resetBelowDistrict = () => {
+                setPlaceholder(upazilaSelect,'আগে জেলা নির্বাচন করুন');
+                setPlaceholder(unionSelect,'আগে উপজেলা নির্বাচন করুন');
+            };
+            divisionSelect.addEventListener('change', async () => {
+                resetBelowDivision();
+                if (!divisionSelect.value) return;
+                try {
+                    await loadChildren('/districts/' + encodeURIComponent(divisionSelect.value), districtSelect, 'জেলা নির্বাচন করুন');
+                    status.textContent = 'বিভাগ ও জেলার তালিকা প্রস্তুত';
+                } catch (error) {
+                    status.textContent = 'লোকেশনের তালিকা লোড করা যায়নি';
+                    console.warn('[Google Maps] districts list unavailable:', error);
+                }
+            });
+            districtSelect.addEventListener('change', async () => {
+                resetBelowDistrict();
+                if (!districtSelect.value) return;
+                try {
+                    await loadChildren('/upazilas/' + encodeURIComponent(districtSelect.value), upazilaSelect, 'উপজেলা / থানা নির্বাচন করুন');
+                } catch (error) {
+                    status.textContent = 'উপজেলার তালিকা লোড করা যায়নি';
+                    console.warn('[Google Maps] upazila list unavailable:', error);
+                }
+            });
+            upazilaSelect.addEventListener('change', async () => {
+                setPlaceholder(unionSelect,'তালিকা লোড হচ্ছে…',true);
+                if (!upazilaSelect.value) { setPlaceholder(unionSelect,'আগে উপজেলা নির্বাচন করুন'); return; }
+                try {
+                    const count = await loadChildren('/unions/' + encodeURIComponent(upazilaSelect.value), unionSelect, 'ইউনিয়ন নির্বাচন করুন');
+                    if (!count) setPlaceholder(unionSelect,'ইউনিয়নের তথ্য নেই',true);
+                } catch (error) {
+                    setPlaceholder(unionSelect,'ইউনিয়নের তালিকা লোড হয়নি',true);
+                    status.textContent = 'ইউনিয়নের তালিকা লোড করা যায়নি';
+                    console.warn('[Google Maps] union list unavailable:', error);
+                }
+            });
+            wardSelect.addEventListener('change', () => wardOther.classList.toggle('d-none', wardSelect.value !== 'other'));
+            const selectedLabel = select => select?.selectedOptions?.[0] && select.value ? select.selectedOptions[0].textContent.trim() : '';
             const makeQuery = () => {
-                const district = String(document.getElementById('bdMapDistrict')?.value || '').trim();
-                if (!district) throw new Error('Please enter at least the district name.');
-                const fields = ['bdMapHouseRoad','bdMapUnion','bdMapUpazila','bdMapDistrict','bdMapDivision','bdMapExtraAddress']
-                    .map(id => String(document.getElementById(id)?.value || '').trim())
-                    .filter(Boolean);
-                fields.push('Bangladesh');
-                return fields.join(', ');
+                const division = selectedLabel(divisionSelect);
+                const district = selectedLabel(districtSelect);
+                const upazila = selectedLabel(upazilaSelect);
+                if (!division || !district || !upazila) throw new Error('বিভাগ, জেলা এবং উপজেলা / থানা ড্রপডাউন থেকে নির্বাচন করুন।');
+                const ward = wardSelect.value === 'other' ? wardOther.value.trim() : wardSelect.value ? wardSelect.value + ' নং ওয়ার্ড' : '';
+                return [
+                    document.getElementById('bdMapHouseRoad').value.trim(),
+                    document.getElementById('bdMapLocality').value.trim(),
+                    selectedLabel(unionSelect),
+                    ward,
+                    document.getElementById('bdMapMunicipality').value.trim(),
+                    upazila, district, division,
+                    document.getElementById('bdMapExtraAddress').value.trim(),
+                    'Bangladesh'
+                ].filter(Boolean).join(', ');
             };
             const showMap = (query, label) => {
                 const encoded = encodeURIComponent(query);
                 const embedUrl = 'https://maps.google.com/maps?q=' + encoded + '&z=16&output=embed';
                 const openUrl = 'https://www.google.com/maps/search/?api=1&query=' + encoded;
-                result.innerHTML = '<div class="p-3 p-lg-4 border-bottom d-flex flex-wrap align-items-center gap-2"><div class="me-auto"><div class="small text-success fw-bold">ADDRESS SEARCH RESULT</div><h5 class="fw-bold mb-1">' + escapeHtml(label || 'Customer location') + '</h5><div class="small text-muted">' + escapeHtml(query) + '</div></div><a class="btn btn-outline-primary" href="' + openUrl + '" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Open in Google Maps</a></div><div style="width:100%;height:clamp(360px,62vh,680px);background:#e2e8f0"><iframe title="Google Maps customer address" src="' + embedUrl + '" width="100%" height="100%" style="border:0" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div><div class="p-3 bg-light small text-muted"><i class="bi bi-crosshair me-1"></i>Zoom in/out and inspect the result. If the pin is not exact, add more village, union, road or landmark details and search again.</div>';
+                result.innerHTML = '<div class="p-3 p-lg-4 border-bottom d-flex flex-wrap align-items-center gap-2"><div class="me-auto"><div class="small text-success fw-bold">ADDRESS SEARCH RESULT</div><h5 class="fw-bold mb-1">' + escapeHtml(label || 'Customer location') + '</h5><div class="small text-muted">' + escapeHtml(query) + '</div></div><a class="btn btn-outline-primary" href="' + openUrl + '" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Open in Google Maps</a></div><div style="width:100%;height:clamp(360px,62vh,680px);background:#e2e8f0"><iframe title="Google Maps customer address" src="' + embedUrl + '" width="100%" height="100%" style="border:0" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div><div class="p-3 bg-light small text-muted"><i class="bi bi-crosshair me-1"></i>ম্যাপের অবস্থান মিলিয়ে দেখুন। পিন সঠিক না হলে গ্রাম, ওয়ার্ড, রোড বা ল্যান্ডমার্কের তথ্য যোগ করুন।</div>';
             };
-            form?.addEventListener('submit', function(event) {
+            form?.addEventListener('submit', event => {
                 event.preventDefault();
                 try {
                     const query = makeQuery();
                     showMap(query, String(document.getElementById('bdMapCustomerName')?.value || '').trim());
                 } catch (error) {
-                    window.alert(error.message || 'Please enter a valid Bangladesh address.');
+                    window.alert(error.message || 'সঠিক বাংলাদেশি ঠিকানা নির্বাচন করুন।');
                 }
             });
-            form?.addEventListener('reset', function() {
+            form?.addEventListener('reset', () => {
                 window.setTimeout(() => {
-                    if (result) result.innerHTML = '<div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">Enter a district and any known upazila, union, village, road or house details, then select Find on Google Maps.</p></div>';
+                    resetBelowDivision();
+                    wardOther.classList.add('d-none');
+                    if (result) result.innerHTML = '<div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">বিভাগ, জেলা ও উপজেলা নির্বাচন করে ঠিকানার বিস্তারিত দিন।</p></div>';
                 }, 0);
             });
+            (async () => {
+                try {
+                    const items = await fetchLocations('/divisions');
+                    fillSelect(divisionSelect, items, 'বিভাগ নির্বাচন করুন');
+                    status.textContent = items.length ? 'বিভাগ ও প্রশাসনিক তালিকা প্রস্তুত' : 'বিভাগের তালিকা খালি';
+                } catch (error) {
+                    status.textContent = 'লোকেশনের তালিকা লোড হয়নি — নেটওয়ার্ক পরীক্ষা করুন';
+                    setPlaceholder(divisionSelect,'বিভাগের তালিকা লোড হয়নি',true);
+                    console.warn('[Google Maps] divisions list unavailable:', error);
+                }
+            })();
         };
 
         function initializeAdminRuntime() {
