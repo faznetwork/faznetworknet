@@ -125,14 +125,23 @@ exports.listTelemetry = async (req,res) => {
                END AS priority
         FROM customers c
         LEFT JOIN pppoe_users p ON LOWER(p.username)=LOWER(c.username)
+        LEFT JOIN LATERAL (
+          SELECT s.caller_id
+          FROM pppoe_live_sessions s
+          WHERE LOWER(s.username)=LOWER(c.username)
+            AND s.received_at >= NOW() - INTERVAL '3 minutes'
+            AND NULLIF(BTRIM(s.caller_id), '') IS NOT NULL
+          ORDER BY s.received_at DESC
+          LIMIT 1
+        ) live ON TRUE
         WHERE
           (NULLIF(BTRIM(c.onu_mac), '') IS NOT NULL
            AND regexp_replace(lower(c.onu_mac), '[^0-9a-f]', '', 'g') =
                regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
           OR
           (NULLIF(BTRIM(c.onu_mac), '') IS NULL
-           AND NULLIF(BTRIM(p.caller_id), '') IS NOT NULL
-           AND regexp_replace(lower(p.caller_id), '[^0-9a-f]', '', 'g') =
+           AND NULLIF(BTRIM(COALESCE(live.caller_id,p.caller_id)), '') IS NOT NULL
+           AND regexp_replace(lower(COALESCE(live.caller_id,p.caller_id)), '[^0-9a-f]', '', 'g') =
                regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
         ORDER BY priority, c.updated_at DESC NULLS LAST
         LIMIT 1
