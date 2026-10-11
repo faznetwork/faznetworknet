@@ -325,17 +325,28 @@ async function users(req, res) {
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `, params);
 
-    // Read the most recently pushed RouterOS session snapshot from PostgreSQL.
-    // This avoids opening a MikroTik socket for each Customer 360/dashboard request.
-    const liveResult = await db.query(
-      `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
-              bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
-       FROM pppoe_live_sessions
-       WHERE received_at >= NOW() - INTERVAL '3 minutes'
-       ORDER BY username ASC`
-    );
+    // Use the live RouterOS active-session table for the current online state.
+    // Only use a recent pushed snapshot when the RouterOS read fails.
+    let liveRows;
+    try {
+      liveRows = await mikrotikService.getActiveSessions();
+      if (!Array.isArray(liveRows)) throw new Error("Invalid MikroTik active-session response.");
+    } catch (liveError) {
+      console.warn("[PPPoE API] Live session lookup unavailable:", liveError.message);
+      const snapshot = await db.query(
+        `SELECT username,address,uptime,service,bytes_in AS "bytesIn",
+                bytes_out AS "bytesOut",caller_id AS "callerId",received_at AS "receivedAt"
+         FROM pppoe_live_sessions
+         WHERE received_at >= NOW() - INTERVAL '3 minutes'
+         ORDER BY username ASC`
+      );
+      if (!snapshot.rows.length) {
+        return res.status(503).json({success:false,users:[],profiles:[],code:"LIVE_SESSION_SOURCE_UNAVAILABLE",message:"Live session data is unavailable; customer status was not inferred."});
+      }
+      liveRows = snapshot.rows;
+    }
     const sessionMap = new Map();
-    for (const session of liveResult.rows) {
+    for (const session of liveRows) {
       const username = String(session.username || "").trim().toLowerCase();
       if (username && !sessionMap.has(username)) sessionMap.set(username, session);
     }
