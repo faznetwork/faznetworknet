@@ -181,6 +181,16 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS phone VARCHAR(40);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS server VARCHAR(100) DEFAULT 'all';
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS time_limit VARCHAR(50);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS data_limit VARCHAR(50);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS first_login_at TIMESTAMPTZ;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS expired_at TIMESTAMPTZ;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_status VARCHAR(20) NOT NULL DEFAULT 'not_required';
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_error TEXT;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS router_removed_at TIMESTAMPTZ;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_cleanup ON hotspot_vouchers(status,cleanup_status,id);
+
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_created_at ON hotspot_vouchers(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_phone ON hotspot_vouchers(phone);
 

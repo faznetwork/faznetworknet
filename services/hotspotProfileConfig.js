@@ -41,7 +41,7 @@ function buildHotspotOnLoginScript(config) {
     ':local activeId [/ip hotspot active find where user=$u]',
     ':if ([:len $activeId] > 0) do={ :set auth [/ip hotspot active get $activeId login-by]; }',
     ':local uid [/ip hotspot user find where name=$u]',
-    ':if ([:len $uid] > 0) do={ /ip hotspot user set $uid comment=("FAZ|PROFILE=' + profileName + '|VALIDITY=' + policy + '|MAC=".$loginMac."|AUTH=".$auth);' + bindMac + ' }'
+    ':if ([:len $uid] > 0) do={ :local oldComment [/ip hotspot user get $uid comment]; :if ([:find $oldComment "FAZ|PROFILE="] = nil) do={ /ip hotspot user set $uid comment=("FAZ|PROFILE=' + profileName + '|VALIDITY=' + policy + '|FIRST_LOGIN=" . [/system clock get date] . " " . [/system clock get time] . "|MAC=" . $loginMac . "|AUTH=" . $auth); };' + bindMac + ' }'
   ].join("; ");
 
   if (validity.unit === "gb") {
