@@ -15,9 +15,9 @@ This collector is for the V-SOL V1601E04-DP on the local management network. Ren
 1. Set a strong `OLT_COLLECTOR_TOKEN` environment variable on the Render `faznetwork-web` service.
 2. Replace `__OLT_COLLECTOR_TOKEN__` in `scripts/mikrotik/olt-telemetry-collector.rsc` with that exact token. Never commit a real token to Git.
 3. Confirm SNMP read-only access from the MikroTik to OLT `103.54.37.182:161`. If the OLT has a source-IP allow list, allow only the MikroTik management source IP; do not enable SNMP writes or open SNMP to the Internet.
-4. Upload/import the script on the MikroTik and run it manually once. It reads candidate indexes 1–4 / 1–64, sends only entries with both a MAC and RX object, and logs the server response. The script uses short per-query timeouts; a first scan may take time.
+4. Replace the token placeholder locally, upload the `.rsc` file to Files, then run `/import file-name=olt-telemetry-collector.rsc`. This creates the named script `faz-olt-telemetry` without scheduling it. Run `/system script run faz-olt-telemetry` manually once. It reads candidate indexes 1–4 / 1–64, sends only entries with both a MAC and RX object, and logs the server response. The first scan may take time.
 5. Check the server response `success:true` and then open Customer 360. The customer ONU MAC must match the OLT MAC exactly for RX to appear on that customer. Unknown/unparseable RX encodings remain blank by design.
-6. Only after a successful manual run, add a scheduler interval of `5m` for the script. Do not run overlapping copies.
+6. Only after a successful manual run, add a scheduler interval of `5m` with policy `ftp,read,test` for script `faz-olt-telemetry`. Do not run overlapping copies.
 
 ## MIB branches used
 
