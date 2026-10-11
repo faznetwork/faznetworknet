@@ -337,6 +337,38 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
 CREATE INDEX IF NOT EXISTS idx_expenses_category_date ON expenses(category,date DESC);
 
 
+-- HR records are isolated from customer subscriptions, billing, and payment ledgers.
+CREATE TABLE IF NOT EXISTS hr_departments (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  description VARCHAR(500),
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hr_departments_name_ci ON hr_departments (LOWER(name));
+CREATE INDEX IF NOT EXISTS idx_hr_departments_status_name ON hr_departments(status, name);
+
+CREATE TABLE IF NOT EXISTS hr_employees (
+  id BIGSERIAL PRIMARY KEY,
+  employee_code VARCHAR(40),
+  full_name VARCHAR(160) NOT NULL,
+  phone VARCHAR(40),
+  email VARCHAR(254),
+  department_id BIGINT REFERENCES hr_departments(id) ON DELETE SET NULL,
+  designation VARCHAR(120),
+  joining_date DATE,
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  notes VARCHAR(2000),
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hr_employees_code ON hr_employees (LOWER(employee_code)) WHERE employee_code IS NOT NULL AND employee_code <> '';
+CREATE INDEX IF NOT EXISTS idx_hr_employees_department_status ON hr_employees(department_id,status);
+CREATE INDEX IF NOT EXISTS idx_hr_employees_created_at ON hr_employees(created_at DESC);
+
 -- Isolated staff/admin identities for role-based access; does not modify customer or billing tables.
 CREATE TABLE IF NOT EXISTS admin_users (
   id BIGSERIAL PRIMARY KEY,
