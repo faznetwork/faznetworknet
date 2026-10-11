@@ -14,7 +14,7 @@ test("public homepage never opens a live MikroTik connection", () => {
 
 test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {
   const service = read("services/mikrotikService.js");
-  assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
+  assert.match(service, /const CONNECTION_TIMEOUT_MS = 1000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
   assert.match(service, /timeout: 0/);
   assert.match(service, /socket\.setTimeout\(0\)/);
@@ -45,7 +45,7 @@ test("admin diagnostics bound both database and router waits", () => {
 test("admin dashboard avoids duplicate RouterOS polling and pauses hidden-dashboard traffic", () => {
   const admin = read("views/admin.ejs");
   assert.match(admin, /if \(!dashboard \|\| dashboard\.style\.display === 'none'\) return;/);
-  assert.match(admin, /trafficTimer = setInterval\(\(\) => \{ void pollTraffic\(\); \}, 10000\)/);
+  assert.match(admin, /trafficTimer = setInterval\(\(\) => \{ void pollTraffic\(\); \}, 1000\)/);
   assert.match(admin, /\}, 15000\);/);
   assert.doesNotMatch(admin, /initial dashboard refresh/);
   assert.doesNotMatch(admin, /safeAdminBootStep\('router metrics'/);
