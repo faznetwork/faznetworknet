@@ -1243,64 +1243,30 @@ async function resolveCustomer360(idValue){
 }
 async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
 async function getCustomerLiveSession(req,res){
-  const offlineLive=(mac="",reason="")=>({
-    status:"offline",isLive:false,online:false,ip:"",mac:clean(mac,100),uptime:"",
-    bytesIn:"0",bytesOut:"0",traffic:{bytesIn:0,bytesOut:0},stale:false,
-    source:"mikrotik-active-list",checkedAt:new Date().toISOString(),
-    ...(reason?{diagnostic:reason}: {})
-  });
+  const offlineLive=(mac="",diagnostic="")=>({status:"offline",isLive:false,online:false,ip:"",mac:clean(mac,100),uptime:"",bytesIn:"0",bytesOut:"0",traffic:{bytesIn:0,bytesOut:0},stale:false,source:"mikrotik-active-list",checkedAt:new Date().toISOString(),...(diagnostic?{diagnostic}:{})});
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query(
-      "SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
-      [key]
-    );
+    const result=await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
-
     let storedMac="";
-    try{
-      const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
-      storedMac=clean(q.rows?.[0]?.caller_id,100);
-    }catch(error){
-      console.warn("[Customer 360 live status] Stored caller-id lookup failed:",error.message);
-    }
-
-    // Source of truth: the current RouterOS PPPoE active list. No collector
-    // snapshot fallback is allowed to turn an unreachable router into Online.
+    try{const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);storedMac=clean(q.rows?.[0]?.caller_id,100);}
+    catch(error){console.warn("[Customer 360 live status] caller-id lookup failed:",error.message);}
     try{
       const sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),3500);
-      if(!Array.isArray(sessions))throw new Error("Invalid response from MikroTik active-session list.");
+      if(!Array.isArray(sessions))throw new Error("Invalid MikroTik active-session response.");
       const target=String(customer.username||"").trim().toLowerCase();
-      const session=sessions.find(item=>
-        String(item?.username||item?.name||"").trim().toLowerCase()===target
-      );
+      const session=sessions.find(item=>String(item?.username||item?.name||"").trim().toLowerCase()===target);
       if(!session)return res.json({success:true,live:offlineLive(storedMac),statusSource:"mikrotik-active-list"});
-      const bytesIn=String(session.bytesIn??session.bytes_in??0);
-      const bytesOut=String(session.bytesOut??session.bytes_out??0);
-      return res.json({
-        success:true,
-        live:{
-          status:"online",isLive:true,online:true,ip:clean(session.address,100),
-          mac:clean(session.callerId||session.caller_id||storedMac,100),
-          uptime:clean(session.uptime,100),bytesIn,bytesOut,
-          traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},
-          service:clean(session.service,50),receivedAt:new Date().toISOString(),
-          checkedAt:new Date().toISOString(),stale:false,source:"mikrotik-active-list"
-        },
-        statusSource:"mikrotik-active-list"
-      });
-    }catch(liveError){
-      console.warn("[Customer 360 live status] MikroTik active-list request failed; status is Offline:",liveError.message);
-      return res.json({
-        success:true,
-        live:offlineLive(storedMac,liveError.message||"MikroTik active-session list unavailable."),
-        statusSource:"mikrotik-active-list-unavailable"
-      });
+      const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
+      return res.json({success:true,statusSource:"mikrotik-active-list",live:{status:"online",isLive:true,online:true,ip:clean(session.address,100),mac:clean(session.callerId||session.caller_id||storedMac,100),uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:new Date().toISOString(),checkedAt:new Date().toISOString(),stale:false,source:"mikrotik-active-list"}});
+    }catch(error){
+      console.warn("[Customer 360 live status] Active-list request failed; status Offline:",error.message);
+      return res.json({success:true,statusSource:"mikrotik-active-list-unavailable",live:offlineLive(storedMac,error.message||"Active-session list unavailable.")});
     }
   }catch(error){
     console.error("[Customer 360 live status] Handler error:",error.message);
-    return res.status(500).json({success:false,message:"Unable to determine live customer status.",code:"CUSTOMER_LIVE_STATUS_ERROR"});
+    return res.status(500).json({success:false,code:"CUSTOMER_LIVE_STATUS_ERROR",message:"Unable to determine live customer status."});
   }
 }
 
