@@ -12,10 +12,13 @@ test("public homepage never opens a live MikroTik connection", () => {
   assert.match(server, /Saved hotspot metadata unavailable/);
 });
 
-test("MikroTik API uses a persistent serialized connection with 10-second timeouts", () => {
+test("MikroTik API keeps a serialized persistent socket without an idle disconnect timeout", () => {
   const service = read("services/mikrotikService.js");
   assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
+  assert.match(service, /timeout: CONNECTION_TIMEOUT_MS \/ 1000/);
+  assert.match(service, /keepalive: true/);
+  assert.match(service, /sends a harmless/);
   assert.match(service, /this\._connection = null/);
   assert.match(service, /this\._operationQueue = Promise\.resolve\(\)/);
   assert.match(service, /_getPersistentConnection\(config\)/);
@@ -24,6 +27,14 @@ test("MikroTik API uses a persistent serialized connection with 10-second timeou
   assert.match(service, /MikroTik connection handshake/);
   assert.match(service, /this\._safeClose\(connection\);/);
   assert.doesNotMatch(service, /await this\._safeClose\(connection\)/);
+});
+
+test("customer usage collector reuses the shared MikroTik service and never closes its socket", () => {
+  const collector = read("jobs/customerUsageCollector.js");
+  assert.match(collector, /require\(["']\.\.\/services\/mikrotikService["']\)/);
+  assert.match(collector, /mikrotikService\.getPppoeLiveTraffic\(customer\.username\)/);
+  assert.match(collector, /5\*60\*1000/);
+  assert.doesNotMatch(collector, /\.close\s*\(|\.disconnect\s*\(|\.destroy\s*\(/);
 });
 
 test("admin diagnostics bound both database and router waits", () => {

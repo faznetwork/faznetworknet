@@ -69,7 +69,12 @@ class MikroTikService {
       port: config.port,
       user: config.user,
       password: config.password,
-      timeout: CONNECTION_TIMEOUT_MS / 1000
+      // node-routeros uses this timeout for socket inactivity and destroys
+      // the socket when it fires. Its built-in keepalive option sends a harmless
+      // API keepalive command every timeout/2, so the persistent session remains
+      // active between dashboard polls. _executeWithTimeout still bounds calls.
+      timeout: CONNECTION_TIMEOUT_MS / 1000,
+      keepalive: true
     });
 
     // node-routeros emits asynchronous `error` events for malformed/unexpected
