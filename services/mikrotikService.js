@@ -79,6 +79,10 @@ class MikroTikService {
     if (typeof connection.on === "function") {
       connection.on("error", (error) => {
         console.warn("[MikroTik Connection Error]:", error?.message || error);
+        // RouterOS clients can emit socket errors asynchronously, outside the
+        // active write promise. Invalidate the singleton so the next queued
+        // operation performs a clean reconnect.
+        if (this._connection === connection) this._resetPersistentConnection(connection);
       });
     }
 
