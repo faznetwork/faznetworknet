@@ -646,6 +646,9 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher Management</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('cleanup','Expired &amp; Cleanup'); return false;"><span>Expired &amp; Cleanup</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherSales(); return false;"><span>Voucher Sales History</span></a></li>
                 </ul>
             </li>
 
@@ -1463,6 +1466,41 @@
                 const payload={quantity:Number(document.getElementById('vQty').value||0),userPrefix:document.getElementById('vPrefix').value.trim(),profile:document.getElementById('vProfile').value,price:Number(document.getElementById('vPrice').value||0)};
                 fetch('/api/hotspot/vouchers/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){if(d.success===false) throw new Error(d.message||d.error||'Voucher generation failed');const area=document.getElementById('voucherPrintArea');const vouchers=Array.isArray(d.vouchers)?d.vouchers:[];if(area) area.innerHTML=vouchers.map(function(v){return '<div class="col-12 col-sm-6 col-md-3"><div class="p-3 border rounded shadow-sm bg-white" style="border:2px dashed #10b981 !important"><div class="fw-bold text-success text-center">FAZ NETWORK</div><div class="text-center small text-muted mb-2">Wi-Fi Hotspot Voucher</div><div class="bg-light p-2 rounded text-center"><div class="small text-muted">Username</div><div class="fs-5 fw-bold font-monospace">'+escapeHtml(v.username||'-')+'</div><div class="small text-muted mt-1">Password</div><div class="fw-bold font-monospace">'+escapeHtml(v.password||'-')+'</div></div></div></div>';}).join('');}).catch(function(e){alert(e.message||'Network error while generating vouchers');}).finally(function(){btn.disabled=false;});
             };
+            return false;
+        };
+
+        window.loadHotspotVoucherRecords = async function(filter,title){
+            const container=document.getElementById('dynamicPageContent');
+            if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
+            if(!container) return false;
+            container.style.display='block'; if(typeof closeSidebarMobile==='function') closeSidebarMobile();
+            safeSetText('pageTitle',title||'Voucher Management');
+            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-ticket-perforated-fill text-success me-2"></i><strong>'+escapeHtml(title||'Voucher Management')+'</strong><div class="small text-muted mt-1">PostgreSQL voucher records; historical records are retained</div></div><div class="d-flex flex-wrap gap-2 ms-auto"><button class="btn btn-outline-success btn-sm" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher Management\')">All</button><button class="btn btn-outline-primary btn-sm" onclick="window.loadHotspotVoucherRecords(\'unused\',\'Unused Vouchers\')">Unused</button><button class="btn btn-outline-success btn-sm" onclick="window.loadHotspotVoucherRecords(\'active\',\'Active Vouchers\')">Active</button><button class="btn btn-outline-danger btn-sm" onclick="window.loadHotspotVoucherRecords(\'expired\',\'Expired Vouchers\')">Expired</button><button class="btn btn-outline-secondary btn-sm" onclick="window.loadHotspotVoucherRecords(\'cleanup\',\'Expired & Cleanup\')">Cleanup Pending</button></div></div><div class="card-body"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Voucher</th><th>Profile</th><th>Status</th><th>Price</th><th>First Used</th><th>Expires</th><th>Cleanup</th><th>Created</th></tr></thead><tbody id="hsVoucherRecordsBody"><tr><td colspan="8" class="text-center py-4">Loading voucher records...</td></tr></tbody></table></div><div id="hsVoucherRecordsNote" class="small text-muted"></div></div></div></section>';
+            try{
+                const data=await jsonFetch('/api/hotspot/voucher-records?status='+encodeURIComponent(filter||'all'));
+                const rows=Array.isArray(data.vouchers)?data.vouchers:[];
+                const body=document.getElementById('hsVoucherRecordsBody');
+                const fmt=function(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-GB',{timeZone:'Asia/Dhaka'});};
+                const badge=function(status){const s=String(status||'unknown');const cls=s==='active'?'bg-success':s==='unused'?'bg-primary':s==='expired'?'bg-danger':'bg-secondary';return '<span class="badge '+cls+'">'+escapeHtml(s)+'</span>';};
+                if(body)body.innerHTML=rows.map(function(v){return '<tr><td><strong>'+escapeHtml(v.username)+'</strong><div class="small text-muted">'+escapeHtml(v.phone||'')+'</div></td><td>'+escapeHtml(v.profile||'—')+'</td><td>'+badge(v.status)+'</td><td>৳ '+Number(v.price||0).toFixed(2)+'</td><td>'+fmt(v.first_login_at)+'</td><td>'+fmt(v.expires_at)+'</td><td><span class="badge '+(v.cleanup_status==='failed'?'bg-danger':v.cleanup_status==='pending'?'bg-warning text-dark':'bg-secondary')+'">'+escapeHtml(v.cleanup_status||'—')+'</span>'+(v.cleanup_error?'<div class="small text-danger">'+escapeHtml(v.cleanup_error)+'</div>':'')+'</td><td>'+fmt(v.created_at)+'</td></tr>';}).join('')||'<tr><td colspan="8" class="text-center py-5 text-muted">No voucher records found for this filter.</td></tr>';
+                safeSetText('hsVoucherRecordsNote','Showing '+rows.length+' records (maximum 500 per view). Voucher history is not deleted by cleanup.');
+            }catch(error){const body=document.getElementById('hsVoucherRecordsBody');if(body)body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">'+escapeHtml(error.message||'Could not load voucher records')+'</td></tr>';}
+            return false;
+        };
+        window.loadHotspotVoucherSales = async function(){
+            const container=document.getElementById('dynamicPageContent');
+            if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
+            if(!container)return false;container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
+            safeSetText('pageTitle','Voucher Sales History');
+            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-receipt-cutoff text-success me-2"></i><strong>Voucher Sales History</strong></div><div class="card-body"><div class="alert alert-light border small">Only processed transactions matched to a known Hotspot voucher are counted as collected payments. Voucher list price alone is not treated as revenue.</div><div class="row g-3 mb-3"><div class="col-6 col-lg-3"><div class="card card-body"><div class="small text-muted">Matched Payments</div><strong class="fs-4" id="hsSalesCount">—</strong></div></div><div class="col-6 col-lg-3"><div class="card card-body"><div class="small text-muted">Collected</div><strong class="fs-4 text-success">৳ <span id="hsSalesAmount">—</span></strong></div></div></div><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date</th><th>Voucher</th><th>Channel</th><th>Transaction ID</th><th>Sender</th><th>Amount</th><th>Status</th></tr></thead><tbody id="hsVoucherSalesBody"><tr><td colspan="7" class="text-center py-4">Loading matched payment history...</td></tr></tbody></table></div></div></div></section>';
+            try{
+                const data=await jsonFetch('/api/hotspot/voucher-sales');
+                safeSetText('hsSalesCount',Number(data.count||0).toLocaleString());
+                safeSetText('hsSalesAmount',Number(data.totalAmount||0).toFixed(2));
+                const body=document.getElementById('hsVoucherSalesBody');
+                const fmt=function(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-GB',{timeZone:'Asia/Dhaka'});};
+                if(body)body.innerHTML=(data.transactions||[]).map(function(t){return '<tr><td>'+fmt(t.created_at)+'</td><td>'+escapeHtml(t.matched_username||'—')+'</td><td>'+escapeHtml(t.channel||'—')+'</td><td class="font-monospace">'+escapeHtml(t.trx_id||'—')+'</td><td>'+escapeHtml(t.sender_phone||'—')+'</td><td>৳ '+Number(t.amount||0).toFixed(2)+'</td><td><span class="badge bg-success">'+escapeHtml(t.status||'processed')+'</span></td></tr>';}).join('')||'<tr><td colspan="7" class="text-center py-5 text-muted">No processed payments matched to Hotspot vouchers yet.</td></tr>';
+            }catch(error){const body=document.getElementById('hsVoucherSalesBody');if(body)body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">'+escapeHtml(error.message||'Could not load voucher payment history')+'</td></tr>';}
             return false;
         };
 
