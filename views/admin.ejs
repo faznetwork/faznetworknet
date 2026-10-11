@@ -2078,7 +2078,84 @@
         function printHotspotSlip(){
             const card=document.getElementById('hotspotCreatedCredentials'); if(!card)return;
             const w=window.open('', '_blank', 'width=420,height=600'); if(!w)return;
-            w.document.write(`<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
+            w.document.write(`<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}
+        /* Mobile-first Customer List: preserve desktop table and all existing handlers. */
+        @media (max-width: 767.98px) {
+            #view-customer-filter { min-width: 0; }
+            #view-customer-filter .card-custom { min-width: 0; overflow: visible; }
+            #view-customer-filter .card-custom-header {
+                display: flex; align-items: center; gap: .5rem;
+                padding: 12px; min-width: 0;
+            }
+            #view-customer-filter .card-custom-header > .d-flex:first-child {
+                width: 100%; min-width: 0;
+            }
+            #view-customer-filter .customer-search-wrap {
+                order: 2; width: 100%; max-width: none; margin: 0 !important;
+                flex: 1 1 100%;
+            }
+            #view-customer-filter .card-custom-header > button {
+                order: 3; flex: 0 0 auto; min-height: 38px;
+                font-size: 12px; padding: .4rem .6rem; white-space: nowrap;
+            }
+            #view-customer-filter #customerBillingTabs {
+                display: flex !important; flex-wrap: nowrap !important;
+                gap: 8px !important; overflow-x: auto; padding: 10px 12px 12px !important;
+                -webkit-overflow-scrolling: touch; scrollbar-width: none;
+            }
+            #view-customer-filter #customerBillingTabs::-webkit-scrollbar { display: none; }
+            #view-customer-filter #customerBillingTabs button {
+                flex: 0 0 auto; min-height: 36px; border-radius: 999px;
+                padding: .4rem .8rem; white-space: nowrap; font-size: 12px;
+            }
+            #view-customer-filter .table-responsive { overflow: visible; }
+            #view-customer-filter table.customer-live-table {
+                display: block; width: 100%; border: 0; background: transparent;
+            }
+            #view-customer-filter .customer-live-table thead { display: none; }
+            #view-customer-filter .customer-live-table tbody {
+                display: grid; gap: 10px; padding: 0 10px 12px;
+            }
+            #view-customer-filter .customer-live-table tbody tr[data-customer-row] {
+                display: block; min-width: 0; margin: 0; border: 0;
+                border-radius: 13px; background: transparent;
+            }
+            #view-customer-filter .customer-live-table tbody tr[data-customer-row] > td:not(.customer-mobile-cell) {
+                display: none !important;
+            }
+            #view-customer-filter .customer-live-table tbody tr[data-customer-row] > .customer-mobile-cell {
+                display: block !important; width: 100%; padding: 0 !important;
+                border: 0 !important; background: transparent !important;
+            }
+            .customer-mobile-card {
+                min-width: 0; padding: 12px; border: 1px solid #e2e8f0;
+                border-radius: 13px; background: #fff;
+                box-shadow: 0 2px 8px rgba(15,23,42,.045);
+            }
+            .customer-mobile-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+            .customer-mobile-person { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; }
+            .customer-mobile-person .customer-avatar { width: 36px; height: 36px; flex-basis: 36px; }
+            .customer-mobile-name-wrap { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+            .customer-mobile-name { display: block !important; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.25; }
+            .customer-mobile-phone { display: block; color: #64748b; font-size: 11px; line-height: 1.2; text-decoration: none; }
+            .customer-mobile-head > .customer-status-badge { flex: 0 0 auto; margin-top: 1px; padding: 4px 7px; font-size: 10px; box-shadow: none !important; }
+            .customer-mobile-dropdown { flex: 0 0 32px; margin-left: -3px; }
+            .customer-mobile-menu-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 36px; padding: 0; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; }
+            .customer-mobile-menu-button::after { display: none; }
+            .customer-mobile-dropdown .dropdown-menu { min-width: 190px; z-index: 1055; }
+            .customer-mobile-dropdown .dropdown-item { min-height: 42px; font-size: 13px; }
+            .customer-mobile-details { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+            .customer-mobile-details > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+            .customer-mobile-details > div > span { color: #94a3b8; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+            .customer-mobile-details strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; font-size: 11px; font-weight: 700; }
+            .customer-mobile-details strong .customer-days-pill { margin-left: 4px; vertical-align: middle; font-size: 9px; }
+            .customer-mobile-footer { display: grid; grid-template-columns: .85fr 1.4fr; gap: 8px; margin-top: 12px; }
+            .customer-mobile-footer .btn { display: inline-flex; justify-content: center; align-items: center; min-height: 40px; border-radius: 9px; font-size: 12px; font-weight: 700; }
+            .customer-mobile-footer .btn-success { background: #0a3d2e; border-color: #0a3d2e; }
+            .customer-mobile-footer .btn-success:hover { background: #0d4d3a; border-color: #0d4d3a; }
+            .customer-mobile-cell .customer-mobile-card .dropdown-menu { position: absolute; }
+        }
+</style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
 </body></html>`);
             w.document.close();
         }
@@ -4450,6 +4527,39 @@ async function deletePlan(id,name){
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
+            const mobilePhone = String(metadata.displayPhone || user.phone || '').replace(/[^\\d+]/g, '');
+            const mobileName = escapeHtml(metadata.displayName || user.username || 'Customer');
+            const mobileUsername = escapeHtml(user.username || '-');
+            const mobilePackage = escapeHtml(user.package_name || user.profile || 'N/A');
+            const mobileIp = escapeHtml(ip === '-' ? 'Not assigned' : ip);
+            const mobileExpiry = escapeHtml(validityLabel || 'Not set');
+            const mobileActions =
+                '<td class="customer-mobile-cell" colspan="8"><article class="customer-mobile-card">' +
+                    '<div class="customer-mobile-head">' +
+                        '<div class="customer-mobile-person"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="customer-mobile-name-wrap">' +
+                            '<a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link customer-mobile-name fw-semibold text-decoration-none" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + mobileName + '</a>' +
+                            '<a class="customer-mobile-phone" href="tel:' + escapeHtml(mobilePhone) + '"><i class="bi bi-telephone-fill me-1"></i>' + escapeHtml(metadata.displayPhone || 'Phone not set') + '</a>' +
+                        '</div></div>' +
+                        '<span class="customer-status-badge ' + statusClass + '">' + escapeHtml(statusLabel) + '</span>' +
+                        '<div class="dropdown customer-mobile-dropdown"><button type="button" class="btn customer-mobile-menu-button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions for ' + mobileName + '"><i class="bi bi-three-dots-vertical"></i></button>' +
+                            '<ul class="dropdown-menu dropdown-menu-end shadow-sm">' +
+                                '<li><button type="button" class="dropdown-item action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" onclick="event.preventDefault();event.stopPropagation();if(typeof window.openCustomerEditForm===\'function\')window.openCustomerEditForm(this.dataset.id,this.dataset.username);"><i class="bi bi-pencil-square me-2"></i>Edit customer</button></li>' +
+                                '<li><button type="button" class="dropdown-item" onclick="syncPanelCustomersToMikroTik(this)" title="Sync all panel customers to MikroTik"><i class="bi bi-arrow-repeat me-2"></i>Sync panel to MikroTik</button></li>' +
+                                '<li><hr class="dropdown-divider"></li>' +
+                                '<li><button type="button" class="dropdown-item text-danger action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" onclick="window.deleteCustomer(this.dataset.id,this.dataset.username)"><i class="bi bi-trash3 me-2"></i>Delete customer</button></li>' +
+                            '</ul></div>' +
+                    '</div>' +
+                    '<div class="customer-mobile-details">' +
+                        '<div><span>PPPoE username</span><strong class="font-monospace">' + mobileUsername + '</strong></div>' +
+                        '<div><span>Package</span><strong>' + mobilePackage + '</strong></div>' +
+                        '<div><span>IP address</span><strong class="font-monospace">' + mobileIp + '</strong></div>' +
+                        '<div><span>Expiry date</span><strong>' + mobileExpiry + (daysLabel ? '<small class="customer-days-pill ' + daysClass + '">' + escapeHtml(daysLabel) + '</small>' : '') + '</strong></div>' +
+                    '</div>' +
+                    '<div class="customer-mobile-footer">' +
+                        '<a class="btn btn-sm btn-outline-secondary" href="tel:' + escapeHtml(mobilePhone) + '"><i class="bi bi-telephone me-1"></i>Call</a>' +
+                        '<a class="btn btn-sm btn-success" href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '"><i class="bi bi-person-lines-fill me-1"></i>Manage</a>' +
+                    '</div>' +
+                '</article></td>';
             return '<tr data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
                 '<td class="ps-3"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
                 '<td class="customer-identity-cell"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
@@ -4467,6 +4577,7 @@ async function deletePlan(id,name){
                     '<button type="button" class="btn btn-sm btn-outline-primary px-2 py-1 action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit ' + escapeHtml(metadata.displayName || user.username || 'customer') + '" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
                     '<button type="button" class="btn btn-sm btn-outline-danger px-2 py-1 action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>' +
                 '</div></td>' +
+                mobileActions +
             '</tr>';
         }
         async function openCustomerProfile(username,prefetchedData){
