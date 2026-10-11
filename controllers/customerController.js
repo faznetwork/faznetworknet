@@ -541,10 +541,44 @@ async function listCustomers(req,res){
     `);
 
     let sessions=[];
+    let sessionSource="mikrotik-live";
+    let sessionLookupError=null;
     try{
-      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),2500);
+      // Give RouterOS enough time to return its active-session table. A short
+      // 2.5s race made transient API latency look like every customer was offline.
+      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),10000);
+      if(!Array.isArray(sessions))throw new Error("MikroTik returned an invalid active-session response.");
     }catch(error){
-      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable:",error.message);
+      sessionLookupError=error.message||"MikroTik live session lookup failed.";
+      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable:",sessionLookupError);
+      try{
+        const snapshot=await db.query(
+          `SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
+                  caller_id AS "callerId",received_at AS "receivedAt"
+           FROM pppoe_live_sessions
+           WHERE received_at >= NOW() - INTERVAL '3 minutes'
+           ORDER BY username ASC`
+        );
+        if(!snapshot.rows.length){
+          return res.status(503).json({
+            success:false,
+            code:"LIVE_SESSION_SOURCE_UNAVAILABLE",
+            message:"Live MikroTik session data is temporarily unavailable. Customer online/offline status has not been changed to Offline.",
+            statusSource:"unavailable",
+            details:sessionLookupError
+          });
+        }
+        sessions=snapshot.rows;
+        sessionSource="recent-router-snapshot";
+      }catch(snapshotError){
+        console.warn("[CUSTOMER LIST] Recent session snapshot unavailable:",snapshotError.message);
+        return res.status(503).json({
+          success:false,
+          code:"LIVE_SESSION_SOURCE_UNAVAILABLE",
+          message:"Live customer status is temporarily unavailable; no Offline status was inferred.",
+          statusSource:"unavailable"
+        });
+      }
     }
     const sessionMap=new Map();
     for(const session of Array.isArray(sessions)?sessions:[]){
