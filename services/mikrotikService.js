@@ -409,10 +409,8 @@ class MikroTikService {
 
   async getHotspotExpirationSnapshot() {
     return this._withConnection("Hotspot expiry snapshot", async (connection) => {
-      const [userRows, schedulerRows] = await Promise.all([
-        connection.write("/ip/hotspot/user/print"),
-        connection.write("/system/scheduler/print")
-      ]);
+      const userRows = await connection.write("/ip/hotspot/user/print");
+      const schedulerRows = await connection.write("/system/scheduler/print");
       const users = (Array.isArray(userRows) ? userRows : []).map((item) => ({
         id: this._str(item[".id"]),
         username: this._str(item.name),
@@ -436,11 +434,9 @@ class MikroTikService {
     const username = this._str(usernameValue).trim();
     if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
     return this._withConnection("expired Hotspot user cleanup", async (connection) => {
-      const [userRows, activeRows, schedulerRows] = await Promise.all([
-        connection.write("/ip/hotspot/user/print"),
-        connection.write("/ip/hotspot/active/print"),
-        connection.write("/system/scheduler/print")
-      ]);
+      const userRows = await connection.write("/ip/hotspot/user/print");
+      const activeRows = await connection.write("/ip/hotspot/active/print");
+      const schedulerRows = await connection.write("/system/scheduler/print");
       const matches = (Array.isArray(userRows) ? userRows : []).filter(item =>
         this._str(item.name).trim().toLowerCase() === username.toLowerCase() && item[".id"]);
       const activeMatches = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
