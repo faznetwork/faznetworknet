@@ -405,14 +405,33 @@ async function profiles(req, res) {
 
 async function active(req, res) {
   try {
-    const result = await db.query(
-      `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
-              bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
-       FROM pppoe_live_sessions
-       WHERE received_at >= NOW() - INTERVAL '3 minutes'
-       ORDER BY username ASC`
-    );
-    return res.json({ success: true, count: result.rows.length, sessions: result.rows, source: "mikrotik-push", stale: result.rows.length === 0 });
+    // This endpoint drives the Online/Offline customer filters. Query RouterOS
+    // directly first; the pushed snapshot table is only a fallback source.
+    let sessions;
+    let source = "mikrotik-live";
+    try {
+      sessions = await mikrotikService.getActiveSessions();
+      if (!Array.isArray(sessions)) throw new Error("Invalid MikroTik active-session response.");
+    } catch (liveError) {
+      console.warn("[PPPoE ACTIVE] Live RouterOS lookup failed; trying recent snapshot:", liveError.message);
+      const snapshot = await db.query(
+        `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
+                bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
+         FROM pppoe_live_sessions
+         WHERE received_at >= NOW() - INTERVAL '3 minutes'
+         ORDER BY username ASC`
+      );
+      if (!snapshot.rows.length) {
+        return res.status(503).json({
+          success: false,
+          code: "LIVE_SESSION_SOURCE_UNAVAILABLE",
+          message: "MikroTik live sessions are unavailable and no recent snapshot exists. Online/offline status was not inferred."
+        });
+      }
+      sessions = snapshot.rows;
+      source = "recent-router-snapshot";
+    }
+    return res.json({ success: true, count: sessions.length, sessions, source, stale: false });
   } catch (error) {
     return errorResponse(res, error);
   }
