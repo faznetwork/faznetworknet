@@ -7,6 +7,97 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <style>
 body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.hero{background:linear-gradient(135deg,#0a3d2e,#0d4d3a);color:#fff}.card{box-shadow:0 .125rem .25rem rgba(0,0,0,.075)}.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.metric{font-size:1.45rem;font-weight:700}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.live-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8}.live-dot.online{background:#34d399;animation:pulse 1.7s infinite}@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}.sticky{position:sticky;top:0;z-index:1020;background:rgba(248,250,252,.95);backdrop-filter:blur(8px)}.topology-chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.8rem}.topology-node{position:relative;min-width:0;min-height:118px;border:1px solid #dbe5e1;border-radius:14px;padding:14px;background:linear-gradient(160deg,#fff,#f6fbf8);overflow-wrap:anywhere}.topology-node:not(:last-child):after{content:"➜";position:absolute;right:-1.45rem;top:42%;font-size:1.2rem;font-weight:800;color:#10b981}.topology-step{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0d6b50}.topology-value{font-weight:700;margin-top:8px;color:#0f172a}.topology-detail{font-size:.78rem;color:#64748b;margin-top:5px}.topology-health{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:.72rem;font-weight:700;background:#e2e8f0;color:#334155}.topology-health.good{background:#d1fae5;color:#065f46}.topology-health.warning{background:#fef3c7;color:#92400e}.topology-health.bad{background:#fee2e2;color:#991b1b}@media(max-width:1199px){.topology-chain{grid-template-columns:repeat(3,minmax(0,1fr))}.topology-node:not(:last-child):after{display:none}}@media(max-width:767px){.sticky .container-fluid{flex-direction:column;align-items:stretch;gap:.65rem}.sticky .container-fluid>a{align-self:flex-start;white-space:normal}.sticky .container-fluid>span{display:block;white-space:normal;line-height:1.35;font-size:.875rem!important}.topology-chain{grid-template-columns:minmax(0,1fr);gap:.75rem}.topology-node{min-height:auto;padding:16px}.topology-node .topology-value{font-size:1rem;line-height:1.4}.topology-node .topology-detail{overflow-wrap:anywhere}.hero .d-flex.gap-2.flex-wrap{gap:.5rem!important}.hero button{max-width:100%;white-space:normal}}
+
+/* Customer 360 mobile: compact action grid, telemetry and readable record cards. */
+@media (max-width: 767.98px) {
+  body { font-size: 14px; }
+  #app { padding-left: 12px !important; padding-right: 12px !important; }
+  .hero { padding: 14px !important; border-radius: 14px !important; }
+  .hero h2 { max-width: 100%; overflow-wrap: anywhere; font-size: 1.15rem; line-height: 1.35; }
+  .hero > .d-flex.flex-column.flex-xl-row > .d-flex.gap-2.flex-wrap:last-child {
+    display: grid !important; grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 8px !important; width: 100%;
+  }
+  .hero > .d-flex.flex-column.flex-xl-row > .d-flex.gap-2.flex-wrap:last-child > button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; min-width: 0; min-height: 62px; margin: 0 !important;
+    padding: 8px 4px; border-radius: 10px; font-size: 10px; line-height: 1.25;
+    text-align: center; overflow-wrap: anywhere;
+  }
+  .hero > .d-flex.flex-column.flex-xl-row > .d-flex.gap-2.flex-wrap:last-child > button i {
+    margin: 0 !important; font-size: 17px;
+  }
+  .hero > .d-flex.flex-column.flex-xl-row > .d-flex.gap-2.flex-wrap:last-child > button:nth-child(3) { border-color: rgba(255,255,255,.4); }
+  .topology-chain { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 8px !important; }
+  .topology-node { min-width: 0; min-height: 0; padding: 10px !important; border-radius: 10px; }
+  .topology-step { font-size: 9px; letter-spacing: .035em; line-height: 1.3; }
+  .topology-value { margin-top: 5px !important; font-size: 12px !important; line-height: 1.3; overflow-wrap: anywhere; }
+  .topology-detail { margin-top: 3px !important; font-size: 10px !important; line-height: 1.35; overflow-wrap: anywhere; }
+  #topologyFootnote { margin-top: 8px !important; font-size: 10px; }
+  #topologyOnuMissing { padding: 8px 10px !important; font-size: 12px; }
+  #topologyOnuMissing .small { font-size: 10px; }
+  .metric { font-size: 1.05rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .label { font-size: 9px; letter-spacing: .04em; }
+  #app > section.row.g-3.mb-3 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-left: 0; margin-right: 0; }
+  #app > section.row.g-3.mb-3 > [class*="col-"] { width: auto; padding: 0; min-width: 0; }
+  #app > section.row.g-3.mb-3 > [class*="col-"]:last-child { grid-column: 1 / -1; }
+  #app > section.row.g-3.mb-3 .card-body { padding: 12px; min-width: 0; }
+  #app > section.row.g-3.mb-3 .card-body .btn { max-width: 100%; white-space: normal; font-size: 11px; }
+  #app .card-body { min-width: 0; }
+  #app .table-responsive { overflow-x: visible; }
+  #app .table-responsive table { width: 100%; min-width: 0 !important; margin-bottom: 0; }
+  #app .table-responsive table thead { display: none; }
+  #app .table-responsive table tbody { display: grid; gap: 8px; }
+  #app .table-responsive table tbody tr {
+    display: grid; min-width: 0; padding: 5px 10px;
+    border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;
+  }
+  #app .table-responsive table tbody tr td {
+    display: grid; grid-template-columns: minmax(88px, 36%) minmax(0,1fr);
+    align-items: start; gap: 8px; min-width: 0; padding: 7px 0;
+    border: 0; border-bottom: 1px solid #f1f5f9; background: transparent;
+    font-size: 11px; line-height: 1.35; white-space: normal;
+    overflow-wrap: anywhere; word-break: break-word;
+  }
+  #app .table-responsive table tbody tr td:last-child { border-bottom: 0; }
+  #app .table-responsive table tbody tr td::before {
+    content: "Details"; color: #64748b; font-size: 9px; font-weight: 800;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  #networkMapRows tr td:nth-child(1)::before { content: "Observation"; }
+  #networkMapRows tr td:nth-child(2)::before { content: "Identity"; }
+  #networkMapRows tr td:nth-child(3)::before { content: "Match"; }
+  #networkMapRows tr td:nth-child(4)::before { content: "Source"; }
+  #networkMapRows tr td:nth-child(5)::before { content: "Observed at"; }
+  #ledger tr td:nth-child(1)::before { content: "Entry"; }
+  #ledger tr td:nth-child(2)::before { content: "Date"; }
+  #ledger tr td:nth-child(3)::before { content: "Package"; }
+  #ledger tr td:nth-child(4)::before { content: "Amount paid"; }
+  #ledger tr td:nth-child(5)::before { content: "Method"; }
+  #ledger tr td:nth-child(6)::before { content: "Receipt / Trx ID"; }
+  #ledger tr td:nth-child(7)::before { content: "Status"; }
+  #auditLedger tr td:nth-child(1)::before { content: "Timestamp"; }
+  #auditLedger tr td:nth-child(2)::before { content: "Action"; }
+  #auditLedger tr td:nth-child(3)::before { content: "Description"; }
+  #auditLedger tr td:nth-child(4)::before { content: "Performed by"; }
+  #auditLedger tr td:nth-child(5)::before { content: "IP address"; }
+  #usageRows tr td:nth-child(1)::before { content: "Date"; }
+  #usageRows tr td:nth-child(2)::before { content: "Download"; }
+  #usageRows tr td:nth-child(3)::before { content: "Upload"; }
+  #usageRows tr td:nth-child(4)::before { content: "Total"; }
+  #app .table-responsive .text-center[colspan] { display: block; padding: 12px !important; }
+  #app .table-responsive td[colspan]::before { content: none !important; }
+  #app .nav.nav-pills { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  #app .nav.nav-pills::-webkit-scrollbar { display: none; }
+  #app .nav.nav-pills .nav-link { font-size: 11px; padding: 8px 10px; }
+  #app h5 { font-size: 1rem; }
+}
+@media (max-width: 360px) {
+  .topology-chain { grid-template-columns: minmax(0,1fr) !important; }
+  .hero > .d-flex.flex-column.flex-xl-row > .d-flex.gap-2.flex-wrap:last-child { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #app > section.row.g-3.mb-3 { grid-template-columns: minmax(0,1fr); }
+  #app > section.row.g-3.mb-3 > [class*="col-"]:last-child { grid-column: auto; }
+}
 </style><script src="/js/date-format.js"></script>
 </head>
 <body>
