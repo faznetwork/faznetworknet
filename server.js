@@ -73,6 +73,7 @@ app.get("/admin/reports/expenses",requireRole(["super_admin","admin"]),(req,res)
  app.get(/^\/admin\/expenses\/(add|all|report)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Expense Sheet"}));
 app.get(/^\/admin\/hr\/.*/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/monitor\/(usage|online)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
+app.get(/^\/admin\/monitor\/(usage|online)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   const adminPath=String(req.path||"").replace(/\/+$/,"")||"/admin";
   const customerRoute=adminPath.match(/^\/admin\/customers\/([^/]+)$/);
