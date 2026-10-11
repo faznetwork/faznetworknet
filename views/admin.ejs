@@ -5199,7 +5199,7 @@ async function deletePlan(id,name){
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
             function readRoute() {
-                const path = window.location.pathname.replace(/\\/+$/, '') || '/admin';
+                const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
                 const pathRoute = routeFromPath(path);
                 if (pathRoute) return pathRoute;
                 if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
