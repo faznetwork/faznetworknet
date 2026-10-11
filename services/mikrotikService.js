@@ -69,20 +69,39 @@ class MikroTikService {
       port: config.port,
       user: config.user,
       password: config.password,
-      timeout: CONNECTION_TIMEOUT_MS / 1000
+      // node-routeros currently coerces timeout: 0 to its 10s default.
+      // _getPersistentConnection() disables the underlying socket timer directly
+      // immediately after connect() creates the socket; operation deadlines are
+      // still enforced independently by _executeWithTimeout().
+      timeout: 0,
+      keepalive: false
     });
 
-    // node-routeros emits asynchronous `error` events for malformed/unexpected
-    // RouterOS replies (for example: `!empty`). Without a listener, Node treats
-    // the EventEmitter error as uncaught and terminates the entire web process,
-    // which causes Render to return intermittent 502 Bad Gateway responses.
+    // Detailed lifecycle logging is intentional: distinguish remote/socket
+    // errors from a close initiated by our own reset/reconnect path.
     if (typeof connection.on === "function") {
       connection.on("error", (error) => {
-        console.warn("[MikroTik Connection Error]:", error?.message || error);
-        // RouterOS clients can emit socket errors asynchronously, outside the
-        // active write promise. Invalidate the singleton so the next queued
-        // operation performs a clean reconnect.
-        if (this._connection === connection) this._resetPersistentConnection(connection);
+        const detail = error?.message || String(error || "unknown error");
+        console.error("[MikroTik Connection Error]", {
+          host: config.host, port: config.port, code: error?.code || null,
+          message: detail, connected: Boolean(connection.connected),
+          closeReason: connection.__fazCloseReason || null
+        });
+        if (this._connection === connection) {
+          this._resetPersistentConnection(connection, "socket error: " + detail);
+        }
+      });
+      connection.on("close", () => {
+        console.warn("[MikroTik Connection Close]", {
+          host: config.host, port: config.port,
+          connected: Boolean(connection.connected),
+          reason: connection.__fazCloseReason || "remote close / socket ended"
+        });
+        this._stopHeartbeat(connection);
+        if (this._connection === connection) {
+          this._connection = null;
+          this._connectionKey = null;
+        }
       });
     }
 
@@ -105,18 +124,83 @@ class MikroTikService {
       /^(ECONN|ENET|EHOST|EPIPE|ETIMEDOUT|ERR_SOCKET)/.test(code);
   }
 
-  _resetPersistentConnection(connection) {
-    if (connection && this._connection === connection) {
+  _stopHeartbeat(connection) {
+    if (!connection) return;
+    if (connection.__fazHeartbeatTimer) {
+      clearInterval(connection.__fazHeartbeatTimer);
+      connection.__fazHeartbeatTimer = null;
+    }
+  }
+
+  _disableSocketInactivityTimeout(connection, phase = "connect") {
+    // node-routeros does not expose the Socket publicly in its TypeScript API,
+    // but the runtime connector stores it as connector.socket. The socket timer
+    // is set synchronously inside connection.connect(), so it can be cleared
+    // immediately without disabling our independent Promise.race deadlines.
+    const socket = connection?.connector?.socket;
+    if (!socket || typeof socket.setTimeout !== "function") {
+      console.warn("[MikroTik Socket] Could not access underlying socket to disable inactivity timeout", {
+        phase, host: connection?.host || null
+      });
+      return false;
+    }
+    socket.setTimeout(0);
+    if (typeof socket.setKeepAlive === "function") socket.setKeepAlive(true);
+    console.log("[MikroTik Socket] inactivity timeout disabled", {
+      phase, host: connection.host, port: connection.port
+    });
+    return true;
+  }
+
+  _startHeartbeat(connection) {
+    this._stopHeartbeat(connection);
+    connection.__fazHeartbeatTimer = setInterval(async () => {
+      // Heartbeats join the same operation queue as application requests, so
+      // they cannot interleave with a multi-command billing/customer operation.
+      const heartbeat = this._operationQueue.then(async () => {
+        if (this._connection !== connection || !connection.connected) return;
+        try {
+          await this._executeWithTimeout(
+            connection.write("/system/identity/print"),
+            OPERATION_TIMEOUT_MS,
+            "persistent connection heartbeat"
+          );
+          console.debug("[MikroTik Heartbeat] ok", {
+            host: connection.host, port: connection.port, at: new Date().toISOString()
+          });
+        } catch (error) {
+          console.warn("[MikroTik Heartbeat] failed", {
+            host: connection.host, port: connection.port,
+            message: error?.message || String(error), code: error?.code || null
+          });
+          if (this._connection === connection && this._isConnectionFailure(error)) {
+            this._resetPersistentConnection(connection, "heartbeat failed: " + (error?.message || error));
+          }
+        }
+      });
+      this._operationQueue = heartbeat.catch(() => {});
+      await heartbeat;
+    }, 30000);
+    if (typeof connection.__fazHeartbeatTimer.unref === "function") {
+      connection.__fazHeartbeatTimer.unref();
+    }
+  }
+
+  _resetPersistentConnection(connection, reason = "explicit reset / reconnect") {
+    if (!connection) return;
+    connection.__fazCloseReason = reason;
+    this._stopHeartbeat(connection);
+    if (this._connection === connection) {
       this._connection = null;
       this._connectionKey = null;
     }
-    if (connection) this._safeClose(connection);
+    this._safeClose(connection);
   }
 
   async _getPersistentConnection(config) {
     const key = JSON.stringify({host:config.host,port:config.port,user:config.user,password:config.password});
     if (this._connection && this._connectionKey !== key) {
-      this._resetPersistentConnection(this._connection);
+      this._resetPersistentConnection(this._connection, "router configuration changed");
     }
     if (this._connection) return this._connection;
 
@@ -124,14 +208,24 @@ class MikroTikService {
     this._connection = connection;
     this._connectionKey = key;
     try {
+      // Calling connect() synchronously creates connector.socket and initially
+      // applies node-routeros' default 10s socket timeout. Clear that idle timer
+      // immediately; the Promise.race below still caps the connection handshake.
+      const connectPromise = connection.connect();
+      this._disableSocketInactivityTimeout(connection, "initial connect");
       await this._executeWithTimeout(
-        connection.connect(),
+        connectPromise,
         CONNECTION_TIMEOUT_MS,
         "MikroTik connection handshake"
       );
+      this._disableSocketInactivityTimeout(connection, "after handshake");
+      this._startHeartbeat(connection);
+      console.log("[MikroTik Connection] persistent session established", {
+        host: config.host, port: config.port, keepalive: "30s API heartbeat"
+      });
       return connection;
     } catch (error) {
-      this._resetPersistentConnection(connection);
+      this._resetPersistentConnection(connection, "connect/handshake failed: " + (error?.message || error));
       throw error;
     }
   }
@@ -157,7 +251,7 @@ class MikroTikService {
         if (connection && this._isConnectionFailure(error)) {
           // Discard a timed-out/uncertain socket so the next queued request
           // performs a fresh handshake rather than reusing a poisoned session.
-          this._resetPersistentConnection(connection);
+          this._resetPersistentConnection(connection, "operation failed: " + (error?.message || error));
         }
         const details=this._extractRouterError(error);
         const wrapped=new Error(details.message);

@@ -12,15 +12,22 @@ test("public homepage never opens a live MikroTik connection", () => {
   assert.match(server, /Saved hotspot metadata unavailable/);
 });
 
-test("MikroTik API uses a persistent serialized connection with 10-second timeouts", () => {
+test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {
   const service = read("services/mikrotikService.js");
   assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
+  assert.match(service, /timeout: 0/);
+  assert.match(service, /socket\.setTimeout\(0\)/);
+  assert.match(service, /_executeWithTimeout\(/);
+  assert.match(service, /_startHeartbeat\(connection\)/);
+  assert.match(service, /}, 30000\)/);
+  assert.match(service, /connection\.on\("close"/);
+  assert.match(service, /connection\.on\("error"/);
   assert.match(service, /this\._connection = null/);
   assert.match(service, /this\._operationQueue = Promise\.resolve\(\)/);
   assert.match(service, /_getPersistentConnection\(config\)/);
   assert.match(service, /connection\.write = \(\.\.\.args\) =>/);
-  assert.match(service, /_resetPersistentConnection\(connection\)/);
+  assert.match(service, /_resetPersistentConnection\(connection/);
   assert.match(service, /MikroTik connection handshake/);
   assert.match(service, /this\._safeClose\(connection\);/);
   assert.doesNotMatch(service, /await this\._safeClose\(connection\)/);
