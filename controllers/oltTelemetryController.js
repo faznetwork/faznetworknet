@@ -1,6 +1,7 @@
 "use strict";
 const crypto = require("crypto");
 const db = require("../db");
+const { parseOpticalPowerDbm } = require("../lib/network/opticalPower");
 let schemaReady;
 function ensureSchema() {
   if (!schemaReady) schemaReady = db.query(`
@@ -47,19 +48,19 @@ function normalizeReading(row, oltId) {
   if (!onuId) throw new Error('Every reading must include onuId.');
   const status=String(row.status||'unknown').toLowerCase();
   if (!['online','offline','los','unknown'].includes(status)) throw new Error('Invalid ONU status.');
-  const power=(value,min,max,name)=>{
-    if(value===null||value===undefined||value==='')return null;
-    const n=Number(value);
-    if(!Number.isFinite(n)||n<min||n>max)throw new Error('Invalid '+name+'.');
-    return Math.round(n*100)/100;
+  const power=(value,min,max)=>{
+    // V-SOL exposes RX/TX as OCTET STRING on some firmware revisions.
+    // Parse only a plain numeric string or an explicit dBm value; never guess
+    // whether encoded integer values are tenths/hundredths of a dBm.
+    return parseOpticalPowerDbm(value,min,max);
   };
   const observedAt=row.observedAt ? new Date(row.observedAt) : new Date();
   if(Number.isNaN(observedAt.getTime()) || observedAt.getTime()>Date.now()+300000) throw new Error('Invalid observedAt timestamp.');
   return {
     oltId, onuId, onuMac:normalizeMac(row.onuMac), pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
     ponPort:String(row.ponPort||'').trim().slice(0,100)||null,
-    status, rx:power(row.rxPowerDbm,-50,10,'RX power'),
-    tx:power(row.txPowerDbm,-50,20,'TX power'),
+    status, rx:power(row.rxPowerDbm,-50,10),
+    tx:power(row.txPowerDbm,-50,20),
     observedAt:observedAt.toISOString(),
     sourceAgent:String(row.sourceAgent||'').trim().slice(0,160)||null,
     raw:row.raw && typeof row.raw==='object'&&!Array.isArray(row.raw) && Buffer.byteLength(JSON.stringify(row.raw))<=12000?JSON.stringify(row.raw):'{}'
