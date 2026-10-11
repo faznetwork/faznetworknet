@@ -5156,7 +5156,6 @@ async function deletePlan(id,name){
             }
             function routeFromPath(path) {
                 const routes = {
-                    '/admin': { view: 'dashboard' },
                     '/admin/dashboard': { view: 'dashboard' },
                     '/admin/customers/add': { view: 'page', page: 'add-customer' },
                     '/admin/customers/all': { view: 'customers', filter: 'all', title: 'all_customer' },
