@@ -3292,12 +3292,16 @@ async function deletePlan(id,name){
             const dynamic = document.getElementById('dynamicPageContent');
             if (!dynamic) return false;
             if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
-            if (typeof window.switchView === 'function') window.switchView('dashboard');
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
             const title = section === 'departments' ? 'Human Resource — Department' : section === 'added' ? 'Human Resource — Added Employees' : 'Human Resource — All Employees';
             setPageTitleSafe(title);
-            dynamic.innerHTML = '<section class="admin-view p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap align-items-center gap-3 mb-4"><div class="rounded-4 d-flex align-items-center justify-content-center" style="width:50px;height:50px;background:#ecfdf5;color:#065f46;font-size:23px"><i class="bi bi-person-badge"></i></div><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Human Resource</div><h2 class="h5 fw-bold mb-0">' + escapeHtml(title) + '</h2><div class="small text-muted">Manage HR records independently from customer billing and MikroTik accounts.</div></div></div><div id="hrModuleContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading HR records…</div></div></div></div></section>';
-            const content = document.getElementById('hrModuleContent');
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap align-items-center gap-3 mb-4"><div class="rounded-4 d-flex align-items-center justify-content-center" style="width:50px;height:50px;background:#ecfdf5;color:#065f46;font-size:23px"><i class="bi bi-person-badge"></i></div><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Human Resource</div><h2 class="h5 fw-bold mb-0">' + escapeHtml(title) + '</h2><div class="small text-muted">Manage HR records independently from customer billing and MikroTik accounts.</div></div></div><div id="hrModuleContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading HR records…</div></div></div></div></section>';
+            const content = root.querySelector('#hrModuleContent');
             try {
                 if (section === 'departments') {
                     const data = await window.jsonFetch('/api/hr/departments');
@@ -5593,9 +5597,15 @@ async function deletePlan(id,name){
                 const dynamic = document.getElementById('dynamicPageContent');
                 if (!title || !dynamic) return false;
                 if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+                if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+                let root = document.getElementById('fazDynamicModuleRoot');
+                if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+                document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+                root.style.display = 'block';
+                if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
                 if (typeof setPageTitleSafe === 'function') setPageTitleSafe(title);
-                dynamic.innerHTML = `
-                    <section class="admin-view p-2 p-md-3">
+                root.innerHTML = `
+                    <section class="p-2 p-md-3">
                         <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
                             <div class="card-body p-3 p-md-5">
                                 <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
