@@ -61,7 +61,7 @@ exports.listEmployees = async (req,res) => {
     const [r,d]=await Promise.all([
       db.query(`SELECT e.id,e.employee_code,e.full_name,e.phone,e.email,e.department_id,d.name department_name,e.designation,e.joining_date,e.status,e.notes,e.created_by,e.created_at,e.updated_at
         FROM hr_employees e LEFT JOIN hr_departments d ON d.id=e.department_id ORDER BY \${order} LIMIT 2000`),
-      db.query("SELECT id,name FROM hr_departments WHERE status='active' ORDER BY name ASC")
+      db.query("SELECT id,name,status FROM hr_departments ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END,name ASC")
     ]);
     return res.json({success:true,sort,employees:r.rows,departments:d.rows});
   } catch(e){console.error('[HR] Employee list failed:',e?.message||e);return res.status(500).json({success:false,message:'Unable to load employees.'});}
