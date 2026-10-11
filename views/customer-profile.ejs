@@ -193,5 +193,6 @@ async function loadUsageRecords(){
 }
 $('usageRecord').onclick=()=>{open('usageModal');loadUsageRecords()};
 $('usageRefresh').onclick=loadUsageRecords;
-$('refreshAudit').onclick=loadAuditLogs;$('showPass').onclick=()=>{$('pass').type=$('pass').type==='password'?'text':'password'};load();loadLiveSession();loadNetworkMap();setInterval(load,15000);setInterval(loadLiveSession,1500);setInterval(loadNetworkMap,30000)})();
+$('refreshAudit').onclick=loadAuditLogs;$('showPass').onclick=()=>{$('pass').type=$('pass').type==='password'?'text':'password'};// Avoid overlapping background refreshes: profile + audit every 60s, live RouterOS status every 3s, topology every 60s.
+load();loadLiveSession();loadNetworkMap();setInterval(load,60000);setInterval(loadLiveSession,3000);setInterval(loadNetworkMap,60000)})();
 </script></body></html>

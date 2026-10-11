@@ -1254,45 +1254,23 @@ async function getCustomerLiveSession(req,res){
     ]);
     const storedMac=storedResult.status==="fulfilled"?clean(storedResult.value.rows?.[0]?.caller_id,100):"";
 
-    // Customer 360 polls this endpoint every 3 seconds. Read the current
-    // RouterOS active PPPoE table instead of treating an old pushed DB
-    // snapshot as the source of truth for online/offline status.
-    let sessions,source="mikrotik-live";
+    // The current RouterOS active list is authoritative. Never report Online from a stale DB snapshot.
+    let sessions;
     try{
-      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),10000);
+      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),3500);
       if(!Array.isArray(sessions))throw new Error("MikroTik returned an invalid active-session response.");
     }catch(liveError){
-      console.warn("[Customer live session] RouterOS lookup failed; trying recent snapshot:",liveError.message);
-      try{
-        const snapshot=await db.query(
-          `SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
-                  caller_id AS "callerId",received_at AS "receivedAt"
-           FROM pppoe_live_sessions
-           WHERE LOWER(username)=LOWER($1)
-             AND received_at >= NOW() - INTERVAL '3 minutes'
-           ORDER BY received_at DESC LIMIT 1`,
-          [customer.username]
-        );
-        const row=snapshot.rows[0];
-        const receivedAtMs=row?.receivedAt?new Date(row.receivedAt).getTime():NaN;
-        const fresh=Boolean(row)&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000;
-        if(fresh){
-          const bytesIn=String(row.bytesIn??0),bytesOut=String(row.bytesOut??0);
-          return res.json({success:true,live:{status:"online",isLive:true,online:true,ip:clean(row.address,100),mac:clean(row.callerId||storedMac,100),uptime:clean(row.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(row.service,50),receivedAt:row.receivedAt,stale:false,source:"recent-snapshot"}});
-        }
-      }catch(snapshotError){
-        console.warn("[Customer live session] Recent snapshot lookup failed:",snapshotError.message);
-      }
+      console.warn("[Customer 360 live status] RouterOS active-list lookup failed:",JSON.stringify({username:customer.username,message:liveError.message,source:"mikrotik-live",at:new Date().toISOString()}));
       return res.status(503).json({success:false,code:"LIVE_SESSION_SOURCE_UNAVAILABLE",message:"Live MikroTik session data is temporarily unavailable; Customer 360 kept the last known status instead of guessing Offline."});
     }
 
     const target=String(customer.username||"").trim().toLowerCase();
     const session=sessions.find(item=>String(item?.username||item?.name||"").trim().toLowerCase()===target);
-    if(!session)return res.json({success:true,live:offlineLive(storedMac)});
+    if(!session)return res.json({success:true,live:offlineLive(storedMac),statusSource:"mikrotik-live"});
     const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
-    return res.json({success:true,live:{status:"online",isLive:true,online:true,ip:clean(session.address,100),mac:clean(session.callerId||session.caller_id||storedMac,100),uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:new Date().toISOString(),stale:false,source}});
+    return res.json({success:true,live:{status:"online",isLive:true,online:true,ip:clean(session.address,100),mac:clean(session.callerId||session.caller_id||storedMac,100),uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:new Date().toISOString(),stale:false,source:"mikrotik-live"},statusSource:"mikrotik-live"});
   }catch(error){
-    console.warn("[Customer live session] Live lookup failed:",error.message);
+    console.warn("[Customer 360 live status] Request failed:",error.message);
     return res.status(503).json({success:false,code:"LIVE_SESSION_SOURCE_UNAVAILABLE",message:"Live session data is temporarily unavailable; customer status was not changed."});
   }
 }
