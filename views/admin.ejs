@@ -4527,7 +4527,7 @@ async function deletePlan(id,name){
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
-            const mobilePhone = String(metadata.displayPhone || user.phone || '').replace(/[^\\d+]/g, '');
+            const mobilePhone = String(metadata.displayPhone || user.phone || '').replace(/[^\d+]/g, '');
             const mobileName = escapeHtml(metadata.displayName || user.username || 'Customer');
             const mobileUsername = escapeHtml(user.username || '-');
             const mobilePackage = escapeHtml(user.package_name || user.profile || 'N/A');
