@@ -4095,7 +4095,17 @@ async function deletePlan(id,name){
             const unionSelect = document.getElementById('bdMapUnion');
             const wardSelect = document.getElementById('bdMapWard');
             const wardOther = document.getElementById('bdMapWardOther');
-            const apiBase = 'https://bdapis.vercel.app/geo/v2.0';
+            const apiBases = ['https://bdapis.vercel.app/geo/v2.0', 'https://bdopenapi.vercel.app/api/geo'];
+            const knownDivisions = [
+                {id:'1',name:'Barishal',bn_name:'বরিশাল'},
+                {id:'2',name:'Chattogram',bn_name:'চট্টগ্রাম'},
+                {id:'3',name:'Dhaka',bn_name:'ঢাকা'},
+                {id:'4',name:'Khulna',bn_name:'খুলনা'},
+                {id:'5',name:'Rajshahi',bn_name:'রাজশাহী'},
+                {id:'6',name:'Rangpur',bn_name:'রংপুর'},
+                {id:'7',name:'Sylhet',bn_name:'সিলেট'},
+                {id:'8',name:'Mymensingh',bn_name:'ময়মনসিংহ'}
+            ];
             const unwrap = payload => {
                 if (Array.isArray(payload)) return payload;
                 for (const key of ['data','results','items','divisions','districts','upazilas','unions']) {
@@ -4127,9 +4137,17 @@ async function deletePlan(id,name){
                 if (select.options.length <= 1) setPlaceholder(select, 'তথ্য পাওয়া যায়নি', true);
             };
             const fetchLocations = async path => {
-                const response = await fetch(apiBase + path, {headers:{'Accept':'application/json'}});
-                if (!response.ok) throw new Error('Location list request failed (' + response.status + ')');
-                return unwrap(await response.json());
+                let lastError;
+                for (const base of apiBases) {
+                    try {
+                        const response = await fetch(base + path, {headers:{'Accept':'application/json'}, signal:AbortSignal.timeout(7000)});
+                        if (!response.ok) throw new Error('Location list request failed (' + response.status + ')');
+                        const items = unwrap(await response.json());
+                        if (items.length) return items;
+                        throw new Error('Location API returned an empty list');
+                    } catch (error) { lastError = error; }
+                }
+                throw lastError || new Error('Location list unavailable');
             };
             const loadChildren = async (path, select, placeholder) => {
                 setPlaceholder(select, 'তালিকা লোড হচ্ছে…', true);
@@ -4227,12 +4245,20 @@ async function deletePlan(id,name){
             });
             (async () => {
                 try {
-                    const items = await fetchLocations('/divisions');
+                    let items;
+                    try { items = await fetchLocations('/divisions'); }
+                    catch (error) {
+                        // Keep the first dropdown usable even if both public geo APIs are temporarily unavailable.
+                        console.warn('[Google Maps] using built-in division fallback:', error);
+                        items = knownDivisions;
+                    }
                     fillSelect(divisionSelect, items, 'বিভাগ নির্বাচন করুন');
-                    status.textContent = items.length ? 'বিভাগ ও প্রশাসনিক তালিকা প্রস্তুত' : 'বিভাগের তালিকা খালি';
+                    status.textContent = items === knownDivisions
+                        ? 'বিভাগ নির্বাচন চালু; জেলা/উপজেলা তালিকার জন্য নেটওয়ার্ক দরকার'
+                        : 'বিভাগ ও প্রশাসনিক তালিকা প্রস্তুত';
                 } catch (error) {
-                    status.textContent = 'লোকেশনের তালিকা লোড হয়নি — নেটওয়ার্ক পরীক্ষা করুন';
-                    setPlaceholder(divisionSelect,'বিভাগের তালিকা লোড হয়নি',true);
+                    status.textContent = 'বিভাগের তালিকা প্রস্তুত করা যায়নি';
+                    setPlaceholder(divisionSelect,'বিভাগের তালিকা পাওয়া যায়নি',false);
                     console.warn('[Google Maps] divisions list unavailable:', error);
                 }
             })();
