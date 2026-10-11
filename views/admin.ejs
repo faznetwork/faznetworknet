@@ -5395,8 +5395,6 @@ async function deletePlan(id,name){
                 bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
             };
             const moduleTitles = {
-                'usage': 'Monitor — Usage',
-                'monitor-online': 'Monitor — Online',
                 'vpn': 'VPN Server',
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
@@ -5443,6 +5441,7 @@ async function deletePlan(id,name){
                     return { view: 'hr', section };
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
+                if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5491,8 +5490,8 @@ async function deletePlan(id,name){
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support', category: 'all' },
                     '/admin/settings': { view: 'page', page: 'general-settings' },
-                    '/admin/monitor/usage': { view: 'module', module: 'usage' },
-                    '/admin/monitor/online': { view: 'module', module: 'monitor-online' },
+                    '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
+                    '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
                     '/admin/vpn': { view: 'module', module: 'vpn' },
                     '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
@@ -5566,6 +5565,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'support') return normalized.category === 'software' ? '/admin/support/software' : normalized.category === 'website' ? '/admin/support/website' : '/admin/support/tickets';
                 if (normalized.view === 'hr') return normalized.section === 'departments' ? '/admin/hr/departments' : normalized.section === 'added' ? '/admin/hr/employees/added' : '/admin/hr/employees';
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
+                if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5637,6 +5637,7 @@ async function deletePlan(id,name){
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
                     case 'hr': return callIfAvailable('loadHRModule', [r.section]);
                     case 'network-diagram': return callIfAvailable('loadNetworkDiagram');
+                    case 'monitor': return callIfAvailable('loadNetworkMonitor', [r.mode || 'online']);
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
@@ -5732,6 +5733,7 @@ async function deletePlan(id,name){
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
                     case 'loadHRModule': return { view: 'hr', section: ['departments','employees','added'].includes(String(args[0] || 'employees')) ? String(args[0] || 'employees') : 'employees' };
                     case 'loadNetworkDiagram': return { view: 'network-diagram' };
+                    case 'loadNetworkMonitor': return { view: 'monitor', mode: String(args[0] || 'online') === 'usage' ? 'usage' : 'online' };
                     default: return null;
                 }
             }
@@ -5769,7 +5771,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
