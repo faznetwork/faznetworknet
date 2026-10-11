@@ -1261,7 +1261,7 @@ async function getCustomerLiveSession(req,res){
       if(!Array.isArray(sessions))throw new Error("MikroTik returned an invalid active-session response.");
     }catch(liveError){
       console.warn("[Customer 360 live status] RouterOS active-list lookup failed:",JSON.stringify({username:customer.username,message:liveError.message,source:"mikrotik-live",at:new Date().toISOString()}));
-      return res.json({success:true,live:offlineLive(storedMac),statusSource:"mikrotik-live-unavailable",diagnostic:liveError.message});
+      return res.status(503).json({success:false,code:"LIVE_SESSION_SOURCE_UNAVAILABLE",message:"Live MikroTik session data is temporarily unavailable; Customer 360 kept the last known status instead of guessing Offline."});
     }
 
     const target=String(customer.username||"").trim().toLowerCase();
