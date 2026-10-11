@@ -194,12 +194,25 @@ async function createCustomer(req, res) {
     billingCycle: String(body.billingCycle || body.billing_cycle || "monthly").trim().toLowerCase(),
     billingDurationDays: body.billingDurationDays || body.billing_duration_days ? Number.parseInt(body.billingDurationDays || body.billing_duration_days,10) : null,
     billingStatus: String(body.billingStatus || body.billing_status || "unpaid").trim().toLowerCase()==="paid" ? "paid" : "unpaid",
+    email: clean(body.email,254),
+    whatsappPhone: clean(body.whatsappPhone || body.whatsapp_phone,40),
+    telegramLink: clean(body.telegramLink || body.telegram_link,255),
+    facebookLink: clean(body.facebookLink || body.facebook_link,500),
     billingExpiryOverride: [true,"true",1,"1","yes","on"].includes(body.billingExpiryOverride ?? body.billing_expiry_override),
     disabled: [true,"true",1,"1","yes","on"].includes(body.disabled),
     remarks: clean(body.remarks || body.note, 1000)
   };
   if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
   if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
+  if(customer.email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
+  const whatsappDigits=customer.whatsappPhone.replace(/[^0-9]/g,"");
+  customer.whatsappPhone=whatsappDigits?(/^(?:8801[3-9]\\d{8}|01[3-9]\\d{8})$/.test(whatsappDigits)?whatsappDigits:""):null;
+  if(customer.whatsappPhone=== "" )return res.status(400).json({success:false,message:"Enter a valid Bangladesh WhatsApp number or leave it blank."});
+  const safeContactLink=(value,kind)=>{if(!value)return null;const v=String(value).trim();if(kind==="telegram"&&/^@[A-Za-z0-9_]{5,32}$/.test(v))return v;if(kind==="telegram"&&/^t\\.me\\/[A-Za-z0-9_]{5,32}\\/?$/i.test(v))return "https://"+v;if(!/^https:\\/\\//i.test(v))return null;try{const u=new URL(v);const host=u.hostname.toLowerCase();if(kind==="telegram"&&![ "t.me","www.t.me","telegram.me","www.telegram.me"].includes(host))return null;if(kind==="facebook"&&![ "facebook.com","www.facebook.com","m.facebook.com","fb.me","www.messenger.com","messenger.com"].includes(host))return null;return u.toString();}catch(_){return null;}};
+  const telegramRaw=customer.telegramLink,facebookRaw=customer.facebookLink;
+  customer.telegramLink=safeContactLink(telegramRaw,"telegram");customer.facebookLink=safeContactLink(facebookRaw,"facebook");
+  if(telegramRaw&&!customer.telegramLink)return res.status(400).json({success:false,message:"Telegram must be an @username or a valid t.me link."});
+  if(facebookRaw&&!customer.facebookLink)return res.status(400).json({success:false,message:"Facebook must be a valid HTTPS Facebook/Messenger link."});
   customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
 
   if (!customer.fullName || !customer.phone || customer.phone === '—' || !customer.connectionDate || !customer.activationDate || !customer.expirationDate ||
@@ -238,8 +251,9 @@ async function createCustomer(req, res) {
        (full_name, phone, connection_date, username, password, package_name, profile,
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
-        billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,NOW(),NOW())
+        billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
+        email, whatsapp_phone, telegram_link, facebook_link, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -248,7 +262,8 @@ async function createCustomer(req, res) {
         customer.onuMac || null, customer.remarks || null, customer.expirationDate,
         customer.alternativePhone || null, customer.oltPonPort || null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
         customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
-        (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active"
+        (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
+        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null
       ]
     );
 
