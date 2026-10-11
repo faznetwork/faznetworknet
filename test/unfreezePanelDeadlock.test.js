@@ -16,8 +16,9 @@ test("MikroTik API keeps a serialized persistent socket without an idle disconne
   const service = read("services/mikrotikService.js");
   assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
-  assert.match(service, /timeout: 0/);
-  assert.match(service, /Disable socket inactivity/);
+  assert.match(service, /timeout: CONNECTION_TIMEOUT_MS \/ 1000/);
+  assert.match(service, /keepalive: true/);
+  assert.match(service, /sends a harmless/);
   assert.match(service, /this\._connection = null/);
   assert.match(service, /this\._operationQueue = Promise\.resolve\(\)/);
   assert.match(service, /_getPersistentConnection\(config\)/);
