@@ -122,6 +122,28 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
 });
 
+test("marks due database vouchers expired and retains retry state when RouterOS snapshot is unavailable", async () => {
+  const rows = [{
+    id: 7, username: "API-OFFLINE-EXPIRED", status: "active",
+    expires_at: new Date("2026-10-11T10:00:00.000Z"), cleanup_status: "not_required"
+  }];
+  const database = mockDb(rows);
+  const router = {
+    async getHotspotExpirationSnapshot() { throw new Error("Router API timeout"); },
+    async cleanupExpiredHotspotUser() { throw new Error("Router API timeout"); }
+  };
+  const run = createHotspotExpirationCleanup({
+    db: database, mikrotikService: router, logger: quietLogger(),
+    now: () => new Date("2026-10-11T12:00:00.000Z")
+  });
+  const result = await run();
+  assert.equal(result.expired, 1);
+  assert.equal(result.failed, 1);
+  assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
+  assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='pending'") && call.params.includes("Router API timeout")));
+  assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
+});
+
 test("does not expire an unused voucher solely because it was created long ago", async () => {
   const rows = [{
     id: 6, username: "UNUSED-OLD", status: "unused",
