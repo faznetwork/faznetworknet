@@ -700,7 +700,7 @@ async function profile(req,res){
       expiration_date:expiration||null,expirationDate:expiration||null,billing_cycle:clean(dbUser?.billing_cycle||"monthly",30),billing_duration_days:dbUser?.billing_duration_days==null?null:Number(dbUser.billing_duration_days),billing_expiry_override:Boolean(dbUser?.billing_expiry_override),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft,paid_until:paidUntil||null,
       disabled:Boolean(mtSecret?.disabled??pppoeRow?.disabled),remote_address:clean(mtSecret?.remoteAddress||pppoeRow?.remote_address||dbUser?.remote_address,100),caller_id:clean(mtSecret?.callerId||pppoeRow?.caller_id||dbUser?.caller_id,100),
       service:clean(mtSecret?.service||"pppoe",30),installation_address:dbUser?.installation_address||"",olt_pon_port:dbUser?.olt_pon_port||"",
-      distribution_box:dbUser?.distribution_box||dbUser?.fiber_box||"",onu_mac:dbUser?.onu_mac||pppoeRow?.caller_id||"",onu_serial:dbUser?.onu_serial||"",
+      distribution_box:dbUser?.distribution_box||dbUser?.fiber_box||"",onu_mac:dbUser?.onu_mac||"",onu_serial:dbUser?.onu_serial||"",
       fiber_drop_core:dbUser?.fiber_drop_core||"",remarks:dbUser?.remarks||"",connection_date:dbUser?.connection_date||null
     };
     return res.json({success:true,customer,live:{online:Boolean(session),ip:session?.address||customer.remote_address||"",mac:session?.callerId||customer.caller_id||"",uptime:session?.uptime||"",bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||""},plans,payments,source:dbUser&&mtSecret?"database+mikrotik":mtSecret?"mikrotik":"database"});
