@@ -4054,7 +4054,7 @@ async function deletePlan(id,name){
             setPageTitleSafe('Google Maps');
             const dynamic = document.getElementById('dynamicPageContent');
             if (!dynamic) return;
-            dynamic.innerHTML = \`
+            dynamic.innerHTML = `
                 <section class="admin-view p-3">
                     <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
                         <div class="rounded-4 d-flex align-items-center justify-content-center shadow-sm" style="width:58px;height:58px;background:linear-gradient(135deg,#dcfce7,#d1fae5);color:#065f46;font-size:26px"><i class="bi bi-geo-alt-fill"></i></div>
@@ -4071,7 +4071,7 @@ async function deletePlan(id,name){
                                     <div class="col-md-6"><label for="bdMapDistrict" class="form-label fw-semibold">জেলা (District) <span class="text-danger">*</span></label><select id="bdMapDistrict" class="form-select" required disabled><option value="">আগে বিভাগ নির্বাচন করুন</option></select></div>
                                     <div class="col-md-6"><label for="bdMapUpazila" class="form-label fw-semibold">উপজেলা / থানা (Upazila / Thana) <span class="text-danger">*</span></label><select id="bdMapUpazila" class="form-select" required disabled><option value="">আগে জেলা নির্বাচন করুন</option></select></div>
                                     <div class="col-md-6"><label for="bdMapUnion" class="form-label fw-semibold">ইউনিয়ন / স্থানীয় এলাকা (Union)</label><select id="bdMapUnion" class="form-select" disabled><option value="">আগে উপজেলা নির্বাচন করুন</option></select></div>
-                                    <div class="col-md-4"><label for="bdMapWard" class="form-label fw-semibold">ওয়ার্ড নম্বর (Ward)</label><select id="bdMapWard" class="form-select"><option value="">ওয়ার্ড নির্বাচন করুন</option>\${Array.from({length:9},(_,i)=>\`<option value="\${i+1}">\${i+1} নং ওয়ার্ড</option>\`).join('')}<option value="other">তালিকায় নেই / Other</option></select><input id="bdMapWardOther" class="form-control mt-2 d-none" maxlength="60" placeholder="ওয়ার্ড নম্বর / নাম লিখুন"></div>
+                                    <div class="col-md-4"><label for="bdMapWard" class="form-label fw-semibold">ওয়ার্ড নম্বর (Ward)</label><select id="bdMapWard" class="form-select"><option value="">ওয়ার্ড নির্বাচন করুন</option>${Array.from({length:9},(_,i)=>`<option value="${i+1}">${i+1} নং ওয়ার্ড</option>`).join('')}<option value="other">তালিকায় নেই / Other</option></select><input id="bdMapWardOther" class="form-control mt-2 d-none" maxlength="60" placeholder="ওয়ার্ড নম্বর / নাম লিখুন"></div>
                                     <div class="col-md-4"><label for="bdMapLocality" class="form-label fw-semibold">গ্রাম / মহল্লা / বাজার</label><input id="bdMapLocality" class="form-control" maxlength="180" placeholder="গ্রাম, পাড়া বা বাজারের নাম"></div>
                                     <div class="col-md-4"><label for="bdMapHouseRoad" class="form-label fw-semibold">বাড়ি / রোড / হোল্ডিং</label><input id="bdMapHouseRoad" class="form-control" maxlength="180" placeholder="বাড়ি নম্বর, রোড বা হোল্ডিং"></div>
                                     <div class="col-md-6"><label for="bdMapMunicipality" class="form-label fw-semibold">পৌরসভা / সিটি কর্পোরেশন <span class="text-muted fw-normal">(optional)</span></label><input id="bdMapMunicipality" class="form-control" maxlength="120" placeholder="প্রযোজ্য হলে নাম লিখুন"></div>
@@ -4085,7 +4085,7 @@ async function deletePlan(id,name){
                         <div class="card-body p-5 text-center text-muted"><i class="bi bi-map fs-1 d-block mb-3"></i><h5 class="fw-bold text-dark">Bangladesh customer map</h5><p class="mb-0">বিভাগ, জেলা ও উপজেলা নির্বাচন করে ঠিকানার বিস্তারিত দিন, তারপর Google Maps-এ খুঁজুন।</p></div>
                     </div>
                     <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>এটি নির্বাচিত ঠিকানা Google Maps-এ খুঁজে দেখায়; গ্রাহকের ফোনের GPS থেকে লাইভ অবস্থান সংগ্রহ করে না। গ্রাম বা ওয়ার্ডের নির্ভুল পিন Google Maps-এর তথ্যের ওপরও নির্ভর করে।</div>
-                </section>\`;
+                </section>`;
             const form = document.getElementById('bdGoogleMapSearchForm');
             const result = document.getElementById('bdMapResult');
             const status = document.getElementById('bdGeoStatus');
