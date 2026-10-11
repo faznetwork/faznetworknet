@@ -92,6 +92,7 @@ async function loadNetworkMap(){
    const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
+    $('topologyOnuMissing').classList.toggle('d-none',Boolean(String(customer.onuMac||t.onuMac||'').trim()));
     hasFreshCollectorTelemetry=!t.stale;
     $('topoPon').textContent=t.ponPort||customer.oltPonPort||'EPON —';
     $('topoOnu').textContent=t.onuId||'ONU —';
