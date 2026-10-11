@@ -190,6 +190,16 @@ async function voucherRecords(req,res){
   return res.json({success:true,filter,count:rows.length,vouchers:rows.map(v=>({...v,price:Number(v.price||0)}))});
  }catch(e){return errorResponse(res,e);}
 }
+async function voucherSales(req,res){
+ try{
+  const [summary,rows]=await Promise.all([
+   db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(t.amount),0)::numeric(12,2) AS total_amount FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status='processed'"),
+   db.query("SELECT t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status='processed' ORDER BY t.created_at DESC,t.id DESC LIMIT 500")
+  ]);
+  const s=summary.rows?.[0]||{};
+  return res.json({success:true,count:Number(s.count||0),totalAmount:Number(s.total_amount||0),transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
+ }catch(e){return errorResponse(res,e);}
+}
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function remove(req,res){try{
  const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
@@ -197,4 +207,4 @@ async function remove(req,res){try{
  await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='completed',cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,NOW()),updated_at=NOW() WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,kick,remove};
+module.exports={page,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove};
