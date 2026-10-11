@@ -578,7 +578,6 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('hotspot-webhook'); return false;"><i class="bi bi-webhook me-2"></i><span>Hotspot Webhook</span></a></li>
                 </ul>
             </li>
 
@@ -877,28 +876,6 @@
                   </div><div id="generalMfsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalMfsSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Numbers</button></div></form></div>
                 </div>
               </div>
-            </section>
-
-            <!-- VIEW: HOTSPOT WEBHOOK SETTINGS -->
-            <section id="view-hotspot-webhook" class="admin-view" style="display:none">
-                <div class="mb-3"><h2 class="h4 fw-bold mb-1">Hotspot Webhook Settings</h2><p class="text-muted mb-0">Configure the inbound payment webhook and match payments to MikroTik Hotspot profiles.</p></div>
-                <div class="row g-4"><div class="col-12"><div class="card card-custom shadow-sm border-0">
-                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Hotspot Webhook &amp; Gateway Integration</div><small class="text-muted fw-normal">Configure the inbound webhook used by your payment automation.</small></div></div><span id="paymentWebhookStatus" class="badge bg-secondary ms-auto">Not configured</span></div>
-                    <div class="card-body p-4"><form id="paymentWebhookSettingsForm" novalidate><div class="row g-4">
-                        <div class="col-12"><label for="paymentWebhookUrl" class="form-label fw-semibold">Webhook URL / Custom Path</label><input id="paymentWebhookUrl" type="text" class="form-control font-monospace" placeholder="/my-sms-hook or https://example.com/my-sms-hook" autocomplete="url" autocapitalize="off" spellcheck="false"><div class="form-text">Enter any absolute path (for example <code>/my-sms-hook</code>, <code>/api/custom-forwarder</code>) or a full HTTP/HTTPS URL. Forwarder requests must use POST.</div><div class="mt-2 p-3 rounded border bg-light"><div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><div class="small fw-semibold text-muted"><i class="bi bi-link-45deg me-1"></i>Full incoming endpoint</div><button type="button" id="copyWebhookEndpointBtn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copy endpoint</button></div><code id="webhookEndpointDisplay" class="d-block text-break mt-2">Loading endpoint…</code></div></div>
-                        <div class="col-lg-8"><label for="paymentWebhookSecret" class="form-label fw-semibold">Webhook Secret Key / Token</label><input id="paymentWebhookSecret" type="password" class="form-control font-monospace" placeholder="Leave blank to keep the existing secret" autocomplete="new-password"><div id="paymentWebhookSecretHint" class="form-text">The saved secret is never returned to the browser.</div></div>
-                        <div class="col-lg-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" role="switch" id="paymentWebhookEnabled"><label class="form-check-label fw-semibold" for="paymentWebhookEnabled">Enable automation</label></div></div>
-                    </div><div id="paymentWebhookSettingsResult" class="small mt-3"></div><div class="d-flex justify-content-end mt-4"><button id="paymentWebhookSaveBtn" type="submit" class="btn btn-success px-4"><i class="bi bi-check2-circle me-1"></i>Save Webhook Settings</button></div></form></div>
-                </div></div></div>
-                <div class="row g-4 mt-1"><div class="col-12"><div class="card card-custom shadow-sm border-0">
-                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-wifi text-primary fs-5"></i><div><div class="fw-semibold">Live Hotspot Profile Prices &amp; Validity</div><small class="text-muted fw-normal">Automatic synchronization with the Profile menu and database.</small></div></div><span id="hotspotProfileSyncStatus" class="badge bg-secondary ms-auto">Not loaded</span></div>
-                    <div class="card-body p-4">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div class="small text-muted">Price and validity are read directly from the latest saved profile metadata. No manual amount mapping or save step is required; TrxID verification uses the current values.</div><button type="button" id="hotspotProfilesRefreshBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Profiles</button></div>
-                        <div class="small text-muted mb-3" id="hotspotProfileSource">Waiting for MikroTik and database…</div>
-                        <div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead class="table-light"><tr><th>Profile</th><th>Price (৳)</th><th>Validity</th><th>Rate Limit</th><th>Data Quota</th></tr></thead><tbody id="hotspotPriceProfileRows"><tr><td colspan="5" class="text-muted text-center py-4">Loading live profile data…</td></tr></tbody></table></div>
-                        <div id="hotspotProfileSettingsResult" class="small mt-3" role="status" aria-live="polite"></div>
-                    </div>
-                </div></div></div>
             </section>
 
             <!-- Shared Add/Edit Customer Form Modal. The existing Add Customer form is moved here for editing and restored when closed. -->
@@ -1755,7 +1732,7 @@
                 'hotspot_dashboard_title':'Hotspot Dashboard','total_hotspot_accounts':'Total Hotspot Accounts','currently_online_clients':'Currently Online Clients','total_vouchers_generated':'Total Vouchers Generated','hotspot_revenue':'Hotspot Revenue','live_hotspot_overview':'Live Hotspot Overview','hotspot_accounts':'Hotspot Accounts','search_hotspot':'Search username, profile, IP or MAC...','hotspot_user_profiles':'Hotspot User Profiles','rate_limit':'Rate Limit','shared_users':'Shared Users','idle_timeout':'Idle Timeout','keepalive':'Keepalive','hotspot_address':'Hotspot Address','dns_name':'DNS Name','html_directory':'HTML Directory','login_by':'Login By','radius':'RADIUS','yes':'Yes','no':'No','quantity':'Quantity','user_prefix':'User Prefix','character_length':'Character Length','profile':'Profile','price':'Price','validity':'Validity','generate_batch_vouchers':'Generate Batch Vouchers','print_voucher_cards':'Print Voucher Cards','printable_voucher_cards':'Printable Voucher Cards','username_label':'Username','password_pin':'Password / PIN','package_speed':'Package Speed / Profile','instructions':'<span data-key="instructions">Connect to Wi-Fi → Open Portal → Enter PIN</span>','remove_user_confirm':'Remove Hotspot user','generate_first':'Generate a voucher batch first.','generating':'Generating...','loading_profiles':'Loading profiles...','no_profiles':'No MikroTik profiles found','no_hotspot_users':'No Hotspot users found.','bytes_in_out':'Bytes In/Out', 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
                 'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details',
-                'payment_ledger':'Financial Payment Ledger','search_payments':'Search TrxID, phone or username...','total_received':'Total Received Amount','total_transactions':'Total Transactions','unmatched_count':'Unmatched Count','trx_txnid':'TrxID / TxnID','gateway':'Gateway','amount':'Amount (৳)','sender_phone':'Sender Phone','matched_customer':'Matched Customer / Username','date_time':'Date & Time','manual_match':'Manual Match','processed':'Processed','unmatched':'Unmatched','duplicate':'Duplicate','no_payments':'No transactions found for this filter.','previous':'Previous','next':'Next','page':'Page','of':'of','enter_username':'Enter PPPoE username','match_payment':'Match Payment','cancel':'Cancel','matching':'Matching...','match_success':'Payment matched and customer renewed for 30 days.'
+                'payment_ledger':'Financial Payment Ledger','search_payments':'Search TrxID, phone or username...','total_received':'Total Received Amount','total_transactions':'Total Transactions','unmatched_count':'Unmatched Count','trx_txnid':'TrxID / TxnID','gateway':'Gateway','amount':'Amount (৳)','sender_phone':'Sender Phone','matched_customer':'Matched Customer / Username','customer_type':'Customer Type','type_pppoe':'PPPoE','type_hotspot':'Hotspot','type_unassigned':'Unassigned','type_unknown':'Unknown','date_time':'Date & Time','manual_match':'Manual Match','processed':'Processed','unmatched':'Unmatched','duplicate':'Duplicate','no_payments':'No transactions found for this filter.','previous':'Previous','next':'Next','page':'Page','of':'of','enter_username':'Enter PPPoE username','match_payment':'Match Payment','cancel':'Cancel','matching':'Matching...','match_success':'Payment matched and customer renewed for 30 days.'
             },
             'bn': {
                 'brand':'FAZ NETWORK','dashboard':'ড্যাশবোর্ড','customer':'কাস্টমার','all_customer':'অল কাস্টমার','add_customer':'অ্যাড কাস্টমার',
@@ -1774,7 +1751,7 @@
                 'hotspot_dashboard_title':'হটস্পট ড্যাশবোর্ড','total_hotspot_accounts':'মোট হটস্পট অ্যাকাউন্ট','currently_online_clients':'বর্তমানে অনলাইন ক্লায়েন্ট','total_vouchers_generated':'মোট তৈরি ভাউচার','hotspot_revenue':'হটস্পট আয়','live_hotspot_overview':'লাইভ হটস্পট ওভারভিউ','hotspot_accounts':'হটস্পট অ্যাকাউন্ট','search_hotspot':'ইউজারনেম, প্রোফাইল, IP বা MAC খুঁজুন...','hotspot_user_profiles':'হটস্পট ইউজার প্রোফাইল','rate_limit':'রেট লিমিট','shared_users':'শেয়ার্ড ইউজার','idle_timeout':'আইডল টাইমআউট','keepalive':'কিপঅ্যালাইভ','hotspot_address':'হটস্পট অ্যাড্রেস','dns_name':'DNS নাম','html_directory':'HTML ডিরেক্টরি','login_by':'লগইন পদ্ধতি','radius':'RADIUS','yes':'হ্যাঁ','no':'না','quantity':'পরিমাণ','user_prefix':'ইউজার প্রিফিক্স','character_length':'ক্যারেক্টার দৈর্ঘ্য','profile':'প্রোফাইল','price':'মূল্য','validity':'মেয়াদ','generate_batch_vouchers':'ব্যাচ ভাউচার তৈরি করুন','print_voucher_cards':'ভাউচার কার্ড প্রিন্ট','printable_voucher_cards':'প্রিন্টযোগ্য ভাউচার কার্ড','username_label':'ইউজারনেম','password_pin':'পাসওয়ার্ড / PIN','package_speed':'প্যাকেজ স্পিড / প্রোফাইল','instructions':'Wi-Fi-তে কানেক্ট করুন → পোর্টাল খুলুন → PIN দিন','remove_user_confirm':'হটস্পট ইউজারটি মুছে ফেলবেন?','generate_first':'আগে একটি ভাউচার ব্যাচ তৈরি করুন।','generating':'তৈরি হচ্ছে...','loading_profiles':'প্রোফাইল লোড হচ্ছে...','no_profiles':'কোনো MikroTik প্রোফাইল পাওয়া যায়নি','no_hotspot_users':'কোনো হটস্পট ইউজার পাওয়া যায়নি।','bytes_in_out':'বাইট ইন/আউট', 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
                 'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য',
-                'payment_ledger':'ফাইন্যান্সিয়াল পেমেন্ট লেজার','search_payments':'TrxID, ফোন বা ইউজারনেম খুঁজুন...','total_received':'মোট প্রাপ্ত অর্থ','total_transactions':'মোট লেনদেন','unmatched_count':'ম্যাচ না হওয়া','trx_txnid':'TrxID / TxnID','gateway':'গেটওয়ে','amount':'পরিমাণ (৳)','sender_phone':'প্রেরকের ফোন','matched_customer':'ম্যাচড কাস্টমার / ইউজারনেম','date_time':'তারিখ ও সময়','manual_match':'ম্যানুয়াল ম্যাচ','processed':'প্রসেসড','unmatched':'আনম্যাচড','duplicate':'ডুপ্লিকেট','no_payments':'এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।','previous':'আগের','next':'পরের','page':'পৃষ্ঠা','of':'এর','enter_username':'PPPoE ইউজারনেম লিখুন','match_payment':'পেমেন্ট ম্যাচ করুন','cancel':'বাতিল','matching':'ম্যাচ করা হচ্ছে...','match_success':'পেমেন্ট ম্যাচ হয়েছে এবং কাস্টমার ৩০ দিনের জন্য রিনিউ হয়েছে।'
+                'payment_ledger':'ফাইন্যান্সিয়াল পেমেন্ট লেজার','search_payments':'TrxID, ফোন বা ইউজারনেম খুঁজুন...','total_received':'মোট প্রাপ্ত অর্থ','total_transactions':'মোট লেনদেন','unmatched_count':'ম্যাচ না হওয়া','trx_txnid':'TrxID / TxnID','gateway':'গেটওয়ে','amount':'পরিমাণ (৳)','sender_phone':'প্রেরকের ফোন','matched_customer':'ম্যাচড কাস্টমার / ইউজারনেম','customer_type':'কাস্টমারের ধরন','type_pppoe':'PPPoE','type_hotspot':'হটস্পট','type_unassigned':'নির্ধারিত নয়','type_unknown':'অজানা','date_time':'তারিখ ও সময়','manual_match':'ম্যানুয়াল ম্যাচ','processed':'প্রসেসড','unmatched':'আনম্যাচড','duplicate':'ডুপ্লিকেট','no_payments':'এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।','previous':'আগের','next':'পরের','page':'পৃষ্ঠা','of':'এর','enter_username':'PPPoE ইউজারনেম লিখুন','match_payment':'পেমেন্ট ম্যাচ করুন','cancel':'বাতিল','matching':'ম্যাচ করা হচ্ছে...','match_success':'পেমেন্ট ম্যাচ হয়েছে এবং কাস্টমার ৩০ দিনের জন্য রিনিউ হয়েছে।'
             }
         };
 
@@ -1838,7 +1815,6 @@
             'all-customer': 'All Customer (PPPoE)',
             payments: 'All Payments',
             'general-settings': 'General Settings',
-            'hotspot-webhook': 'Hotspot Webhook Settings'
         };
 
         let currentIpPoolEdit = null; let ipPoolCache = {};
@@ -2464,9 +2440,6 @@ async function deletePlan(id,name){
                     fetchPayments(currentPaymentChannel);
                 } else if (target === 'general-settings') {
                     loadGeneralSettings();
-                } else if (target === 'hotspot-webhook') {
-                    loadHotspotWebhookSettings();
-                    loadHotspotProfileSettings();
                 }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
@@ -2474,7 +2447,7 @@ async function deletePlan(id,name){
 
         window.switchView = switchView;
 
-        if (window.location.hash === '#hotspot-webhook') switchView('hotspot-webhook');
+        if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
             const id = String(sectionId || '').trim();
@@ -2642,9 +2615,9 @@ async function deletePlan(id,name){
                         <div class="card-body p-0 table-responsive">
                             <table class="table table-hover mb-0 payment-ledger-table">
                                 <thead class="table-light"><tr>
-                                    <th>#</th><th data-key="trx_txnid">${escapeHtml(t.trx_txnid)}</th><th data-key="gateway">${escapeHtml(t.gateway)}</th><th data-key="amount">${escapeHtml(t.amount)}</th><th data-key="sender_phone">${escapeHtml(t.sender_phone)}</th><th data-key="matched_customer">${escapeHtml(t.matched_customer)}</th><th data-key="status_badge">${escapeHtml(t.status_badge)}</th><th data-key="date_time">${escapeHtml(t.date_time)}</th><th data-key="actions">${escapeHtml(t.actions)}</th>
+                                    <th>#</th><th data-key="trx_txnid">${escapeHtml(t.trx_txnid)}</th><th data-key="gateway">${escapeHtml(t.gateway)}</th><th data-key="amount">${escapeHtml(t.amount)}</th><th data-key="sender_phone">${escapeHtml(t.sender_phone)}</th><th data-key="matched_customer">${escapeHtml(t.matched_customer)}</th><th data-key="customer_type">${escapeHtml(t.customer_type)}</th><th data-key="status_badge">${escapeHtml(t.status_badge)}</th><th data-key="date_time">${escapeHtml(t.date_time)}</th><th data-key="actions">${escapeHtml(t.actions)}</th>
                                 </tr></thead>
-                                <tbody id="paymentLedgerBody">${rows.length ? rows.map((tx,i)=>paymentRowHtml(tx, ((data.page||1)-1)*(data.limit||50)+i+1, t)).join('') : '<tr><td colspan="9" class="text-center py-5 text-muted" data-key="no_payments">' + escapeHtml(t.no_payments) + '</td></tr>'}</tbody>
+                                <tbody id="paymentLedgerBody">${rows.length ? rows.map((tx,i)=>paymentRowHtml(tx, ((data.page||1)-1)*(data.limit||50)+i+1, t)).join('') : '<tr><td colspan="10" class="text-center py-5 text-muted" data-key="no_payments">' + escapeHtml(t.no_payments) + '</td></tr>'}</tbody>
                             </table>
                         </div>
                         <div class="card-footer bg-white d-flex justify-content-between align-items-center">
@@ -2656,6 +2629,13 @@ async function deletePlan(id,name){
             content.style.display = 'block';
             content.hidden = false;
             updateLanguage(lang);
+        }
+
+        function paymentCustomerTypeBadge(value, t) {
+            const type = String(value || 'unassigned').toLowerCase();
+            const labels = { pppoe: t.type_pppoe || 'PPPoE', hotspot: t.type_hotspot || 'Hotspot', unassigned: t.type_unassigned || 'Unassigned', unknown: t.type_unknown || 'Unknown' };
+            const classes = { pppoe: 'bg-primary', hotspot: 'bg-success', unassigned: 'bg-secondary', unknown: 'bg-warning text-dark' };
+            return '<span class="badge ' + (classes[type] || classes.unknown) + '">' + escapeHtml(labels[type] || labels.unknown) + '</span>';
         }
 
         function paymentRowHtml(tx, index, t) {
@@ -2670,6 +2650,7 @@ async function deletePlan(id,name){
                 '<td class="fw-semibold">৳' + Number(tx.amount || 0).toFixed(2) + '</td>' +
                 '<td>' + escapeHtml(tx.sender_phone || '-') + '</td>' +
                 '<td>' + escapeHtml(tx.matched_username || '-') + '</td>' +
+                '<td>' + paymentCustomerTypeBadge(tx.customer_type, t) + '</td>' +
                 '<td>' + paymentStatusBadge(tx.status, t) + '</td>' +
                 '<td>' + escapeHtml(tx.created_at ? FazDate.formatDateTime(tx.created_at) : '-') + '</td>' +
                 '<td><div class="payment-action-group">' + action + '</div></td>' +
