@@ -967,6 +967,44 @@
         }
         @media(prefers-reduced-motion:reduce){#adminTopBar.is-loading .mobile-page-loading-bar::after{animation:none;width:100%;left:0}}
 
+    
+        /* Premium Customer 360 / Risk Profile presentation */
+        #editCustomerModal .modal-content{border:1px solid #dbe7e2!important;border-radius:22px!important;overflow:hidden;box-shadow:0 24px 70px rgba(2,44,34,.22)!important}
+        #editCustomerModal .modal-header{padding:20px 24px;background:linear-gradient(115deg,#082f25,#0a3d2e 62%,#12664b)!important;color:#fff;border-bottom:0!important;gap:12px}
+        #editCustomerModal .modal-header .modal-title{color:#fff;font-size:1.15rem;letter-spacing:-.025em}
+        #editCustomerModal .modal-header .small{color:#d1fae5!important}
+        #editCustomerModal .modal-header .btn-close{filter:invert(1);opacity:.85}
+        #editCustomerModal .modal-body{padding:20px;background:#f4f8f6!important}
+        #editCustomerModal .nav-pills{display:flex;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start!important;scrollbar-width:thin;border:1px solid #dce9e3;padding:8px!important}
+        #editCustomerModal .nav-pills .nav-item{flex:0 0 auto}
+        #editCustomerModal .nav-pills .nav-link{border-radius:10px;font-size:12px;font-weight:750;color:#486258;padding:10px 13px;white-space:nowrap}
+        #editCustomerModal .nav-pills .nav-link.active{background:#0a3d2e;color:#fff;box-shadow:0 4px 12px rgba(10,61,46,.18)}
+        #editCustomerModal .tab-content>.tab-pane .card{border:1px solid #e0eae5!important;border-radius:16px;box-shadow:0 5px 18px rgba(15,23,42,.035)!important}
+        #editCustomerModal .tab-content>.tab-pane .card-body{padding:20px}
+        #editCustomerModal .form-control,#editCustomerModal .form-select{min-height:43px;border-radius:10px;border-color:#cbdad2;background-color:#fff}
+        #editCustomerModal .form-control:focus,#editCustomerModal .form-select:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+        #editCustomerModal .modal-footer{padding:14px 20px;border-top:1px solid #e2ebe6;gap:8px}
+        #editCustomerModal .modal-footer .btn{border-radius:10px;font-weight:750;padding:10px 14px}
+        #editCustomerModal #cpSaveBtn{background:#0a3d2e;border-color:#0a3d2e}
+        #editCustomerModal #cpSaveBtn:hover{background:#0d4d3a;border-color:#0d4d3a}
+        .customer-risk-hero{padding:22px;border:1px solid #cfe7db;border-radius:18px;background:linear-gradient(125deg,#fff 0%,#ecfdf5 62%,#eff6ff 100%);box-shadow:0 8px 24px rgba(15,23,42,.045)}
+        .customer-risk-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:850;color:#047857;margin-bottom:7px}
+        .customer-risk-hero p{font-size:13px;color:#64748b}
+        .customer-risk-badge{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;font-size:12px;font-weight:850;white-space:nowrap}
+        .customer-risk-badge.risk-medium{background:#fffbeb;color:#b45309;border-color:#fde68a}
+        .customer-risk-badge.risk-high{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+        .customer-risk-meter{height:9px;border-radius:999px;background:#dbe7e1;overflow:hidden}
+        .customer-risk-meter span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#10b981,#f59e0b,#ef4444);transition:width .25s ease}
+        .customer-risk-metric{height:100%;min-height:138px;padding:16px;border:1px solid #e0eae5;border-radius:15px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;gap:7px;box-shadow:0 4px 14px rgba(15,23,42,.03)}
+        .customer-risk-metric-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:#ecfdf5;color:#047857;font-size:17px}
+        .customer-risk-metric-label{font-size:11px;font-weight:750;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+        .customer-risk-metric strong{font-size:15px;color:#0f172a;overflow-wrap:anywhere}
+        .customer-risk-details{background:#fff;border:1px solid #e0eae5!important}
+        .customer-risk-signals{list-style:none;padding:0;display:grid;gap:10px}
+        .customer-risk-signals li{display:flex;align-items:flex-start;gap:9px;color:#334155;font-size:13px;line-height:1.5}
+        .customer-risk-signals li:before{content:'•';color:#059669;font-size:20px;line-height:1;margin-top:1px}
+        @media(max-width:575.98px){#editCustomerModal .modal-dialog{margin:8px}#editCustomerModal .modal-header{padding:15px}#editCustomerModal .modal-body{padding:12px}#editCustomerModal .tab-content>.tab-pane .card-body{padding:14px}.customer-risk-hero{padding:16px}#editCustomerModal .modal-footer{padding:12px;display:grid;grid-template-columns:1fr 1fr}#editCustomerModal .modal-footer #cpSaveBtn{grid-column:1/-1;width:100%}#editCustomerModal .modal-footer .btn{font-size:12px}}
+
     </style>
 <script src="/js/date-format.js"></script>
 
@@ -1721,6 +1759,7 @@
           <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-billing" type="button">💳 Billing & Validity</button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-info" type="button">📍 Customer & Fiber</button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-tech" type="button">🔑 PPPoE & Technical</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-risk" type="button"><i class="bi bi-shield-check me-1"></i> Customer Risk</button></li>
         </ul>
         <div class="tab-content">
           <div class="tab-pane fade show active" id="cp-tab-live">
@@ -1789,6 +1828,23 @@
               <div class="col-md-6"><label class="form-label fw-semibold">PPPoE Password</label><div class="input-group"><input id="cpPassword" type="password" class="form-control"><button id="cpPasswordToggle" type="button" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div>
               <div class="col-md-6"><label class="form-label fw-semibold">Admin Note / Comment</label><input id="cpRemarks" class="form-control" placeholder="Internal memo"></div>
             </div></div></div>
+          </div>
+          <div class="tab-pane fade" id="cp-tab-risk">
+            <div class="customer-risk-hero mb-3">
+              <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                <div><div class="customer-risk-eyebrow">ACCOUNT HEALTH OVERVIEW</div><h5 class="fw-bold mb-1">Customer Risk Profile</h5><p class="mb-0">Risk indicators are calculated from the current billing and connection data.</p></div>
+                <span id="cpRiskBadge" class="customer-risk-badge">Evaluating…</span>
+              </div>
+              <div class="customer-risk-meter mt-3"><span id="cpRiskMeter"></span></div>
+              <div class="d-flex justify-content-between small mt-2"><span>Lower risk</span><span id="cpRiskScore">—</span><span>Higher risk</span></div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-sm-6 col-xl-3"><div class="customer-risk-metric"><span class="customer-risk-metric-icon"><i class="bi bi-credit-card"></i></span><span class="customer-risk-metric-label">Billing status</span><strong id="cpRiskBilling">—</strong></div></div>
+              <div class="col-sm-6 col-xl-3"><div class="customer-risk-metric"><span class="customer-risk-metric-icon"><i class="bi bi-calendar2-check"></i></span><span class="customer-risk-metric-label">Validity</span><strong id="cpRiskValidity">—</strong></div></div>
+              <div class="col-sm-6 col-xl-3"><div class="customer-risk-metric"><span class="customer-risk-metric-icon"><i class="bi bi-router"></i></span><span class="customer-risk-metric-label">Connection</span><strong id="cpRiskConnection">—</strong></div></div>
+              <div class="col-sm-6 col-xl-3"><div class="customer-risk-metric"><span class="customer-risk-metric-icon"><i class="bi bi-person-check"></i></span><span class="customer-risk-metric-label">Account state</span><strong id="cpRiskAccount">—</strong></div></div>
+            </div>
+            <div class="card customer-risk-details border-0"><div class="card-body"><h6 class="fw-bold mb-3">Risk signals & recommended action</h6><ul id="cpRiskSignals" class="customer-risk-signals mb-0"><li>Loading customer indicators…</li></ul><p class="small text-muted mt-3 mb-0">This is an operational billing-risk indicator, not a credit score. It does not automatically suspend or modify a customer.</p></div></div>
           </div>
         </div>
       </div>
@@ -4593,6 +4649,30 @@ async function deletePlan(id,name){
                 const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
                 const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
+                const billingState=String(customer.billing_status||'unpaid').trim().toLowerCase();
+                const isPaid=['paid','active','current'].includes(billingState);
+                const isExpired=days!==null&&days<0;
+                const isDue=days!==null&&days<=3;
+                const accountDisabled=Boolean(customer.disabled);
+                const riskSignals=[];
+                let riskScore=0;
+                if(!isPaid){riskScore+=35;riskSignals.push('Billing is '+(customer.billing_status||'unpaid')+'. Verify the latest payment before changing service status.');}
+                if(isExpired){riskScore+=40;riskSignals.push('Validity has expired. Review the billing date and renewal record.');}
+                else if(isDue){riskScore+=20;riskSignals.push('Validity expires soon. Confirm the next billing cycle with the customer.');}
+                if(!live.online){riskScore+=10;riskSignals.push('Customer is currently offline. Check the session and line status before assuming a fault.');}
+                if(accountDisabled){riskScore+=15;riskSignals.push('The account is marked disabled. Confirm whether this is intentional.');}
+                riskScore=Math.min(100,riskScore);
+                const riskLevel=riskScore>=60?'High Risk':riskScore>=30?'Medium Risk':'Low Risk';
+                const riskBadge=modalEl.querySelector('#cpRiskBadge');
+                if(riskBadge){riskBadge.textContent=riskLevel;riskBadge.className='customer-risk-badge'+(riskScore>=60?' risk-high':riskScore>=30?' risk-medium':'');}
+                const riskMeter=modalEl.querySelector('#cpRiskMeter');if(riskMeter)riskMeter.style.width=riskScore+'%';
+                setText('cpRiskScore',riskScore+'/100');
+                setText('cpRiskBilling',customer.billing_status||'Unpaid');
+                setText('cpRiskValidity',isExpired?'Expired':days===0?'Expires today':days!==null&&days<=3?'Due in '+days+' day(s)':days!==null?'Valid · '+days+' day(s)':'Not set');
+                setText('cpRiskConnection',live.online?'Online':'Offline');
+                setText('cpRiskAccount',accountDisabled?'Disabled':'Enabled');
+                const signalList=modalEl.querySelector('#cpRiskSignals');
+                if(signalList){if(!riskSignals.length)riskSignals.push('No elevated billing or account indicators were found from the available profile data.');signalList.innerHTML=riskSignals.map(item=>'<li>'+escapeHtml(item)+'</li>').join('');}
                 const statusText=live.online?'Online':'Offline';
                 const statusClass=live.online?'bg-success':'bg-secondary';
                 const uptime=String(live.uptime||'');
@@ -4713,7 +4793,7 @@ async function deletePlan(id,name){
             expiryInput?.addEventListener('change',()=>{if(autoExpire&&expiryInput.value!==expiryInput.dataset.initialValue)autoExpire.checked=false;});
             daysInput?.addEventListener('input',()=>{if(autoExpire&&daysInput.value!==daysInput.dataset.initialValue)autoExpire.checked=false;});
             hub()?.querySelector('#cpSyncBtn')?.addEventListener('click',async()=>{const m=hub(),id=m?.dataset.customerId||m?.dataset.username;if(!m||!id)return;if(!confirm('Sync '+(m.dataset.username||'this customer')+' credentials, expiry and Caller ID/MAC from the panel to MikroTik?'))return;const b=m.querySelector('#cpSyncBtn');hubLoading(b,true,'Syncing Customer...');try{const d=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/sync-mikrotik',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});alert(d.message||'Customer synced to MikroTik.');await openCustomerProfile(m.dataset.username||id);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to sync this customer.');}finally{hubLoading(b,false,'Sync Customer to MikroTik');}});
-             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),telegramLink:m.querySelector('#cpTelegramLink').value.trim(),facebookLink:m.querySelector('#cpFacebookLink').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
+             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),telegramLink:m.querySelector('#cpTelegramLink').value.trim(),facebookLink:m.querySelector('#cpFacebookLink').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!d||d.success===false)throw new Error(d?.message||'Customer update failed. No changes were confirmed.');alert(d.message||'Customer profile saved successfully.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for the configured billing cycle?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
