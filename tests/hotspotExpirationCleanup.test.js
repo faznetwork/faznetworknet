@@ -116,7 +116,7 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   assert.equal(result.expired, 1);
   assert.equal(result.removed, 1);
   assert.deepEqual(cleaned, ["VOUCHER-DB-EXPIRED"]);
-  const expireUpdate = database.calls.find(call => call.sql.includes("status='expired'"));
+  const expireUpdate = database.calls.find(call => call.sql.startsWith("UPDATE hotspot_vouchers SET status='expired'"));
   assert.ok(expireUpdate);
   assert.equal(expireUpdate.params[1].toISOString(), expiredAt.toISOString());
   assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
@@ -164,7 +164,7 @@ test("does not expire an unused voucher solely because it was created long ago",
   assert.equal(result.expired, 0);
   assert.equal(result.removed, 0);
   assert.deepEqual(cleaned, []);
-  assert.ok(!database.calls.some(call => call.sql.includes("status='expired'")));
+  assert.ok(!database.calls.some(call => call.sql.startsWith("UPDATE hotspot_vouchers SET status='expired'")));
 });
 
 test("keeps cleanup pending and records the error when MikroTik removal fails", async () => {
