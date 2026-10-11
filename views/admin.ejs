@@ -1545,10 +1545,38 @@
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active / Online Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Offline Users</div><span id="hsOfflineUsers" class="fs-3 fw-bold mt-1 d-block text-secondary">0</span></div></div></div>'+
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Revenue</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div></div></div></div></div>'+
+            '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 mt-2"><div><h5 class="mb-1 fw-bold">Voucher Inventory</h5><div class="small text-muted">Counts from PostgreSQL voucher records</div></div><button type="button" class="btn btn-outline-success btn-sm" onclick="window.refreshHotspotVoucherStats()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>'+
+            '<div class="row g-3 mb-4">'+
+            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Vouchers</div><span id="hsVoucherTotal" class="fs-3 fw-bold d-block mt-1">—</span></div></div></div>'+
+            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Unused</div><span id="hsVoucherUnused" class="fs-3 fw-bold d-block mt-1 text-primary">—</span><div class="small text-muted">Not used yet</div></div></div></div>'+
+            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Used</div><span id="hsVoucherUsed" class="fs-3 fw-bold d-block mt-1 text-info">—</span><div class="small text-muted">Active + expired</div></div></div></div>'+
+            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active</div><span id="hsVoucherActive" class="fs-3 fw-bold d-block mt-1 text-success">—</span></div></div></div>'+
+            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expired</div><span id="hsVoucherExpired" class="fs-3 fw-bold d-block mt-1 text-danger">—</span><div class="small text-muted"><span id="hsVoucherCleanupPending">0</span> cleanup pending</div></div></div></div></div>'+
             '<div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-theme" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill"></i> + Add Hotspot User</button><button type="button" class="btn btn-outline-success" onclick="window.loadVoucherGeneratorSection()"><i class="bi bi-lightning-charge-fill"></i> ⚡ Batch Generator</button></div>'+
             '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>Real-Time Active Users</div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="4" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
+            window.refreshHotspotVoucherStats();
             await refreshHotspotDashboardMetrics();
         }
+        window.refreshHotspotVoucherStats = async function refreshHotspotVoucherStats(){
+            const ids=['hsVoucherTotal','hsVoucherUnused','hsVoucherUsed','hsVoucherActive','hsVoucherExpired','hsVoucherCleanupPending'];
+            try{
+                const response=await fetch('/api/hotspot/voucher-stats',{headers:{'Accept':'application/json'}});
+                if(!response.ok) throw new Error('Unable to load voucher statistics ('+response.status+').');
+                const data=await response.json();
+                if(data.success===false) throw new Error(data.message||'Unable to load voucher statistics.');
+                safeSetText('hsVoucherTotal',Number(data.totalVouchers||0).toLocaleString());
+                safeSetText('hsVoucherUnused',Number(data.unusedVouchers||0).toLocaleString());
+                safeSetText('hsVoucherUsed',Number(data.usedVouchers||0).toLocaleString());
+                safeSetText('hsVoucherActive',Number(data.activeVouchers||0).toLocaleString());
+                safeSetText('hsVoucherExpired',Number(data.expiredVouchers||0).toLocaleString());
+                safeSetText('hsVoucherCleanupPending',Number(data.cleanupPending||0).toLocaleString());
+            }catch(error){
+                ids.forEach(function(id){safeSetText(id,'—');});
+                console.error('[HOTSPOT VOUCHER STATS]',error);
+                const total=document.getElementById('hsVoucherTotal');
+                if(total) total.title=error.message||'Voucher statistics unavailable';
+            }
+        };
         async function refreshHotspotDashboardMetrics(){
             const body=document.getElementById('hotspotDashboardSessions'); if(!body)return;
             try{
