@@ -5454,7 +5454,6 @@ async function deletePlan(id,name){
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
                 'account-manage': 'Account & Support — Manage',
-                'sub-staff': 'User & Reseller — Sub-Staff'
             };
             const state = { depth: 0, restoring: false, current: null };
 
@@ -5497,6 +5496,7 @@ async function deletePlan(id,name){
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
+                if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5557,7 +5557,7 @@ async function deletePlan(id,name){
                     '/admin/hr/departments': { view: 'hr', section: 'departments' },
                     '/admin/hr/employees': { view: 'hr', section: 'employees' },
                     '/admin/hr/employees/added': { view: 'hr', section: 'added' },
-                    '/admin/resellers/sub-staff': { view: 'module', module: 'sub-staff' }
+                    '/admin/resellers/sub-staff': { view: 'sub-staff' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
@@ -5621,6 +5621,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'hr') return normalized.section === 'departments' ? '/admin/hr/departments' : normalized.section === 'added' ? '/admin/hr/employees/added' : '/admin/hr/employees';
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
                 if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
+                if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5686,7 +5687,8 @@ async function deletePlan(id,name){
                     case 'packages': return callIfAvailable('loadPlanPackages');
                     case 'ip-pools': return callIfAvailable('loadIpPools');
                     case 'olt': return callIfAvailable('loadOltManagement', [r.mode]);
-                    case 'staff': return callIfAvailable('loadStaffManagement');
+                    case 'staff': return callIfAvailable('loadStaffManagement', ['all']);
+                    case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
@@ -5782,7 +5784,7 @@ async function deletePlan(id,name){
                     case 'loadPlanPackages': return { view: 'packages' };
                     case 'loadIpPools': return { view: 'ip-pools' };
                     case 'loadOltManagement': return { view: 'olt', mode: args[0] || 'overview' };
-                    case 'loadStaffManagement': return { view: 'staff' };
+                    case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : 'staff' };
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
