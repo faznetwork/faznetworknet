@@ -12,7 +12,7 @@ test('Staff Management and Sub-Staff restore separate canonical paths', () => {
   assert.ok(adminView.includes("'/admin/staff': { view: 'staff' }"));
   assert.ok(adminView.includes("'/admin/resellers/sub-staff': { view: 'sub-staff' }"));
   assert.ok(adminView.includes("case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);"));
-  assert.ok(adminView.includes("case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : 'staff' };"));
+  assert.ok(adminView.includes("case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : String(args[0] || 'all') === 'account-manage' ? 'account-manage' : 'staff' };"));
 });
 
 test('Staff pages are admin-only and use the existing invitation/account APIs', () => {

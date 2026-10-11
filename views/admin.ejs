@@ -3506,7 +3506,7 @@ async function deletePlan(id,name){
         window.loadStaffInvitations = async function(mode = currentStaffMode) {
             const body = document.getElementById('rbacInvitationsBody');
             if (!body) return false;
-            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            currentStaffMode = ['sub-staff','account-manage'].includes(mode) ? mode : 'all';
             window.__fazStaffMode = currentStaffMode;
             body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading invitations…</td></tr>';
             try {
@@ -3533,19 +3533,19 @@ async function deletePlan(id,name){
         };
 
         window.loadStaffManagement = async function(mode = 'all') {
-            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            currentStaffMode = ['sub-staff','account-manage'].includes(mode) ? mode : 'all';
             window.__fazStaffMode = currentStaffMode;
             if (typeof window.switchView === 'function') window.switchView('staff-management');
-            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : 'Staff Management';
+            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : currentStaffMode === 'account-manage' ? 'Account Management' : 'Staff Management';
             setPageTitleSafe(title);
             const heading = document.getElementById('rbacStaffHeading');
             const createHeading = document.getElementById('rbacCreateAccountHeading');
             const accountsHeading = document.getElementById('rbacAccountsHeading');
             const invitesHeading = document.getElementById('rbacInvitationsHeading');
             if (heading) heading.textContent = title;
-            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : 'Create Admin / Staff Account';
-            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : 'Accounts';
-            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : 'Pending Invitations';
+            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : currentStaffMode === 'account-manage' ? 'Create Account' : 'Create Admin / Staff Account';
+            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : currentStaffMode === 'account-manage' ? 'Managed Accounts' : 'Accounts';
+            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : currentStaffMode === 'account-manage' ? 'Account Invitations' : 'Pending Invitations';
             const roleSelect = document.getElementById('rbacRole');
             if (roleSelect) {
                 Array.from(roleSelect.options).forEach(option => {
@@ -3619,6 +3619,54 @@ async function deletePlan(id,name){
             } catch(error) {
                 usersBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load accounts.') + '</td></tr>';
                 await window.loadStaffInvitations(currentStaffMode);
+                return false;
+            }
+        };
+
+
+        window.loadAccountDashboard = async function() {
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return false;
+            if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+            setPageTitleSafe('Account & Support — Dashboard');
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Account & Support</div><h2 class="h5 fw-bold mb-1">Account & Support Dashboard</h2><p class="small text-muted mb-0">Overview of the accounts, invitations, and support tickets visible to your role.</p></div><a href="/admin/account/manage" class="btn btn-success"><i class="bi bi-people me-2"></i>Manage Accounts</a></div><div id="accountDashboardContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading account overview…</div></div></div></div></section>';
+            const content = root.querySelector('#accountDashboardContent');
+            try {
+                const results = await Promise.all([
+                    window.jsonFetch('/api/admin/users'),
+                    window.jsonFetch('/api/admin/users/invitations'),
+                    window.jsonFetch('/api/admin/security/tickets?category=all')
+                ]);
+                const users = Array.isArray(results[0].users) ? results[0].users : [];
+                const invitations = Array.isArray(results[1].invitations) ? results[1].invitations : [];
+                const tickets = Array.isArray(results[2].tickets) ? results[2].tickets : [];
+                const activeUsers = users.filter(user => user.status === 'active').length;
+                const openTickets = tickets.filter(ticket => ['open','in_progress'].includes(ticket.status)).length;
+                const pendingInvitations = invitations.filter(item => item.status === 'pending').length;
+                const card = (label,value,icon,tint) => '<div class="col-12 col-sm-6 col-xl-3"><div class="border rounded-4 p-3 h-100"><div class="d-flex align-items-center justify-content-between gap-2"><span class="small text-muted">' + label + '</span><span class="rounded-3 d-flex align-items-center justify-content-center" style="width:38px;height:38px;background:' + tint + ';color:#065f46"><i class="bi ' + icon + '"></i></span></div><div class="h3 fw-bold mt-2 mb-0">' + Number(value) + '</div></div></div>';
+                const recentUsers = users.slice().sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0,5);
+                const recentTickets = tickets.filter(ticket => ['open','in_progress'].includes(ticket.status)).slice(0,5);
+                content.innerHTML =
+                    '<div class="row g-3 mb-4">' +
+                    card('Accounts visible',users.length,'bi-people','#ecfdf5') +
+                    card('Active accounts',activeUsers,'bi-person-check','#ecfdf5') +
+                    card('Pending invitations',pendingInvitations,'bi-envelope-paper','#eff6ff') +
+                    card('Open support tickets',openTickets,'bi-headset','#fff7ed') +
+                    '</div><div class="alert alert-info small">Counts reflect the records your role is permitted to view. The Admin role sees staff accounts only.</div>' +
+                    '<div class="row g-3"><div class="col-12 col-xl-6"><div class="card border rounded-4 h-100"><div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>Recently created accounts</strong><a class="btn btn-sm btn-outline-success" href="/admin/account/manage">View all</a></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody>' +
+                    (recentUsers.length ? recentUsers.map(user => '<tr><td class="fw-semibold">' + escapeHtml(user.username) + '</td><td>' + escapeHtml(user.role) + '</td><td><span class="badge ' + (user.status === 'active' ? 'text-bg-success' : 'text-bg-secondary') + '">' + escapeHtml(user.status || 'unknown') + '</span></td></tr>').join('') : '<tr><td colspan="3" class="text-center text-muted py-4">No accounts found.</td></tr>') +
+                    '</tbody></table></div></div></div><div class="col-12 col-xl-6"><div class="card border rounded-4 h-100"><div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>Open support tickets</strong><a class="btn btn-sm btn-outline-success" href="/admin/support/tickets">View tickets</a></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Ticket</th><th>Priority</th><th>Status</th></tr></thead><tbody>' +
+                    (recentTickets.length ? recentTickets.map(ticket => '<tr><td><div class="fw-semibold">' + escapeHtml(ticket.title) + '</div><div class="small text-muted">#' + Number(ticket.id) + '</div></td><td>' + escapeHtml(ticket.priority || 'normal') + '</td><td>' + escapeHtml(ticket.status) + '</td></tr>').join('') : '<tr><td colspan="3" class="text-center text-muted py-4">No open tickets.</td></tr>') +
+                    '</tbody></table></div></div></div></div>';
+                return true;
+            } catch (error) {
+                content.innerHTML = '<div class="alert alert-danger mb-0" role="alert">' + escapeHtml(error.message || 'Unable to load account overview.') + '</div>';
                 return false;
             }
         };
@@ -5575,8 +5623,6 @@ async function deletePlan(id,name){
             const moduleTitles = {
                 'vpn': 'VPN Server',
                 'vpn-port-forwarding': 'VPN Port Forwarding',
-                'account-dashboard': 'Account & Support — Dashboard',
-                'account-manage': 'Account & Support — Manage',
             };
             const state = { depth: 0, restoring: false, current: null };
 
@@ -5620,6 +5666,8 @@ async function deletePlan(id,name){
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
+                if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
+                if (route.view === 'account-manage') return { view: 'account-manage' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5673,8 +5721,8 @@ async function deletePlan(id,name){
                     '/admin/network/diagram': { view: 'network-diagram' },
                     '/admin/vpn': { view: 'module', module: 'vpn' },
                     '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
-                    '/admin/account/dashboard': { view: 'module', module: 'account-dashboard' },
-                    '/admin/account/manage': { view: 'module', module: 'account-manage' },
+                    '/admin/account/dashboard': { view: 'account-dashboard' },
+                    '/admin/account/manage': { view: 'account-manage' },
                     '/admin/support/software': { view: 'support', category: 'software' },
                     '/admin/support/website': { view: 'support', category: 'website' },
                     '/admin/hr/departments': { view: 'hr', section: 'departments' },
@@ -5745,6 +5793,8 @@ async function deletePlan(id,name){
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
                 if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
                 if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
+                if (normalized.view === 'account-dashboard') return '/admin/account/dashboard';
+                if (normalized.view === 'account-manage') return '/admin/account/manage';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5812,6 +5862,8 @@ async function deletePlan(id,name){
                     case 'olt': return callIfAvailable('loadOltManagement', [r.mode]);
                     case 'staff': return callIfAvailable('loadStaffManagement', ['all']);
                     case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
+                    case 'account-dashboard': return callIfAvailable('loadAccountDashboard');
+                    case 'account-manage': return callIfAvailable('loadStaffManagement', ['account-manage']);
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
@@ -5907,7 +5959,7 @@ async function deletePlan(id,name){
                     case 'loadPlanPackages': return { view: 'packages' };
                     case 'loadIpPools': return { view: 'ip-pools' };
                     case 'loadOltManagement': return { view: 'olt', mode: args[0] || 'overview' };
-                    case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : 'staff' };
+                    case 'loadStaffManagement': return { view: String(args[0] || 'all') === 'sub-staff' ? 'sub-staff' : String(args[0] || 'all') === 'account-manage' ? 'account-manage' : 'staff' };
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
                     case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
@@ -5951,7 +6003,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
