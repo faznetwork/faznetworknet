@@ -3,8 +3,6 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
-let running = false;
-const BATCH_SIZE = 500;
 const HOUR_MS = 60 * 60 * 1000;
 
 function parseRouterOsDuration(value) {
@@ -69,6 +67,7 @@ function createHotspotExpirationCleanup(deps = {}) {
   const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
   const now = deps.now || (() => new Date());
+  let running = false;
 
   return async function runHotspotExpirationCleanup() {
     if (running && !deps.allowConcurrent) return { skipped: true, reason: "already_running" };
@@ -80,8 +79,7 @@ function createHotspotExpirationCleanup(deps = {}) {
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
       const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status='pending') ORDER BY id ASC LIMIT $1",
-        [BATCH_SIZE]
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status='pending') ORDER BY id ASC"
       );
 
       for (const voucher of result.rows || []) {
