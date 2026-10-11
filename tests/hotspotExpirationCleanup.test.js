@@ -80,6 +80,21 @@ test("expires marked users, kicks/removes them, and retains database history", a
   assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
 });
 
+test("reconciles legacy expired vouchers that predate cleanup tracking", async () => {
+  const rows = [{ id: 4, username: "LEGACY-EXPIRED", status: "expired", cleanup_status: "not_required" }];
+  const database = mockDb(rows);
+  const cleaned = [];
+  const router = {
+    async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { alreadyAbsent: true }; }
+  };
+  const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger() });
+  const result = await run();
+  assert.equal(result.removed, 1);
+  assert.deepEqual(cleaned, ["LEGACY-EXPIRED"]);
+  assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
+});
+
 test("keeps cleanup pending and records the error when MikroTik removal fails", async () => {
   const rows = [{ id: 3, username: "VOUCHER3", status: "active", cleanup_status: "not_required" }];
   const database = mockDb(rows);

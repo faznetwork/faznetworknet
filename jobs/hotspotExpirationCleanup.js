@@ -79,14 +79,14 @@ function createHotspotExpirationCleanup(deps = {}) {
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
       const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status='pending') ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       for (const voucher of result.rows || []) {
         checked++;
         const username = String(voucher.username || "").trim();
         const user = users.get(username.toLowerCase());
-        const pendingCleanup = voucher.status === "expired" && voucher.cleanup_status === "pending";
+        const pendingCleanup = voucher.status === "expired" && ["pending", "not_required", "failed"].includes(voucher.cleanup_status);
         if (pendingCleanup) {
           try {
             await router.cleanupExpiredHotspotUser(username);
