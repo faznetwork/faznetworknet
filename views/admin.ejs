@@ -1956,6 +1956,21 @@
             document.body.style.pointerEvents = 'auto';
         }
 
+        // Heal stale invisible Bootstrap backdrops that can intercept sidebar clicks.
+        // Only clean overlays when no modal/offcanvas is actually open.
+        function recoverStaleNavigationOverlay() {
+            if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing')) return;
+            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
+            if (!stale.length) return;
+            stale.forEach(function (el) { el.remove(); });
+            if (document.body) {
+                document.body.classList.remove('modal-open', 'offcanvas-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+                document.body.style.pointerEvents = 'auto';
+            }
+        }
+
         function purgeStuckBackdrops() {
             document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
             document.querySelectorAll('.offcanvas-backdrop').forEach(function(el) { el.remove(); });
@@ -1987,6 +2002,22 @@
             window.history.pushState({customer360:true,customerId:id},'',target);
             window.location.replace(target);
         };
+
+        // Bootstrap should remove these itself; this observer handles orphaned backdrops
+        // left behind by interrupted modal transitions, without polling RouterOS or APIs.
+        if (!window.__sidebarOverlayRecoveryBound) {
+            window.__sidebarOverlayRecoveryBound = true;
+            const overlayObserver = new MutationObserver(function () {
+                recoverStaleNavigationOverlay();
+            });
+            overlayObserver.observe(document.body, { childList: true, subtree: true });
+            document.addEventListener('hidden.bs.modal', function () {
+                window.setTimeout(recoverStaleNavigationOverlay, 80);
+            }, true);
+            document.addEventListener('hidden.bs.offcanvas', function () {
+                window.setTimeout(recoverStaleNavigationOverlay, 80);
+            }, true);
+        }
 
         function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);if(button)button.setAttribute('aria-expanded',open?'true':'false');}
         function closeSidebarMobile(){purgeStuckBackdrops();const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('show');const backdrop=document.getElementById('sidebarBackdrop');if(backdrop)backdrop.classList.remove('show');if(document.body)document.body.classList.remove('sidebar-open');syncMobileSidebarState();}
