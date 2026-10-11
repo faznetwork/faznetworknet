@@ -15,9 +15,6 @@ const routedModules = [
   ['/admin/vpn/port-forwarding', 'vpn-port-forwarding'],
   ['/admin/account/dashboard', 'account-dashboard'],
   ['/admin/account/manage', 'account-manage'],
-  ['/admin/hr/departments', 'hr-departments'],
-  ['/admin/hr/employees', 'hr-employees'],
-  ['/admin/hr/employees/added', 'hr-added-employees'],
   ['/admin/resellers/sub-staff', 'sub-staff']
 ];
 
