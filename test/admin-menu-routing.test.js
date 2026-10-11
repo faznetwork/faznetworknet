@@ -10,7 +10,6 @@ const reportsView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reports
 const routedModules = [
   ['/admin/monitor/usage', 'usage'],
   ['/admin/monitor/online', 'monitor-online'],
-  ['/admin/network/diagram', 'network-diagram'],
   ['/admin/vpn', 'vpn'],
   ['/admin/vpn/port-forwarding', 'vpn-port-forwarding'],
   ['/admin/account/dashboard', 'account-dashboard'],
