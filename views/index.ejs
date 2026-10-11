@@ -107,7 +107,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
     <% const publicPppoePackages=safePackages.filter(pkg=>{const n=String(pkg.plan_name||pkg.profile_name||"").trim();return n&&!/(expired|ex-|disabled|block|default|vpn)/i.test(n)&&Number(pkg.price)>0;}); %>
     <% const publicHotspotPackages=safeHotspotPackages.filter(pkg=>{const n=String(pkg.name||pkg.profile||"").trim();return n&&!/(expired|ex-|disabled|block|default|vpn)/i.test(n)&&Number(pkg.price)>0;}); %>
     <div id="pppoePanel" class="package-panel mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" role="tabpanel" aria-labelledby="pppoeTab">
-      <% if(!publicPppoePackages.length){ %><div class="package-empty sm:col-span-2 xl:col-span-3"><span class="empty-orbit">⌁</span><h3>No home fiber plans are published yet</h3><p>Contact FAZ NETWORK to confirm current availability and pricing.</p><button type="button" class="cta-secondary mt-5" data-open-support>Talk to support <span>↗</span></button></div><% } %>
+      <% if(!publicPppoePackages.length){ %><div class="package-empty sm:col-span-2 lg:col-span-3"><span class="empty-orbit">⌁</span><h3>No home fiber plans are published yet</h3><p>Contact FAZ NETWORK to confirm current availability and pricing.</p><button type="button" class="cta-secondary mt-5" data-open-support>Talk to support <span>↗</span></button></div><% } %>
       <% publicPppoePackages.forEach((pkg,index)=>{ const name=String(pkg.plan_name||pkg.profile_name||"Home Fiber").trim(); const speed=String(pkg.rate_limit||"Speed confirmed on connection").trim(); const price=Number(pkg.price); const duration=Math.max(1,Number(pkg.duration_months||1)); const match=speed.match(/([0-9]+(?:\.[0-9]+)?)\s*(mbps|mb\/s|m)?/i); const speedCallout=match?match[1]+" Mbps":speed; %>
         <article class="package-card <%= index===1?'package-card-featured':'' %>" style="--card-hue:<%= [165,190,265][index%3] %>deg">
           <div class="card-topline"><span class="plan-index">PLAN / <%= String(index+1).padStart(2,"0") %></span><span class="plan-chip"><span class="live-dot"></span> HOME FIBER</span></div>
@@ -130,7 +130,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
           <button type="button" class="cta-primary" data-buy-hotspot data-profile="<%= esc(name) %>" data-price="<%= price %>" data-validity="<%= esc(validity) %>">Buy Package <span>↗</span></button>
         </article>
       <% }) %>
-      <% if(!publicHotspotPackages.length){ %><div class="package-empty sm:col-span-2 xl:col-span-3"><span class="empty-orbit">⌁</span><h3>Hotspot passes are being refreshed</h3><p>Ask support for currently available WiFi voucher and data passes.</p><button type="button" class="cta-secondary mt-5" data-open-support>View available passes <span>↗</span></button></div><% } %>
+      <% if(!publicHotspotPackages.length){ %><div class="package-empty sm:col-span-2 lg:col-span-3"><span class="empty-orbit">⌁</span><h3>Hotspot passes are being refreshed</h3><p>Ask support for currently available WiFi voucher and data passes.</p><button type="button" class="cta-secondary mt-5" data-open-support>View available passes <span>↗</span></button></div><% } %>
     </div>
     <p class="mt-7 text-center text-xs leading-5 text-slate-500">Displayed prices and specifications are based on configured consumer plans. Coverage, speed and availability may vary by location and package terms.</p>
   </div>
