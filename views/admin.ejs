@@ -1358,7 +1358,7 @@
 
             <!-- VIEW: SUPPORT TICKETS -->
             <section id="view-support-tickets" class="admin-view" style="display:none">
-              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Support Tickets</h2><p class="text-muted mb-0">Staff accounts see only tickets assigned to them.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadSupportTickets()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Support Tickets</h2><p class="text-muted mb-0">Staff accounts see only tickets assigned to them.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadSupportTickets(window.__fazSupportCategory || 'all')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
               <div class="card card-custom mb-4" id="rbacTicketCreateCard"><div class="card-custom-header"><i class="bi bi-plus-circle text-success"></i><span>Create Support Ticket</span></div><div class="card-body"><form id="rbacTicketForm" class="row g-3">
                 <div class="col-md-6"><label class="form-label" for="ticketTitle">Title</label><input id="ticketTitle" name="title" class="form-control" maxlength="180" required></div>
                 <div class="col-md-3"><label class="form-label" for="ticketCategory">Category</label><select id="ticketCategory" name="category" class="form-select"><option value="general">General</option><option value="software">Software</option><option value="website">Website</option></select></div>
@@ -5279,7 +5279,7 @@ async function deletePlan(id,name){
                 }
                 if (route.view === 'olt') return { view: 'olt', mode: has(allowed.oltModes, route.mode) ? route.mode : 'overview' };
                 if (route.view === 'support') {
-                    const category = ['all','general','software','website'].includes(String(route.category || 'all')) ? String(route.category || 'all') : 'all';
+                    const category = ['all','software','website'].includes(String(route.category || 'all')) ? String(route.category || 'all') : 'all';
                     return { view: 'support', category };
                 }
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
@@ -5560,7 +5560,7 @@ async function deletePlan(id,name){
                     case 'loadStaffManagement': return { view: 'staff' };
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
-                    case 'loadSupportTickets': return { view: 'support', category: ['all','general','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
+                    case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
                     default: return null;
                 }
             }
