@@ -427,6 +427,74 @@
         .ip-pool-save:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(5,150,105,.25)}
         @keyframes ipPoolModalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
         @media(max-width:768px){.ip-pool-hero{padding:18px}.ip-pool-table{min-width:860px}.ip-pool-modal .modal-body{padding:16px}}
+    
+        /* FAZ NETWORK Hotspot Suite — premium, responsive UI layer. CSS-only: preserves all existing handlers and API contracts. */
+        .hotspot-dynamic-view{--hs-ink:#10231c;--hs-muted:#64756d;--hs-line:#e2eae5;--hs-soft:#f5faf7;color:var(--hs-ink);font-family:Inter,'Plus Jakarta Sans',sans-serif;min-width:0}
+        .hotspot-dynamic-view>.row{--bs-gutter-x:clamp(12px,1.6vw,20px);--bs-gutter-y:clamp(12px,1.6vw,20px)}
+        .hotspot-dynamic-view .card-custom,.hotspot-dynamic-view .card{border:1px solid var(--hs-line)!important;border-radius:17px!important;background:#fff;box-shadow:0 5px 20px rgba(16,35,28,.045)!important;overflow:hidden;transition:box-shadow .18s ease,border-color .18s ease}
+        .hotspot-dynamic-view .card-custom:hover,.hotspot-dynamic-view .card:hover{border-color:#c9dfd2!important;box-shadow:0 10px 28px rgba(16,35,28,.07)!important}
+        .hotspot-dynamic-view .card-header,.hotspot-dynamic-view .card-custom-header{background:linear-gradient(180deg,#fff,#fbfefc)!important;border-bottom:1px solid #eaf0ec!important;padding:clamp(15px,2vw,22px)!important}
+        .hotspot-dynamic-view .card-body{padding:clamp(15px,2vw,23px)}
+        .hotspot-dynamic-view h1,.hotspot-dynamic-view h2,.hotspot-dynamic-view h3,.hotspot-dynamic-view h4,.hotspot-dynamic-view h5{font-family:'Plus Jakarta Sans',Inter,sans-serif;color:#10231c;letter-spacing:-.025em}
+        .hotspot-dynamic-view h5{font-size:clamp(1rem,1.3vw,1.18rem);font-weight:800}
+        .hotspot-dynamic-view .text-muted{color:#6b7c73!important}
+        .hotspot-dynamic-view .hotspot-kpi{position:relative;isolation:isolate;border:1px solid #e1ebe4!important;border-left:4px solid #10b981!important;background:linear-gradient(145deg,#fff 0%,#f7fcf9 100%);overflow:hidden}
+        .hotspot-dynamic-view .hotspot-kpi:after{content:"";position:absolute;z-index:-1;width:105px;height:105px;border-radius:50%;right:-34px;top:-38px;background:rgba(16,185,129,.07)}
+        .hotspot-dynamic-view .hotspot-kpi .card-body{padding:20px}
+        .hotspot-dynamic-view .hotspot-kpi .text-muted{font-size:.73rem!important;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
+        .hotspot-dynamic-view .hotspot-kpi .fs-3{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(1.65rem,2.6vw,2.1rem)!important;font-weight:800;letter-spacing:-.045em;color:#10231c}
+        .hotspot-dynamic-view .btn{border-radius:10px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease;padding:.62rem .9rem}
+        .hotspot-dynamic-view .btn:hover{transform:translateY(-1px)}
+        .hotspot-dynamic-view .btn-theme,.hotspot-dynamic-view .btn-success{background:#0a3d2e;border-color:#0a3d2e;color:#fff}
+        .hotspot-dynamic-view .btn-theme:hover,.hotspot-dynamic-view .btn-success:hover{background:#0d4d3a;border-color:#0d4d3a;box-shadow:0 5px 14px rgba(10,61,46,.15)}
+        .hotspot-dynamic-view .btn-outline-success{color:#08764f;border-color:#b7dfca;background:#f5fcf8}
+        .hotspot-dynamic-view .btn-outline-success:hover{background:#e9f8ef;color:#075d40;border-color:#8bc8a7}
+        .hotspot-dynamic-view .btn-outline-secondary,.hotspot-dynamic-view .btn-light{border-color:#dce6df;color:#47584f;background:#fff}
+        .hotspot-dynamic-view .form-control,.hotspot-dynamic-view .form-select,.hotspot-dynamic-view .input-group-text{min-height:42px;border-color:#d8e4dc;border-radius:10px;font-size:.875rem}
+        .hotspot-dynamic-view .input-group>.form-control,.hotspot-dynamic-view .input-group>.form-select{border-radius:10px}
+        .hotspot-dynamic-view .form-control:focus,.hotspot-dynamic-view .form-select:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+        .hotspot-dynamic-view .table-responsive{border:1px solid #e4ece7;border-radius:13px;background:#fff}
+        .hotspot-dynamic-view .table{margin-bottom:0;--bs-table-bg:#fff;--bs-table-hover-bg:#f5fbf7}
+        .hotspot-dynamic-view .table thead th,.hotspot-dynamic-view .hotspot-live-table th,.hotspot-dynamic-view .hotspot-enterprise-table th{background:#f5f9f6!important;color:#607168!important;font-size:.68rem!important;font-weight:800!important;letter-spacing:.075em!important;text-transform:uppercase;border-bottom:1px solid #e0e9e3!important;padding:14px 15px!important}
+        .hotspot-dynamic-view .table tbody td,.hotspot-dynamic-view .hotspot-live-table td,.hotspot-dynamic-view .hotspot-enterprise-table td{padding:13px 15px;border-bottom:1px solid #edf2ee;font-size:.82rem;vertical-align:middle}
+        .hotspot-dynamic-view .table tbody tr:last-child td{border-bottom:0}
+        .hotspot-dynamic-view .table tbody tr:hover td{background:#f7fcf9}
+        .hotspot-dynamic-view .badge{font-weight:750;letter-spacing:.01em;padding:.45em .7em;border-radius:7px}
+        .hotspot-dynamic-view .alert{border-radius:12px;border-width:1px;padding:13px 16px}
+        .hotspot-dynamic-view .modal-content{border:1px solid #dfe9e2;border-radius:18px;box-shadow:0 24px 70px rgba(15,35,25,.2);overflow:hidden}
+        .hotspot-dynamic-view .modal-header{background:linear-gradient(120deg,#f2fbf5,#fff);border-bottom:1px solid #e4eee7;padding:20px 22px}
+        .hotspot-dynamic-view .modal-title{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800}
+        .hotspot-dynamic-view .modal-body{padding:22px}
+        .hotspot-dynamic-view .modal-footer{border-top:1px solid #e8efea;padding:16px 22px}
+        .hotspot-dynamic-view .hotspot-live-dot{font-size:1.05rem}
+        .hotspot-dynamic-view .hotspot-live-dot:after{width:8px;height:8px}
+        .hotspot-dynamic-view .hotspot-user-icon{width:36px;height:36px;border:1px solid #d1fae5;background:linear-gradient(145deg,#ecfdf5,#d9fbe8);font-size:14px}
+        .hotspot-dynamic-view .hotspot-empty-icon{width:64px;height:64px;border:1px solid #d1fae5;background:linear-gradient(145deg,#f0fdf4,#dcfce7);box-shadow:0 6px 18px rgba(16,185,129,.08)}
+        .hotspot-dynamic-view .hotspot-profile-avatar{width:44px;height:44px;border:1px solid #d1fae5;background:linear-gradient(145deg,#ecfdf5,#d1fae5);border-radius:14px}
+        .hotspot-dynamic-view .hotspot-profile-table{border:1px solid #e4ece7;border-radius:13px;overflow:hidden}
+        .hotspot-dynamic-view .hotspot-profile-table thead th{background:#f5f9f6}
+        .hotspot-dynamic-view .voucher-grid{gap:16px}
+        .hotspot-dynamic-view .voucher-card{border:1px dashed #b9cec0;border-radius:13px;background:linear-gradient(145deg,#fff,#f8fcf9);box-shadow:0 3px 12px rgba(15,35,25,.04);padding:17px}
+        .hotspot-dynamic-view .voucher-brand{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;letter-spacing:.07em}
+        .hotspot-dynamic-view .voucher-credential{display:inline-block;background:#f2faf5;border:1px solid #dcefe3;border-radius:7px;padding:5px 8px;font-size:16px;letter-spacing:.025em;overflow-wrap:anywhere}
+        .hotspot-dynamic-view .voucher-cut{border-color:#d6e5db}
+        @media(max-width:767.98px){
+          .hotspot-dynamic-view{font-size:14px}
+          .hotspot-dynamic-view .card-custom,.hotspot-dynamic-view .card{border-radius:14px!important}
+          .hotspot-dynamic-view .card-header,.hotspot-dynamic-view .card-custom-header{padding:14px!important}
+          .hotspot-dynamic-view .card-body{padding:14px}
+          .hotspot-dynamic-view .hotspot-kpi .card-body{padding:16px}
+          .hotspot-dynamic-view .btn{min-height:40px;padding:.55rem .75rem}
+          .hotspot-dynamic-view .hotspot-enterprise-search,.hotspot-dynamic-view .hotspot-search{min-width:0;width:100%}
+          .hotspot-dynamic-view .table-responsive{border-radius:10px}
+          .hotspot-dynamic-view .table thead th,.hotspot-dynamic-view .table tbody td{padding:11px 12px!important}
+          .hotspot-dynamic-view .modal-body{padding:16px}
+          .hotspot-dynamic-view .voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+          .hotspot-dynamic-view .voucher-card{padding:12px;min-height:0}
+          .hotspot-dynamic-view .voucher-credential{font-size:14px}
+        }
+        @media(max-width:420px){.hotspot-dynamic-view .voucher-grid{grid-template-columns:1fr}}
+
     </style>
 <script src="/js/date-format.js"></script>
 
