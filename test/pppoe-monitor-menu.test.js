@@ -25,5 +25,5 @@ test('Usage counters are labelled as current session data and the tables are res
   assert.ok(adminView.includes('Current active-session byte counters only; these are not lifetime billing totals.'));
   assert.ok(adminView.includes('class="table-responsive border rounded-3"'));
   assert.ok(adminView.includes('Recent snapshot · fallback'));
-  assert.ok(adminView.includes('MikroTik live session table') === false);
+  assert.ok(adminView.includes("data.source === 'mikrotik-live' ? 'MikroTik live'"));
 });
