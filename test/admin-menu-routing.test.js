@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const adminView = fs.readFileSync(path.join(__dirname, '..', 'views', 'admin.ejs'), 'utf8');
+const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+const reportsView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reports.ejs'), 'utf8');
 
 const routedModules = [
   ['/admin/monitor/usage', 'usage'],
@@ -15,9 +17,6 @@ const routedModules = [
   ['/admin/account/manage', 'account-manage'],
   ['/admin/support/software', 'software-support-tickets'],
   ['/admin/support/website', 'website-support-tickets'],
-  ['/admin/expenses/add', 'expenses-add'],
-  ['/admin/expenses/all', 'expenses-all'],
-  ['/admin/expenses/report', 'expenses-report'],
   ['/admin/hr/departments', 'hr-departments'],
   ['/admin/hr/employees', 'hr-employees'],
   ['/admin/hr/employees/added', 'hr-added-employees'],
@@ -48,4 +47,14 @@ test('placeholder content uses responsive Bootstrap spacing and returns to admin
   assert.ok(adminView.includes('class="admin-view p-2 p-md-3"'));
   assert.ok(adminView.includes('class="card-body p-3 p-md-5"'));
   assert.ok(adminView.includes('href="/admin/dashboard" class="btn btn-success"'));
+});
+
+test('expense submenu URLs use the existing functional expense ledger and CRUD endpoints', () => {
+  for (const url of ['/admin/expenses/add', '/admin/expenses/all', '/admin/expenses/report']) {
+    assert.ok(adminView.includes(`href="${url}"`), `expense menu link missing for ${url}`);
+    assert.ok(serverSource.includes('app.get(/^\\/admin\\/expenses\\/(add|all|report)\\/?$/'), 'authenticated expense page route missing');
+  }
+  assert.ok(reportsView.includes("const routeKind=location.pathname.split('/').pop();const kind=['add','all','report'].includes(routeKind)?'expenses':routeKind;"));
+  assert.ok(reportsView.includes("load().then(()=>{if(routeKind==='add')openExpense()});"));
+  assert.ok(reportsView.includes("api('/api/reports/expenses'+(id?'/'+id:''),{method:id?'PUT':'POST'"));
 });
