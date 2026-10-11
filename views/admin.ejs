@@ -135,6 +135,11 @@
         .dashboard-round-offline{--round-color:#64748b;--round-tint:#f8fafc}
         .dashboard-round-collection{--round-color:#b45309;--round-tint:#fffbeb}
         .dashboard-round-router{--round-color:#6d28d9;--round-tint:#f5f3ff}
+        .dashboard-module-card{display:flex;align-items:flex-start;gap:8px;padding:18px;border:1px solid #e2e8f0;background:#fff;color:#0f172a;min-height:150px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+        .dashboard-module-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(15,23,42,.08);border-color:#a7f3d0;color:#0f172a}
+        .dashboard-module-icon{font-size:1.45rem;line-height:1.3}
+        .dashboard-module-card .small{line-height:1.5}
+        .dashboard-module-card:focus-visible{outline:3px solid #10b981;outline-offset:2px}
         .hotspot-dashboard-shortcuts{justify-content:flex-start}
         @media(max-width:575.98px){.hotspot-dashboard-shortcuts{gap:12px}}
         @media(max-width:575.98px){.dashboard-shortcuts{gap:12px}.dashboard-round-button{width:calc(50vw - 28px);height:calc(50vw - 28px);flex-basis:calc(50vw - 28px);max-width:158px;max-height:158px;min-width:132px;min-height:132px}.dashboard-round-button>strong{font-size:21px}.dashboard-round-label{font-size:11px}}
@@ -829,6 +834,22 @@
                         <span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><strong id="dashboardRoundRouterStatus">Checking</strong><span class="dashboard-round-label">MikroTik</span><span class="dashboard-round-hint">Router status</span>
                     </button>
                 </div>
+                <section class="dashboard-module-hub mb-4" aria-label="Module dashboards">
+                    <div class="d-flex align-items-end justify-content-between flex-wrap gap-2 mb-3">
+                        <div><h2 class="h5 fw-bold mb-1">Module Dashboards</h2><p class="text-muted small mb-0">Open each management area using the existing panel navigation.</p></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="loadCustomerSection('all','all_customer')"><span class="dashboard-module-icon text-success"><i class="bi bi-people-fill"></i></span><span class="fw-bold">Customer Management</span><span class="small text-muted">Customer list, sessions, expiry and dues</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="loadPaymentsSection('all','all_payments')"><span class="dashboard-module-icon text-primary"><i class="bi bi-credit-card-fill"></i></span><span class="fw-bold">Payments &amp; Billing</span><span class="small text-muted">Payment history and collection workflow</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="window.loadHotspotDashboard()"><span class="dashboard-module-icon text-info"><i class="bi bi-wifi"></i></span><span class="fw-bold">Hotspot Dashboard</span><span class="small text-muted">Users, vouchers and live sessions</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><a class="card card-custom dashboard-module-card h-100 text-decoration-none" href="/admin/reports/collection"><span class="dashboard-module-icon text-warning"><i class="bi bi-bar-chart-line-fill"></i></span><span class="fw-bold">Reports &amp; Analytics</span><span class="small text-muted">Collection, due summary, revenue and expenses</span></a></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="window.loadDevices()"><span class="dashboard-module-icon text-success"><i class="bi bi-router-fill"></i></span><span class="fw-bold">MikroTik &amp; Network</span><span class="small text-muted">Device inventory and router operations</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="loadPlanPackages()"><span class="dashboard-module-icon text-primary"><i class="bi bi-box-seam-fill"></i></span><span class="fw-bold">Plans &amp; Packages</span><span class="small text-muted">Internet packages and service plans</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="window.loadOltManagement('overview')"><span class="dashboard-module-icon text-info"><i class="bi bi-diagram-3-fill"></i></span><span class="fw-bold">OLT &amp; Fiber</span><span class="small text-muted">OLT overview, ONTs and topology</span></button></div>
+                        <div class="col-12 col-sm-6 col-xl-3"><button type="button" class="card card-custom dashboard-module-card h-100 w-100 text-start" onclick="switchView('general-settings')"><span class="dashboard-module-icon text-secondary"><i class="bi bi-sliders2-vertical"></i></span><span class="fw-bold">System Settings</span><span class="small text-muted">Application and integration settings</span></button></div>
+                    </div>
+                </section>
+
                 <div class="card card-custom mb-4">
                     <div class="card-custom-header"><i class="bi bi-cpu text-success fs-5"></i><span>MikroTik CPU &amp; RAM Usage</span><span id="dashboardRouterStatus" class="badge bg-secondary ms-auto">Checking...</span></div>
                     <div class="card-body p-4"><div class="row g-4">
