@@ -21,19 +21,39 @@ if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyRe
   });
 }
 
-const CONNECTION_TIMEOUT_MS = 3000;
-const OPERATION_TIMEOUT_MS = 3000;
+const CONNECTION_TIMEOUT_MS = 10000;
+const OPERATION_TIMEOUT_MS = 10000;
 const DEFAULT_PORT = 8728;
 
 class MikroTikService {
+  constructor() {
+    // One long-lived RouterOS session per Node.js process. Every operation is
+    // serialized because a RouterOS API connection must not have overlapping
+    // command/reply streams.
+    this._connection = null;
+    this._connectionKey = null;
+    this._operationQueue = Promise.resolve();
+    this._configCache = null;
+    this._configCacheUntil = 0;
+  }
+
   async _getConfig(override) {
     const supplied=override&&typeof override==="object"?override:{};
     let saved={};
-    try {
-      const db=require("../db");
-      const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
-      saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
-    } catch(error) { console.warn("[MikroTik Settings] PostgreSQL settings unavailable; using environment fallback:",error.message); }
+    const hasOverride = Object.keys(supplied).length > 0;
+    if (!hasOverride && this._configCache && Date.now() < this._configCacheUntil) {
+      saved = this._configCache;
+    } else {
+      try {
+        const db=require("../db");
+        const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
+        saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
+        if (!hasOverride) {
+          this._configCache = saved;
+          this._configCacheUntil = Date.now() + 5000;
+        }
+      } catch(error) { console.warn("[MikroTik Settings] PostgreSQL settings unavailable; using environment fallback:",error.message); }
+    }
     const host=String(supplied.host??saved.mikrotik_host??process.env.ROUTER_HOST??"").trim();
     const port=Number.parseInt(String(supplied.port??saved.mikrotik_port??process.env.ROUTER_PORT??DEFAULT_PORT),10);
     const user=String(supplied.user??saved.mikrotik_user??process.env.ROUTER_USER??"").trim();
@@ -62,39 +82,94 @@ class MikroTikService {
       });
     }
 
+    // Serialize writes even when a caller uses Promise.all() inside one operation.
+    // The service-level queue below serializes complete operations as well.
+    const originalWrite = connection.write.bind(connection);
+    let writeQueue = Promise.resolve();
+    connection.write = (...args) => {
+      const run = writeQueue.then(() => originalWrite(...args));
+      writeQueue = run.catch(() => {});
+      return run;
+    };
     return connection;
   }
-  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS) {
-    let connection = null;
-    let connectTimer;
-    try {
-      // Settings lookup and socket connect both have a hard deadline. A stalled
-      // PostgreSQL settings query must not make a RouterOS request wait forever.
-      const config = await this._executeWithTimeout(this._getConfig(configOverride), CONNECTION_TIMEOUT_MS, "MikroTik configuration lookup");
-      connection = this._createConnection(config);
-      const connectPromise = connection.connect();
-      await Promise.race([
-        connectPromise,
-        new Promise((_, reject) => {
-          connectTimer = setTimeout(() => reject(new Error("MikroTik connection timed out after 3 seconds.")), CONNECTION_TIMEOUT_MS);
-        })
-      ]);
-      if (connectTimer) clearTimeout(connectTimer);
-      return await this._executeWithTimeout(operation(connection), operationTimeoutMs, operationName);
-    } catch (error) {
-      const details=this._extractRouterError(error);
-      const wrapped=new Error(details.message);
-      wrapped.cause=error;
-      wrapped.category=details.category;
-      wrapped.code=error&&error.code?error.code:"MIKROTIK_ERROR";
-      wrapped.operation=operationName;
-      throw wrapped;
-    } finally {
-      if (connectTimer) clearTimeout(connectTimer);
-      // Closing a half-open/unreachable socket must never delay the HTTP response.
-      // _safeClose initiates cleanup and absorbs both sync and async close failures.
-      if (connection) this._safeClose(connection);
+
+  _isConnectionFailure(error) {
+    const message = String(error && error.message || error || "").toLowerCase();
+    const code = String(error && error.code || "").toUpperCase();
+    return /timeout|timed out|socket|connection|not connected|closed|reset|broken pipe|econn|enetunreach|ehostunreach|epipe|hang up/.test(message) ||
+      /^(ECONN|ENET|EHOST|EPIPE|ETIMEDOUT|ERR_SOCKET)/.test(code);
+  }
+
+  _resetPersistentConnection(connection) {
+    if (connection && this._connection === connection) {
+      this._connection = null;
+      this._connectionKey = null;
     }
+    if (connection) this._safeClose(connection);
+  }
+
+  async _getPersistentConnection(config) {
+    const key = JSON.stringify({host:config.host,port:config.port,user:config.user,password:config.password});
+    if (this._connection && this._connectionKey !== key) {
+      this._resetPersistentConnection(this._connection);
+    }
+    if (this._connection) return this._connection;
+
+    const connection = this._createConnection(config);
+    this._connection = connection;
+    this._connectionKey = key;
+    try {
+      await this._executeWithTimeout(
+        connection.connect(),
+        CONNECTION_TIMEOUT_MS,
+        "MikroTik connection handshake"
+      );
+      return connection;
+    } catch (error) {
+      this._resetPersistentConnection(connection);
+      throw error;
+    }
+  }
+
+  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS) {
+    const execute = async () => {
+      let connection = null;
+      try {
+        // A short config cache avoids a PostgreSQL settings lookup for every
+        // RouterOS command. Configuration changes are picked up within 5s.
+        const config = await this._executeWithTimeout(
+          this._getConfig(configOverride),
+          CONNECTION_TIMEOUT_MS,
+          "MikroTik configuration lookup"
+        );
+        connection = await this._getPersistentConnection(config);
+        return await this._executeWithTimeout(
+          Promise.resolve().then(() => operation(connection)),
+          operationTimeoutMs,
+          operationName
+        );
+      } catch (error) {
+        if (connection && this._isConnectionFailure(error)) {
+          // Discard a timed-out/uncertain socket so the next queued request
+          // performs a fresh handshake rather than reusing a poisoned session.
+          this._resetPersistentConnection(connection);
+        }
+        const details=this._extractRouterError(error);
+        const wrapped=new Error(details.message);
+        wrapped.cause=error;
+        wrapped.category=details.category;
+        wrapped.code=error&&error.code?error.code:"MIKROTIK_ERROR";
+        wrapped.operation=operationName;
+        throw wrapped;
+      }
+    };
+
+    // Promise-chain queue is process-safe in Node's single event loop. Each
+    // complete operation owns the connection until its RouterOS commands finish.
+    const result = this._operationQueue.then(execute, execute);
+    this._operationQueue = result.catch(() => {});
+    return result;
   }
   async _executeWithTimeout(promise, ms = OPERATION_TIMEOUT_MS, operationName = "MikroTik call") {
     let timer;
