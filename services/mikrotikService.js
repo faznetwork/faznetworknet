@@ -69,7 +69,12 @@ class MikroTikService {
       port: config.port,
       user: config.user,
       password: config.password,
-      timeout: CONNECTION_TIMEOUT_MS / 1000
+      // node-routeros passes this value to socket.setTimeout(), which destroys
+      // an idle socket when the timer fires. A 10s value caused the RouterOS
+      // session to log out after every quiet period. Disable socket inactivity
+      // timeout; TCP keep-alive is already enabled by node-routeros. Connection
+      // and command deadlines remain enforced by _executeWithTimeout below.
+      timeout: 0
     });
 
     // node-routeros emits asynchronous `error` events for malformed/unexpected
