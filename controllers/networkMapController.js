@@ -79,3 +79,45 @@ exports.getLatestSummary = async (req, res) => {
   }
 };
 
+
+exports.getDiagram = async (req, res) => {
+  try {
+    const [devices, links, latestRun] = await Promise.all([
+      db.query(
+        `SELECT id,device_type AS "deviceType",name,vendor,model,
+                host(management_ip) AS "managementIp",mac_address::text AS "macAddress",
+                location,parent_device_id AS "parentDeviceId",last_seen_at AS "lastSeenAt"
+         FROM network_devices
+         ORDER BY CASE device_type WHEN 'mikrotik' THEN 0 WHEN 'olt' THEN 1 WHEN 'access_point' THEN 2 WHEN 'cpe' THEN 3 ELSE 4 END,name ASC,id ASC
+         LIMIT 1000`
+      ),
+      db.query(
+        `SELECT l.id,l.from_device_id AS "fromDeviceId",l.to_device_id AS "toDeviceId",
+                l.relationship,l.match_status AS "matchStatus",l.last_seen_at AS "lastSeenAt",
+                f.name AS "fromName",t.name AS "toName"
+         FROM network_topology_links l
+         JOIN network_devices f ON f.id=l.from_device_id
+         JOIN network_devices t ON t.id=l.to_device_id
+         ORDER BY CASE l.match_status WHEN 'verified' THEN 0 WHEN 'unverified' THEN 1 ELSE 2 END,
+                  f.name ASC,t.name ASC,l.id ASC
+         LIMIT 1000`
+      ),
+      db.query(
+        `SELECT status,started_at AS "startedAt",finished_at AS "finishedAt",
+                discovered_count AS "discoveredCount",matched_count AS "matchedCount",
+                unmatched_count AS "unmatchedCount"
+         FROM network_discovery_runs ORDER BY started_at DESC,id DESC LIMIT 1`
+      )
+    ]);
+    return res.json({
+      success: true,
+      devices: devices.rows,
+      links: links.rows,
+      latestRun: latestRun.rows[0] || null,
+      counts: { devices: devices.rowCount, links: links.rowCount }
+    });
+  } catch (error) {
+    console.error("[Network diagram API]", error?.message || error);
+    return res.status(503).json({ success: false, message: "Network diagram data is temporarily unavailable." });
+  }
+};
