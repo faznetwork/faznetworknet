@@ -26,7 +26,7 @@
 :if ($token = "__OLT_COLLECTOR_TOKEN__") do={ :error "Set OLT collector token before running"; }
 
 # This initial read-only probe verifies one known scalar OID before polling.
-:local sysDescr [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community oid="1.3.6.1.2.1.1.1.0" as-value];
+:local sysDescr [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community tries=1 try-timeout=500ms oid="1.3.6.1.2.1.1.1.0" as-value];
 :if ([:len ($sysDescr->"value")] = 0) do={ :error "OLT SNMP sysDescr is empty; check ACL/community"; }
 
 # Read a bounded set of candidate ONU indexes. Do not write anything to the OLT.
@@ -41,17 +41,16 @@
     :local gotMac false;
     :local gotRx false;
     :onerror err in={
-      :set macResult [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community oid=($macBase . $suffix) as-value];
+      :set macResult [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community tries=1 try-timeout=250ms oid=($macBase . $suffix) as-value];
       :if (($macResult->"type") != "no-such-instance" && [:len ($macResult->"value")] > 0) do={ :set gotMac true; }
     } do={ :set gotMac false; }
     :if ($gotMac) do={
       :onerror err in={
-        :set rxResult [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community oid=($rxBase . $suffix) as-value];
+        :set rxResult [/tool snmp-get address=$oltAddress port=$oltPort version=2c community=$community tries=1 try-timeout=250ms oid=($rxBase . $suffix) as-value];
         :if (($rxResult->"type") != "no-such-instance" && [:len ($rxResult->"value")] > 0) do={ :set gotRx true; }
       } do={ :set gotRx false; }
       :if ($gotRx) do={
-        :local mac [:tolower ($macResult->"value")];
-        :local mac [:replace $mac "-" ":"];
+        :local mac ($macResult->"value");
         :local rxText ($rxResult->"value");
         :local reading {"onuId"=($pon . "/" . $onu);"onuMac"=$mac;"ponPort"=("PON " . $pon);"status"="unknown";"rxPowerDbm"=$rxText;"sourceAgent"="RouterOS-SNMP-VSOL";"raw"={"rxOid"=($rxBase . $suffix);"rxType"=($rxResult->"type");"rxValue"=$rxText;"macOid"=($macBase . $suffix);"macType"=($macResult->"type")}};
         :set readings ($readings, $reading);
