@@ -3445,6 +3445,61 @@ async function deletePlan(id,name){
             }
         };
 
+
+        window.loadNetworkMonitor = async function(mode = 'online') {
+            mode = String(mode || 'online') === 'usage' ? 'usage' : 'online';
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return false;
+            if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+            const isUsage = mode === 'usage';
+            const title = isUsage ? 'Monitor — Usage' : 'Monitor — Online';
+            setPageTitleSafe(title);
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · PPPoE Monitor</div><h2 class="h5 fw-bold mb-1">' + escapeHtml(title) + '</h2><p class="small text-muted mb-0">' + (isUsage ? 'Current active-session byte counters only; these are not lifetime billing totals.' : 'Active PPPoE sessions reported by MikroTik or the latest available snapshot.') + '</p></div><button type="button" class="btn btn-outline-success" onclick="window.loadNetworkMonitor(\'' + mode + '\')"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></div><div id="pppoeMonitorContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading active sessions…</div></div></div></div></section>';
+            const content = root.querySelector('#pppoeMonitorContent');
+            try {
+                const data = await window.jsonFetch('/api/pppoe/active');
+                const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+                const toBig = value => { try { const s = String(value ?? '0').trim(); return /^\d+$/.test(s) ? BigInt(s) : 0n; } catch (_) { return 0n; } };
+                const formatBytes = value => {
+                    const n = typeof value === 'bigint' ? value : toBig(value);
+                    const units = ['B','KB','MB','GB','TB','PB'];
+                    let scale = 0, size = Number(n);
+                    while (size >= 1024 && scale < units.length - 1) { size /= 1024; scale++; }
+                    return (scale ? size.toFixed(1) : size.toFixed(0)) + ' ' + units[scale];
+                };
+                const totalIn = sessions.reduce((sum, item) => sum + toBig(item.bytesIn), 0n);
+                const totalOut = sessions.reduce((sum, item) => sum + toBig(item.bytesOut), 0n);
+                const source = data.source === 'mikrotik-live' ? 'MikroTik live' : data.source === 'recent-router-snapshot' ? 'Recent snapshot · fallback' : 'Source not specified';
+                const sourceClass = data.source === 'mikrotik-live' ? 'text-bg-success' : 'text-bg-warning';
+                const summary = isUsage
+                    ? '<div class="row g-3 mb-4"><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Active sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">RX · Downloaded this session</div><div class="h4 fw-bold mb-0 text-success">' + formatBytes(totalIn) + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">TX · Uploaded this session</div><div class="h4 fw-bold mb-0 text-primary">' + formatBytes(totalOut) + '</div></div></div></div>'
+                    : '<div class="row g-3 mb-4"><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Online PPPoE sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Data source</div><div class="mt-1"><span class="badge ' + sourceClass + '">' + escapeHtml(source) + '</span></div></div></div></div>';
+                const rows = sessions.map(session => {
+                    const user = escapeHtml(session.username || '—');
+                    const ip = escapeHtml(session.address || '—');
+                    const uptime = escapeHtml(session.uptime || '—');
+                    const service = escapeHtml(session.service || 'PPPoE');
+                    const caller = escapeHtml(session.callerId || '—');
+                    return '<tr><td class="fw-semibold text-break">' + user + '</td><td class="text-nowrap">' + ip + '</td><td class="text-nowrap">' + uptime + '</td><td>' + service + '</td><td class="text-break">' + caller + '</td>' + (isUsage ? '<td class="text-nowrap">' + formatBytes(session.bytesIn) + '</td><td class="text-nowrap">' + formatBytes(session.bytesOut) + '</td>' : '') + '</tr>';
+                }).join('');
+                content.innerHTML = summary + (data.source === 'recent-router-snapshot' ? '<div class="alert alert-warning small">MikroTik live query was unavailable. These rows came from a recent stored snapshot and may not reflect the exact current state.</div>' : '') +
+                    '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h3 class="h6 fw-bold mb-0">' + (isUsage ? 'Session traffic counters' : 'Online sessions') + '</h3><span class="small text-muted">Source: ' + escapeHtml(source) + '</span></div>' +
+                    '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>IP address</th><th>Uptime</th><th>Service</th><th>Caller ID</th>' + (isUsage ? '<th>RX · Download</th><th>TX · Upload</th>' : '') + '</tr></thead><tbody>' +
+                    (sessions.length ? rows : '<tr><td colspan="' + (isUsage ? 7 : 5) + '" class="text-center text-muted py-4">No active PPPoE sessions were returned.</td></tr>') +
+                    '</tbody></table></div>';
+                return true;
+            } catch (error) {
+                content.innerHTML = '<div class="alert alert-danger mb-0" role="alert">' + escapeHtml(error.message || 'Unable to load active PPPoE sessions.') + '</div>';
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
