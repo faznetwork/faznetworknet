@@ -594,6 +594,42 @@
         @media(max-width:420px){.hotspot-dynamic-view .voucher-grid{grid-template-columns:1fr}}
 
 
+        /* Hotspot All Users: match Customer 360 profile quality, not just generic table styling. */
+        .hotspot-all-users-view .card-custom{border:1px solid #dbe7e2!important;border-radius:20px!important;overflow:hidden;box-shadow:0 14px 38px rgba(10,61,46,.09)!important;background:#fff}
+        .hotspot-all-users-view .hotspot-all-users-heading{padding:22px 24px!important;background:linear-gradient(115deg,#082f25 0%,#0a3d2e 62%,#12664b 100%)!important;color:#fff;border:0!important;display:flex;align-items:center;gap:18px}
+        .hotspot-all-users-view .hotspot-all-users-heading h5{color:#fff!important;font-size:1.18rem;font-weight:800;letter-spacing:-.025em}
+        .hotspot-all-users-view .hotspot-all-users-heading .small{color:#d1fae5!important}
+        .hotspot-all-users-view .hotspot-all-users-heading .hotspot-user-icon{width:46px;height:46px;flex:0 0 46px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:18px}
+        .hotspot-all-users-view #hotspotSectionCount{font-size:13px;padding:7px 11px;background:#d1fae5!important;color:#065f46!important;border:1px solid #a7f3d0}
+        .hotspot-all-users-view .hotspot-enterprise-search{min-width:280px}
+        .hotspot-all-users-view .hotspot-enterprise-search .input-group-text,.hotspot-all-users-view .hotspot-enterprise-search .form-control{min-height:44px;border-color:#cbded4;background:#fff;font-size:14px}
+        .hotspot-all-users-view .hotspot-enterprise-search .input-group-text{border-radius:11px 0 0 11px;padding:0 14px;color:#047857}
+        .hotspot-all-users-view .hotspot-enterprise-search .form-control{border-radius:0 11px 11px 0}
+        .hotspot-all-users-view .hotspot-all-users-heading .btn{min-height:44px;padding:10px 15px!important;border-radius:10px;font-size:13px;font-weight:750}
+        .hotspot-all-users-view .table-responsive{padding:0 18px 18px;background:#fff}
+        .hotspot-all-users-view .hotspot-enterprise-table{border-collapse:separate;border-spacing:0;border:1px solid #e2ebe6;border-radius:14px;overflow:hidden;margin-top:18px!important}
+        .hotspot-all-users-view .hotspot-enterprise-table thead th{background:#f0f7f3!important;color:#35594b!important;border-bottom:1px solid #dce9e1!important;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.055em;padding:16px 15px!important;white-space:nowrap}
+        .hotspot-all-users-view .hotspot-enterprise-table tbody td{padding:16px 15px!important;border-bottom:1px solid #edf2ef;font-size:13px;color:#334155;vertical-align:middle}
+        .hotspot-all-users-view .hotspot-enterprise-table tbody tr:last-child td{border-bottom:0}
+        .hotspot-all-users-view .hotspot-enterprise-table tbody tr:hover td{background:#f7fcf9}
+        .hotspot-all-users-view .hotspot-enterprise-table tbody td:nth-child(2) strong{font-size:14px;font-weight:800;color:#0f2920}
+        .hotspot-all-users-view .hotspot-enterprise-table .hotspot-user-icon{width:40px;height:40px;flex:0 0 40px;border:1px solid #ccebd9;background:linear-gradient(145deg,#ecfdf5,#d1fae5);font-size:14px}
+        .hotspot-all-users-view .hotspot-enterprise-table .badge{font-size:11px;font-weight:750;padding:7px 10px}
+        .hotspot-all-users-view .hotspot-enterprise-table .btn-group{gap:7px}
+        .hotspot-all-users-view .hotspot-enterprise-table .btn-group .btn{width:38px;height:38px;border-radius:10px!important;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+        .hotspot-all-users-view .hotspot-empty-icon{margin:0 auto}
+        @media(max-width:767.98px){
+          .hotspot-all-users-view .card-custom{border-radius:15px!important}
+          .hotspot-all-users-view .hotspot-all-users-heading{padding:16px!important;align-items:flex-start;flex-wrap:wrap}
+          .hotspot-all-users-view .hotspot-all-users-heading>div:last-child{width:100%;margin-left:0!important;display:grid!important;grid-template-columns:1fr 1fr;gap:9px!important}
+          .hotspot-all-users-view .hotspot-enterprise-search{grid-column:1/-1;min-width:0;width:100%}
+          .hotspot-all-users-view .hotspot-all-users-heading .btn{width:100%;min-height:44px}
+          .hotspot-all-users-view .table-responsive{padding:0 10px 12px}
+          .hotspot-all-users-view .hotspot-enterprise-table{min-width:760px;margin-top:12px!important}
+          .hotspot-all-users-view .hotspot-enterprise-table thead th{padding:13px 12px!important}
+          .hotspot-all-users-view .hotspot-enterprise-table tbody td{padding:13px 12px!important}
+        }
+
         /* FAZ NETWORK mobile-first navigation and dashboard refinement. */
         @media (max-width: 767.98px) {
             :root { --sidebar-width: min(300px, 86vw); }
@@ -2040,7 +2076,7 @@
 
             const loadingTitle=isActive?'Live Active Sessions':'Hotspot Users Database';
             const icon=isActive?'bi-broadcast-pin':'bi-database';
-            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3"><div><div class="d-flex align-items-center gap-2"><span class="'+(isActive?'hotspot-live-dot':'text-success')+'"><i class="bi '+icon+'"></i></span><h5 class="mb-0 fw-bold">'+loadingTitle+'</h5><span id="hotspotSectionCount" class="badge rounded-pill bg-success">0</span></div><div class="small text-muted mt-1">'+(isActive?'Real-time clients connected to MikroTik Hotspot':'All configured customer accounts from MikroTik Hotspot')+'</div></div><div class="d-flex flex-wrap gap-2 ms-lg-auto">'+
+            container.innerHTML='<section class="hotspot-dynamic-view admin-view '+(isActive?'hotspot-active-users-view':'hotspot-all-users-view')+'"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="'+(isActive?'card-header bg-white border-bottom p-3 p-md-4':'hotspot-all-users-heading')+'"><div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3"><div><div class="d-flex align-items-center gap-2"><span class="'+(isActive?'hotspot-live-dot':'text-success')+'"><i class="bi '+icon+'"></i></span><h5 class="mb-0 fw-bold">'+loadingTitle+'</h5><span id="hotspotSectionCount" class="badge rounded-pill bg-success">0</span></div><div class="small text-muted mt-1">'+(isActive?'Real-time clients connected to MikroTik Hotspot':'All configured customer accounts from MikroTik Hotspot')+'</div></div><div class="d-flex flex-wrap gap-2 ms-lg-auto">'+
                 (isActive?'<button type="button" class="btn btn-outline-success btn-sm" onclick="window.loadHotspotSection(\'active\',\'active_user\')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>':'<div class="input-group input-group-sm hotspot-enterprise-search"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="hotspotAllSearch" class="form-control" placeholder="Search phone / name..." oninput="filterHotspotRows(this.value)"></div><button type="button" class="btn btn-theme btn-sm" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill me-1"></i>+ Add User</button><button type="button" class="btn btn-outline-success btn-sm" onclick="window.loadHotspotSection(\'all\',\'all_user\')"><i class="bi bi-arrow-repeat me-1"></i>Sync</button>')+
                 '</div></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-enterprise-table"><thead class="table-light">'+
                 (isActive?'<tr><th>#</th><th>Username / Phone</th><th>IP Address</th><th>MAC Address</th><th>Current Uptime</th><th>Data Usage</th><th class="text-end">Action</th></tr>':'<tr><th>#</th><th>User / Phone</th><th>Profile / Plan</th><th>Uptime Used</th><th>Status</th><th>Comment</th><th class="text-end">Actions</th></tr>')+
