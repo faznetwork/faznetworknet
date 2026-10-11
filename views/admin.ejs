@@ -5093,7 +5093,7 @@ async function deletePlan(id,name){
         (function installPersistentAdminRouting() {
             if (window.__fazAdminRoutingInstalled) return;
             const adminPath = window.location.pathname.replace(/\/+$/, '') || '/';
-            if (adminPath !== '/admin') return;
+            if (!/^\/admin(?:\/|$)/.test(adminPath)) return;
             window.__fazAdminRoutingInstalled = true;
 
             const allowed = {
@@ -5154,38 +5154,107 @@ async function deletePlan(id,name){
                 }
                 return { view: 'dashboard' };
             }
+            function routeFromPath(path) {
+                const routes = {
+                    '/admin/dashboard': { view: 'dashboard' },
+                    '/admin/customers/add': { view: 'page', page: 'add-customer' },
+                    '/admin/customers/all': { view: 'customers', filter: 'all', title: 'all_customer' },
+                    '/admin/customers/online': { view: 'customers', filter: 'online', title: 'online_customer' },
+                    '/admin/customers/offline': { view: 'customers', filter: 'offline', title: 'offline_customer' },
+                    '/admin/customers/active': { view: 'customers', filter: 'active', title: 'active_customer' },
+                    '/admin/customers/expired': { view: 'customers', filter: 'expire', title: 'expire_customer' },
+                    '/admin/customers/expiring-today-yesterday': { view: 'customers', filter: 'expire_today_yesterday', title: 'expire_today_yesterday' },
+                    '/admin/customers/expiring-next-7-days': { view: 'customers', filter: 'expire_7_days', title: 'expire_7_days' },
+                    '/admin/customers/new': { view: 'customers', filter: 'new', title: 'new_customer' },
+                    '/admin/customers/due': { view: 'customers', filter: 'due', title: 'due_collection' },
+                    '/admin/payments/pending': { view: 'payments', filter: 'pending', title: 'pending_invoice' },
+                    '/admin/payments/all': { view: 'payments', filter: 'all', title: 'all_payments' },
+                    '/admin/payments/requests': { view: 'payments', filter: 'requests', title: 'payment_request' },
+                    '/admin/payments/bkash': { view: 'payments', filter: 'bkash', title: 'bkash_payments' },
+                    '/admin/payments/nagad': { view: 'payments', filter: 'nagad', title: 'nagad_payments' },
+                    '/admin/payments/rocket': { view: 'payments', filter: 'rocket', title: 'rocket_payments' },
+                    '/admin/hotspot/dashboard': { view: 'hotspot', section: 'dashboard' },
+                    '/admin/hotspot/add-user': { view: 'hotspot', section: 'add-user' },
+                    '/admin/hotspot/users/all': { view: 'hotspot', section: 'users', filter: 'all', title: 'all_user' },
+                    '/admin/hotspot/users/active': { view: 'hotspot', section: 'users', filter: 'active', title: 'active_user' },
+                    '/admin/hotspot/users/offline': { view: 'hotspot', section: 'users', filter: 'offline', title: 'offline_user' },
+                    '/admin/hotspot/profiles': { view: 'hotspot', section: 'profiles' },
+                    '/admin/hotspot/vouchers/generate': { view: 'hotspot', section: 'voucher-generator' },
+                    '/admin/hotspot/vouchers/manage': { view: 'hotspot', section: 'vouchers', filter: 'all' },
+                    '/admin/hotspot/vouchers/cleanup': { view: 'hotspot', section: 'vouchers', filter: 'cleanup' },
+                    '/admin/hotspot/sales': { view: 'hotspot', section: 'sales' },
+                    '/admin/network/mikrotik-devices': { view: 'devices' },
+                    '/admin/packages': { view: 'packages' },
+                    '/admin/network/ip-pools': { view: 'ip-pools' },
+                    '/admin/network/olt': { view: 'olt', mode: 'overview' },
+                    '/admin/network/olt/onts': { view: 'olt', mode: 'onts' },
+                    '/admin/network/olt/topology': { view: 'olt', mode: 'topology' },
+                    '/admin/staff': { view: 'staff' },
+                    '/admin/audit-logs': { view: 'audit' },
+                    '/admin/network/maps': { view: 'maps' },
+                    '/admin/support/tickets': { view: 'support' },
+                    '/admin/settings': { view: 'page', page: 'general-settings' }
+                };
+                return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
+            }
             function readRoute() {
+                const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
+                const pathRoute = routeFromPath(path);
+                if (pathRoute) return pathRoute;
+                if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
+
+                // Backward compatibility: older shared links with ?view=... resolve once,
+                // then commitRoute replaces them with the canonical path-based URL.
                 const params = new URLSearchParams(window.location.search);
                 const view = params.get('view');
-                if (!view && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
                 if (!view) return { view: 'dashboard' };
                 if (view === 'page') return cleanRoute({ view, page: params.get('page'), channel: params.get('channel') });
                 if (view === 'customers') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
                 if (view === 'payments') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
-                if (view === 'hotspot') return cleanRoute({
-                    view, section: params.get('section'), filter: params.get('filter'), title: params.get('title')
-                });
+                if (view === 'hotspot') return cleanRoute({ view, section: params.get('section'), filter: params.get('filter'), title: params.get('title') });
                 if (view === 'olt') return cleanRoute({ view, mode: params.get('mode') });
                 return cleanRoute({ view });
             }
             function routeUrl(route) {
                 const normalized = cleanRoute(route);
-                const params = new URLSearchParams();
-                params.set('view', normalized.view);
+                if (normalized.view === 'dashboard') return '/admin/dashboard';
                 if (normalized.view === 'page') {
-                    params.set('page', normalized.page);
-                    if (normalized.channel) params.set('channel', normalized.channel);
-                } else if (normalized.view === 'customers' || normalized.view === 'payments') {
-                    params.set('filter', normalized.filter);
-                    params.set('title', normalized.title);
-                } else if (normalized.view === 'hotspot') {
-                    params.set('section', normalized.section);
-                    if (normalized.section === 'users' || normalized.section === 'vouchers') params.set('filter', normalized.filter);
-                    if (normalized.title) params.set('title', normalized.title);
-                } else if (normalized.view === 'olt') {
-                    params.set('mode', normalized.mode);
+                    if (normalized.page === 'add-customer') return '/admin/customers/add';
+                    if (normalized.page === 'general-settings') return '/admin/settings';
+                    if (normalized.page === 'all-customer') return '/admin/customers/all';
+                    if (normalized.page === 'payments') return '/admin/payments/' + (normalized.channel || 'all');
                 }
-                return window.location.pathname + '?' + params.toString();
+                if (normalized.view === 'customers') {
+                    const paths = {
+                        all: 'all', online: 'online', offline: 'offline', active: 'active',
+                        expire: 'expired', expire_today_yesterday: 'expiring-today-yesterday',
+                        expire_7_days: 'expiring-next-7-days', new: 'new', due: 'due'
+                    };
+                    return '/admin/customers/' + (paths[normalized.filter] || 'all');
+                }
+                if (normalized.view === 'payments') return '/admin/payments/' + (normalized.filter || 'all');
+                if (normalized.view === 'hotspot') {
+                    if (normalized.section === 'dashboard') return '/admin/hotspot/dashboard';
+                    if (normalized.section === 'add-user') return '/admin/hotspot/add-user';
+                    if (normalized.section === 'users') return '/admin/hotspot/users/' + (normalized.filter || 'all');
+                    if (normalized.section === 'profiles') return '/admin/hotspot/profiles';
+                    if (normalized.section === 'voucher-generator') return '/admin/hotspot/vouchers/generate';
+                    if (normalized.section === 'vouchers') return '/admin/hotspot/vouchers/' + (normalized.filter === 'cleanup' ? 'cleanup' : 'manage');
+                    if (normalized.section === 'sales') return '/admin/hotspot/sales';
+                }
+                if (normalized.view === 'devices') return '/admin/network/mikrotik-devices';
+                if (normalized.view === 'packages') return '/admin/packages';
+                if (normalized.view === 'ip-pools') return '/admin/network/ip-pools';
+                if (normalized.view === 'olt') {
+                    if (normalized.mode === 'onts') return '/admin/network/olt/onts';
+                    if (normalized.mode === 'topology') return '/admin/network/olt/topology';
+                    return '/admin/network/olt';
+                }
+                if (normalized.view === 'staff') return '/admin/staff';
+                if (normalized.view === 'audit') return '/admin/audit-logs';
+                if (normalized.view === 'maps') return '/admin/network/maps';
+                if (normalized.view === 'support') return '/admin/support/tickets';
+                return '/admin/dashboard';
             }
             function commitRoute(route, replace) {
                 const normalized = cleanRoute(route);
