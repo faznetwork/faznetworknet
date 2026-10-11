@@ -1,19 +1,10 @@
-# FAZ NETWORK — V-SOL V1601E04-DP read-only ONU optical telemetry
-# RouterOS v7.8+ required for /tool snmp-get as-value.
-# This script ONLY reads SNMP and POSTs readings to FAZ NETWORK. It does not
-# change MikroTik PPPoE, firewall, routing, customer, or OLT configuration.
-#
-# BEFORE IMPORT:
-# 1) Replace __OLT_COLLECTOR_TOKEN__ with the OLT_COLLECTOR_TOKEN set on Render.
-# 2) Confirm the OLT SNMP read-only community and permitted source IP.
-# 3) First run manually and inspect the log; do not schedule until confirmed.
-#
-# Known V-SOL V1600D MIB branches (index suffixes must be confirmed on this firmware):
-# RX power: 1.3.6.1.4.1.37950.1.1.5.12.2.1.8.1.7.<PON>.<ONU>
-# ONU MAC:  1.3.6.1.4.1.37950.1.1.5.12.2.1.2.1.5.<PON>.<ONU>
-# RX power is an OCTET STRING on this MIB; unknown/encoded values are sent as raw
-# and the server refuses to guess a conversion to dBm.
+# FAZ NETWORK — importable read-only V-SOL telemetry script
+# RouterOS v7.8+. Imports a named script; does NOT create a scheduler.
+# Replace __OLT_COLLECTOR_TOKEN__ outside Git before importing.
+# Run manually first; schedule only after a verified success response.
+# SNMP uses read-only community public. Do not use the private write community.
 
+ /system script add name="faz-olt-telemetry" policy=ftp,read,test source={
 :local oltAddress "103.54.37.182";
 :local oltPort 161;
 :local community "public";
@@ -62,3 +53,4 @@
 :local body [:serialize to=json value={"oltId"=$oltId;"readings"=$readings} options=json.no-string-conversion];
 :local response [/tool fetch url=$apiUrl http-method=post http-header-field=("Content-Type: application/json,Authorization: Bearer " . $token) http-data=$body output=user as-value check-certificate=yes];
 :log info ("FAZ OLT telemetry POST complete; response=" . ($response->"data"));
+}
