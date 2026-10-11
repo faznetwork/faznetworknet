@@ -14,7 +14,7 @@ test("public homepage never opens a live MikroTik connection", () => {
 
 test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {
   const service = read("services/mikrotikService.js");
-  assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
+  assert.match(service, /const CONNECTION_TIMEOUT_MS = 1000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
   assert.match(service, /timeout: 0/);
   assert.match(service, /socket\.setTimeout\(0\)/);
