@@ -1156,11 +1156,11 @@
                             <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                         </button>
                         <ul class="submenu">
-                            <li><a href="javascript:void(0)"><span data-key="usage">Usage</span></a></li>
-                            <li><a href="javascript:void(0)"><span data-key="online">Online</span></a></li>
+                            <li><a href="/admin/monitor/usage"><span data-key="usage">Usage</span></a></li>
+                            <li><a href="/admin/monitor/online"><span data-key="online">Online</span></a></li>
                         </ul>
                     </li>
-                    <li><a href="javascript:void(0)"><span data-key="network_diagram">Network Diagram</span></a></li>
+                    <li><a href="/admin/network/diagram"><span data-key="network_diagram">Network Diagram</span></a></li>
                 </ul>
             </li>
 
@@ -1170,8 +1170,8 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="vpn">VPN</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="vpn_port_forwarding">VPN Port Forwarding</span></a></li>
+                    <li><a href="/admin/vpn"><span data-key="vpn">VPN</span></a></li>
+                    <li><a href="/admin/vpn/port-forwarding"><span data-key="vpn_port_forwarding">VPN Port Forwarding</span></a></li>
                 </ul>
             </li>
 
@@ -1181,8 +1181,8 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="account_dashboard">Dashboard</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="manage">Manage</span></a></li>
+                    <li><a href="/admin/account/dashboard"><span data-key="account_dashboard">Dashboard</span></a></li>
+                    <li><a href="/admin/account/manage"><span data-key="manage">Manage</span></a></li>
                     <li>
                         <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
                             <i class="bi bi-headset"></i> <span data-key="support">Support</span>
@@ -1190,8 +1190,8 @@
                         </button>
                         <ul class="submenu">
                             <li><a href="javascript:void(0)" onclick="window.loadSupportTickets(); return false;"><span data-key="support_tickets">Support Tickets</span></a></li>
-                            <li><a href="javascript:void(0)"><span data-key="software_support_tickets">Software Support Tickets</span></a></li>
-                            <li><a href="javascript:void(0)"><span data-key="website_support_tickets">Website Support Tickets</span></a></li>
+                            <li><a href="/admin/support/software"><span data-key="software_support_tickets">Software Support Tickets</span></a></li>
+                            <li><a href="/admin/support/website"><span data-key="website_support_tickets">Website Support Tickets</span></a></li>
                         </ul>
                     </li>
                 </ul>
@@ -1203,9 +1203,9 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="add_expenses">Add Expenses</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="all_expenses">All Expenses</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="expenses_report">Expenses Report</span></a></li>
+                    <li><a href="/admin/expenses/add"><span data-key="add_expenses">Add Expenses</span></a></li>
+                    <li><a href="/admin/expenses/all"><span data-key="all_expenses">All Expenses</span></a></li>
+                    <li><a href="/admin/expenses/report"><span data-key="expenses_report">Expenses Report</span></a></li>
                 </ul>
             </li>
 
@@ -1215,9 +1215,9 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="department">Department</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="all_employees">All Employees</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="added_employees">Added Employees</span></a></li>
+                    <li><a href="/admin/hr/departments"><span data-key="department">Department</span></a></li>
+                    <li><a href="/admin/hr/employees"><span data-key="all_employees">All Employees</span></a></li>
+                    <li><a href="/admin/hr/employees/added"><span data-key="added_employees">Added Employees</span></a></li>
                 </ul>
             </li>
 
@@ -1237,7 +1237,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="sub_staff">Sub-Staff</span></a></li>
+                    <li><a href="/admin/resellers/sub-staff"><span data-key="sub_staff">Sub-Staff</span></a></li>
                 </ul>
             </li>
         </ul>
@@ -5118,6 +5118,21 @@ async function deletePlan(id,name){
                 pending: 'pending_invoice', all: 'all_payments', requests: 'payment_request',
                 bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
             };
+            const moduleTitles = {
+                'usage': 'Monitor — Usage',
+                'monitor-online': 'Monitor — Online',
+                'network-diagram': 'Network Diagram',
+                'vpn': 'VPN Server',
+                'vpn-port-forwarding': 'VPN Port Forwarding',
+                'account-dashboard': 'Account & Support — Dashboard',
+                'account-manage': 'Account & Support — Manage',
+                'software-support-tickets': 'Software Support Tickets',
+                'website-support-tickets': 'Website Support Tickets',
+                'hr-departments': 'Human Resource — Department',
+                'hr-employees': 'Human Resource — All Employees',
+                'hr-added-employees': 'Human Resource — Added Employees',
+                'sub-staff': 'User & Reseller — Sub-Staff'
+            };
             const state = { depth: 0, restoring: false, current: null };
 
             function has(list, value) {
@@ -5151,6 +5166,9 @@ async function deletePlan(id,name){
                 if (route.view === 'olt') return { view: 'olt', mode: has(allowed.oltModes, route.mode) ? route.mode : 'overview' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps', 'support'].indexOf(route.view) !== -1) {
                     return { view: route.view };
+                }
+                if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
+                    return { view: 'module', module: String(route.module) };
                 }
                 return { view: 'dashboard' };
             }
@@ -5193,7 +5211,20 @@ async function deletePlan(id,name){
                     '/admin/audit-logs': { view: 'audit' },
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support' },
-                    '/admin/settings': { view: 'page', page: 'general-settings' }
+                    '/admin/settings': { view: 'page', page: 'general-settings' },
+                    '/admin/monitor/usage': { view: 'module', module: 'usage' },
+                    '/admin/monitor/online': { view: 'module', module: 'monitor-online' },
+                    '/admin/network/diagram': { view: 'module', module: 'network-diagram' },
+                    '/admin/vpn': { view: 'module', module: 'vpn' },
+                    '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
+                    '/admin/account/dashboard': { view: 'module', module: 'account-dashboard' },
+                    '/admin/account/manage': { view: 'module', module: 'account-manage' },
+                    '/admin/support/software': { view: 'module', module: 'software-support-tickets' },
+                    '/admin/support/website': { view: 'module', module: 'website-support-tickets' },
+                    '/admin/hr/departments': { view: 'module', module: 'hr-departments' },
+                    '/admin/hr/employees': { view: 'module', module: 'hr-employees' },
+                    '/admin/hr/employees/added': { view: 'module', module: 'hr-added-employees' },
+                    '/admin/resellers/sub-staff': { view: 'module', module: 'sub-staff' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
@@ -5254,6 +5285,24 @@ async function deletePlan(id,name){
                 if (normalized.view === 'audit') return '/admin/audit-logs';
                 if (normalized.view === 'maps') return '/admin/network/maps';
                 if (normalized.view === 'support') return '/admin/support/tickets';
+                if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
+                    const modulePaths = {
+                        'usage': '/admin/monitor/usage',
+                        'monitor-online': '/admin/monitor/online',
+                        'network-diagram': '/admin/network/diagram',
+                        'vpn': '/admin/vpn',
+                        'vpn-port-forwarding': '/admin/vpn/port-forwarding',
+                        'account-dashboard': '/admin/account/dashboard',
+                        'account-manage': '/admin/account/manage',
+                        'software-support-tickets': '/admin/support/software',
+                        'website-support-tickets': '/admin/support/website',
+                        'hr-departments': '/admin/hr/departments',
+                        'hr-employees': '/admin/hr/employees',
+                        'hr-added-employees': '/admin/hr/employees/added',
+                        'sub-staff': '/admin/resellers/sub-staff'
+                    };
+                    return modulePaths[normalized.module];
+                }
                 return '/admin/dashboard';
             }
             function commitRoute(route, replace) {
@@ -5307,9 +5356,36 @@ async function deletePlan(id,name){
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets');
+                    case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
             }
+            function showAdminModulePlaceholder(moduleKey) {
+                const title = moduleTitles[moduleKey];
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!title || !dynamic) return false;
+                if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+                if (typeof setPageTitleSafe === 'function') setPageTitleSafe(title);
+                dynamic.innerHTML = `
+                    <section class="admin-view p-2 p-md-3">
+                        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                            <div class="card-body p-3 p-md-5">
+                                <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                                    <div class="rounded-4 d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;background:#ecfdf5;color:#065f46;font-size:24px"><i class="bi bi-cone-striped"></i></div>
+                                    <div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Admin Module</div><h3 class="h5 fw-bold mb-0">${escapeHtml(title)}</h3></div>
+                                </div>
+                                <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="status">
+                                    <i class="bi bi-info-circle-fill mt-1"></i>
+                                    <div><strong>এই মডিউলটি এখনো কার্যকরভাবে তৈরি হয়নি।</strong><div class="small mt-1">URL ও navigation প্রস্তুত করা হয়েছে, কিন্তু data/API ও save/edit functionality যুক্ত না হওয়া পর্যন্ত এখানে কোনো তথ্য পরিবর্তন হবে না।</div></div>
+                                </div>
+                                <p class="text-muted mb-4">মোবাইল ও ডেস্কটপ—দুই স্ক্রিনেই ব্যবহারযোগ্য করে পরবর্তী ধাপে এই মডিউলটি বাস্তব কার্যকারিতাসহ তৈরি করা হবে।</p>
+                                <a href="/admin/dashboard" class="btn btn-success"><i class="bi bi-grid me-2"></i>ড্যাশবোর্ডে ফিরুন</a>
+                            </div>
+                        </div>
+                    </section>`;
+                return true;
+            }
+
             function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
