@@ -2501,13 +2501,34 @@
         function toggleSidebar(){const sidebar=document.getElementById('sidebar');if(!sidebar||window.innerWidth>=768)return;sidebar.classList.toggle('show');syncMobileSidebarState();}
 
         function toggleSubmenu(event, button) {
-            event.stopPropagation();
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            if (!button) return;
             const submenu = button.nextElementSibling;
-            if (submenu) submenu.classList.toggle('show');
+            const isOpen = Boolean(submenu && !submenu.classList.contains('show'));
+            if (submenu) submenu.classList.toggle('show', isOpen);
+            button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             const arrow = button.querySelector('.arrow-icon');
-            if (arrow) arrow.classList.toggle('bi-chevron-up');
+            if (arrow) {
+                arrow.classList.toggle('bi-chevron-up', isOpen);
+                arrow.classList.toggle('bi-chevron-down', !isOpen);
+            }
         }
-        document.addEventListener('click',function(event){if(window.innerWidth>=768)return;const sidebar=document.getElementById('sidebar');if(!sidebar||!sidebar.classList.contains('show'))return;if(event.target.closest('#sidebar .submenu a')||event.target.closest('#sidebar .sidebar-menu > .menu-item > a'))closeSidebarMobile();});
+        document.addEventListener('click', function(event) {
+            if (window.innerWidth >= 768) return;
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar || !sidebar.classList.contains('show')) return;
+            const link = event.target.closest('#sidebar .submenu a, #sidebar .sidebar-menu > .menu-item > a');
+            if (!link) return;
+            // Inline handlers execute before this bubbling listener. Keep them intact,
+            // prevent the javascript:void(0) pseudo-navigation, then close the drawer.
+            if ((link.getAttribute('href') || '').trim().toLowerCase().startsWith('javascript:')) {
+                event.preventDefault();
+            }
+            closeSidebarMobile();
+        });
         window.addEventListener('resize',function(){if(window.innerWidth>=768){closeSidebarMobile();purgeStuckBackdrops();}else{syncMobileSidebarState();}});
 
         const viewTitles = {
@@ -5062,6 +5083,270 @@ async function deletePlan(id,name){
             })();
         };
 
+
+        /*
+         * FAZ NETWORK admin SPA navigation:
+         * - URL is the source of truth for the active view.
+         * - Existing view loaders remain responsible for data and rendering.
+         * - Route wrappers are intentionally UI-only; API/backend contracts are unchanged.
+         */
+        (function installPersistentAdminRouting() {
+            if (window.__fazAdminRoutingInstalled) return;
+            const adminPath = window.location.pathname.replace(/\/+$/, '') || '/';
+            if (adminPath !== '/admin') return;
+            window.__fazAdminRoutingInstalled = true;
+
+            const allowed = {
+                pages: ['dashboard', 'add-customer', 'all-customer', 'payments', 'general-settings'],
+                customerFilters: ['all', 'online', 'offline', 'active', 'expire', 'expire_today_yesterday', 'expire_7_days', 'new', 'due'],
+                customerTitles: ['all_customer', 'online_customer', 'offline_customer', 'active_customer', 'expire_customer', 'expire_today_yesterday', 'expire_7_days', 'new_customer', 'due_collection'],
+                paymentFilters: ['pending', 'all', 'requests', 'bkash', 'nagad', 'rocket'],
+                paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments'],
+                hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales'],
+                hotspotFilters: ['all', 'active', 'offline'],
+                hotspotTitles: ['all_user', 'active_user', 'offline_user'],
+                voucherFilters: ['all', 'cleanup'],
+                oltModes: ['overview', 'onts', 'topology']
+            };
+            const customerTitleByFilter = {
+                all: 'all_customer', online: 'online_customer', offline: 'offline_customer',
+                active: 'active_customer', expire: 'expire_customer',
+                expire_today_yesterday: 'expire_today_yesterday', expire_7_days: 'expire_7_days',
+                new: 'new_customer', due: 'due_collection'
+            };
+            const paymentTitleByFilter = {
+                pending: 'pending_invoice', all: 'all_payments', requests: 'payment_request',
+                bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
+            };
+            const state = { depth: 0, restoring: false, current: null };
+
+            function has(list, value) {
+                return list.indexOf(String(value || '')) !== -1;
+            }
+            function cleanRoute(route) {
+                if (!route || typeof route !== 'object') return { view: 'dashboard' };
+                if (route.view === 'page' && has(allowed.pages, route.page)) {
+                    if (route.page === 'dashboard') return { view: 'dashboard' };
+                    if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
+                    if (route.page === 'payments') return { view: 'payments', filter: 'all', title: 'all_payments', channel: route.channel || '' };
+                    return { view: 'page', page: route.page, channel: route.channel || '' };
+                }
+                if (route.view === 'customers') {
+                    const filter = has(allowed.customerFilters, route.filter) ? route.filter : 'all';
+                    const title = has(allowed.customerTitles, route.title) ? route.title : customerTitleByFilter[filter];
+                    return { view: 'customers', filter, title };
+                }
+                if (route.view === 'payments') {
+                    const filter = has(allowed.paymentFilters, route.filter) ? route.filter : 'all';
+                    const title = has(allowed.paymentTitles, route.title) ? route.title : paymentTitleByFilter[filter];
+                    return { view: 'payments', filter, title };
+                }
+                if (route.view === 'hotspot') {
+                    const section = has(allowed.hotspotSections, route.section) ? route.section : 'dashboard';
+                    const filter = has(allowed.hotspotFilters, route.filter) ? route.filter : 'all';
+                    const title = has(allowed.hotspotTitles, route.title) ? route.title : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : 'all_user');
+                    const voucherFilter = has(allowed.voucherFilters, route.filter) ? route.filter : 'all';
+                    return { view: 'hotspot', section, filter: section === 'vouchers' ? voucherFilter : filter, title };
+                }
+                if (route.view === 'olt') return { view: 'olt', mode: has(allowed.oltModes, route.mode) ? route.mode : 'overview' };
+                if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps', 'support'].indexOf(route.view) !== -1) {
+                    return { view: route.view };
+                }
+                return { view: 'dashboard' };
+            }
+            function readRoute() {
+                const params = new URLSearchParams(window.location.search);
+                const view = params.get('view');
+                if (!view && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
+                if (!view) return { view: 'dashboard' };
+                if (view === 'page') return cleanRoute({ view, page: params.get('page'), channel: params.get('channel') });
+                if (view === 'customers') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
+                if (view === 'payments') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
+                if (view === 'hotspot') return cleanRoute({
+                    view, section: params.get('section'), filter: params.get('filter'), title: params.get('title')
+                });
+                if (view === 'olt') return cleanRoute({ view, mode: params.get('mode') });
+                return cleanRoute({ view });
+            }
+            function routeUrl(route) {
+                const normalized = cleanRoute(route);
+                const params = new URLSearchParams();
+                params.set('view', normalized.view);
+                if (normalized.view === 'page') {
+                    params.set('page', normalized.page);
+                    if (normalized.channel) params.set('channel', normalized.channel);
+                } else if (normalized.view === 'customers' || normalized.view === 'payments') {
+                    params.set('filter', normalized.filter);
+                    params.set('title', normalized.title);
+                } else if (normalized.view === 'hotspot') {
+                    params.set('section', normalized.section);
+                    if (normalized.section === 'users' || normalized.section === 'vouchers') params.set('filter', normalized.filter);
+                    if (normalized.title) params.set('title', normalized.title);
+                } else if (normalized.view === 'olt') {
+                    params.set('mode', normalized.mode);
+                }
+                return window.location.pathname + '?' + params.toString();
+            }
+            function commitRoute(route, replace) {
+                const normalized = cleanRoute(route);
+                const url = routeUrl(normalized);
+                if (window.location.pathname + window.location.search !== url) {
+                    const method = replace ? 'replaceState' : 'pushState';
+                    window.history[method]({ fazAdminRoute: normalized }, '', url);
+                } else if (replace) {
+                    window.history.replaceState({ fazAdminRoute: normalized }, '', url);
+                }
+                state.current = normalized;
+                return normalized;
+            }
+            function callIfAvailable(name, args) {
+                const fn = window[name];
+                if (typeof fn !== 'function') {
+                    console.error('[Admin Routing] Required view handler is unavailable:', name);
+                    return false;
+                }
+                return fn.apply(window, args || []);
+            }
+            function dispatchRoute(route) {
+                const r = cleanRoute(route);
+                switch (r.view) {
+                    case 'dashboard':
+                        return callIfAvailable('switchView', ['dashboard']);
+                    case 'page':
+                        if (r.page === 'add-customer') return callIfAvailable('showAddCustomerForm');
+                        if (r.page === 'all-customer') return callIfAvailable('loadCustomerSection', ['all', 'all_customer']);
+                        if (r.page === 'payments') return callIfAvailable('loadPaymentsSection', [r.channel || 'all', 'all_payments']);
+                        return callIfAvailable('switchView', [r.page, r.channel || '']);
+                    case 'customers':
+                        return callIfAvailable('loadCustomerSection', [r.filter, r.title]);
+                    case 'payments':
+                        return callIfAvailable('loadPaymentsSection', [r.filter, r.title]);
+                    case 'hotspot':
+                        if (r.section === 'dashboard') return callIfAvailable('loadHotspotDashboard');
+                        if (r.section === 'users') return callIfAvailable('loadHotspotSection', [r.filter, r.title]);
+                        if (r.section === 'add-user') return callIfAvailable('loadAddHotspotUserView');
+                        if (r.section === 'profiles') return callIfAvailable('loadHotspotProfiles', ['hotspot_profile']);
+                        if (r.section === 'voucher-generator') return callIfAvailable('loadVoucherGeneratorSection');
+                        if (r.section === 'vouchers') return callIfAvailable('loadHotspotVoucherRecords', [r.filter, r.filter === 'cleanup' ? 'Expired & Cleanup' : 'Voucher Management']);
+                        if (r.section === 'sales') return callIfAvailable('loadHotspotVoucherSales');
+                        break;
+                    case 'devices': return callIfAvailable('loadDevices');
+                    case 'packages': return callIfAvailable('loadPlanPackages');
+                    case 'ip-pools': return callIfAvailable('loadIpPools');
+                    case 'olt': return callIfAvailable('loadOltManagement', [r.mode]);
+                    case 'staff': return callIfAvailable('loadStaffManagement');
+                    case 'audit': return callIfAvailable('loadAuditLogs');
+                    case 'maps': return callIfAvailable('loadGoogleMapTracking');
+                    case 'support': return callIfAvailable('loadSupportTickets');
+                }
+                return false;
+            }
+            function restoreRoute(route, replace) {
+                const normalized = commitRoute(route, Boolean(replace));
+                state.restoring = true;
+                try {
+                    const result = dispatchRoute(normalized);
+                    if (result && typeof result.catch === 'function') {
+                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
+                    }
+                    return result;
+                } catch (error) {
+                    console.error('[Admin Routing] View restore failed:', error);
+                    return false;
+                } finally {
+                    state.restoring = false;
+                }
+            }
+            function routeForCall(name, args) {
+                switch (name) {
+                    case 'switchView': {
+                        const page = String(args[0] || 'dashboard');
+                        if (page === 'dashboard') return { view: 'dashboard' };
+                        if (page === 'add-customer') return { view: 'page', page: 'add-customer' };
+                        if (page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
+                        if (page === 'payments') return { view: 'payments', filter: args[1] || 'all', title: paymentTitleByFilter[args[1] || 'all'] || 'all_payments' };
+                        if (page === 'general-settings') return { view: 'page', page };
+                        return null;
+                    }
+                    case 'showAddCustomerForm': return { view: 'page', page: 'add-customer' };
+                    case 'loadCustomerSection': {
+                        const filter = has(allowed.customerFilters, args[0]) ? args[0] : 'all';
+                        return { view: 'customers', filter, title: has(allowed.customerTitles, args[1]) ? args[1] : customerTitleByFilter[filter] };
+                    }
+                    case 'loadPaymentsSection': {
+                        const filter = has(allowed.paymentFilters, args[0]) ? args[0] : 'all';
+                        return { view: 'payments', filter, title: has(allowed.paymentTitles, args[1]) ? args[1] : paymentTitleByFilter[filter] };
+                    }
+                    case 'loadHotspotDashboard': return { view: 'hotspot', section: 'dashboard' };
+                    case 'loadHotspotSection': {
+                        const filter = has(allowed.hotspotFilters, args[0]) ? args[0] : 'all';
+                        return { view: 'hotspot', section: 'users', filter, title: has(allowed.hotspotTitles, args[1]) ? args[1] : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : 'all_user') };
+                    }
+                    case 'loadAddHotspotUserView': return { view: 'hotspot', section: 'add-user' };
+                    case 'loadHotspotProfiles': return { view: 'hotspot', section: 'profiles' };
+                    case 'loadVoucherGeneratorSection': return { view: 'hotspot', section: 'voucher-generator' };
+                    case 'loadHotspotVoucherRecords': {
+                        const filter = has(allowed.voucherFilters, args[0]) ? args[0] : 'all';
+                        return { view: 'hotspot', section: 'vouchers', filter };
+                    }
+                    case 'loadHotspotVoucherSales': return { view: 'hotspot', section: 'sales' };
+                    case 'loadDevices': return { view: 'devices' };
+                    case 'loadPlanPackages': return { view: 'packages' };
+                    case 'loadIpPools': return { view: 'ip-pools' };
+                    case 'loadOltManagement': return { view: 'olt', mode: args[0] || 'overview' };
+                    case 'loadStaffManagement': return { view: 'staff' };
+                    case 'loadAuditLogs': return { view: 'audit' };
+                    case 'loadGoogleMapTracking': return { view: 'maps' };
+                    case 'loadSupportTickets': return { view: 'support' };
+                    default: return null;
+                }
+            }
+            function closeDrawerAfterNavigation() {
+                if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') {
+                    window.closeSidebarMobile();
+                }
+            }
+            function wrapNavigation(name) {
+                const original = window[name];
+                if (typeof original !== 'function' || original.__fazRouteWrapped) return;
+                const wrapped = function() {
+                    const args = Array.prototype.slice.call(arguments);
+                    const isTopLevel = state.depth === 0;
+                    const route = routeForCall(name, args);
+                    if (isTopLevel && route && !state.restoring) commitRoute(route, false);
+                    state.depth++;
+                    let result;
+                    try {
+                        result = original.apply(this, args);
+                    } catch (error) {
+                        state.depth--;
+                        throw error;
+                    }
+                    state.depth--;
+                    if (isTopLevel && !state.restoring) closeDrawerAfterNavigation();
+                    return result;
+                };
+                wrapped.__fazRouteWrapped = true;
+                window[name] = wrapped;
+            }
+            [
+                'switchView', 'showAddCustomerForm', 'loadCustomerSection', 'loadPaymentsSection',
+                'loadHotspotDashboard', 'loadHotspotSection', 'loadAddHotspotUserView',
+                'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
+                'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
+                'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
+                'loadGoogleMapTracking', 'loadSupportTickets'
+            ].forEach(wrapNavigation);
+
+            window.__fazRestoreAdminRoute = function() {
+                restoreRoute(readRoute(), true);
+            };
+            window.addEventListener('popstate', function() {
+                restoreRoute(readRoute(), true);
+                closeDrawerAfterNavigation();
+            });
+        })();
+
         function initializeAdminRuntime() {
             try { initializeCustomerDateFormatGuard(); }
             catch (error) { console.error('[Customer Date Format] guard initialization failed:', error); }
@@ -5086,9 +5371,9 @@ async function deletePlan(id,name){
                 console.error('[Admin Boot] event binding failed:', error);
             }
 
-            // switchView('dashboard') owns the initial dashboard and traffic startup.
-            // Avoid issuing duplicate MikroTik requests during page initialization.
-            try { void safeAdminBootStep('switch dashboard view', () => switchView('dashboard')); }
+            // Restore the URL-selected view on first load; dashboard is only the default.
+            // The selected loader owns its existing data fetches and polling behavior.
+            try { void safeAdminBootStep('restore URL-selected view', () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard')); }
             catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
 
             try {
