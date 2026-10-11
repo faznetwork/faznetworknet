@@ -135,6 +135,8 @@
         .dashboard-round-offline{--round-color:#64748b;--round-tint:#f8fafc}
         .dashboard-round-collection{--round-color:#b45309;--round-tint:#fffbeb}
         .dashboard-round-router{--round-color:#6d28d9;--round-tint:#f5f3ff}
+        .hotspot-dashboard-shortcuts{justify-content:flex-start}
+        @media(max-width:575.98px){.hotspot-dashboard-shortcuts{gap:12px}}
         @media(max-width:575.98px){.dashboard-shortcuts{gap:12px}.dashboard-round-button{width:calc(50vw - 28px);height:calc(50vw - 28px);flex-basis:calc(50vw - 28px);max-width:158px;max-height:158px;min-width:132px;min-height:132px}.dashboard-round-button>strong{font-size:21px}.dashboard-round-label{font-size:11px}}
         .card-custom {
             border: none;
@@ -1589,7 +1591,14 @@
         async function loadHotspotDashboard(){
             purgeStuckBackdrops();
             currentHotspotMode='dashboard'; setHotspotTitle('hotspot_dashboard');
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-3 mb-4">'+
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view">'+
+            '<div class="dashboard-shortcuts hotspot-dashboard-shortcuts mb-4">'+
+            '<button type="button" class="dashboard-round-button dashboard-round-customers" onclick="window.loadHotspotSection(\'all\',\'all_user\')" title="Open all Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-people-fill"></i></span><strong id="hsRoundTotalUsers">—</strong><span class="dashboard-round-label">Total Hotspot Users</span><span class="dashboard-round-hint">View user list</span></button>'+
+            '<button type="button" class="dashboard-round-button dashboard-round-online" onclick="window.loadHotspotSection(\'active\',\'active_user\')" title="Open active Hotspot sessions"><span class="dashboard-round-icon"><i class="bi bi-wifi"></i></span><strong id="hsRoundActiveUsers">—</strong><span class="dashboard-round-label">Online</span><span class="dashboard-round-hint">Live sessions</span></button>'+
+            '<button type="button" class="dashboard-round-button dashboard-round-offline" onclick="window.loadHotspotSection(\'offline\',\'offline_user\')" title="Open offline Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-wifi-off"></i></span><strong id="hsRoundOfflineUsers">—</strong><span class="dashboard-round-label">Offline</span><span class="dashboard-round-hint">View offline list</span></button>'+
+            '<button type="button" class="dashboard-round-button dashboard-round-collection" onclick="window.loadHotspotVoucherSales()" title="Open Hotspot voucher sales history"><span class="dashboard-round-icon"><i class="bi bi-cash-coin"></i></span><strong id="hsRoundTodayRevenue" class="dashboard-round-amount">৳0.00</strong><span class="dashboard-round-label">Today\'s Collection</span><span class="dashboard-round-hint">Voucher sales</span></button>'+
+            '<button type="button" class="dashboard-round-button dashboard-round-router" onclick="window.loadDevices()" title="Open MikroTik devices"><span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><strong>Open</strong><span class="dashboard-round-label">MikroTik</span><span class="dashboard-round-hint">Device management</span></button>'+
+            '</div><div class="row g-3 mb-4">'+
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Hotspot Users</div><span id="hsTotalUsers" class="fs-3 fw-bold mt-1 d-block">0</span></div></div></div>'+
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active / Online Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
             '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Offline Users</div><span id="hsOfflineUsers" class="fs-3 fw-bold mt-1 d-block text-secondary">0</span></div></div></div>'+
@@ -1641,6 +1650,10 @@
                 safeSetText('hsActiveUsers',Number(d.activeUsers||0));
                 safeSetText('hsOfflineUsers',Number(d.offlineUsers||0));
                 safeSetText('hsTodayRevenue',Number(d.todayRevenue||0).toFixed(2));
+                safeSetText('hsRoundTotalUsers',Number(d.totalUsers||0).toLocaleString());
+                safeSetText('hsRoundActiveUsers',Number(d.activeUsers||0).toLocaleString());
+                safeSetText('hsRoundOfflineUsers',Number(d.offlineUsers||0).toLocaleString());
+                safeSetText('hsRoundTodayRevenue','৳'+Number(d.todayRevenue||0).toFixed(2));
                 const rows=Array.isArray(activeData.users)?activeData.users:[];
                 body.innerHTML=rows.length?rows.map(function(s){
                     return '<tr><td><strong>'+escapeHtml(s.username||'-')+'</strong></td><td class="font-monospace">'+escapeHtml(s.address||'-')+'</td><td class="font-monospace">'+escapeHtml(s.mac_address||'-')+'</td><td>'+escapeHtml(s.uptime||'-')+'</td></tr>';
@@ -1648,7 +1661,8 @@
                 const status=document.getElementById('hotspotDashboardStatus');
                 if(status){status.className='badge bg-success ms-auto';status.textContent='Live · '+Number(d.activeUsers||0)+' active';}
             }catch(error){
-                safeSetText('hsTotalUsers','0'); safeSetText('hsActiveUsers','0'); safeSetText('hsOfflineUsers','0'); safeSetText('hsTodayRevenue','0.00');
+                safeSetText('hsTotalUsers','—'); safeSetText('hsActiveUsers','—'); safeSetText('hsOfflineUsers','—'); safeSetText('hsTodayRevenue','—');
+                safeSetText('hsRoundTotalUsers','—'); safeSetText('hsRoundActiveUsers','—'); safeSetText('hsRoundOfflineUsers','—'); safeSetText('hsRoundTodayRevenue','—');
                 body.innerHTML='<tr><td colspan="4" class="text-center py-5 text-danger">'+escapeHtml(error.message||'Unable to load Hotspot dashboard.')+'</td></tr>';
                 const status=document.getElementById('hotspotDashboardStatus');
                 if(status){status.className='badge bg-danger ms-auto';status.textContent='Offline';}
@@ -1709,7 +1723,7 @@
             currentHotspotTitleKey=titleKey;
             setHotspotTitle(titleKey);
             appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');
-            try { const endpoint=filter==='active'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(filter); const data=await jsonFetch(endpoint); renderHotspotTable(data,filter,titleKey); }
+            try { const endpoint=filter==='active'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(filter==='offline'?'all':filter); const data=await jsonFetch(endpoint); if(filter==='offline'&&Array.isArray(data.users)){data.users=data.users.filter(function(user){return !(user.online&&typeof user.online==='object'?user.online.address||user.online.macAddress:user.online);});} renderHotspotTable(data,filter,titleKey); }
             catch(error){ appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message)+'</div></section>'); }
         }
 
