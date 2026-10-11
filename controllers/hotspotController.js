@@ -3,7 +3,7 @@ function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function errorResponse(res,e){console.error("[Hotspot API]",e);const message=e?.message||"Hotspot operation failed.";return res.status(e?.statusCode||503).json({success:false,users:[],profiles:[],message,error:message});}
 function randomPin(length=8){return crypto.randomBytes(Math.ceil(length*1.5)).toString("base64url").replace(/[^A-Za-z0-9]/g,"").slice(0,length).toUpperCase();}
 function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","active"].includes(filter)?filter:"all";}
-function validityMs(value){const m=String(value||"").trim().match(/^(\\d+(?:\\.\\d+)?)\\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!m)return 0;const n=Number(m[1]),u=m[2].toLowerCase();const unit=u.startsWith("m")?60000:u.startsWith("h")?3600000:u.startsWith("w")?604800000:86400000;return n*unit;}
+function validityMs(value){const m=String(value||"").trim().match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!m)return 0;const n=Number(m[1]),u=m[2].toLowerCase();const unit=u.startsWith("m")?60000:u.startsWith("h")?3600000:u.startsWith("w")?604800000:86400000;return n*unit;}
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
 async function page(req,res){res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"});}
 async function readProfileMetadata(){const r=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");try{const v=JSON.parse(r.rows[0]?.value||"{}");return v&&typeof v==="object"&&!Array.isArray(v)?v:{};}catch(_){return {};}}
@@ -93,9 +93,10 @@ async function generate(req,res){
    return res.status(400).json({success:false,error:"Profile, validity, and a non-negative price are required."});
  if(!Number.isSafeInteger(charLength)||charLength<4||charLength>16)
    return res.status(400).json({success:false,error:"Character length must be a whole number between 4 and 16."});
- if(!/^(\\d+(?:\\.\\d+)?)\\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i.test(validity))
+ if(!/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i.test(validity))
    return res.status(400).json({success:false,error:"Validity must use a supported duration such as 30m, 2h, 1d, or 1w."});
  const provisioned=[];
+ const persisted=[];
  const created=[];
  try {
    // Validate the target profile and snapshot existing RouterOS names once per batch.
@@ -126,6 +127,7 @@ async function generate(req,res){
      provisioned.push(candidate.username);
      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",
        [candidate.username,candidate.password,profile,validity,price,"Auto-Generated"]);
+     persisted.push(candidate.username);
      created.push({...candidate,profile,validity,price,status:"unused"});
    }
    return res.json({success:true,count:created.length,vouchers:created});
@@ -137,7 +139,7 @@ async function generate(req,res){
      try { await mikrotikService.removeHotspotUser(username); removed=true; }
      catch(cleanupError){ cleanupErrors.push({username,error:cleanupError.message||"RouterOS cleanup failed"}); }
      try {
-       await db.query(
+       if(persisted.some(saved=>saved.toLowerCase()===username.toLowerCase())) await db.query(
          "UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status=$2,cleanup_error=$3,router_removed_at=CASE WHEN $2='completed' THEN COALESCE(router_removed_at,NOW()) ELSE router_removed_at END,updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
          [username,removed?"completed":"failed",removed?null:(cleanupErrors.find(x=>x.username===username)?.error||"RouterOS cleanup failed")]
        );
