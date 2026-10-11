@@ -3506,7 +3506,7 @@ async function deletePlan(id,name){
         window.loadStaffInvitations = async function(mode = currentStaffMode) {
             const body = document.getElementById('rbacInvitationsBody');
             if (!body) return false;
-            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            currentStaffMode = ['sub-staff','account-manage'].includes(mode) ? mode : 'all';
             window.__fazStaffMode = currentStaffMode;
             body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading invitations…</td></tr>';
             try {
@@ -3533,19 +3533,19 @@ async function deletePlan(id,name){
         };
 
         window.loadStaffManagement = async function(mode = 'all') {
-            currentStaffMode = mode === 'sub-staff' ? 'sub-staff' : 'all';
+            currentStaffMode = ['sub-staff','account-manage'].includes(mode) ? mode : 'all';
             window.__fazStaffMode = currentStaffMode;
             if (typeof window.switchView === 'function') window.switchView('staff-management');
-            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : 'Staff Management';
+            const title = currentStaffMode === 'sub-staff' ? 'Sub-Staff' : currentStaffMode === 'account-manage' ? 'Account Management' : 'Staff Management';
             setPageTitleSafe(title);
             const heading = document.getElementById('rbacStaffHeading');
             const createHeading = document.getElementById('rbacCreateAccountHeading');
             const accountsHeading = document.getElementById('rbacAccountsHeading');
             const invitesHeading = document.getElementById('rbacInvitationsHeading');
             if (heading) heading.textContent = title;
-            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : 'Create Admin / Staff Account';
-            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : 'Accounts';
-            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : 'Pending Invitations';
+            if (createHeading) createHeading.textContent = currentStaffMode === 'sub-staff' ? 'Create Sub-Staff Account' : currentStaffMode === 'account-manage' ? 'Create Account' : 'Create Admin / Staff Account';
+            if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : currentStaffMode === 'account-manage' ? 'Managed Accounts' : 'Accounts';
+            if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : currentStaffMode === 'account-manage' ? 'Account Invitations' : 'Pending Invitations';
             const roleSelect = document.getElementById('rbacRole');
             if (roleSelect) {
                 Array.from(roleSelect.options).forEach(option => {
