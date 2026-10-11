@@ -108,7 +108,7 @@ function createHotspotExpirationCleanup(deps = {}) {
 
         const comment = String(user?.comment || "");
         const firstLogin = parseFirstLoginAt(comment);
-        const hasLoginMarker = Boolean(user && /FAZ\\|PROFILE=/i.test(comment));
+        const hasLoginMarker = Boolean(user && /FAZ\|PROFILE=/i.test(comment));
         let effectiveStatus = voucher.status;
         let expiryAt = voucher.expires_at ? new Date(voucher.expires_at) : null;
         if (expiryAt && Number.isNaN(expiryAt.getTime())) expiryAt = null;
