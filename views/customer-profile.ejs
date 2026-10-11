@@ -189,10 +189,10 @@ async function loadNetworkMap(){
     $('topoOnu').textContent=t.onuId||'ONU —';
     $('topoOnuMac').textContent='ONU MAC '+(!t.stale&&t.onuMac?t.onuMac:(t.stale?'Not verified · telemetry stale':'Not verified by live OLT'));
     $('topoRx').textContent='RX '+(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm');
-    const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
-    const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
+    const health=t.stale?'Telemetry Stale':t.signalLevel==='critical'?'High Loss Alert':t.signalLevel==='warning'?'Marginal Warning':t.signalLevel==='high'?'High RX':t.signalLevel==='good'?'Optimal':String(t.status||'Unknown');
+    const healthClass=t.stale?'warning':t.signalLevel==='critical'?'bad':t.signalLevel==='warning'||t.signalLevel==='high'?'warning':t.signalLevel==='good'?'good':'';
     $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span>';
-    $('topologyOverall').textContent=t.stale?'Telemetry stale':(t.status==='online'&&!t.stale?'Live telemetry':'Telemetry received');
+    $('topologyOverall').textContent=t.stale?'Telemetry stale':(t.signalLevel==='critical'?'High Loss Alert':t.signalLevel==='warning'?'Marginal Warning':t.signalLevel==='high'?'High RX':t.signalLevel==='good'?'Optical Optimal':String(t.status||'Telemetry received'));
     $('topologyOverall').className='topology-health '+healthClass;
     $('topologyFootnote').textContent='OLT '+(t.oltId||'—')+' · last observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—')+'. ONU MAC is shown only from fresh, authenticated OLT telemetry; saved fields and PPPoE caller-id are not treated as live ONU MAC.';
 
@@ -202,7 +202,7 @@ async function loadNetworkMap(){
     if(!t.stale&&t.onuMac)$('topoOnuMac').dataset.loaded='true';
     if(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined)$('topoRx').dataset.loaded='true';
     $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
-    $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');
+    $('onuRxPowerValue').className='metric mono '+(t.stale||t.signalLevel==='critical'?'text-danger':t.signalLevel==='warning'||t.signalLevel==='high'?'text-warning':t.signalLevel==='good'?'text-success':'');
     $('onuRxPowerSource').textContent=(t.stale?'STALE · ':'')+'OLT '+(t.oltId||'—')+' · PON '+(t.ponPort||'—')+' · ONU '+(t.onuId||'—')+' · observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—');
     $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
     $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');

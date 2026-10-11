@@ -1196,15 +1196,41 @@ async function resolveCustomer360(idValue){
       `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
               pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
               tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
-              received_at AS "receivedAt",source_agent AS "sourceAgent"
+              received_at AS "receivedAt",source_agent AS "sourceAgent",
+              pppoe_username AS "pppoeUsername"
        FROM olt_telemetry
-       WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
-          OR onu_mac = CASE
-               WHEN regexp_replace(COALESCE($2,''), '-', ':', 'g') ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$'
-               THEN regexp_replace($2, '-', ':', 'g')::macaddr
+       WHERE regexp_replace(lower(onu_mac::text), '[^0-9a-f]', '', 'g') =
+         CASE
+           WHEN NULLIF(BTRIM($2), '') IS NOT NULL THEN
+             CASE WHEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
+                  THEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g')
+                  ELSE NULL END
+           ELSE
+             CASE
+               WHEN regexp_replace(lower(COALESCE(
+                 (SELECT caller_id FROM pppoe_live_sessions
+                  WHERE LOWER(username)=LOWER($1)
+                    AND received_at >= NOW() - INTERVAL '3 minutes'
+                    AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
+                  ORDER BY received_at DESC LIMIT 1),
+                 (SELECT caller_id FROM pppoe_users
+                  WHERE LOWER(username)=LOWER($1) LIMIT 1),
+                 ''
+               )), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
+               THEN regexp_replace(lower(COALESCE(
+                 (SELECT caller_id FROM pppoe_live_sessions
+                  WHERE LOWER(username)=LOWER($1)
+                    AND received_at >= NOW() - INTERVAL '3 minutes'
+                    AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
+                  ORDER BY received_at DESC LIMIT 1),
+                 (SELECT caller_id FROM pppoe_users
+                  WHERE LOWER(username)=LOWER($1) LIMIT 1),
+                 ''
+               )), '[^0-9a-f]', '', 'g')
                ELSE NULL
              END
-       ORDER BY (LOWER(COALESCE(pppoe_username,''))=LOWER($1)) DESC, observed_at DESC LIMIT 1`,
+         END
+       ORDER BY observed_at DESC NULLS LAST LIMIT 1`,
       [username, clean(customer.onu_mac,100)]
     )
   ]);
@@ -1220,7 +1246,7 @@ async function resolveCustomer360(idValue){
     ...telemetryRow,
     stale:!telemetryRow.receivedAt||!Number.isFinite(new Date(telemetryRow.receivedAt).getTime())||Date.now()-new Date(telemetryRow.receivedAt).getTime()>15*60*1000,
     signalLevel:telemetryRow.rxPowerDbm===null||telemetryRow.rxPowerDbm===undefined||!Number.isFinite(Number(telemetryRow.rxPowerDbm))
-      ?"unknown":Number(telemetryRow.rxPowerDbm)<-27?"weak":Number(telemetryRow.rxPowerDbm)<=-25?"warning":"good"
+      ?"unknown":Number(telemetryRow.rxPowerDbm)<=-27?"critical":Number(telemetryRow.rxPowerDbm)<-23?"warning":Number(telemetryRow.rxPowerDbm)>-12?"high":"good"
   }:null;
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
