@@ -19,9 +19,9 @@ function conflict(res, e, message) {
 
 exports.listDepartments = async (req,res) => {
   try {
-    const r = await db.query(\`SELECT d.id,d.name,d.description,d.status,d.created_by,d.created_at,d.updated_at,COUNT(e.id)::int employee_count
+    const r = await db.query(`SELECT d.id,d.name,d.description,d.status,d.created_by,d.created_at,d.updated_at,COUNT(e.id)::int employee_count
       FROM hr_departments d LEFT JOIN hr_employees e ON e.department_id=d.id
-      GROUP BY d.id ORDER BY CASE WHEN d.status='active' THEN 0 ELSE 1 END,d.name ASC,d.id ASC\`);
+      GROUP BY d.id ORDER BY CASE WHEN d.status='active' THEN 0 ELSE 1 END,d.name ASC,d.id ASC`);
     return res.json({success:true,departments:r.rows});
   } catch(e) { console.error('[HR] Department list failed:',e?.message||e); return res.status(500).json({success:false,message:'Unable to load departments.'}); }
 };
@@ -59,8 +59,8 @@ exports.listEmployees = async (req,res) => {
     const sort=String(req.query?.sort||'name').toLowerCase()==='added'?'added':'name';
     const order=sort==='added'?'e.created_at DESC,e.id DESC':'e.full_name ASC,e.id ASC';
     const [r,d]=await Promise.all([
-      db.query(\`SELECT e.id,e.employee_code,e.full_name,e.phone,e.email,e.department_id,d.name department_name,e.designation,e.joining_date,e.status,e.notes,e.created_by,e.created_at,e.updated_at
-        FROM hr_employees e LEFT JOIN hr_departments d ON d.id=e.department_id ORDER BY \${order} LIMIT 2000\`),
+      db.query(`SELECT e.id,e.employee_code,e.full_name,e.phone,e.email,e.department_id,d.name department_name,e.designation,e.joining_date,e.status,e.notes,e.created_by,e.created_at,e.updated_at
+        FROM hr_employees e LEFT JOIN hr_departments d ON d.id=e.department_id ORDER BY \${order} LIMIT 2000`),
       db.query("SELECT id,name FROM hr_departments WHERE status='active' ORDER BY name ASC")
     ]);
     return res.json({success:true,sort,employees:r.rows,departments:d.rows});
@@ -78,9 +78,9 @@ exports.createEmployee = async (req,res) => {
   if(x.error)return res.status(400).json({success:false,message:x.error});
   try {
     if(x.department_id!==null){const d=await db.query('SELECT id FROM hr_departments WHERE id=$1',[x.department_id]);if(!d.rowCount)return res.status(400).json({success:false,message:'Select an existing department.'});}
-    const r=await db.query(\`INSERT INTO hr_employees(employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by)
+    const r=await db.query(`INSERT INTO hr_employees(employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING id,employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by,created_at,updated_at\`,
+      RETURNING id,employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by,created_at,updated_at`,
       [x.employee_code,x.full_name,x.phone,x.email,x.department_id,x.designation,x.joining_date,x.status,x.notes,clean(req.session?.adminUser||'admin',100)]);
     return res.status(201).json({success:true,employee:r.rows[0]});
   } catch(e){return conflict(res,e,'Unable to create employee.');}
@@ -90,8 +90,8 @@ exports.updateEmployee = async (req,res) => {
   if(!validId(id)||x.error)return res.status(400).json({success:false,message:x.error||'Invalid employee ID.'});
   try {
     if(x.department_id!==null){const d=await db.query('SELECT id FROM hr_departments WHERE id=$1',[x.department_id]);if(!d.rowCount)return res.status(400).json({success:false,message:'Select an existing department.'});}
-    const r=await db.query(\`UPDATE hr_employees SET employee_code=$1,full_name=$2,phone=$3,email=$4,department_id=$5,designation=$6,joining_date=$7,status=$8,notes=$9,updated_at=NOW()
-      WHERE id=$10 RETURNING id,employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by,created_at,updated_at\`,
+    const r=await db.query(`UPDATE hr_employees SET employee_code=$1,full_name=$2,phone=$3,email=$4,department_id=$5,designation=$6,joining_date=$7,status=$8,notes=$9,updated_at=NOW()
+      WHERE id=$10 RETURNING id,employee_code,full_name,phone,email,department_id,designation,joining_date,status,notes,created_by,created_at,updated_at`,
       [x.employee_code,x.full_name,x.phone,x.email,x.department_id,x.designation,x.joining_date,x.status,x.notes,id]);
     if(!r.rowCount)return res.status(404).json({success:false,message:'Employee not found.'});
     return res.json({success:true,employee:r.rows[0]});
