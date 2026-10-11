@@ -3671,6 +3671,82 @@ async function deletePlan(id,name){
             }
         };
 
+
+        window.loadVpnModule = async function() {
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return false;
+            if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+            setPageTitleSafe('VPN Server');
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Router Security</div><h2 class="h5 fw-bold mb-1">VPN Server Inventory</h2><p class="small text-muted mb-0">Read-only view of VPN services configured on the connected MikroTik router.</p></div><button type="button" class="btn btn-outline-success" onclick="window.loadVpnModule()"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></div><div class="alert alert-warning small"><i class="bi bi-shield-lock me-2"></i>Read-only for production safety. VPN configuration changes are disabled here to avoid disconnecting remote users.</div><div id="vpnInventoryContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Reading router VPN settings…</div></div></div></div></section>';
+            const content = root.querySelector('#vpnInventoryContent');
+            try {
+                const data = await window.jsonFetch('/api/router/vpn');
+                const sections = data.sections || {};
+                const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+                const configs = [
+                    {key:'wireguard',title:'WireGuard Interfaces',columns:[['name','Name'],['listenPort','Listen port'],['mtu','MTU'],['disabled','Disabled']]},
+                    {key:'l2tp',title:'L2TP Server',columns:[['enabled','Enabled'],['useIpsec','Use IPsec'],['defaultProfile','Default profile'],['authentication','Authentication'],['maxSessions','Max sessions']]},
+                    {key:'sstp',title:'SSTP Server',columns:[['enabled','Enabled'],['port','Port'],['certificate','Certificate'],['authentication','Authentication'],['defaultProfile','Default profile']]},
+                    {key:'openvpn',title:'OpenVPN Server',columns:[['enabled','Enabled'],['port','Port'],['mode','Mode'],['certificate','Certificate'],['authentication','Authentication'],['defaultProfile','Default profile']]},
+                    {key:'ipsecPeers',title:'IPsec Peers',columns:[['name','Name'],['address','Peer address'],['localAddress','Local address'],['profile','Profile'],['exchangeMode','Exchange mode'],['disabled','Disabled']]}
+                ];
+                const count = configs.reduce((sum, config) => sum + (Array.isArray(sections[config.key]) ? sections[config.key].length : 0), 0);
+                const renderSection = config => {
+                    const rows = Array.isArray(sections[config.key]) ? sections[config.key] : [];
+                    return '<div class="card border rounded-4 mb-3"><div class="card-header bg-white d-flex justify-content-between align-items-center gap-2"><strong>' + escapeHtml(config.title) + '</strong><span class="badge text-bg-light border">' + rows.length + '</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>' + config.columns.map(col => '<th>' + escapeHtml(col[1]) + '</th>').join('') + '</tr></thead><tbody>' +
+                        (rows.length ? rows.map(row => '<tr>' + config.columns.map(col => {
+                            let value = row[col[0]];
+                            if (typeof value === 'boolean') value = value ? 'Yes' : 'No';
+                            return '<td class="text-break">' + escapeHtml(value === null || value === undefined || value === '' ? '—' : String(value)) + '</td>';
+                        }).join('') + '</tr>').join('') : '<tr><td colspan="' + config.columns.length + '" class="text-center text-muted py-3">No entries returned.</td></tr>') +
+                        '</tbody></table></div></div>';
+                };
+                content.innerHTML = (data.degraded ? '<div class="alert alert-danger">Router VPN inventory is unavailable: ' + escapeHtml(data.error || 'connection failed') + '</div>' : '') +
+                    '<div class="row g-3 mb-3"><div class="col-12 col-sm-6"><div class="border rounded-4 p-3"><div class="small text-muted">VPN entries returned</div><div class="h3 fw-bold mb-0">' + count + '</div></div></div><div class="col-12 col-sm-6"><div class="border rounded-4 p-3"><div class="small text-muted">Configuration scope</div><div class="fw-semibold">Connected MikroTik only</div></div></div></div>' +
+                    (warnings.length ? '<div class="alert alert-info small"><strong>Some sections were unavailable:</strong><ul class="mb-0 mt-1">' + warnings.map(w => '<li>' + escapeHtml(w.section) + ': ' + escapeHtml(w.message) + '</li>').join('') + '</ul></div>' : '') +
+                    configs.map(renderSection).join('');
+                return true;
+            } catch (error) {
+                content.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error.message || 'Unable to read VPN settings.') + '</div>';
+                return false;
+            }
+        };
+
+        window.loadPortForwarding = async function() {
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return false;
+            if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+            if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+            let root = document.getElementById('fazDynamicModuleRoot');
+            if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            root.style.display = 'block';
+            if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+            setPageTitleSafe('VPN Port Forwarding');
+            root.innerHTML = '<section class="p-2 p-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body p-3 p-md-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="small text-success fw-bold text-uppercase">FAZ NETWORK · Firewall NAT</div><h2 class="h5 fw-bold mb-1">Port Forwarding Rules</h2><p class="small text-muted mb-0">Destination-NAT rules currently configured on the connected MikroTik router.</p></div><button type="button" class="btn btn-outline-success" onclick="window.loadPortForwarding()"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></div><div class="alert alert-warning small"><i class="bi bi-shield-lock me-2"></i>Read-only view. Creating or changing firewall rules can interrupt production traffic and is not enabled here.</div><div id="portForwardingContent"><div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading destination-NAT rules…</div></div></div></div></section>';
+            const content = root.querySelector('#portForwardingContent');
+            try {
+                const data = await window.jsonFetch('/api/router/port-forwarding');
+                const rules = Array.isArray(data.rules) ? data.rules : [];
+                const rows = rules.map(rule => '<tr><td><div class="fw-semibold">' + escapeHtml(rule.comment || 'Unnamed rule') + '</div><div class="small text-muted">' + escapeHtml(rule.id || '') + '</div></td><td>' + escapeHtml(rule.protocol || '—') + '</td><td class="text-break">' + escapeHtml(rule.destinationAddress || 'Any') + (rule.destinationPort ? ':' + escapeHtml(rule.destinationPort) : '') + '</td><td class="text-break">' + escapeHtml(rule.incomingInterface || 'Any') + '</td><td class="text-break">' + escapeHtml(rule.targetAddress || '—') + (rule.targetPort ? ':' + escapeHtml(rule.targetPort) : '') + '</td><td>' + escapeHtml(rule.action || '—') + '</td><td><span class="badge ' + (rule.disabled ? 'text-bg-secondary' : 'text-bg-success') + '">' + (rule.disabled ? 'Disabled' : 'Enabled') + '</span></td></tr>').join('');
+                content.innerHTML = (data.degraded ? '<div class="alert alert-danger">Port-forwarding rules are unavailable: ' + escapeHtml(data.error || 'connection failed') + '</div>' : '') +
+                    '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h3 class="h6 fw-bold mb-0">Destination NAT</h3><span class="badge text-bg-light border">' + rules.length + ' rules</span></div>' +
+                    '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Rule / Comment</th><th>Protocol</th><th>Destination</th><th>Incoming interface</th><th>Forward target</th><th>Action</th><th>Status</th></tr></thead><tbody>' +
+                    (rules.length ? rows : '<tr><td colspan="7" class="text-center text-muted py-4">No destination-NAT rules were returned.</td></tr>') +
+                    '</tbody></table></div>';
+                return true;
+            } catch (error) {
+                content.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error.message || 'Unable to load port-forwarding rules.') + '</div>';
+                return false;
+            }
+        };
+
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
@@ -5621,8 +5697,6 @@ async function deletePlan(id,name){
                 bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
             };
             const moduleTitles = {
-                'vpn': 'VPN Server',
-                'vpn-port-forwarding': 'VPN Port Forwarding',
             };
             const state = { depth: 0, restoring: false, current: null };
 
@@ -5668,6 +5742,8 @@ async function deletePlan(id,name){
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
                 if (route.view === 'account-manage') return { view: 'account-manage' };
+                if (route.view === 'vpn') return { view: 'vpn' };
+                if (route.view === 'vpn-port-forwarding') return { view: 'vpn-port-forwarding' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5719,8 +5795,8 @@ async function deletePlan(id,name){
                     '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
                     '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
-                    '/admin/vpn': { view: 'module', module: 'vpn' },
-                    '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
+                    '/admin/vpn': { view: 'vpn' },
+                    '/admin/vpn/port-forwarding': { view: 'vpn-port-forwarding' },
                     '/admin/account/dashboard': { view: 'account-dashboard' },
                     '/admin/account/manage': { view: 'account-manage' },
                     '/admin/support/software': { view: 'support', category: 'software' },
@@ -5795,6 +5871,8 @@ async function deletePlan(id,name){
                 if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
                 if (normalized.view === 'account-dashboard') return '/admin/account/dashboard';
                 if (normalized.view === 'account-manage') return '/admin/account/manage';
+                if (normalized.view === 'vpn') return '/admin/vpn';
+                if (normalized.view === 'vpn-port-forwarding') return '/admin/vpn/port-forwarding';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5864,6 +5942,8 @@ async function deletePlan(id,name){
                     case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
                     case 'account-dashboard': return callIfAvailable('loadAccountDashboard');
                     case 'account-manage': return callIfAvailable('loadStaffManagement', ['account-manage']);
+                    case 'vpn': return callIfAvailable('loadVpnModule');
+                    case 'vpn-port-forwarding': return callIfAvailable('loadPortForwarding');
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
@@ -5966,6 +6046,9 @@ async function deletePlan(id,name){
                     case 'loadHRModule': return { view: 'hr', section: ['departments','employees','added'].includes(String(args[0] || 'employees')) ? String(args[0] || 'employees') : 'employees' };
                     case 'loadNetworkDiagram': return { view: 'network-diagram' };
                     case 'loadNetworkMonitor': return { view: 'monitor', mode: String(args[0] || 'online') === 'usage' ? 'usage' : 'online' };
+                    case 'loadAccountDashboard': return { view: 'account-dashboard' };
+                    case 'loadVpnModule': return { view: 'vpn' };
+                    case 'loadPortForwarding': return { view: 'vpn-port-forwarding' };
                     default: return null;
                 }
             }
@@ -6003,7 +6086,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard', 'loadVpnModule', 'loadPortForwarding'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {

@@ -567,6 +567,70 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
     });
   }
+  async getVpnInventory() {
+    return this._withConnection("VPN inventory query", async (connection) => {
+      const sections = {};
+      const warnings = [];
+      const commands = [
+        {
+          key: "wireguard", label: "WireGuard",
+          path: "/interface/wireguard/print",
+          map: (item) => ({ id: this._str(item[".id"]), name: this._str(item.name), listenPort: this._str(item["listen-port"]), mtu: this._str(item.mtu), disabled: this._bool(item.disabled) })
+        },
+        {
+          key: "l2tp", label: "L2TP Server",
+          path: "/interface/l2tp-server/server/print",
+          map: (item) => ({ enabled: !this._bool(item.disabled), useIpsec: this._str(item["use-ipsec"]), defaultProfile: this._str(item["default-profile"]), authentication: this._str(item.authentication), maxSessions: this._str(item["max-sessions"]) })
+        },
+        {
+          key: "sstp", label: "SSTP Server",
+          path: "/interface/sstp-server/server/print",
+          map: (item) => ({ enabled: !this._bool(item.disabled), port: this._str(item.port), certificate: this._str(item.certificate), authentication: this._str(item.authentication), defaultProfile: this._str(item["default-profile"]), maxSessions: this._str(item["max-sessions"]) })
+        },
+        {
+          key: "openvpn", label: "OpenVPN Server",
+          path: "/interface/ovpn-server/server/print",
+          map: (item) => ({ enabled: !this._bool(item.disabled), port: this._str(item.port), mode: this._str(item.mode), certificate: this._str(item.certificate), authentication: this._str(item.auth), defaultProfile: this._str(item["default-profile"]), maxSessions: this._str(item["max-sessions"]) })
+        },
+        {
+          key: "ipsecPeers", label: "IPsec Peers",
+          path: "/ip/ipsec/peer/print",
+          map: (item) => ({ id: this._str(item[".id"]), name: this._str(item.name), address: this._str(item.address), localAddress: this._str(item["local-address"]), profile: this._str(item.profile), exchangeMode: this._str(item["exchange-mode"]), disabled: this._bool(item.disabled) })
+        }
+      ];
+      for (const command of commands) {
+        try {
+          const rows = await connection.write(command.path);
+          sections[command.key] = (Array.isArray(rows) ? rows : []).map(command.map);
+        } catch (error) {
+          sections[command.key] = [];
+          warnings.push({ section: command.label, message: "Not available on this RouterOS version or not configured." });
+        }
+      }
+      return { sections, warnings };
+    });
+  }
+
+  async getPortForwardRules() {
+    return this._withConnection("port forwarding inventory query", async (connection) => {
+      const rows = await connection.write("/ip/firewall/nat/print");
+      return (Array.isArray(rows) ? rows : [])
+        .filter((item) => this._str(item.chain).toLowerCase() === "dstnat")
+        .map((item) => ({
+          id: this._str(item[".id"]),
+          action: this._str(item.action),
+          protocol: this._str(item.protocol),
+          destinationAddress: this._str(item["dst-address"]),
+          destinationPort: this._str(item["dst-port"]),
+          incomingInterface: this._str(item["in-interface"]),
+          targetAddress: this._str(item["to-addresses"]),
+          targetPort: this._str(item["to-ports"]),
+          comment: this._str(item.comment),
+          disabled: this._bool(item.disabled)
+        }));
+    });
+  }
+
   async getHotspotUsers() {
     return this._withConnection("Hotspot user query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/print");
