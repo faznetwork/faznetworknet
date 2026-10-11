@@ -54,3 +54,24 @@ exports.traffic = async (req, res) => {
     sendFallback(res, "traffic query", error, { traffic: { rxMbps: 0, txMbps: 0, rxBps: 0, txBps: 0 } });
   }
 };
+
+exports.vpn = async (req, res) => {
+  try {
+    const inventory = await mikrotikService.getVpnInventory();
+    return res.json({ success: true, ...inventory });
+  } catch (error) {
+    return sendFallback(res, "VPN inventory", error, {
+      sections: { wireguard: [], l2tp: [], sstp: [], openvpn: [], ipsecPeers: [] },
+      warnings: [{ section: "VPN inventory", message: "MikroTik VPN configuration could not be read." }]
+    });
+  }
+};
+
+exports.portForwarding = async (req, res) => {
+  try {
+    const rules = await mikrotikService.getPortForwardRules();
+    return res.json({ success: true, rules });
+  } catch (error) {
+    return sendFallback(res, "port forwarding inventory", error, { rules: [] });
+  }
+};
