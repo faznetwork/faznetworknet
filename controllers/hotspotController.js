@@ -169,7 +169,7 @@ async function kick(req,res){try{const username=clean(req.body.username,100),id=
 async function remove(req,res){try{
  const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
  await mikrotikService.removeHotspotUser(username);
- await db.query("UPDATE hotspot_vouchers SET status='expired' WHERE username=$1",[username]);
+ await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='completed',cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,NOW()),updated_at=NOW() WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
 module.exports={page,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,kick,remove};
