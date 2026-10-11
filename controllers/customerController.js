@@ -1133,8 +1133,13 @@ async function resolveCustomer360(idValue){
               received_at AS "receivedAt",source_agent AS "sourceAgent"
        FROM olt_telemetry
        WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
+          OR onu_mac = CASE
+               WHEN regexp_replace(COALESCE($2,''), '-', ':', 'g') ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$'
+               THEN regexp_replace($2, '-', ':', 'g')::macaddr
+               ELSE NULL
+             END
        ORDER BY observed_at DESC LIMIT 1`,
-      [username]
+      [username, clean(customer.onu_mac,100)]
     )
   ]);
   const secret=routerRecordResult.status==="fulfilled"?routerRecordResult.value.rows?.[0]||null:null;
