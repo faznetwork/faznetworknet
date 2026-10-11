@@ -79,29 +79,82 @@ async function disconnectActive(req,res){
   return res.json({success:true,...result});
  }catch(e){return errorResponse(res,e);}
 }
-async function generate(req,res){try{
- const quantity=Math.min(Math.max(Number(req.body.quantity)||0,1),500);
- const profile=clean(req.body.profile,100),validity=clean(req.body.validity,50),price=Number(req.body.price);
- const userPrefix=clean(req.body.userPrefix||"FAZ-",20).replace(/[^A-Za-z0-9_-]/g,"")||"FAZ-";
- const charLength=Math.min(Math.max(Number(req.body.charLength)||6,4),16);
- if(!profile||!validity||!Number.isFinite(price)||price<0)return res.status(400).json({success:false,error:"Profile, validity, and valid price are required."});
+async function generate(req,res){
+ const body=req.body||{};
+ const quantity=Number(body.quantity);
+ const profile=clean(body.profile,100);
+ const validity=clean(body.validity,50);
+ const price=Number(body.price);
+ const userPrefix=clean(body.userPrefix||"FAZ-",20).replace(/[^A-Za-z0-9_-]/g,"")||"FAZ-";
+ const charLength=Number(body.charLength||6);
+ if(!Number.isSafeInteger(quantity)||quantity<1||quantity>500)
+   return res.status(400).json({success:false,error:"Quantity must be a whole number between 1 and 500."});
+ if(!profile||!validity||!Number.isFinite(price)||price<0)
+   return res.status(400).json({success:false,error:"Profile, validity, and a non-negative price are required."});
+ if(!Number.isSafeInteger(charLength)||charLength<4||charLength>16)
+   return res.status(400).json({success:false,error:"Character length must be a whole number between 4 and 16."});
+ if(!/^(\\d+(?:\\.\\d+)?)\\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i.test(validity))
+   return res.status(400).json({success:false,error:"Validity must use a supported duration such as 30m, 2h, 1d, or 1w."});
+ const provisioned=[];
  const created=[];
- for(let i=0;i<quantity;i++){
-   let username="",password="",unique=false;
-   for(let attempt=0;attempt<30&&!unique;attempt++){
-     username=userPrefix+randomPin(charLength); password=randomPin(charLength);
-     const exists=await db.query("SELECT 1 FROM hotspot_vouchers WHERE username=$1",[username]);
-     unique=!exists.rows.length;
+ try {
+   // Validate the target profile and snapshot existing RouterOS names once per batch.
+   const [profiles,routerUsers]=await Promise.all([
+     mikrotikService.getHotspotProfiles(),
+     mikrotikService.getHotspotUsers()
+   ]);
+   if(!(Array.isArray(profiles)?profiles:[]).some(p=>String(p.name||"").toLowerCase()===profile.toLowerCase()))
+     return res.status(400).json({success:false,error:"The selected Hotspot profile does not exist on MikroTik."});
+   const routerNames=new Set((Array.isArray(routerUsers)?routerUsers:[]).map(u=>String(u.username||"").trim().toLowerCase()).filter(Boolean));
+   const reservedNames=new Set();
+   const candidates=[];
+   // Reserve the complete batch before provisioning so intra-batch collisions cannot occur.
+   for(let i=0;i<quantity;i++){
+     let username="",password="",unique=false;
+     for(let attempt=0;attempt<50&&!unique;attempt++){
+       username=userPrefix+randomPin(charLength);
+       const key=username.toLowerCase();
+       if(routerNames.has(key)||reservedNames.has(key)) continue;
+       const exists=await db.query("SELECT 1 FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+       if(!exists.rows.length){unique=true;reservedNames.add(key);password=randomPin(charLength);}
+     }
+     if(!unique) throw new Error("Could not reserve enough unique voucher usernames. No voucher was provisioned; try a longer prefix or character length.");
+     candidates.push({username,password});
    }
-   if(!unique)throw new Error("Could not generate a unique voucher username. Please try again.");
-   await mikrotikService.createHotspotUser({username,password,profile,comment:"Auto-Generated"});
-   try{
-     await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",[username,password,profile,validity,price,"Auto-Generated"]);
-   }catch(dbError){try{await mikrotikService.removeHotspotUser(username);}catch(_){ }throw dbError;}
-   created.push({username,password,profile,validity,price,status:"unused"});
+   for(const candidate of candidates){
+     await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,comment:"Auto-Generated"});
+     provisioned.push(candidate.username);
+     await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",
+       [candidate.username,candidate.password,profile,validity,price,"Auto-Generated"]);
+     created.push({...candidate,profile,validity,price,status:"unused"});
+   }
+   return res.json({success:true,count:created.length,vouchers:created});
+ } catch(e) {
+   // RouterOS and PostgreSQL cannot share a transaction; compensate all completed steps and retain DB history.
+   const cleanupErrors=[];
+   for(const username of provisioned.slice().reverse()){
+     let removed=false;
+     try { await mikrotikService.removeHotspotUser(username); removed=true; }
+     catch(cleanupError){ cleanupErrors.push({username,error:cleanupError.message||"RouterOS cleanup failed"}); }
+     try {
+       await db.query(
+         "UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status=$2,cleanup_error=$3,router_removed_at=CASE WHEN $2='completed' THEN COALESCE(router_removed_at,NOW()) ELSE router_removed_at END,updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
+         [username,removed?"completed":"failed",removed?null:(cleanupErrors.find(x=>x.username===username)?.error||"RouterOS cleanup failed")]
+       );
+     } catch(historyError) {
+       console.error("[Hotspot Voucher Generator] Failed to record compensation state for",username,historyError.message);
+     }
+   }
+   console.error("[Hotspot Voucher Generator] Batch failed; compensation attempted.",e);
+   return res.status(502).json({
+     success:false,
+     error:e?.message||"Voucher batch generation failed.",
+     partialBatch:created.length,
+     cleanupPending:cleanupErrors.length,
+     cleanupErrors
+   });
  }
- res.json({success:true,count:created.length,vouchers:created});
-}catch(e){return errorResponse(res,e);}}
+}
 async function createUser(req,res){
   try{
     const username=clean(req.body.username,100);
