@@ -378,6 +378,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   id BIGSERIAL PRIMARY KEY,
   title VARCHAR(180) NOT NULL,
   description TEXT NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'general' CHECK (category IN ('general','software','website')),
   status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved','closed')),
   priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high','urgent')),
   customer_username VARCHAR(100),
@@ -386,6 +387,9 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Safe upgrade for databases where support_tickets already existed before category-based views.
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'general' CHECK (category IN ('general','software','website'));
+CREATE INDEX IF NOT EXISTS idx_support_tickets_category_status ON support_tickets(category,status,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_tickets(assigned_to_user_id,status,created_at DESC);
 
 

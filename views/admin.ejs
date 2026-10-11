@@ -1358,11 +1358,12 @@
 
             <!-- VIEW: SUPPORT TICKETS -->
             <section id="view-support-tickets" class="admin-view" style="display:none">
-              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Support Tickets</h2><p class="text-muted mb-0">Staff accounts see only tickets assigned to them.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadSupportTickets()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Support Tickets</h2><p class="text-muted mb-0">Staff accounts see only tickets assigned to them.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadSupportTickets(window.__fazSupportCategory || 'all')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
               <div class="card card-custom mb-4" id="rbacTicketCreateCard"><div class="card-custom-header"><i class="bi bi-plus-circle text-success"></i><span>Create Support Ticket</span></div><div class="card-body"><form id="rbacTicketForm" class="row g-3">
                 <div class="col-md-6"><label class="form-label" for="ticketTitle">Title</label><input id="ticketTitle" name="title" class="form-control" maxlength="180" required></div>
-                <div class="col-md-3"><label class="form-label" for="ticketPriority">Priority</label><select id="ticketPriority" name="priority" class="form-select"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
-                <div class="col-md-3"><label class="form-label" for="ticketCustomer">Customer username (optional)</label><input id="ticketCustomer" name="customer_username" class="form-control" maxlength="100"></div>
+                <div class="col-md-2"><label class="form-label" for="ticketCategory">Category</label><select id="ticketCategory" name="category" class="form-select"><option value="general">General</option><option value="software">Software</option><option value="website">Website</option></select></div>
+                <div class="col-md-2"><label class="form-label" for="ticketPriority">Priority</label><select id="ticketPriority" name="priority" class="form-select"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+                <div class="col-md-2"><label class="form-label" for="ticketCustomer">Customer username (optional)</label><input id="ticketCustomer" name="customer_username" class="form-control" maxlength="100"></div>
                 <div class="col-12"><label class="form-label" for="ticketDescription">Description</label><textarea id="ticketDescription" name="description" class="form-control" rows="3" maxlength="10000" required></textarea></div>
                 <div class="col-md-6"><label class="form-label" for="ticketAssignee">Assign to staff (optional)</label><select id="ticketAssignee" name="assigned_to_user_id" class="form-select"><option value="">Unassigned</option></select></div>
                 <div class="col-12"><div id="rbacTicketResult" class="small" role="status"></div><button class="btn btn-success" type="submit" id="rbacTicketSubmit">Create ticket</button></div>
@@ -3168,6 +3169,121 @@ async function deletePlan(id,name){
         }
 
         window.switchView = switchView;
+
+        let currentSupportCategory = 'all';
+        window.loadSupportTickets = async function(category = currentSupportCategory) {
+            const validCategories = ['all', 'general', 'software', 'website'];
+            currentSupportCategory = validCategories.includes(String(category || '').toLowerCase())
+                ? String(category || 'all').toLowerCase() : 'all';
+            window.__fazSupportCategory = currentSupportCategory;
+            const section = document.getElementById('view-support-tickets');
+            const body = document.getElementById('rbacTicketsBody');
+            const form = document.getElementById('rbacTicketForm');
+            const createCard = document.getElementById('rbacTicketCreateCard');
+            if (!section || !body) return false;
+            if (typeof window.switchView === 'function') window.switchView('support-tickets');
+            const titles = {all:'Support Tickets',general:'General Support Tickets',software:'Software Support Tickets',website:'Website Support Tickets'};
+            setPageTitleSafe(titles[currentSupportCategory] || titles.all);
+            const canManageTickets = <%- JSON.stringify(['super_admin','admin'].includes(typeof currentRole !== 'undefined' ? currentRole : 'super_admin')) %>;
+            if (createCard) createCard.classList.toggle('d-none', !canManageTickets);
+            const categorySelect = document.getElementById('ticketCategory');
+            if (categorySelect) {
+                categorySelect.value = currentSupportCategory === 'software' || currentSupportCategory === 'website' ? currentSupportCategory : 'general';
+                categorySelect.disabled = currentSupportCategory === 'software' || currentSupportCategory === 'website';
+            }
+            body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading tickets…</td></tr>';
+            try {
+                const results = await Promise.all([
+                    window.jsonFetch('/api/admin/security/tickets?category=' + encodeURIComponent(currentSupportCategory)),
+                    canManageTickets ? window.jsonFetch('/api/admin/security/staff').catch(() => ({staff:[]})) : Promise.resolve({staff:[]})
+                ]);
+                const tickets = Array.isArray(results[0].tickets) ? results[0].tickets : [];
+                const staff = Array.isArray(results[1].staff) ? results[1].staff : [];
+                if (categorySelect && canManageTickets) {
+                    const selected = categorySelect.value || 'general';
+                    categorySelect.innerHTML = '<option value="general">General</option><option value="software">Software</option><option value="website">Website</option>';
+                    categorySelect.value = currentSupportCategory === 'software' || currentSupportCategory === 'website' ? currentSupportCategory : selected;
+                    categorySelect.disabled = currentSupportCategory === 'software' || currentSupportCategory === 'website';
+                }
+                body.innerHTML = tickets.length ? tickets.map(ticket => {
+                    const id = Number(ticket.id);
+                    const categoryBadge = '<span class="badge text-bg-light border">' + escapeHtml(ticket.category || 'general') + '</span>';
+                    const statusOptions = ['open','in_progress','resolved','closed'].map(status =>
+                        '<option value="' + status + '"' + (ticket.status === status ? ' selected' : '') + '>' +
+                        ({open:'Open',in_progress:'In progress',resolved:'Resolved',closed:'Closed'}[status]) + '</option>'
+                    ).join('');
+                    const staffOptions = '<option value="">Unassigned</option>' + staff.map(user =>
+                        '<option value="' + Number(user.id) + '"' + (Number(ticket.assigned_to_user_id) === Number(user.id) ? ' selected' : '') + '>' +
+                        escapeHtml(user.username) + '</option>'
+                    ).join('');
+                    const statusCell = canManageTickets
+                        ? '<select class="form-select form-select-sm" aria-label="Ticket status" data-ticket-status="' + id + '">' + statusOptions + '</select>'
+                        : '<span class="badge ' + (ticket.status === 'resolved' || ticket.status === 'closed' ? 'text-bg-success' : 'text-bg-warning') + '">' + escapeHtml(ticket.status || 'open') + '</span>';
+                    const assigneeCell = canManageTickets
+                        ? '<select class="form-select form-select-sm" aria-label="Assigned staff" data-ticket-assignee="' + id + '">' + staffOptions + '</select>'
+                        : escapeHtml(ticket.assigned_to_username || 'Assigned staff');
+                    const actionCell = canManageTickets
+                        ? '<button type="button" class="btn btn-sm btn-outline-success text-nowrap" data-ticket-save="' + id + '"><i class="bi bi-check2 me-1"></i>Save</button>'
+                        : '<span class="small text-muted">View only</span>';
+                    return '<tr><td><strong>#' + id + ' · ' + escapeHtml(ticket.title) + '</strong><div class="small text-muted mt-1">' + escapeHtml(ticket.description || '') + '</div><div class="mt-1">' + categoryBadge + '</div></td>' +
+                        '<td>' + escapeHtml(ticket.customer_username || '—') + '</td>' +
+                        '<td><span class="badge ' + (ticket.priority === 'urgent' || ticket.priority === 'high' ? 'text-bg-danger' : 'text-bg-secondary') + '">' + escapeHtml(ticket.priority || 'normal') + '</span></td>' +
+                        '<td>' + statusCell + '</td><td>' + assigneeCell + '</td>' +
+                        '<td class="text-nowrap">' + escapeHtml(typeof FazDate !== 'undefined' ? FazDate.formatDateTime(ticket.created_at) : ticket.created_at || '—') + '</td>' +
+                        '<td>' + actionCell + '</td></tr>';
+                }).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">No tickets in this category.</td></tr>';
+                body.querySelectorAll('[data-ticket-save]').forEach(button => {
+                    button.addEventListener('click', async () => {
+                        const id = Number(button.dataset.ticketSave);
+                        const status = body.querySelector('[data-ticket-status="' + id + '"]')?.value || 'open';
+                        const assignee = body.querySelector('[data-ticket-assignee="' + id + '"]')?.value || null;
+                        button.disabled = true;
+                        try {
+                            await window.jsonFetch('/api/admin/security/tickets/' + id, {
+                                method: 'PATCH', body: JSON.stringify({status, assigned_to_user_id: assignee})
+                            });
+                            await window.loadSupportTickets(currentSupportCategory);
+                        } catch (error) {
+                            window.alert(error.message || 'Unable to update ticket.');
+                            button.disabled = false;
+                        }
+                    });
+                });
+                if (form && !form.dataset.supportSubmitBound) {
+                    form.dataset.supportSubmitBound = '1';
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        const submit = document.getElementById('rbacTicketSubmit');
+                        const result = document.getElementById('rbacTicketResult');
+                        const payload = {
+                            title: document.getElementById('ticketTitle')?.value || '',
+                            description: document.getElementById('ticketDescription')?.value || '',
+                            priority: document.getElementById('ticketPriority')?.value || 'normal',
+                            customer_username: document.getElementById('ticketCustomer')?.value || '',
+                            category: currentSupportCategory === 'software' || currentSupportCategory === 'website'
+                                ? currentSupportCategory : (document.getElementById('ticketCategory')?.value || 'general'),
+                            assigned_to_user_id: document.getElementById('ticketAssignee')?.value || null
+                        };
+                        if (submit) { submit.disabled = true; submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…'; }
+                        if (result) { result.className = 'small text-muted'; result.textContent = ''; }
+                        try {
+                            await window.jsonFetch('/api/admin/security/tickets', {method:'POST',body:JSON.stringify(payload)});
+                            form.reset();
+                            if (result) { result.className = 'small text-success'; result.textContent = 'Ticket created successfully.'; }
+                            await window.loadSupportTickets(currentSupportCategory);
+                        } catch (error) {
+                            if (result) { result.className = 'small text-danger'; result.textContent = error.message || 'Unable to create ticket.'; }
+                        } finally {
+                            if (submit) { submit.disabled = false; submit.innerHTML = 'Create ticket'; }
+                        }
+                    });
+                }
+                return true;
+            } catch (error) {
+                body.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to load support tickets.') + '</td></tr>';
+                return false;
+            }
+        };
 
         if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
@@ -5126,8 +5242,6 @@ async function deletePlan(id,name){
                 'vpn-port-forwarding': 'VPN Port Forwarding',
                 'account-dashboard': 'Account & Support — Dashboard',
                 'account-manage': 'Account & Support — Manage',
-                'software-support-tickets': 'Software Support Tickets',
-                'website-support-tickets': 'Website Support Tickets',
                 'hr-departments': 'Human Resource — Department',
                 'hr-employees': 'Human Resource — All Employees',
                 'hr-added-employees': 'Human Resource — Added Employees',
@@ -5164,7 +5278,11 @@ async function deletePlan(id,name){
                     return { view: 'hotspot', section, filter: section === 'vouchers' ? voucherFilter : filter, title };
                 }
                 if (route.view === 'olt') return { view: 'olt', mode: has(allowed.oltModes, route.mode) ? route.mode : 'overview' };
-                if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps', 'support'].indexOf(route.view) !== -1) {
+                if (route.view === 'support') {
+                    const category = ['all','software','website'].includes(String(route.category || 'all')) ? String(route.category || 'all') : 'all';
+                    return { view: 'support', category };
+                }
+                if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
                 if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
@@ -5210,7 +5328,7 @@ async function deletePlan(id,name){
                     '/admin/staff': { view: 'staff' },
                     '/admin/audit-logs': { view: 'audit' },
                     '/admin/network/maps': { view: 'maps' },
-                    '/admin/support/tickets': { view: 'support' },
+                    '/admin/support/tickets': { view: 'support', category: 'all' },
                     '/admin/settings': { view: 'page', page: 'general-settings' },
                     '/admin/monitor/usage': { view: 'module', module: 'usage' },
                     '/admin/monitor/online': { view: 'module', module: 'monitor-online' },
@@ -5219,8 +5337,8 @@ async function deletePlan(id,name){
                     '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
                     '/admin/account/dashboard': { view: 'module', module: 'account-dashboard' },
                     '/admin/account/manage': { view: 'module', module: 'account-manage' },
-                    '/admin/support/software': { view: 'module', module: 'software-support-tickets' },
-                    '/admin/support/website': { view: 'module', module: 'website-support-tickets' },
+                    '/admin/support/software': { view: 'support', category: 'software' },
+                    '/admin/support/website': { view: 'support', category: 'website' },
                     '/admin/hr/departments': { view: 'module', module: 'hr-departments' },
                     '/admin/hr/employees': { view: 'module', module: 'hr-employees' },
                     '/admin/hr/employees/added': { view: 'module', module: 'hr-added-employees' },
@@ -5284,7 +5402,7 @@ async function deletePlan(id,name){
                 if (normalized.view === 'staff') return '/admin/staff';
                 if (normalized.view === 'audit') return '/admin/audit-logs';
                 if (normalized.view === 'maps') return '/admin/network/maps';
-                if (normalized.view === 'support') return '/admin/support/tickets';
+                if (normalized.view === 'support') return normalized.category === 'software' ? '/admin/support/software' : normalized.category === 'website' ? '/admin/support/website' : '/admin/support/tickets';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5294,8 +5412,6 @@ async function deletePlan(id,name){
                         'vpn-port-forwarding': '/admin/vpn/port-forwarding',
                         'account-dashboard': '/admin/account/dashboard',
                         'account-manage': '/admin/account/manage',
-                        'software-support-tickets': '/admin/support/software',
-                        'website-support-tickets': '/admin/support/website',
                         'hr-departments': '/admin/hr/departments',
                         'hr-employees': '/admin/hr/employees',
                         'hr-added-employees': '/admin/hr/employees/added',
@@ -5355,7 +5471,7 @@ async function deletePlan(id,name){
                     case 'staff': return callIfAvailable('loadStaffManagement');
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
-                    case 'support': return callIfAvailable('loadSupportTickets');
+                    case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
@@ -5442,7 +5558,7 @@ async function deletePlan(id,name){
                     case 'loadStaffManagement': return { view: 'staff' };
                     case 'loadAuditLogs': return { view: 'audit' };
                     case 'loadGoogleMapTracking': return { view: 'maps' };
-                    case 'loadSupportTickets': return { view: 'support' };
+                    case 'loadSupportTickets': return { view: 'support', category: ['all','software','website'].includes(String(args[0] || 'all')) ? String(args[0] || 'all') : 'all' };
                     default: return null;
                 }
             }
