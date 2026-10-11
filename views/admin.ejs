@@ -2902,6 +2902,8 @@
                     /ONU \/ ONT Telemetry|ONT Information/.test(card.querySelector('.card-header')?.textContent || '')
                 );
                 if (telemetryCard) {
+                    // The compact counters below replace the tall four-card summary on this telemetry view.
+                    dynamic.querySelector('.row.g-3.mb-4')?.classList.add('d-none');
                     const tableWrap = telemetryCard.querySelector('.table-responsive');
                     if (tableWrap) {
                         tableWrap.classList.add('d-none', 'd-md-block');
@@ -2977,12 +2979,26 @@
                                 try { await navigator.clipboard.writeText(mac); button.innerHTML = '<i class="bi bi-check2 text-success"></i>'; }
                                 catch (_) { button.title = 'Copy unavailable in this browser'; }
                             }));
-                            const desktopRows = tableWrap.querySelectorAll('tbody tr');
+                            const desktopBody = tableWrap.querySelector('tbody');
+                            const desktopRows = Array.from(desktopBody?.querySelectorAll('tr') || []).filter(row => !row.dataset.noResults);
+                            let visibleCount = 0;
                             desktopRows.forEach(row => {
                                 const rowText = row.textContent.toLowerCase();
                                 const ponCell = row.cells[1]?.textContent.trim() || '';
-                                row.classList.toggle('d-none', !((!query || rowText.includes(query)) && (selectedPon === 'ALL' || ponCell === selectedPon)));
+                                const show = (!query || rowText.includes(query)) && (selectedPon === 'ALL' || ponCell === selectedPon);
+                                row.classList.toggle('d-none', !show);
+                                if (show) visibleCount++;
                             });
+                            if (desktopBody) {
+                                let emptyRow = desktopBody.querySelector('tr[data-no-results]');
+                                if (!emptyRow) {
+                                    emptyRow = document.createElement('tr');
+                                    emptyRow.dataset.noResults = 'true';
+                                    emptyRow.innerHTML = '<td colspan="9" class="text-center text-muted py-4">No ONU records match the current search or PON filter.</td>';
+                                    desktopBody.appendChild(emptyRow);
+                                }
+                                emptyRow.classList.toggle('d-none', visibleCount > 0);
+                            }
                         };
                         const relativeTime = value => {
                             const time = new Date(value).getTime();
