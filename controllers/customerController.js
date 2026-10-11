@@ -683,14 +683,19 @@ async function profile(req,res){
       try{const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);pppoeRow=q.rows[0]||null;}
       catch(fallbackError){console.error("[Customer 360] PPPoE lookup failed:",fallbackError.message);}
     }
-    // Admin Customer 360 must not depend on RouterOS socket availability. Use the
-    // synchronized PPPoE row and the push snapshot stored by the collector.
+    // Customer 360 presence must reflect RouterOS's current PPPoE active list,
+    // never a collector snapshot: a stale snapshot can incorrectly keep a customer
+    // Online during a power cut. If the router/API cannot be reached, report Offline.
     mtSecret=pppoeRow?{name:pppoeRow.username,profile:pppoeRow.profile,password:pppoeRow.password,disabled:pppoeRow.disabled,remoteAddress:pppoeRow.remote_address,callerId:pppoeRow.caller_id,service:pppoeRow.service,comment:pppoeRow.comment}:null;
     try{
-      const q=await db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",caller_id AS "callerId",received_at AS "receivedAt" FROM pppoe_live_sessions WHERE LOWER(username)=LOWER($1) ORDER BY received_at DESC LIMIT 1`,[username]);
-      const row=q.rows?.[0]||null;const receivedAt=row?.receivedAt?new Date(row.receivedAt).getTime():NaN;
-      session=row&&Number.isFinite(receivedAt)&&Date.now()-receivedAt>=0&&Date.now()-receivedAt<=3*60*1000?row:null;
-    }catch(error){console.warn("[Customer snapshot warning]:",error.message);session=null;}
+      const activeSessions=await withTimeout(()=>mikrotikService.getActiveSessions(),2000);
+      if(!Array.isArray(activeSessions))throw new Error("MikroTik returned an invalid active-session list.");
+      const normalizedUsername=String(username||"").trim().toLowerCase();
+      session=activeSessions.find(row=>String(row?.username||"").trim().toLowerCase()===normalizedUsername)||null;
+    }catch(error){
+      console.warn("[Customer 360] Live MikroTik active-session lookup failed; showing Offline:",error.message);
+      session=null;
+    }
     if(!dbUser&&!pppoeRow)return res.status(404).json({success:false,message:`Customer "${username}" not found in database`});
     const comment=String(mtSecret?.comment||pppoeRow?.comment||"");
     const nameMatch=comment.match(/Customer:\s*([^|]+)/i),phoneMatch=comment.match(/Phone:\s*([^|]+)/i),expMatch=comment.match(/EXP:\s*([^|]+)/i);
