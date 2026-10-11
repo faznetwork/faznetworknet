@@ -155,25 +155,31 @@ class MikroTikService {
   _startHeartbeat(connection) {
     this._stopHeartbeat(connection);
     connection.__fazHeartbeatTimer = setInterval(async () => {
-      if (this._connection !== connection || !connection.connected) return;
-      try {
-        await this._executeWithTimeout(
-          connection.write("/system/identity/print"),
-          OPERATION_TIMEOUT_MS,
-          "persistent connection heartbeat"
-        );
-        console.debug("[MikroTik Heartbeat] ok", {
-          host: connection.host, port: connection.port, at: new Date().toISOString()
-        });
-      } catch (error) {
-        console.warn("[MikroTik Heartbeat] failed", {
-          host: connection.host, port: connection.port,
-          message: error?.message || String(error), code: error?.code || null
-        });
-        if (this._connection === connection && this._isConnectionFailure(error)) {
-          this._resetPersistentConnection(connection, "heartbeat failed: " + (error?.message || error));
+      // Heartbeats join the same operation queue as application requests, so
+      // they cannot interleave with a multi-command billing/customer operation.
+      const heartbeat = this._operationQueue.then(async () => {
+        if (this._connection !== connection || !connection.connected) return;
+        try {
+          await this._executeWithTimeout(
+            connection.write("/system/identity/print"),
+            OPERATION_TIMEOUT_MS,
+            "persistent connection heartbeat"
+          );
+          console.debug("[MikroTik Heartbeat] ok", {
+            host: connection.host, port: connection.port, at: new Date().toISOString()
+          });
+        } catch (error) {
+          console.warn("[MikroTik Heartbeat] failed", {
+            host: connection.host, port: connection.port,
+            message: error?.message || String(error), code: error?.code || null
+          });
+          if (this._connection === connection && this._isConnectionFailure(error)) {
+            this._resetPersistentConnection(connection, "heartbeat failed: " + (error?.message || error));
+          }
         }
-      }
+      });
+      this._operationQueue = heartbeat.catch(() => {});
+      await heartbeat;
     }, 30000);
     if (typeof connection.__fazHeartbeatTimer.unref === "function") {
       connection.__fazHeartbeatTimer.unref();
