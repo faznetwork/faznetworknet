@@ -5621,8 +5621,6 @@ async function deletePlan(id,name){
                 bkash: 'bkash_payments', nagad: 'nagad_payments', rocket: 'rocket_payments'
             };
             const moduleTitles = {
-                'vpn': 'VPN Server',
-                'vpn-port-forwarding': 'VPN Port Forwarding',
             };
             const state = { depth: 0, restoring: false, current: null };
 
@@ -5668,6 +5666,8 @@ async function deletePlan(id,name){
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
                 if (route.view === 'account-manage') return { view: 'account-manage' };
+                if (route.view === 'vpn') return { view: 'vpn' };
+                if (route.view === 'vpn-port-forwarding') return { view: 'vpn-port-forwarding' };
                 if (['devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps'].indexOf(route.view) !== -1) {
                     return { view: route.view };
                 }
@@ -5719,8 +5719,8 @@ async function deletePlan(id,name){
                     '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
                     '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
-                    '/admin/vpn': { view: 'module', module: 'vpn' },
-                    '/admin/vpn/port-forwarding': { view: 'module', module: 'vpn-port-forwarding' },
+                    '/admin/vpn': { view: 'vpn' },
+                    '/admin/vpn/port-forwarding': { view: 'vpn-port-forwarding' },
                     '/admin/account/dashboard': { view: 'account-dashboard' },
                     '/admin/account/manage': { view: 'account-manage' },
                     '/admin/support/software': { view: 'support', category: 'software' },
@@ -5795,6 +5795,8 @@ async function deletePlan(id,name){
                 if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
                 if (normalized.view === 'account-dashboard') return '/admin/account/dashboard';
                 if (normalized.view === 'account-manage') return '/admin/account/manage';
+                if (normalized.view === 'vpn') return '/admin/vpn';
+                if (normalized.view === 'vpn-port-forwarding') return '/admin/vpn/port-forwarding';
                 if (normalized.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, normalized.module)) {
                     const modulePaths = {
                         'usage': '/admin/monitor/usage',
@@ -5864,6 +5866,8 @@ async function deletePlan(id,name){
                     case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
                     case 'account-dashboard': return callIfAvailable('loadAccountDashboard');
                     case 'account-manage': return callIfAvailable('loadStaffManagement', ['account-manage']);
+                    case 'vpn': return callIfAvailable('loadVpnModule');
+                    case 'vpn-port-forwarding': return callIfAvailable('loadPortForwarding');
                     case 'audit': return callIfAvailable('loadAuditLogs');
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
@@ -5966,6 +5970,9 @@ async function deletePlan(id,name){
                     case 'loadHRModule': return { view: 'hr', section: ['departments','employees','added'].includes(String(args[0] || 'employees')) ? String(args[0] || 'employees') : 'employees' };
                     case 'loadNetworkDiagram': return { view: 'network-diagram' };
                     case 'loadNetworkMonitor': return { view: 'monitor', mode: String(args[0] || 'online') === 'usage' ? 'usage' : 'online' };
+                    case 'loadAccountDashboard': return { view: 'account-dashboard' };
+                    case 'loadVpnModule': return { view: 'vpn' };
+                    case 'loadPortForwarding': return { view: 'vpn-port-forwarding' };
                     default: return null;
                 }
             }
@@ -6003,7 +6010,7 @@ async function deletePlan(id,name){
                 'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
-                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard'
+                'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard', 'loadVpnModule', 'loadPortForwarding'
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
