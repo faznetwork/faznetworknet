@@ -107,23 +107,107 @@ exports.listTelemetry = async (req,res) => {
   try {
     await ensureSchema();
     const username=String(req.query.username||'').trim().slice(0,160);
-    const mac=String(req.query.mac||'').trim().replace(/-/g,':');
+    const rawMac=String(req.query.mac||'').trim();
+    const normalizedMac=rawMac.replace(/[^0-9a-f]/gi,'').toLowerCase();
+    if(rawMac && !/^[0-9a-f]{12}$/i.test(normalizedMac)) {
+      return res.status(400).json({success:false,message:'Invalid MAC address.'});
+    }
+
+    // Reverse mapping is MAC-first: an explicitly assigned ONU MAC takes
+    // precedence; otherwise use the fresh PPPoE caller-id snapshot.
+    const mappingJoin = `
+      LEFT JOIN LATERAL (
+        SELECT c.username,
+               CASE
+                 WHEN regexp_replace(lower(COALESCE(c.onu_mac,'')), '[^0-9a-f]', '', 'g') =
+                      regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g')
+                   THEN 0 ELSE 1
+               END AS priority
+        FROM customers c
+        LEFT JOIN pppoe_users p ON LOWER(p.username)=LOWER(c.username)
+        WHERE
+          (NULLIF(BTRIM(c.onu_mac), '') IS NOT NULL
+           AND regexp_replace(lower(c.onu_mac), '[^0-9a-f]', '', 'g') =
+               regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
+          OR
+          (NULLIF(BTRIM(c.onu_mac), '') IS NULL
+           AND NULLIF(BTRIM(p.caller_id), '') IS NOT NULL
+           AND regexp_replace(lower(p.caller_id), '[^0-9a-f]', '', 'g') =
+               regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
+        ORDER BY priority, c.updated_at DESC NULLS LAST
+        LIMIT 1
+      ) mapped ON TRUE
+    `;
+    const select = `
+      SELECT t.olt_id AS "oltId", t.onu_id AS "onuId",
+             t.onu_mac::text AS "onuMac", t.pon_port AS "ponPort",
+             t.status, t.rx_power_dbm AS "rxPowerDbm",
+             t.tx_power_dbm AS "txPowerDbm",
+             t.observed_at AS "observedAt", t.received_at AS "receivedAt",
+             t.source_agent AS "sourceAgent",
+             COALESCE(NULLIF(t.pppoe_username,''), mapped.username) AS "pppoeUsername"
+      FROM olt_telemetry t
+      ${mappingJoin}
+    `;
     let result;
-    if(mac && /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) {
-      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry WHERE onu_mac=$1::macaddr ORDER BY observed_at DESC LIMIT 1`,[mac]);
-    } else if(username) {
-      // Only match an ONU MAC already stored on this customer record; never equate router MAC with ONU MAC.
-      result=await db.query(`SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",t.received_at AS "receivedAt",t.source_agent AS "sourceAgent" FROM customers c JOIN olt_telemetry t ON (LOWER(t.pppoe_username)=LOWER(c.username) OR t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$' THEN c.onu_mac::macaddr ELSE NULL END) WHERE LOWER(c.username)=LOWER($1) ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC,t.observed_at DESC LIMIT 1`,[username]);
+    if(username) {
+      result=await db.query(`
+        ${select}
+        WHERE
+          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NOT NULL
+           AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
+               regexp_replace(lower((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1)), '[^0-9a-f]', '', 'g'))
+          OR
+          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NULL
+           AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
+             regexp_replace(lower(COALESCE(
+               (SELECT s.caller_id FROM pppoe_live_sessions s
+                WHERE LOWER(s.username)=LOWER($1)
+                  AND s.received_at >= NOW() - INTERVAL '3 minutes'
+                ORDER BY s.received_at DESC LIMIT 1),
+               (SELECT p.caller_id FROM pppoe_users p WHERE LOWER(p.username)=LOWER($1) LIMIT 1),
+               ''
+             )), '[^0-9a-f]', '', 'g'))
+          OR
+          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM pppoe_live_sessions s
+             WHERE LOWER(s.username)=LOWER($1)
+               AND s.received_at >= NOW() - INTERVAL '3 minutes'
+               AND NULLIF(BTRIM(s.caller_id),'') IS NOT NULL
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM pppoe_users p
+             WHERE LOWER(p.username)=LOWER($1) AND NULLIF(BTRIM(p.caller_id),'') IS NOT NULL
+           )
+           AND LOWER(COALESCE(t.pppoe_username,''))=LOWER($1))
+        ORDER BY
+          CASE WHEN LOWER(COALESCE(t.pppoe_username,''))=LOWER($1) THEN 0 ELSE 1 END,
+          t.observed_at DESC NULLS LAST
+        LIMIT 1
+      `,[username]);
+    } else if(normalizedMac) {
+      result=await db.query(`
+        ${select}
+        WHERE regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=$1
+        ORDER BY t.observed_at DESC NULLS LAST LIMIT 1
+      `,[normalizedMac]);
     } else {
-      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+      result=await db.query(`
+        ${select}
+        ORDER BY t.received_at DESC LIMIT 500
+      `);
     }
-    const row=result.rows[0]||null;
-    if(row) {
+    const readings=result.rows.map(row=>{
       const age=Date.now()-new Date(row.receivedAt).getTime();
-      row.stale=age>15*60*1000;
-      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<=-25?'warning':'good';
-    }
-    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+      const rx=row.rxPowerDbm==null?null:Number(row.rxPowerDbm);
+      row.stale=!Number.isFinite(age)||age<0||age>15*60*1000;
+      row.signalLevel=rx===null||!Number.isFinite(rx)?'unknown':
+        rx<=-27?'critical':rx < -23?'warning':rx > -12?'high':'good';
+      return row;
+    });
+    const row=readings[0]||null;
+    return res.json({success:true,telemetry:username||normalizedMac?row:null,readings:username||normalizedMac?undefined:readings});
   } catch(error) {
     if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
     console.error('[OLT telemetry read]',error.message);
