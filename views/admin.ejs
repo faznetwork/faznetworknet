@@ -144,18 +144,26 @@
         .traffic-monitor-card{scroll-margin-top:18px;overflow:hidden;border:1px solid #dbeafe;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
         .traffic-monitor-card .card-custom-header{background:linear-gradient(100deg,#fff 0%,#f0fdf4 55%,#eff6ff 100%);border-bottom:1px solid #dbeafe}
         .traffic-monitor-card .card-custom-header>i{color:#059669!important}
-        .traffic-digital-card{position:relative;border:1px solid #99f6e4;border-radius:12px;padding:17px 18px;background:linear-gradient(135deg,#fff 0%,#ecfdf5 100%);color:#0f172a;min-height:112px;overflow:hidden}
-        .traffic-digital-card.traffic-tx{background:linear-gradient(135deg,#fff 0%,#f5f3ff 100%);border-color:#c4b5fd;color:#0f172a}
-        .traffic-digital-card>div:first-child{font-size:.72rem;font-weight:800;letter-spacing:.055em;color:#475569}
-        .traffic-digital-card.traffic-rx>div:first-child i{color:#059669}
-        .traffic-digital-card.traffic-tx>div:first-child i{color:#7c3aed}
-        .traffic-digital-value{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;margin-top:7px;font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
-        .traffic-digital-value span{font-size:clamp(1.8rem,3.4vw,2.55rem);font-weight:800;line-height:1.05;letter-spacing:-.04em;color:#047857}
-        .traffic-digital-card.traffic-tx .traffic-digital-value span{color:#6d28d9}
-        .traffic-digital-value small{font-size:.78rem;font-weight:700;letter-spacing:0;color:#64748b}
-        .traffic-digital-caption{font-size:.72rem;color:#64748b;margin-top:6px}
-        .traffic-digital-card:after{content:"";display:block;height:3px;border-radius:99px;margin-top:12px;background:linear-gradient(90deg,#10b981,#34d399 45%,transparent 90%);opacity:.95}
-        .traffic-digital-card.traffic-tx:after{background:linear-gradient(90deg,#8b5cf6,#c084fc 45%,transparent 90%)}
+        /* Circular live-traffic tiles intentionally mirror the round metric shortcuts above. */
+        .traffic-monitor-card{scroll-margin-top:18px;overflow:hidden;border:1px solid #dbeafe;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+        .traffic-monitor-card .card-custom-header{background:linear-gradient(100deg,#fff 0%,#f0fdf4 55%,#eff6ff 100%);border-bottom:1px solid #dbeafe}
+        .traffic-monitor-card .card-custom-header>i{color:#059669!important}
+        .traffic-monitor-tiles{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:22px;padding:8px 0}
+        .traffic-digital-card{--traffic-color:#047857;--traffic-tint:#ecfdf5;position:relative;width:158px;height:158px;flex:0 0 158px;border:1px solid color-mix(in srgb,var(--traffic-color) 24%,white);border-radius:50%;padding:13px;background:linear-gradient(145deg,#fff,var(--traffic-tint));box-shadow:0 5px 18px rgba(15,23,42,.07);color:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease}
+        .traffic-digital-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(15,23,42,.13)}
+        .traffic-digital-card.traffic-rx{--traffic-color:#047857;--traffic-tint:#ecfdf5}
+        .traffic-digital-card.traffic-tx{--traffic-color:#6d28d9;--traffic-tint:#f5f3ff;border-color:#ddd6fe}
+        .traffic-digital-icon{width:35px;height:35px;flex:0 0 35px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--traffic-color);color:#fff;font-size:17px;margin-bottom:2px}
+        .traffic-digital-label{font-size:11px;font-weight:800;letter-spacing:.035em;color:#334155;line-height:1.15}
+        .traffic-digital-value{display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:4px;margin-top:2px;font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;max-width:100%}
+        .traffic-digital-value span{font-size:clamp(1.15rem,2.3vw,1.55rem);font-weight:800;line-height:1.05;letter-spacing:-.045em;color:var(--traffic-color);overflow-wrap:anywhere}
+        .traffic-digital-value small{font-size:.68rem;font-weight:800;letter-spacing:0;color:#64748b}
+        .traffic-digital-caption{font-size:.62rem;color:#64748b;line-height:1.2;margin-top:1px;max-width:120px}
+        .traffic-digital-card:after{content:"";position:absolute;inset:5px;border:1px solid color-mix(in srgb,var(--traffic-color) 15%,transparent);border-radius:50%;pointer-events:none}
+        .traffic-sidebar-link{margin:5px 10px 9px;border:1px solid rgba(167,243,208,.35)!important;border-radius:10px;background:linear-gradient(100deg,rgba(16,185,129,.22),rgba(59,130,246,.15))!important;color:#fff!important;font-weight:800!important}
+        .traffic-sidebar-link i{color:#6ee7b7!important}
+        .traffic-sidebar-link:hover,.traffic-sidebar-link:focus-visible{background:linear-gradient(100deg,rgba(16,185,129,.38),rgba(139,92,246,.28))!important;outline:2px solid #6ee7b7;outline-offset:1px}
+        @media(max-width:575.98px){.traffic-monitor-tiles{gap:12px}.traffic-digital-card{width:calc(50vw - 36px);height:calc(50vw - 36px);flex-basis:calc(50vw - 36px);max-width:158px;max-height:158px;min-width:132px;min-height:132px}.traffic-digital-value span{font-size:clamp(1rem,5vw,1.35rem)}}
         .traffic-sidebar-link{margin:5px 10px 9px;border:1px solid rgba(167,243,208,.35)!important;border-radius:10px;background:linear-gradient(100deg,rgba(16,185,129,.22),rgba(59,130,246,.15))!important;color:#fff!important;font-weight:800!important}
         .traffic-sidebar-link i{color:#6ee7b7!important}
         .traffic-sidebar-link:hover,.traffic-sidebar-link:focus-visible{background:linear-gradient(100deg,rgba(16,185,129,.38),rgba(139,92,246,.28))!important;outline:2px solid #6ee7b7;outline-offset:1px}
@@ -843,9 +851,9 @@
                     <div class="card-custom-header"><i class="bi bi-activity text-success fs-5"></i><span>Live Traffic Monitor</span><span id="dashboardTrafficStatus" class="badge bg-secondary ms-auto">Checking...</span></div>
                     <div class="card-body p-4">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><span class="text-muted small">Live bandwidth · Digital Mbps</span><select id="dashboardInterface" aria-label="Select network interface" class="form-select form-select-sm" style="max-width:240px"></select></div>
-                        <div class="row g-3">
-                            <div class="col-12 col-md-6"><div class="traffic-digital-card traffic-rx h-100"><div class="d-flex align-items-center gap-2"><i class="bi bi-arrow-down-circle-fill"></i><span>RX · DOWNLOAD</span></div><div class="traffic-digital-value"><span id="dashboardTrafficRx">—.---</span><small>Mbps</small></div><div class="traffic-digital-caption">Incoming traffic to router</div></div></div>
-                            <div class="col-12 col-md-6"><div class="traffic-digital-card traffic-tx h-100"><div class="d-flex align-items-center gap-2"><i class="bi bi-arrow-up-circle-fill"></i><span>TX · UPLOAD</span></div><div class="traffic-digital-value"><span id="dashboardTrafficTx">—.---</span><small>Mbps</small></div><div class="traffic-digital-caption">Outgoing traffic from router</div></div></div>
+                        <div class="traffic-monitor-tiles">
+                            <div class="traffic-digital-card traffic-rx"><span class="traffic-digital-icon"><i class="bi bi-arrow-down-circle-fill"></i></span><span class="traffic-digital-label">RX · DOWNLOAD</span><div class="traffic-digital-value"><span id="dashboardTrafficRx">—.---</span><small>Mbps</small></div><div class="traffic-digital-caption">Incoming traffic to router</div></div>
+                            <div class="traffic-digital-card traffic-tx"><span class="traffic-digital-icon"><i class="bi bi-arrow-up-circle-fill"></i></span><span class="traffic-digital-label">TX · UPLOAD</span><div class="traffic-digital-value"><span id="dashboardTrafficTx">—.---</span><small>Mbps</small></div><div class="traffic-digital-caption">Outgoing traffic from router</div></div>
                         </div>
 
                 <div class="dashboard-shortcuts mb-4" aria-label="Dashboard quick navigation">
