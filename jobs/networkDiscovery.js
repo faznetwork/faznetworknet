@@ -1,5 +1,6 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
+const onuAutoDiscovery = require("../services/onuAutoDiscovery");
 
 let running = false;
 
@@ -46,12 +47,14 @@ async function runNetworkDiscovery() {
     const bridgeHosts = bridgeResult.hosts;
     await db.query(
       "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
-      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null })]
+      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null, onuAutoMapped, onuAutoAmbiguous })]
     );
 
     let matched = 0;
     let unmatched = 0;
     let discovered = 0;
+    let onuAutoMapped = 0;
+    let onuAutoAmbiguous = 0;
 
     for (const session of sessions) {
       const username = String(session.username || "").trim().slice(0, 100);
@@ -106,6 +109,17 @@ async function runNetworkDiscovery() {
       unmatched++;
     }
 
+    // RouterOS caller-id is treated as a router MAC only. The OLT must independently
+    // show that MAC under exactly one fresh ONU before the customer mapping is changed.
+    try {
+      const onuResult = await onuAutoDiscovery.discoverFromSessions(sessions, { runId, sourceDeviceId: deviceId });
+      onuAutoMapped = onuResult.matched;
+      onuAutoAmbiguous = onuResult.ambiguous;
+      console.log("[NETWORK DISCOVERY] ONU auto-mapping matched=" + onuResult.matched + " ambiguous=" + onuResult.ambiguous + " unmatched=" + onuResult.unmatched);
+    } catch (onuError) {
+      console.warn("[NETWORK DISCOVERY] ONU auto-discovery failed without stopping base discovery:", onuError.message);
+    }
+
     const status = bridgeResult.available ? "succeeded" : "partial";
     const sourceStatus = bridgeResult.available ? "connected" : "partial";
     await db.query(
@@ -118,7 +132,7 @@ async function runNetworkDiscovery() {
     );
     await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
     console.log("[NETWORK DISCOVERY] run=" + runId + " status=" + status + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
-    return { runId, status, discovered, matched, unmatched };
+    return { runId, status, discovered, matched, unmatched, onuAutoMapped, onuAutoAmbiguous };
   } catch (error) {
     if (runId) {
       await db.query(
