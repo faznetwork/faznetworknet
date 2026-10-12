@@ -2695,9 +2695,18 @@
         // Heal stale invisible Bootstrap backdrops that can intercept sidebar clicks.
         // Only clean overlays when no modal/offcanvas is actually open.
         function recoverStaleNavigationOverlay() {
-            if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing')) return;
-            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
-            if (!stale.length) return;
+            // A stale Bootstrap class can survive an interrupted transition. Only
+            // preserve an overlay when it is actually visible and occupying the UI.
+            const activeOverlay = Array.from(document.querySelectorAll('.modal.show, .offcanvas.show, .offcanvas.showing'))
+                .some(function (el) {
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style.display !== 'none' && style.visibility !== 'hidden' &&
+                        Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+                });
+            if (activeOverlay) return;
+            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop:not(#sidebarBackdrop)');
+            if (!stale.length && document.body && document.body.style.pointerEvents !== 'none') return;
             stale.forEach(function (el) { el.remove(); });
             if (document.body) {
                 document.body.classList.remove('modal-open', 'offcanvas-open');
