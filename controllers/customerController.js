@@ -36,6 +36,22 @@ function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+function normalizeMac(value) {
+  const hex = String(value ?? "").trim().toLowerCase().replace(/[^0-9a-f]/g, "");
+  if (!/^[0-9a-f]{12}$/.test(hex)) return "";
+  return hex.match(/.{2}/g).join(":");
+}
+
+function getOpticalHealth(rxPowerDbm) {
+  if (rxPowerDbm === null || rxPowerDbm === undefined || rxPowerDbm === "") return { level: "unknown", label: "RX not available" };
+  const rx = Number(rxPowerDbm);
+  if (!Number.isFinite(rx)) return { level: "unknown", label: "RX not available" };
+  if (rx <= -27) return { level: "critical", label: "Critical" };
+  if (rx < -23) return { level: "warning", label: "Marginal" };
+  if (rx > -12) return { level: "warning", label: "Check Signal" };
+  return { level: "healthy", label: "Optimal" };
+}
+
 function formatBdPhoneNumber(phone) {
   if (!phone) return "—";
   let cleanPhone = String(phone).replace(/[^0-9]/g, "");
@@ -1182,7 +1198,7 @@ async function resolveCustomer360(idValue){
   const username=clean(customer.username,100);
   // Customer 360 must never open a MikroTik API socket. All optional live data
   // comes from PostgreSQL push snapshots and is ignored once older than 3 minutes.
-  const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult,telemetryResult]=await Promise.allSettled([
+  const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult]=await Promise.allSettled([
     db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
                     caller_id AS "callerId",received_at AS "receivedAt"
@@ -1192,54 +1208,6 @@ async function resolveCustomer360(idValue){
     db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
-    db.query(
-      `WITH identity AS (
-         SELECT
-           CASE
-             WHEN regexp_replace(lower(COALESCE($2,'')), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
-             THEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g')
-             ELSE NULL
-           END AS assigned_mac,
-           CASE
-             WHEN regexp_replace(lower(COALESCE(
-               (SELECT caller_id FROM pppoe_live_sessions
-                WHERE LOWER(username)=LOWER($1)
-                  AND received_at >= NOW() - INTERVAL '3 minutes'
-                  AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
-                ORDER BY received_at DESC LIMIT 1),
-               (SELECT caller_id FROM pppoe_users
-                WHERE LOWER(username)=LOWER($1) LIMIT 1),
-               ''
-             )), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
-             THEN regexp_replace(lower(COALESCE(
-               (SELECT caller_id FROM pppoe_live_sessions
-                WHERE LOWER(username)=LOWER($1)
-                  AND received_at >= NOW() - INTERVAL '3 minutes'
-                  AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
-                ORDER BY received_at DESC LIMIT 1),
-               (SELECT caller_id FROM pppoe_users
-                WHERE LOWER(username)=LOWER($1) LIMIT 1),
-               ''
-             )), '[^0-9a-f]', '', 'g')
-             ELSE NULL
-           END AS caller_mac
-       )
-       SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",
-              t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",
-              t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",
-              t.received_at AS "receivedAt",t.source_agent AS "sourceAgent",
-              t.pppoe_username AS "pppoeUsername"
-       FROM olt_telemetry t
-       CROSS JOIN identity i
-       WHERE i.assigned_mac IS NOT NULL
-         AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=i.assigned_mac
-          OR i.assigned_mac IS NULL
-         AND i.caller_mac IS NOT NULL
-         AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=i.caller_mac
-       ORDER BY t.received_at DESC NULLS LAST,t.observed_at DESC NULLS LAST
-       LIMIT 1`,
-      [username, clean(customer.onu_mac,100)]
-    )
   ]);
   const secret=routerRecordResult.status==="fulfilled"?routerRecordResult.value.rows?.[0]||null:null;
   const candidateSession=sessionResult.status==="fulfilled"?sessionResult.value.rows?.[0]||null:null;
@@ -1248,13 +1216,43 @@ async function resolveCustomer360(idValue){
   const plans=packageResult.status==="fulfilled"?packageResult.value.rows:[];
   const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
   const storedMac=callerIdResult.status==="fulfilled"?clean(callerIdResult.value.rows[0]?.caller_id,100):"";
-  const telemetryRow=telemetryResult.status==="fulfilled"?telemetryResult.value.rows?.[0]||null:null;
-  const telemetry=telemetryRow?{
-    ...telemetryRow,
-    stale:(()=>{const now=Date.now(),received=telemetryRow.receivedAt?new Date(telemetryRow.receivedAt).getTime():NaN,observed=telemetryRow.observedAt?new Date(telemetryRow.observedAt).getTime():NaN;return !Number.isFinite(received)||received>now||now-received>15*60*1000||!Number.isFinite(observed)||observed>now+5*60*1000||now-observed>30*60*1000;})(),
-    signalLevel:telemetryRow.rxPowerDbm===null||telemetryRow.rxPowerDbm===undefined||!Number.isFinite(Number(telemetryRow.rxPowerDbm))
-      ?"unknown":Number(telemetryRow.rxPowerDbm)<=-27?"critical":Number(telemetryRow.rxPowerDbm)<-23?"warning":Number(telemetryRow.rxPowerDbm)>-12?"high":"good"
-  }:null;
+  const storedOnuMac = normalizeMac(customer.onu_mac);
+  const sessionCallerMac = normalizeMac(session?.callerId);
+  const storedCallerMac = normalizeMac(storedMac);
+  const candidateMacs = [...new Set([storedOnuMac, sessionCallerMac, storedCallerMac].filter(Boolean))];
+  let telemetryRow = null;
+  try {
+    const telemetryResult = await db.query(
+      `SELECT olt_id AS "oltId", onu_id AS "onuId", onu_mac::text AS "onuMac",
+              pon_port AS "ponPort", status, rx_power_dbm AS "rxPowerDbm",
+              tx_power_dbm AS "txPowerDbm", observed_at AS "observedAt",
+              received_at AS "receivedAt", source_agent AS "sourceAgent",
+              pppoe_username AS "pppoeUsername"
+       FROM olt_telemetry
+       WHERE (NULLIF(BTRIM(pppoe_username), '') IS NOT NULL AND LOWER(BTRIM(pppoe_username)) = LOWER($1))
+          OR (cardinality($2::text[]) > 0 AND
+              regexp_replace(LOWER(onu_mac::text), '[^0-9a-f]', '', 'g') = ANY(
+                SELECT regexp_replace(LOWER(mac), '[^0-9a-f]', '', 'g') FROM unnest($2::text[]) AS mac
+              ))
+       ORDER BY CASE
+         WHEN LOWER(BTRIM(COALESCE(pppoe_username, ''))) = LOWER($1) THEN 0
+         WHEN regexp_replace(LOWER(onu_mac::text), '[^0-9a-f]', '', 'g') = regexp_replace(LOWER(COALESCE($3, '')), '[^0-9a-f]', '', 'g') THEN 1
+         ELSE 2 END, received_at DESC NULLS LAST, observed_at DESC NULLS LAST
+       LIMIT 1`,
+      [username, candidateMacs, storedOnuMac]
+    );
+    telemetryRow = telemetryResult.rows?.[0] || null;
+  } catch (error) {
+    console.warn('[Customer 360] OLT telemetry lookup failed:', error.message);
+  }
+  const telemetry=telemetryRow?(()=>{
+    const now=Date.now();
+    const received=telemetryRow.receivedAt?new Date(telemetryRow.receivedAt).getTime():NaN;
+    const observed=telemetryRow.observedAt?new Date(telemetryRow.observedAt).getTime():NaN;
+    const stale=!Number.isFinite(received)||received>now||now-received>15*60*1000||!Number.isFinite(observed)||observed>now+5*60*1000||now-observed>30*60*1000;
+    const opticalHealth=getOpticalHealth(telemetryRow.rxPowerDbm);
+    return {...telemetryRow,stale,signalLevel:opticalHealth.level,opticalHealth};
+  })():null;
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
   const billing=evaluateCustomerBillingStatus({expiration_date:expiration});
@@ -1266,7 +1264,7 @@ async function resolveCustomer360(idValue){
   const bytesOut=session?String(session.bytesOut??0):"0";
   const liveStatus=session?"online":"offline";
   return {
-    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(telemetry?.onuMac,100)||clean(customer.onu_mac,100),onuId:clean(telemetry?.onuId,100),rxPowerDbm:telemetry?.rxPowerDbm??null,txPowerDbm:telemetry?.txPowerDbm??null,opticalHealth:telemetry?.opticalHealth||getOpticalHealth(null),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(telemetry?.ponPort,120)||clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
     live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
     telemetry,
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
