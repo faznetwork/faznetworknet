@@ -69,7 +69,21 @@ exports.getCustomerMap = async (req, res) => {
          ORDER BY t.observed_at DESC NULLS LAST, t.received_at DESC
          LIMIT 1`,
         [mappingMac]
-      ) : Promise.resolve({ rows: [] })
+      ) : db.query(
+        `SELECT t.olt_id AS "oltId", t.onu_id AS "onuId",
+                t.onu_mac::text AS "onuMac", t.pon_port AS "ponPort",
+                t.status, t.rx_power_dbm AS "rxPowerDbm",
+                t.tx_power_dbm AS "txPowerDbm",
+                t.observed_at AS "observedAt", t.received_at AS "receivedAt",
+                t.source_agent AS "sourceAgent"
+         FROM olt_telemetry t
+         WHERE LOWER(BTRIM(t.pppoe_username))=LOWER($1)
+           AND NULLIF(BTRIM(t.pppoe_username), '') IS NOT NULL
+           AND NULLIF(BTRIM($2), '') IS NULL
+         ORDER BY t.observed_at DESC NULLS LAST, t.received_at DESC
+         LIMIT 1`,
+        [customer.username, customer.onu_mac]
+      )
     ]);
 
     const observations = observationsResult.rows;
@@ -95,7 +109,7 @@ exports.getCustomerMap = async (req, res) => {
         sourceDevice: telemetry?.oltId || null,
         status: readingIsFresh ? "measured" : (telemetry && (!telemetryFresh || rxStatus === "stale") ? "stale" : rxStatus),
         verified: readingIsFresh,
-        mappingMethod: telemetry ? "assigned_onu_mac" : null
+        mappingMethod: telemetry ? (mappingMac ? "assigned_onu_mac" : "collector_pppoe_username") : null
       },
       opticalTelemetry: telemetry ? {
         oltId: telemetry.oltId,

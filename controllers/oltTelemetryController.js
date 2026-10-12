@@ -134,18 +134,40 @@ exports.listTelemetry = async (req,res) => {
     `;
     let result;
     if(username) {
+      // Prefer the customer's explicitly assigned ONU MAC. If it is not set,
+      // allow the authenticated collector's explicit PPPoE username mapping;
+      // never substitute the router's PPPoE caller-id MAC for an ONU MAC.
       result=await db.query(`
         ${select}
-        WHERE NULLIF(BTRIM((
-          SELECT c.onu_mac FROM customers c
-          WHERE LOWER(c.username)=LOWER($1) LIMIT 1
-        )), '') IS NOT NULL
-          AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
-              regexp_replace(lower((
-                SELECT c.onu_mac FROM customers c
-                WHERE LOWER(c.username)=LOWER($1) LIMIT 1
-              )), '[^0-9a-f]', '', 'g')
-        ORDER BY t.observed_at DESC NULLS LAST
+        WHERE (
+          (
+            NULLIF(BTRIM((
+              SELECT c.onu_mac FROM customers c
+              WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+            )), '') IS NOT NULL
+            AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
+                regexp_replace(lower((
+                  SELECT c.onu_mac FROM customers c
+                  WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+                )), '[^0-9a-f]', '', 'g')
+          )
+          OR (
+            NULLIF(BTRIM((
+              SELECT c.onu_mac FROM customers c
+              WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+            )), '') IS NULL
+            AND NULLIF(BTRIM(t.pppoe_username), '') IS NOT NULL
+            AND LOWER(BTRIM(t.pppoe_username))=LOWER($1)
+          )
+        )
+        ORDER BY
+          CASE WHEN regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
+                    regexp_replace(lower((
+                      SELECT c.onu_mac FROM customers c
+                      WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+                    )), '[^0-9a-f]', '', 'g')
+               THEN 0 ELSE 1 END,
+          t.observed_at DESC NULLS LAST, t.received_at DESC
         LIMIT 1
       `,[username]);
     } else if(normalizedMac) {
