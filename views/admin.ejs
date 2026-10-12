@@ -5904,7 +5904,14 @@ async function deletePlan(id,name){
                         return;
                     }
                     record.addedNodes?.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) enforceCustomerDateDisplay(node);
+                        if (node.nodeType !== Node.ELEMENT_NODE) return;
+                        // Large SPA renders insert whole tables and sections. Do not
+                        // recursively scan every subtree for date fields on each insert;
+                        // modal lifecycle events and direct type-attribute changes cover
+                        // the customer forms without blocking the Admin UI.
+                        if (node.matches && node.matches('#connectionDate, #activationDate, #expirationDate, #cpExpiration, #editCustomerModal input[type="date"], #customerEditFormModal input[type="date"], #customerProfileModal input[type="date"]')) {
+                            enforceCustomerDateDisplay(node);
+                        }
                     });
                 });
             });
