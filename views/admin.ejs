@@ -6448,21 +6448,37 @@ async function deletePlan(id,name){
                 return true;
             }
 
+            function showRouteRestoreError(error) {
+                console.error('[Admin Routing] View restore failed:', error);
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!dynamic) return;
+                // Only replace an unresolved loading state. Do not overwrite a view
+                // that has already rendered its own success or error message.
+                const loading = dynamic.querySelector('.spinner-border, .spinner-grow');
+                if (!loading) return;
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger m-3';
+                alert.setAttribute('role', 'alert');
+                alert.textContent = 'এই পেজটি লোড করা যায়নি। আবার চেষ্টা করুন।' +
+                    (error && error.message ? ' (' + String(error.message).slice(0, 180) + ')' : '');
+                dynamic.replaceChildren(alert);
+            }
             function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
+                let result;
                 try {
-                    const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
-                    }
-                    return result;
+                    result = dispatchRoute(normalized);
                 } catch (error) {
-                    console.error('[Admin Routing] View restore failed:', error);
+                    showRouteRestoreError(error);
                     return false;
                 } finally {
                     state.restoring = false;
                 }
+                if (result && typeof result.catch === 'function') {
+                    result.catch(showRouteRestoreError);
+                }
+                return result;
             }
             function routeForCall(name, args) {
                 switch (name) {
