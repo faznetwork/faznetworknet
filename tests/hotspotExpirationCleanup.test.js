@@ -53,7 +53,12 @@ test("promotes a used voucher and records first-login expiry without expiring it
     },
     async cleanupExpiredHotspotUser() { throw new Error("must not clean up an active voucher"); }
   };
-  const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger() });
+  // Freeze time before this voucher's 24-hour first-login expiry so the test
+  // remains deterministic as the calendar advances.
+  const run = createHotspotExpirationCleanup({
+    db: database, mikrotikService: router, logger: quietLogger(),
+    now: () => new Date("2026-10-11T12:00:00.000Z")
+  });
   const result = await run();
   assert.equal(result.activated, 1);
   assert.equal(result.expired, 0);
