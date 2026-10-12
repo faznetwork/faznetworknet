@@ -44,6 +44,34 @@ function normalizeMac(value) {
   if (!/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw)) throw new Error('Invalid ONU MAC address.');
   return raw;
 }
+function getOpticalHealth(telemetry, now = Date.now()) {
+  if (!telemetry || telemetry.identityVerified !== true || telemetry.stale === true) {
+    return { level: "unknown", label: telemetry?.stale ? "Stale telemetry" : "RX not available" };
+  }
+  const receivedAt = new Date(telemetry.receivedAt || "").getTime();
+  const observedAt = new Date(telemetry.observedAt || "").getTime();
+  if (!Number.isFinite(receivedAt) || !Number.isFinite(observedAt) ||
+      receivedAt > now || observedAt > now ||
+      now - receivedAt > 15 * 60 * 1000 || now - observedAt > 30 * 60 * 1000) {
+    return { level: "unknown", label: "Stale telemetry" };
+  }
+  const rx = Number(telemetry.rxPowerDbm);
+  if (telemetry.rxPowerDbm === null || telemetry.rxPowerDbm === undefined ||
+      telemetry.rxPowerDbm === "" || !Number.isFinite(rx)) {
+    return { level: "unknown", label: "RX not available" };
+  }
+  if (rx <= -27) return { level: "critical", label: "Critical" };
+  if (rx < -23) return { level: "warning", label: "Marginal" };
+  if (rx > -12) return { level: "warning", label: "Check Signal" };
+  return { level: "healthy", label: "Optimal" };
+}
+function safeRawJson(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "{}";
+  try {
+    const json = JSON.stringify(value);
+    return json && Buffer.byteLength(json, "utf8") <= 12000 ? json : "{}";
+  } catch (_) { return "{}"; }
+}
 function normalizeReading(row, oltId) {
   const onuId=String(row.onuId||'').trim().slice(0,160);
   if (!onuId) throw new Error('Every reading must include onuId.');
@@ -64,7 +92,7 @@ function normalizeReading(row, oltId) {
     tx:power(row.txPowerDbm,-50,20),
     observedAt:observedAt.toISOString(),
     sourceAgent:String(row.sourceAgent||'').trim().slice(0,160)||null,
-    raw:row.raw && typeof row.raw==='object'&&!Array.isArray(row.raw) && Buffer.byteLength(JSON.stringify(row.raw))<=12000?JSON.stringify(row.raw):'{}'
+    raw:safeRawJson(row.raw)
   };
 }
 exports.syncTelemetry = [authenticateAgent, async (req,res) => {
@@ -104,6 +132,8 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
     return res.status(400).json({success:false,message:error.message||'Unable to store OLT telemetry.'});
   }
 }];
+exports.normalizeMac = normalizeMac;
+exports.getOpticalHealth = getOpticalHealth;
 exports.listTelemetry = async (req,res) => {
   try {
     await ensureSchema();
@@ -113,15 +143,15 @@ exports.listTelemetry = async (req,res) => {
     if(mac && /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) {
       result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry WHERE onu_mac=$1::macaddr ORDER BY observed_at DESC LIMIT 1`,[mac]);
     } else if(username) {
-      // Match only explicit ONU MAC or the stored PPPoE caller-id; a username alone is not optical identity proof.
+      // Only a saved ONU MAC or exact collector-ingested PPPoE username may associate telemetry.
       result=await db.query(
         "SELECT t.olt_id AS \"oltId\",t.onu_id AS \"onuId\",t.onu_mac::text AS \"onuMac\",t.pppoe_username AS \"pppoeUsername\",t.pon_port AS \"ponPort\",t.status,t.rx_power_dbm AS \"rxPowerDbm\",t.tx_power_dbm AS \"txPowerDbm\",t.observed_at AS \"observedAt\",t.received_at AS \"receivedAt\",t.source_agent AS \"sourceAgent\" " +
-        "FROM customers c LEFT JOIN pppoe_users pu ON LOWER(pu.username)=LOWER(c.username) " +
+        "FROM customers c " +
         "JOIN olt_telemetry t ON (" +
         "t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END " +
-        "OR t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END) " +
+        "OR LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) " +
         "WHERE LOWER(c.username)=LOWER($1) " +
-        "ORDER BY (t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END) DESC,t.observed_at DESC LIMIT 1",
+        "ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC,t.observed_at DESC LIMIT 1",
         [username]
       );
     } else {
