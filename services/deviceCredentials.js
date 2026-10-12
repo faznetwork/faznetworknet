@@ -15,4 +15,13 @@ function encrypt(value) {
   const data = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
   return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), data.toString('base64')].join('.');
 }
-module.exports = { encrypt };
+function decrypt(value) {
+  if (!value) return "";
+  const parts = String(value).split(".");
+  if (parts.length !== 3) throw new Error("Stored device credentials have an invalid format.");
+  const [iv, tag, data] = parts.map(part => Buffer.from(part, "base64"));
+  const decipher = crypto.createDecipheriv("aes-256-gcm", getKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+}
+module.exports = { encrypt, decrypt };
