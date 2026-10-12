@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Push-based SNMP telemetry collector. OIDs are vendor-specific and must be verified for the installed OLT firmware."""
-import json, logging, os, time, urllib.request, urllib.error
+"""Push-based SNMP telemetry collector for verified V-SOL OLT table OIDs."""
+import json, logging, os, re, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from pysnmp.hlapi import SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, nextCmd
@@ -30,50 +30,90 @@ def walk(oid):
             values[str(name)]=value.prettyPrint()
     return values
 
-def suffix_map(table):
-    result={}
-    for oid,value in table.items():
-        # Use the OID suffix as a stable row key for joining per-ONU tables.
-        suffix=oid.split(".", len(oid.split("."))-1)[-1]
-        result[suffix]=value
-    return result
+def suffix(oid, root):
+    root=root.rstrip(".")
+    return oid[len(root)+1:] if oid.startswith(root+".") else ""
+
+def load_customer_map():
+    raw=env("ONU_CUSTOMER_MAP_JSON","{}")
+    try:
+        mapping=json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("ONU_CUSTOMER_MAP_JSON must be valid JSON.") from exc
+    if not isinstance(mapping,dict):
+        raise RuntimeError("ONU_CUSTOMER_MAP_JSON must be a JSON object.")
+    return {str(k):str(v).strip() for k,v in mapping.items() if str(v).strip()}
+
+def parse_power(value, scale):
+    """Accept explicit dBm text or numeric values with an explicitly configured scale."""
+    if value is None: return None
+    text=str(value).strip()
+    match=re.search(r"(-?(?:\d+(?:\.\d+)?|\.\d+))\s*dBm\b", text, re.I)
+    try:
+        if match:
+            result=float(match.group(1))
+        else:
+            # Do not infer the unit of a raw numeric/octet value.
+            if not re.fullmatch(r"-?(?:\d+(?:\.\d+)?|\.\d+)", text):
+                return None
+            result=float(text)*float(scale)
+    except (TypeError,ValueError):
+        return None
+    return round(result,2) if -50 <= result <= 20 else None
 
 def collect():
-    # Configure these scalar/table roots from the OLT vendor's official MIB for this exact firmware.
     oid_mac=required("OID_ONU_MAC")
     oid_status=required("OID_ONU_STATUS")
     oid_rx=required("OID_ONU_RX_POWER")
     oid_tx=env("OID_ONU_TX_POWER")
     oid_pon=required("OID_ONU_PON_PORT")
-    macs=walk(oid_mac); statuses=walk(oid_status); rxs=walk(oid_rx); pons=walk(oid_pon)
+    oid_onu_id=required("OID_ONU_ID")
+    macs=walk(oid_mac)
+    statuses=walk(oid_status)
+    rxs=walk(oid_rx)
+    pons=walk(oid_pon)
+    onu_ids=walk(oid_onu_id)
     txs=walk(oid_tx) if oid_tx else {}
-    # OID suffixes must align across these table columns; if the vendor uses different indexes,
-    # define OIDs to return aligned table indexes or adapt this function after validating the MIB.
-    def index_map(table): return {oid[len(oid.split(".")[:0][0]):] if False else oid: value for oid,value in table.items()}
-    def suffix(oid,root): return oid[len(root.rstrip("."))+1:] if oid.startswith(root.rstrip(".")+".") else oid
-    keys=set(macs)
+    customer_map=load_customer_map()
+
+    def get_by_index(table, root, key):
+        return table.get(root.rstrip(".")+"."+key)
+
     rows=[]
     for mac_oid,mac in macs.items():
         key=suffix(mac_oid,oid_mac)
-        status=statuses.get(oid_status.rstrip(".")+"."+key, "unknown").lower()
-        rx=rxs.get(oid_rx.rstrip(".")+"."+key)
-        tx=txs.get(oid_tx.rstrip(".")+"."+key) if oid_tx else None
-        pon=pons.get(oid_pon.rstrip(".")+"."+key)
-        # Never guess power units: configure *_SCALE=0.1 if OLT reports tenths of dBm.
-        def power(v,scale):
-            if v is None: return None
-            try: return round(float(v)*float(scale),2)
-            except (TypeError,ValueError): return None
-        status_map={"online":"online","offline":"offline","los":"los"}
+        if not key or not re.fullmatch(r"\d+(?:\.\d+)*", key):
+            LOG.warning("Skipping ONU MAC row with unexpected OID index: %s", mac_oid)
+            continue
+        status_raw=get_by_index(statuses,oid_status,key)
+        rx_raw=get_by_index(rxs,oid_rx,key)
+        tx_raw=get_by_index(txs,oid_tx,key) if oid_tx else None
+        pon_raw=get_by_index(pons,oid_pon,key)
+        onu_raw=get_by_index(onu_ids,oid_onu_id,key)
+        # Use the actual PON/ONU columns where valid; fall back to the SNMP row index
+        # only when the device reports an invalid ONU ID. Never invent a PON value.
+        try: onu_number=int(str(onu_raw).strip())
+        except (TypeError,ValueError): onu_number=-1
+        try: pon_number=int(str(pon_raw).strip())
+        except (TypeError,ValueError): pon_number=-1
+        onu_id=f"{pon_number}/{onu_number}" if pon_number > 0 and onu_number >= 0 else key
+        status_map={}
         for env_key,normalized in (("ONU_STATUS_ONLINE_VALUE","online"),("ONU_STATUS_OFFLINE_VALUE","offline"),("ONU_STATUS_LOS_VALUE","los")):
             configured=env(env_key)
             if configured: status_map[configured.lower()]=normalized
-        rows.append({"onuId":key,"onuMac":mac.replace("-",":").lower(),"pppoeUsername":str(customer_map.get(key,"")).strip() or None,"ponPort":pon,
-            "status":status_map.get(status,"unknown"),
-            "rxPowerDbm":power(rx,env("RX_POWER_SCALE","1")),
-            "txPowerDbm":power(tx,env("TX_POWER_SCALE","1")) if tx is not None else None,
-            "observedAt":datetime.now(timezone.utc).isoformat(),"sourceAgent":env("COLLECTOR_ID","local-olt-collector"),
-            "raw":{"snmpIndex":key,"rxRaw":rx,"txRaw":tx,"statusRaw":status}})
+        status=status_map.get(str(status_raw or "unknown").strip().lower(),"unknown")
+        rows.append({
+            "onuId":onu_id,
+            "onuMac":str(mac).replace("-",":").lower(),
+            "pppoeUsername":customer_map.get(key) or customer_map.get(onu_id) or None,
+            "ponPort":f"PON {pon_number}" if pon_number > 0 else None,
+            "status":status,
+            "rxPowerDbm":parse_power(rx_raw,env("RX_POWER_SCALE","1")),
+            "txPowerDbm":parse_power(tx_raw,env("TX_POWER_SCALE","1")) if tx_raw is not None else None,
+            "observedAt":datetime.now(timezone.utc).isoformat(),
+            "sourceAgent":env("COLLECTOR_ID","local-olt-collector"),
+            "raw":{"snmpIndex":key,"ponRaw":pon_raw,"onuIdRaw":onu_raw,"rxRaw":rx_raw,"txRaw":tx_raw,"statusRaw":status_raw}
+        })
     return rows
 
 def push(readings):
