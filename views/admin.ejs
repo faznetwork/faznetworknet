@@ -2672,6 +2672,9 @@
             purgeStuckBackdrops(); currentCustomerTitleKey=''; currentPaymentTitleKey=''; setPageTitleSafe('MikroTik Management');
             hideAdminViews(); removeHotspotView();
             const dynamic=document.getElementById('dynamicPageContent'); if(!dynamic)return; dynamic.style.display='block';
+            const existingCorePanel=document.getElementById('general-settings-panel-router');
+            const corePanelHolder=document.getElementById('mikrotikCorePanelHolder');
+            if(existingCorePanel&&corePanelHolder&&existingCorePanel.parentElement!==corePanelHolder)corePanelHolder.appendChild(existingCorePanel);
             dynamic.innerHTML='<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading network device inventory…</div></section>';
             const esc=escapeHtml;
             try{
