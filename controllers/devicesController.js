@@ -114,6 +114,26 @@ exports.discoverMikrotik = async (req, res) => {
 };
 
 
+exports.discoveryStatus = async (req, res) => {
+  try {
+    const [setting, latest] = await Promise.all([
+      db.query("SELECT value FROM app_settings WHERE key='network_discovery_interval_minutes' LIMIT 1"),
+      db.query("SELECT id,run_type AS \"runType\",status,started_at AS \"startedAt\",finished_at AS \"finishedAt\",discovered_count AS \"discoveredCount\",matched_count AS \"matchedCount\",unmatched_count AS \"unmatchedCount\",error_message AS \"errorMessage\" FROM network_discovery_runs WHERE run_type='scheduled' ORDER BY started_at DESC LIMIT 1")
+    ]);
+    const allowed = new Set([5, 10, 15, 30, 60]);
+    const configured = Number(setting.rows[0]?.value || 10);
+    return res.json({
+      success: true,
+      intervalMinutes: allowed.has(configured) ? configured : 10,
+      lastRun: latest.rows[0] || null,
+      scheduler: "server-side read-only MikroTik discovery"
+    });
+  } catch (error) {
+    console.error("[Network discovery status]", error.message);
+    return res.status(503).json({ success: false, message: "Network discovery status is temporarily unavailable." });
+  }
+};
+
 exports.discoverNetworkMap = async (req, res) => {
   let runId = null;
   try {
