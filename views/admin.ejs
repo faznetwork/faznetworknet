@@ -2695,18 +2695,9 @@
         // Heal stale invisible Bootstrap backdrops that can intercept sidebar clicks.
         // Only clean overlays when no modal/offcanvas is actually open.
         function recoverStaleNavigationOverlay() {
-            // A stale Bootstrap class can survive an interrupted transition. Only
-            // preserve an overlay when it is actually visible and occupying the UI.
-            const activeOverlay = Array.from(document.querySelectorAll('.modal.show, .offcanvas.show, .offcanvas.showing'))
-                .some(function (el) {
-                    const style = window.getComputedStyle(el);
-                    const rect = el.getBoundingClientRect();
-                    return style.display !== 'none' && style.visibility !== 'hidden' &&
-                        Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
-                });
-            if (activeOverlay) return;
-            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop:not(#sidebarBackdrop)');
-            if (!stale.length && document.body && document.body.style.pointerEvents !== 'none') return;
+            if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing')) return;
+            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
+            if (!stale.length) return;
             stale.forEach(function (el) { el.remove(); });
             if (document.body) {
                 document.body.classList.remove('modal-open', 'offcanvas-open');
@@ -2752,21 +2743,8 @@
         // left behind by interrupted modal transitions, without polling RouterOS or APIs.
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
-            // Avoid a full-document overlay scan on every dynamic-page DOM mutation.
-            // The admin SPA frequently replaces large tables/cards; only inspect overlays
-            // when a modal/offcanvas/backdrop node is actually added or removed.
-            const overlaySelector = '.modal, .offcanvas, .modal-backdrop, .offcanvas-backdrop';
-            const overlayObserver = new MutationObserver(function (records) {
-                // Bootstrap backdrops are direct body children. Inspect only changed
-                // nodes themselves; recursively querying every inserted table/card subtree
-                // still makes large SPA renders expensive.
-                const overlayChanged = records.some(function (record) {
-                    const nodes = Array.from(record.addedNodes || []).concat(Array.from(record.removedNodes || []));
-                    return nodes.some(function (node) {
-                        return Boolean(node && node.nodeType === 1 && node.matches && node.matches(overlaySelector));
-                    });
-                });
-                if (overlayChanged) recoverStaleNavigationOverlay();
+            const overlayObserver = new MutationObserver(function () {
+                recoverStaleNavigationOverlay();
             });
             overlayObserver.observe(document.body, { childList: true, subtree: true });
             document.addEventListener('hidden.bs.modal', function () {
@@ -5904,14 +5882,7 @@ async function deletePlan(id,name){
                         return;
                     }
                     record.addedNodes?.forEach(node => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                        // Large SPA renders insert whole tables and sections. Do not
-                        // recursively scan every subtree for date fields on each insert;
-                        // modal lifecycle events and direct type-attribute changes cover
-                        // the customer forms without blocking the Admin UI.
-                        if (node.matches && node.matches('#connectionDate, #activationDate, #expirationDate, #cpExpiration, #editCustomerModal input[type="date"], #customerEditFormModal input[type="date"], #customerProfileModal input[type="date"]')) {
-                            enforceCustomerDateDisplay(node);
-                        }
+                        if (node.nodeType === Node.ELEMENT_NODE) enforceCustomerDateDisplay(node);
                     });
                 });
             });
@@ -6465,37 +6436,21 @@ async function deletePlan(id,name){
                 return true;
             }
 
-            function showRouteRestoreError(error) {
-                console.error('[Admin Routing] View restore failed:', error);
-                const dynamic = document.getElementById('dynamicPageContent');
-                if (!dynamic) return;
-                // Only replace an unresolved loading state. Do not overwrite a view
-                // that has already rendered its own success or error message.
-                const loading = dynamic.querySelector('.spinner-border, .spinner-grow');
-                if (!loading) return;
-                const alert = document.createElement('div');
-                alert.className = 'alert alert-danger m-3';
-                alert.setAttribute('role', 'alert');
-                alert.textContent = 'এই পেজটি লোড করা যায়নি। আবার চেষ্টা করুন।' +
-                    (error && error.message ? ' (' + String(error.message).slice(0, 180) + ')' : '');
-                dynamic.replaceChildren(alert);
-            }
             function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
-                let result;
                 try {
-                    result = dispatchRoute(normalized);
+                    const result = dispatchRoute(normalized);
+                    if (result && typeof result.catch === 'function') {
+                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
+                    }
+                    return result;
                 } catch (error) {
-                    showRouteRestoreError(error);
+                    console.error('[Admin Routing] View restore failed:', error);
                     return false;
                 } finally {
                     state.restoring = false;
                 }
-                if (result && typeof result.catch === 'function') {
-                    result.catch(showRouteRestoreError);
-                }
-                return result;
             }
             function routeForCall(name, args) {
                 switch (name) {
