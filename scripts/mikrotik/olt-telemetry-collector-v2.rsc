@@ -64,12 +64,11 @@
     :local onuNum -1;
     :onerror e in={ :set ponNum [:tonum $ponRaw]; } do={ :set ponNum -1; }
     :onerror e in={ :set onuNum [:tonum $onuRaw]; } do={ :set onuNum -1; }
+    # Use the SNMP table row suffix as the stable database key.
+    # PON/ONU columns are metadata until their mapping is verified across multiple rows.
     :local onuId $key;
     :local ponPort "";
-    :if (($ponNum > 0) && ($onuNum >= 0)) do={
-      :set onuId ($ponNum . "/" . $onuNum);
-      :set ponPort ("PON " . $ponNum);
-    }
+    :if ($ponNum > 0) do={ :set ponPort ("PON " . $ponNum); }
     :local reading {"onuId"=$onuId;"onuMac"=$mac;"ponPort"=$ponPort;"status"="unknown";"rxPowerDbm"=$rxRaw;"txPowerDbm"=$txRaw;"sourceAgent"="RouterOS-SNMP-VSOL";"raw"={"snmpIndex"=$key;"statusRaw"=$statusRaw;"ponRaw"=$ponRaw;"onuIdRaw"=$onuRaw;"rxRaw"=$rxRaw;"txRaw"=$txRaw}};
     :set readings ($readings, $reading);
     :set count ($count + 1);
