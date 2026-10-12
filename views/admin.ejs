@@ -2748,12 +2748,13 @@
             // when a modal/offcanvas/backdrop node is actually added or removed.
             const overlaySelector = '.modal, .offcanvas, .modal-backdrop, .offcanvas-backdrop';
             const overlayObserver = new MutationObserver(function (records) {
+                // Bootstrap backdrops are direct body children. Inspect only changed
+                // nodes themselves; recursively querying every inserted table/card subtree
+                // still makes large SPA renders expensive.
                 const overlayChanged = records.some(function (record) {
                     const nodes = Array.from(record.addedNodes || []).concat(Array.from(record.removedNodes || []));
                     return nodes.some(function (node) {
-                        if (!node || node.nodeType !== 1) return false;
-                        return (node.matches && node.matches(overlaySelector)) ||
-                            (node.querySelector && Boolean(node.querySelector(overlaySelector)));
+                        return Boolean(node && node.nodeType === 1 && node.matches && node.matches(overlaySelector));
                     });
                 });
                 if (overlayChanged) recoverStaleNavigationOverlay();
