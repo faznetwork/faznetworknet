@@ -205,6 +205,12 @@
       tbody.innerHTML=(data.logs||[]).map(log=>'<tr><td>'+esc(log.created_at?new Date(log.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—')+'</td><td>'+esc(log.actor_username)+'</td><td>'+esc(log.actor_role)+'</td><td>'+esc(log.action)+'</td><td>'+esc(log.target_user_id||'—')+'</td><td><code class="text-wrap">'+esc(JSON.stringify(log.details||{}))+'</code></td><td>'+esc(log.ip_address||'—')+'</td></tr>').join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No audit events recorded yet.</td></tr>';
     }catch(error){tbody.innerHTML='<tr><td colspan="7" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
   };
+  // This deferred script replaces the main admin loaders after their initial route wrappers
+  // are installed. Re-wrap these entry points so reload/back/forward retain the selected page.
+  ['loadStaffManagement','loadSupportTickets','loadAuditLogs'].forEach(name=>{
+    if(typeof window.__fazWrapAdminNavigation==='function')window.__fazWrapAdminNavigation(name);
+  });
+
   const ticketForm=document.getElementById('rbacTicketForm');
   if(ticketForm)ticketForm.addEventListener('submit',async event=>{
     event.preventDefault();

@@ -6523,6 +6523,10 @@ async function deletePlan(id,name){
                 'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard', 'loadVpnModule', 'loadPortForwarding'
             ].forEach(wrapNavigation);
 
+            // The deferred RBAC sidebar script replaces a few loaders after this IIFE runs.
+            // Expose the same safe wrapper so those replacement handlers keep URL persistence.
+            window.__fazWrapAdminNavigation = function(name) { wrapNavigation(name); };
+
             window.__fazRestoreAdminRoute = function() {
                 restoreRoute(readRoute(), true);
             };
