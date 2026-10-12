@@ -146,7 +146,7 @@ async function loadNetworkMap(){
   rows.innerHTML='<tr><td colspan="5" class="text-muted text-center py-3">'+esc(e.message||'Network mapping unavailable')+'</td></tr>';
  }
 }
-async function load(){try{state=await api('/api/customers/'+encodeURIComponent(id)+'/profile');render();await loadAuditLogs()}catch(e){toast(e.message,'danger')}}
+async function load(){try{state=await api('/api/customers/'+encodeURIComponent(id)+'/profile');render();await loadAuditLogs();await loadNetworkMap()}catch(e){toast(e.message,'danger')}}
 let livePollBusy=false;
 $('refreshNetworkMap')?.addEventListener('click',loadNetworkMap);
 
@@ -154,7 +154,7 @@ async function loadLiveSession(){
  if(livePollBusy)return;livePollBusy=true;
  try{
   const d=await api('/api/customers/'+encodeURIComponent(id)+'/live-session');
-  const l=d.live||{},online=Boolean(l.online);
+  const l=d.live||{},online=Boolean(l.online);state=state||{};state.live={...(state.live||{}),...l,isLive:online};
   $('uptime').textContent=online?(l.uptime||'Connected'):'Offline';
   $('rx').textContent=online?(l.download||'0 bps'):'Offline';
   $('tx').textContent=online?(l.upload||'0 bps'):'Offline';
@@ -201,5 +201,5 @@ async function loadUsageRecords(){
 $('usageRecord').onclick=()=>{open('usageModal');loadUsageRecords()};
 $('usageRefresh').onclick=loadUsageRecords;
 $('refreshAudit').onclick=loadAuditLogs;$('showPass').onclick=()=>{$('pass').type=$('pass').type==='password'?'text':'password'};// Avoid overlapping background refreshes: profile + audit every 60s, live RouterOS status every 3s, topology every 60s.
-load();loadLiveSession();loadNetworkMap();setInterval(load,60000);setInterval(loadLiveSession,3000);setInterval(loadNetworkMap,60000)})();
+load();loadLiveSession();setInterval(load,60000);setInterval(loadLiveSession,3000);setInterval(loadNetworkMap,60000)})();
 </script></body></html>
