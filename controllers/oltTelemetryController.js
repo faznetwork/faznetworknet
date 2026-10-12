@@ -183,22 +183,7 @@ exports.listTelemetry = async (req,res) => {
                (SELECT p.caller_id FROM pppoe_users p WHERE LOWER(p.username)=LOWER($1) LIMIT 1),
                ''
              )), '[^0-9a-f]', '', 'g'))
-          OR
-          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM pppoe_live_sessions s
-             WHERE LOWER(s.username)=LOWER($1)
-               AND s.received_at >= NOW() - INTERVAL '3 minutes'
-               AND NULLIF(BTRIM(s.caller_id),'') IS NOT NULL
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM pppoe_users p
-             WHERE LOWER(p.username)=LOWER($1) AND NULLIF(BTRIM(p.caller_id),'') IS NOT NULL
-           )
-           AND LOWER(COALESCE(t.pppoe_username,''))=LOWER($1))
-        ORDER BY
-          CASE WHEN LOWER(COALESCE(t.pppoe_username,''))=LOWER($1) THEN 0 ELSE 1 END,
-          t.observed_at DESC NULLS LAST
+        ORDER BY t.observed_at DESC NULLS LAST
         LIMIT 1
       `,[username]);
     } else if(normalizedMac) {
@@ -214,9 +199,13 @@ exports.listTelemetry = async (req,res) => {
       `);
     }
     const readings=result.rows.map(row=>{
-      const age=Date.now()-new Date(row.receivedAt).getTime();
+      const now=Date.now();
+      const receivedAt=row.receivedAt?new Date(row.receivedAt).getTime():NaN;
+      const observedAt=row.observedAt?new Date(row.observedAt).getTime():NaN;
       const rx=row.rxPowerDbm==null?null:Number(row.rxPowerDbm);
-      row.stale=!Number.isFinite(age)||age<0||age>15*60*1000;
+      // A recent collector arrival does not make an old optical measurement live.
+      row.stale=!Number.isFinite(receivedAt)||receivedAt>now||now-receivedAt>15*60*1000||
+        !Number.isFinite(observedAt)||observedAt>now+5*60*1000||now-observedAt>30*60*1000;
       row.signalLevel=rx===null||!Number.isFinite(rx)?'unknown':
         rx<=-27?'critical':rx < -23?'warning':rx > -12?'high':'good';
       return row;
