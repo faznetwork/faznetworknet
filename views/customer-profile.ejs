@@ -55,7 +55,11 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <div class="toast-container position-fixed bottom-0 end-0 p-3"><div id="toast" class="toast"><div class="toast-body"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-(()=>{const root=document.getElementById('app'),id=root.dataset.id,$=x=>document.getElementById(x);let state;
+(()=>{const root=document.getElementById('app'),id=root.dataset.id,$=x=>document.getElementById(x);let state={};
+let livePollBusy=false,networkMapBusy=false,profileLoadBusy=false;
+const hasValue=v=>v!==null&&v!==undefined&&String(v).trim()!==''&&String(v).trim()!=='—';
+function mergeCustomerState(incoming){const previous=state||{},next=incoming||{},oldLive=previous.live||{},newLive=next.live||{};state={...previous,...next,customer:{...(previous.customer||{}),...(next.customer||{})},package:{...(previous.package||{}),...(next.package||{})},live:{...oldLive,...newLive,mac:hasValue(newLive.mac)?newLive.mac:(oldLive.mac||''),ip:hasValue(newLive.ip)?newLive.ip:(oldLive.ip||''),poolName:hasValue(newLive.poolName)?newLive.poolName:(oldLive.poolName||'')}};render();renderRouterIdentity();}
+function renderRouterIdentity(){const c=state?.customer||{},l=state?.live||{},mac=(hasValue(l.mac)?l.mac:'')||(hasValue(c.routerMac)?c.routerMac:'')||'—';$('topoRouterMac').textContent='Router MAC '+mac;$('networkMapRouterMac').textContent=mac;$('routerMac').textContent=mac;$('liveIp').textContent=(hasValue(l.ip)?'IP '+l.ip:'IP —')+' · Router MAC '+mac;}
 const api=async(url,o={})=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),8000);try{const r=await fetch(url,{...o,signal:c.signal,headers:{Accept:'application/json',...(o.headers||{})}}),d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw Error(d.message||'Request failed');return d}catch(e){if(e.name==='AbortError')throw Error('Request timed out after 8 seconds.');throw e}finally{clearTimeout(t)}};
 const toast=(m,type='success')=>{const e=$('toast');e.className='toast text-bg-'+type;e.querySelector('.toast-body').textContent=m;bootstrap.Toast.getOrCreateInstance(e,{delay:3500}).show()};
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -63,19 +67,21 @@ const bytes=v=>{const n=Number(v||0);if(!n)return'0 B';const u=['B','KB','MB','G
 const date=v=>v?FazDate.formatDate(v):'—';
 const open=x=>bootstrap.Modal.getOrCreateInstance($(x)).show();
 function render(){const c=state.customer,l=state.live,p=state.package||{},online=!!l.isLive,billingStatus=String(c.billing_status||'unpaid').toLowerCase(),billingLabel=String(c.billing_label||'Unpaid / Expired'),billingClass=String(c.billing_badge_class||'badge bg-danger'),s=String(c.status||'active').toLowerCase(),suspended=s==='suspended'||s==='inactive';
-$('name').textContent=c.name||'Customer';$('phone').textContent=c.phone||'—';$('username').textContent=c.username||'—';$('liveIp').textContent=online?'IP '+(l.ip||'—')+' · Router MAC '+(l.mac||'—'):'Offline · Last Router MAC '+(l.mac||'—');$('status').textContent='Billing: '+(billingStatus==='expired'?'Expired':billingLabel);$('status').className=billingStatus==='expired'?'badge bg-danger':billingClass;$('routerStatus').innerHTML='<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');$('routerStatus').className='badge '+(online?'bg-success':'bg-secondary');
-$('pkg').textContent=p.name||c.packageName||'—';$('rate').textContent='Bandwidth '+(p.rateLimit||'Not set');$('pool').textContent=p.poolName||'—';$('days').textContent=billingLabel;$('expiry').textContent=date(c.expirationDate);$('cycle').textContent=String(c.billingCycle||'monthly')==='custom_days'?'Custom Days ('+Number(c.billingDurationDays||0)+' days)':'Monthly';$('uptime').textContent=online?(l.uptime||'Connected'):'Offline';$('rx').textContent=online?'Waiting for live rate…':'Offline';$('tx').textContent=online?'Waiting for live rate…':'Offline';$('trafficStatus').textContent=online?'Connected · sampling traffic…':'Offline · no active PPPoE session';$('reason').textContent=l.lastDisconnectReason||c.lastDisconnectReason||'Not available';
+$('name').textContent=c.name||'Customer';$('phone').textContent=c.phone||'—';$('username').textContent=c.username||'—';$('liveIp').textContent=(online?'IP '+(l.ip||'—'):'Offline · IP '+(l.ip||'—'))+' · Router MAC '+(hasValue(l.mac)?l.mac:(hasValue(c.routerMac)?c.routerMac:'—'));$('status').textContent='Billing: '+(billingStatus==='expired'?'Expired':billingLabel);$('status').className=billingStatus==='expired'?'badge bg-danger':billingClass;$('routerStatus').innerHTML='<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');$('routerStatus').className='badge '+(online?'bg-success':'bg-secondary');
+$('pkg').textContent=p.name||c.packageName||'—';$('rate').textContent='Bandwidth '+(p.rateLimit||'Not set');const resolvedPool=hasValue(l.poolName)?l.poolName:(hasValue(p.poolName)?p.poolName:'');$('pool').textContent=resolvedPool||'Pool not resolved';$('days').textContent=billingLabel;$('expiry').textContent=date(c.expirationDate);$('cycle').textContent=String(c.billingCycle||'monthly')==='custom_days'?'Custom Days ('+Number(c.billingDurationDays||0)+' days)':'Monthly';$('uptime').textContent=online?(l.uptime||'Connected'):'Offline';$('rx').textContent=online?'Waiting for live rate…':'Offline';$('tx').textContent=online?'Waiting for live rate…':'Offline';$('trafficStatus').textContent=online?'Connected · sampling traffic…':'Offline · no active PPPoE session';$('reason').textContent=l.lastDisconnectReason||c.lastDisconnectReason||'Not available';
 [['fullName',c.fullName],['phone2',c.phone],['alt',c.alternativePhone],['nid',c.nid],['address',c.installationAddress],['area',c.areaZone],['connection',date(c.connectionDate)],['user2',c.username],['routerMac',l.mac||c.routerMac||''],['box',c.splitterBox],['core',c.fiberCore],['olt',c.oltPonPort],['remote',c.remoteAddress],['contactEmail',c.email],['contactWhatsapp',c.whatsapp_phone||c.phone],['contactTelegram',c.telegram_link],['contactFacebook',c.facebook_link]].forEach(([k,v])=>$(k).textContent=v||'—');if(!$('onu').dataset.oltVerified)$('onu').textContent='Awaiting live OLT MAC';$('pass').value=c.password||'';$('renewPkg').value=p.name||c.packageName||'';$('amount').value=Number(p.price||0).toFixed(2);$('suspend').innerHTML='<i class="bi '+(suspended?'bi-check-circle':'bi-slash-circle')+' me-1"></i>'+(suspended?'Reactivate Line':'Suspend Line');$('pkgSelect').innerHTML=(state.plans||[]).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+' · ৳'+Number(x.price||0).toFixed(2)+'</option>').join('')||'<option>No packages</option>';
 const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+date(x.date)+'</td><td>'+esc(x.packageName||p.name||'—')+'</td><td>৳'+Number(x.amount||0).toFixed(2)+'</td><td>'+esc(x.method||'—')+'</td><td class="mono">'+esc(x.trxId||'—')+'</td><td><span class="badge '+(String(x.status||'').toUpperCase()==='PAID'?'bg-success':'bg-secondary')+'">'+esc(x.status||'—')+'</span></td></tr>').join(''):'<tr><td colspan="7" class="text-center text-muted py-4">No transactions. Record the first payment above.</td></tr>'}
 async function loadNetworkMap(){
+ if(networkMapBusy)return;networkMapBusy=true;
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
  let hasFreshCollectorTelemetry=false;
  // Render customer/session data first. The optional network-map endpoint may fail
  // independently; it must never prevent known customer IP/MAC/pool from appearing.
  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
- $('topoPool').textContent=pkg.poolName||'Not assigned';
+ const initialPool=hasValue(live.poolName)?live.poolName:(hasValue(pkg.poolName)?pkg.poolName:'');
+ $('topoPool').textContent=initialPool||'Pool not resolved';
  $('topoIp').textContent='IP '+(live.ip||'—');
- $('topoRouterMac').textContent='Router MAC '+(live.mac||customer.routerMac||'—');
+ renderRouterIdentity();
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
   // Show useful saved inventory immediately, but label it clearly as unverified.
@@ -130,7 +136,10 @@ async function loadNetworkMap(){
   status.textContent=d.discoveryStatus==='observations_available'?'Observations available':'Awaiting first discovery';
   status.className='fw-semibold '+(d.discoveryStatus==='observations_available'?'text-success':'text-muted');
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
-  mac.textContent=d.routerMac||'—';
+  const currentLive=state?.live||{},currentCustomer=state?.customer||{};
+  const finalMac=(hasValue(currentLive.mac)?currentLive.mac:'')||(hasValue(d.routerMac)?d.routerMac:'')||(hasValue(currentCustomer.routerMac)?currentCustomer.routerMac:'');
+  if(hasValue(finalMac)){mac.textContent=finalMac;$('topoRouterMac').textContent='Router MAC '+finalMac;$('routerMac').textContent=finalMac;}
+  const poolName=hasValue(currentLive.poolName)?currentLive.poolName:(hasValue(state?.package?.poolName)?state.package.poolName:'');$('topoPool').textContent=poolName||'Pool not resolved';
   // Legacy customer-column readings must not overwrite fresher collector telemetry.
   if(!hasFreshCollectorTelemetry){
    const rx=d.rxPower||{};
@@ -142,24 +151,26 @@ async function loadNetworkMap(){
   rows.innerHTML=list.length?list.map(o=>'<tr><td>'+esc(o.observationType||'—')+'</td><td class="mono">'+esc(o.identityValue||'—')+'</td><td>'+esc(o.matchStatus||'—')+'</td><td>'+esc(o.sourceDevice||'—')+'</td><td>'+esc(o.observedAt?new Date(o.observedAt).toLocaleString():'—')+'</td></tr>').join(''):'<tr><td colspan="5" class="text-muted text-center py-3">No network observations recorded yet. Run read-only discovery from Device Management.</td></tr>';
  }catch(e){
   status.textContent='Unavailable';status.className='fw-semibold text-warning';
-  last.textContent='—';mac.textContent='—';
+  last.textContent=last.textContent||'No observations yet';renderRouterIdentity();
   rows.innerHTML='<tr><td colspan="5" class="text-muted text-center py-3">'+esc(e.message||'Network mapping unavailable')+'</td></tr>';
- }
+ }finally{networkMapBusy=false;}
 }
-async function load(){try{state=await api('/api/customers/'+encodeURIComponent(id)+'/profile');render();await loadAuditLogs();await loadNetworkMap()}catch(e){toast(e.message,'danger')}}
-let livePollBusy=false;
+async function load(){if(profileLoadBusy)return;profileLoadBusy=true;try{const incoming=await api('/api/customers/'+encodeURIComponent(id)+'/profile');mergeCustomerState(incoming);await loadAuditLogs();await loadNetworkMap()}catch(e){toast(e.message,'danger')}finally{profileLoadBusy=false}}
+
 $('refreshNetworkMap')?.addEventListener('click',loadNetworkMap);
 
 async function loadLiveSession(){
  if(livePollBusy)return;livePollBusy=true;
  try{
   const d=await api('/api/customers/'+encodeURIComponent(id)+'/live-session');
-  const l=d.live||{},online=Boolean(l.online);state=state||{};state.live={...(state.live||{}),...l,isLive:online};
+  const incoming=d.live||{},previous=state.live||{},online=Boolean(incoming.online);
+  state.live={...previous,...incoming,mac:hasValue(incoming.mac)?incoming.mac:(previous.mac||''),ip:hasValue(incoming.ip)?incoming.ip:(previous.ip||''),poolName:hasValue(incoming.poolName)?incoming.poolName:(previous.poolName||''),isLive:online};
+  const l=state.live;
   $('uptime').textContent=online?(l.uptime||'Connected'):'Offline';
   $('rx').textContent=online?(l.download||'0 bps'):'Offline';
   $('tx').textContent=online?(l.upload||'0 bps'):'Offline';
   $('trafficStatus').textContent=online?'Live · '+(l.ip||'IP unavailable')+(l.interface?' · '+l.interface:''):'Offline · no active PPPoE session';
-  $('liveIp').textContent=online?'IP '+(l.ip||'—')+' · MAC '+(l.mac||'—'):'Offline · Last MAC '+(l.mac||'—');
+  renderRouterIdentity();
   $('routerStatus').innerHTML='<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');
   $('routerStatus').className='badge '+(online?'bg-success':'bg-secondary');
  }catch(error){
