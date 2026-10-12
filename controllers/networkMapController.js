@@ -51,7 +51,7 @@ exports.getCustomerMap = async (req, res) => {
         "OR t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END) " +
         "WHERE LOWER(c.username)=LOWER($1) " +
         "ORDER BY (t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END) DESC, t.observed_at DESC LIMIT 1",
-        [customer.username, clean(customer.onu_mac, 100), clean(customer.caller_id, 100)]
+        [customer.username]
       );
       oltTelemetry = telemetryResult.rows[0] || null;
       if (oltTelemetry) {
