@@ -388,7 +388,6 @@ exports.getDiagram = async (req, res) => {
         const rx = oltTelemetry.rxPowerDbm;
         oltTelemetry.signalLevel = rx === null || rx === undefined ? "unknown" : Number(rx) < -27 ? "weak" : Number(rx) <= -25 ? "warning" : "good";
         oltTelemetry.matchedBy = matchTelemetryIdentity({
-          username: customer.username,
           onuMac: customer.onu_mac,
           callerId: customer.caller_id
         }, oltTelemetry) || "unknown";
