@@ -49,7 +49,7 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
   }
 
   const telemetryResult = await db.query(
-    \`SELECT olt_id AS "oltId", onu_id AS "onuId", onu_mac::text AS "onuMac",
+    `SELECT olt_id AS "oltId", onu_id AS "onuId", onu_mac::text AS "onuMac",
             pon_port AS "ponPort", status, rx_power_dbm AS "rxPowerDbm",
             tx_power_dbm AS "txPowerDbm", observed_at AS "observedAt",
             received_at AS "receivedAt", source_agent AS "sourceAgent", raw
@@ -62,7 +62,7 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
           SELECT 1
             FROM jsonb_array_elements_text(t.raw->'clientMacs') AS learned(value)
            WHERE LOWER(REPLACE(learned.value, '-', ':')) = ANY($1::text[])
-        )\`,
+        )`,
     [macs]
   );
   const telemetryRows = telemetryResult.rows;
@@ -77,10 +77,10 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
   const onuMacs = candidateTelemetry.map(row => String(row.onuMac).toLowerCase());
   const assignedResult = onuMacs.length
     ? await db.query(
-        \`SELECT id, username, LOWER(TRIM(onu_mac)) AS "onuMac"
+        `SELECT id, username, LOWER(TRIM(onu_mac)) AS "onuMac"
            FROM customers
           WHERE NULLIF(TRIM(onu_mac), '') IS NOT NULL
-            AND LOWER(TRIM(onu_mac)) = ANY($1::text[])\`,
+            AND LOWER(TRIM(onu_mac)) = ANY($1::text[])`,
         [onuMacs]
       )
     : { rows: [] };
@@ -125,11 +125,11 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
     }
 
     const update = await db.query(
-      \`UPDATE customers
+      `UPDATE customers
           SET onu_mac=$1, olt_pon_port=$2, updated_at=NOW()
         WHERE id=$3
           AND (NULLIF(TRIM(onu_mac), '') IS NULL OR LOWER(TRIM(onu_mac))=LOWER($1))
-        RETURNING id, username\`,
+        RETURNING id, username`,
       [onuMac, String(telemetry.ponPort).slice(0, 120), customer.id]
     );
     if (update.rowCount !== 1) { ambiguous++; continue; }
@@ -145,12 +145,12 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
     mapped.push({ username: customer.username, routerMac: candidate.routerMac, onuMac, onuId: telemetry.onuId, ponPort: telemetry.ponPort });
     if (runId) {
       await db.query(
-        \`INSERT INTO network_observations
+        `INSERT INTO network_observations
           (discovery_run_id, source_device_id, customer_id, observation_type,
            identity_type, identity_value, observed_value, match_status,
            match_confidence, evidence)
          VALUES ($1,$2,$3,'onu_auto_mapping','router_mac',$4,$5::jsonb,
-                 'matched',1,$6::jsonb)\`,
+                 'matched',1,$6::jsonb)`,
         [runId, sourceDeviceId, customer.id, candidate.routerMac,
           JSON.stringify({ username: customer.username, onuMac, onuId: telemetry.onuId, ponPort: telemetry.ponPort }),
           JSON.stringify(evidence)]
