@@ -148,7 +148,7 @@ exports.getLatestSummary = async (req, res) => {
 
 exports.getDiagram = async (req, res) => {
   try {
-    const [devices, links, latestRun, observationCounts] = await Promise.all([
+    const [devices, links, latestRun, observationCounts, linkCounts] = await Promise.all([
       db.query(
         `SELECT id,device_type AS "deviceType",name,vendor,model,
                 host(management_ip) AS "managementIp",mac_address::text AS "macAddress",
@@ -181,6 +181,13 @@ exports.getDiagram = async (req, res) => {
                 COUNT(*) FILTER (WHERE match_status='unmatched')::int AS "unmatchedObservations"
          FROM network_observations
          WHERE observed_at >= NOW() - INTERVAL '30 minutes'`
+      ),
+      db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE match_status='verified')::int AS verified,
+                COUNT(*) FILTER (WHERE match_status='unverified')::int AS unverified,
+                COUNT(*) FILTER (WHERE match_status='disputed')::int AS disputed
+         FROM network_topology_links`
       )
     ]);
     return res.json({
@@ -190,10 +197,10 @@ exports.getDiagram = async (req, res) => {
       latestRun: latestRun.rows[0] || null,
       counts: {
         devices: devices.rowCount,
-        totalMappings: links.rowCount,
-        verifiedMappings: links.rows.filter(link => link.matchStatus === "verified").length,
-        unverifiedMappings: links.rows.filter(link => link.matchStatus === "unverified").length,
-        disputedMappings: links.rows.filter(link => link.matchStatus === "disputed").length,
+        totalMappings: linkCounts.rows[0]?.total || 0,
+        verifiedMappings: linkCounts.rows[0]?.verified || 0,
+        unverifiedMappings: linkCounts.rows[0]?.unverified || 0,
+        disputedMappings: linkCounts.rows[0]?.disputed || 0,
         observationsLast30Minutes: observationCounts.rows[0]?.totalObservations || 0,
         matchedObservationsLast30Minutes: observationCounts.rows[0]?.matchedObservations || 0,
         ambiguousObservationsLast30Minutes: observationCounts.rows[0]?.ambiguousObservations || 0,
