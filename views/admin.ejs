@@ -2743,8 +2743,20 @@
         // left behind by interrupted modal transitions, without polling RouterOS or APIs.
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
-            const overlayObserver = new MutationObserver(function () {
-                recoverStaleNavigationOverlay();
+            // Avoid a full-document overlay scan on every dynamic-page DOM mutation.
+            // The admin SPA frequently replaces large tables/cards; only inspect overlays
+            // when a modal/offcanvas/backdrop node is actually added or removed.
+            const overlaySelector = '.modal, .offcanvas, .modal-backdrop, .offcanvas-backdrop';
+            const overlayObserver = new MutationObserver(function (records) {
+                const overlayChanged = records.some(function (record) {
+                    const nodes = Array.from(record.addedNodes || []).concat(Array.from(record.removedNodes || []));
+                    return nodes.some(function (node) {
+                        if (!node || node.nodeType !== 1) return false;
+                        return (node.matches && node.matches(overlaySelector)) ||
+                            (node.querySelector && Boolean(node.querySelector(overlaySelector)));
+                    });
+                });
+                if (overlayChanged) recoverStaleNavigationOverlay();
             });
             overlayObserver.observe(document.body, { childList: true, subtree: true });
             document.addEventListener('hidden.bs.modal', function () {
@@ -6436,21 +6448,37 @@ async function deletePlan(id,name){
                 return true;
             }
 
+            function showRouteRestoreError(error) {
+                console.error('[Admin Routing] View restore failed:', error);
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!dynamic) return;
+                // Only replace an unresolved loading state. Do not overwrite a view
+                // that has already rendered its own success or error message.
+                const loading = dynamic.querySelector('.spinner-border, .spinner-grow');
+                if (!loading) return;
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger m-3';
+                alert.setAttribute('role', 'alert');
+                alert.textContent = 'এই পেজটি লোড করা যায়নি। আবার চেষ্টা করুন।' +
+                    (error && error.message ? ' (' + String(error.message).slice(0, 180) + ')' : '');
+                dynamic.replaceChildren(alert);
+            }
             function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
+                let result;
                 try {
-                    const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
-                    }
-                    return result;
+                    result = dispatchRoute(normalized);
                 } catch (error) {
-                    console.error('[Admin Routing] View restore failed:', error);
+                    showRouteRestoreError(error);
                     return false;
                 } finally {
                     state.restoring = false;
                 }
+                if (result && typeof result.catch === 'function') {
+                    result.catch(showRouteRestoreError);
+                }
+                return result;
             }
             function routeForCall(name, args) {
                 switch (name) {
