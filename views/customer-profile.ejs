@@ -34,7 +34,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 </section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body"><div class="row g-4">
 <div class="col-lg-6"><h5>Personal & Compliance</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="col-md-6"><div class="label">Phone</div><div id="phone2">—</div></div><div class="col-md-6"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="col-md-6"><div class="label">NID Number</div><div id="nid">—</div></div><div class="col-12"><div class="label">Installation Address</div><div id="address">—</div></div><div class="col-md-6"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="col-md-6"><div class="label">Connection Date</div><div id="connection">—</div></div></div><div class="border rounded-3 p-3 mt-4 bg-light-subtle"><div class="d-flex align-items-center gap-2 mb-3"><i class="bi bi-chat-dots fs-5 text-success"></i><div><h6 class="mb-0 fw-bold">Contact &amp; Notification Channels</h6><div class="small text-muted">Saved customer contact details</div></div></div><div class="row g-3"><div class="col-md-6"><div class="label">Email</div><div id="contactEmail" class="text-break">—</div></div><div class="col-md-6"><div class="label">WhatsApp</div><div id="contactWhatsapp" class="text-break">—</div></div><div class="col-md-6"><div class="label">Telegram</div><div id="contactTelegram" class="text-break">—</div></div><div class="col-md-6"><div class="label">Facebook / Messenger</div><div id="contactFacebook" class="text-break">—</div></div></div><div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Contact information does not send messages by itself. SMS/email or messaging providers must be configured separately.</div></div></div>
-<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">Waiting for local OLT collector…</div><div id="onuTelemetryStatus" class="small mt-1 text-muted">ONU status: —</div><div id="onuTxPowerValue" class="small mono mt-1">TX power: —</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
+<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">Waiting for local OLT collector…</div><div id="onuTelemetryStatus" class="small mt-1 text-muted">ONU status: —</div><div id="onuTxPowerValue" class="small mono mt-1">TX power: —</div><div id="onuTelemetryFreshness" class="small mt-1 text-muted" aria-live="polite">Last seen: —</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
 </div></div></section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Universal Network Mapping</h5><div class="small text-muted">Cached read-only observations · reload does not trigger a new router scan</div></div><button id="refreshNetworkMap" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat me-1"></i>Reload Observations</button></div>
@@ -74,7 +74,7 @@ const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>
 async function loadNetworkMap(){
  if(networkMapBusy)return;networkMapBusy=true;
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
- let hasFreshCollectorTelemetry=false;
+ let hasCollectorTelemetry=false;
  // Render customer/session data first. The optional network-map endpoint may fail
  // independently; it must never prevent known customer IP/MAC/pool from appearing.
  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
@@ -101,24 +101,26 @@ async function loadNetworkMap(){
 
   // Real OLT readings are served separately from the local push collector; never substitute router MAC for ONU MAC.
   try {
-   const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
+   const td=d.oltTelemetry?{telemetry:d.oltTelemetry}:await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
     const liveOnuMac=String(t.onuMac||'').trim();
     $('topologyOnuMissing').classList.toggle('d-none',Boolean(liveOnuMac||savedOnuMac));
-    hasFreshCollectorTelemetry=!t.stale;
+    hasCollectorTelemetry=true;
     $('topoPon').textContent=t.ponPort||customer.oltPonPort||'PON not assigned';
     $('topoOnu').textContent=t.onuId||savedOnuId||'ONU ID not assigned';
-    $('topoOnuMac').textContent='ONU MAC '+(!t.stale&&liveOnuMac?liveOnuMac:(savedOnuMac?savedOnuMac+' · saved, not live verified':(t.stale?'telemetry stale · not verified':'not assigned')));
+    $('topoOnuMac').textContent='ONU MAC '+(liveOnuMac?liveOnuMac+(t.stale?' · stale':' · telemetry'):(savedOnuMac?savedOnuMac+' · saved, not live verified':'not assigned'));
     $('topoRx').textContent='RX '+(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm');
     const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
     const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
-    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span>';
+    const lastSeenValue=t.lastSeenAt||t.observedAt||t.receivedAt||null;
+    const lastSeenLabel=lastSeenValue?new Date(lastSeenValue).toLocaleString():'timestamp unavailable';
+    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span> <span class="topology-health '+(t.stale?'warning':'')+'">Last seen: '+esc(lastSeenLabel)+(t.stale?' (Stale)':'')+'</span>';
     $('topologyOverall').textContent=t.stale?'OLT telemetry stale':(t.status==='online'&&!t.stale?'Live OLT telemetry':'OLT telemetry received');
     $('topologyOverall').className='topology-health '+healthClass;
     $('topologyFootnote').textContent='OLT '+(t.oltId||'—')+' · last observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—')+'. ONU MAC is shown only from fresh, authenticated OLT telemetry; saved fields and PPPoE caller-id are not treated as live ONU MAC.';
 
-    if(!t.stale&&t.onuMac){$('onu').textContent=t.onuMac;$('onu').dataset.oltVerified='true';}else{$('onu').textContent=t.stale?'Not verified · telemetry stale':'Awaiting live OLT MAC';delete $('onu').dataset.oltVerified;}
+    if(t.onuMac){$('onu').textContent=t.onuMac;if(!t.stale){$('onu').dataset.oltVerified='true';delete $('onu').dataset.oltStale;}else{delete $('onu').dataset.oltVerified;$('onu').dataset.oltStale='true';}}else{$('onu').textContent='Awaiting OLT MAC';delete $('onu').dataset.oltVerified;delete $('onu').dataset.oltStale;}
     if(t.ponPort)$('topoPon').dataset.loaded='true';
     if(t.onuId)$('topoOnu').dataset.loaded='true';
     if(!t.stale&&t.onuMac)$('topoOnuMac').dataset.loaded='true';
@@ -129,6 +131,8 @@ async function loadNetworkMap(){
     $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
     $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');
     $('onuTxPowerValue').textContent='TX power: '+(t.txPowerDbm===null||t.txPowerDbm===undefined?'—':Number(t.txPowerDbm).toFixed(2)+' dBm');
+    $('onuTelemetryFreshness').textContent='Last seen: '+lastSeenLabel+(t.stale?' (Stale)':'');
+    $('onuTelemetryFreshness').className='small mt-1 '+(t.stale?'text-warning':'text-muted');
    } else {
     $('onuTelemetryStatus').textContent='ONU status: awaiting verified OLT telemetry';
    }
@@ -141,7 +145,7 @@ async function loadNetworkMap(){
   if(hasValue(finalMac)){mac.textContent=finalMac;$('topoRouterMac').textContent='Router MAC '+finalMac;$('routerMac').textContent=finalMac;}
   const poolName=hasValue(currentLive.poolName)?currentLive.poolName:(hasValue(state?.package?.poolName)?state.package.poolName:'');$('topoPool').textContent=poolName||'Pool not resolved';
   // Legacy customer-column readings must not overwrite fresher collector telemetry.
-  if(!hasFreshCollectorTelemetry){
+  if(!hasCollectorTelemetry){
    const rx=d.rxPower||{};
    const validRx=rx.dbm!==null&&rx.dbm!==undefined&&Number.isFinite(Number(rx.dbm));
    $('onuRxPowerValue').textContent=validRx?Number(rx.dbm).toFixed(2)+' dBm':'—';

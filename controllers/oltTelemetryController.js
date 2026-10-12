@@ -2,6 +2,7 @@
 const crypto = require("crypto");
 const db = require("../db");
 const { parseOpticalPowerDbm } = require("../lib/network/opticalPower");
+const { isTelemetryStale, telemetryLastSeen } = require("../lib/network/oltTelemetryFreshness");
 let schemaReady;
 function ensureSchema() {
   if (!schemaReady) schemaReady = db.query(`
@@ -112,14 +113,23 @@ exports.listTelemetry = async (req,res) => {
     if(mac && /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) {
       result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry WHERE onu_mac=$1::macaddr ORDER BY observed_at DESC LIMIT 1`,[mac]);
     } else if(username) {
-      // Only match an ONU MAC already stored on this customer record; never equate router MAC with ONU MAC.
-      result=await db.query(`SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",t.pppoe_username AS "pppoeUsername",t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",t.received_at AS "receivedAt",t.source_agent AS "sourceAgent" FROM customers c JOIN olt_telemetry t ON (LOWER(t.pppoe_username)=LOWER(c.username) OR t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$' THEN c.onu_mac::macaddr ELSE NULL END) WHERE LOWER(c.username)=LOWER($1) ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC,t.observed_at DESC LIMIT 1`,[username]);
+      // Match only explicit ONU MAC or the stored PPPoE caller-id; a username alone is not optical identity proof.
+      result=await db.query(
+        "SELECT t.olt_id AS \"oltId\",t.onu_id AS \"onuId\",t.onu_mac::text AS \"onuMac\",t.pppoe_username AS \"pppoeUsername\",t.pon_port AS \"ponPort\",t.status,t.rx_power_dbm AS \"rxPowerDbm\",t.tx_power_dbm AS \"txPowerDbm\",t.observed_at AS \"observedAt\",t.received_at AS \"receivedAt\",t.source_agent AS \"sourceAgent\" " +
+        "FROM customers c LEFT JOIN pppoe_users pu ON LOWER(pu.username)=LOWER(c.username) " +
+        "JOIN olt_telemetry t ON (" +
+        "t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END " +
+        "OR t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END) " +
+        "WHERE LOWER(c.username)=LOWER($1) " +
+        "ORDER BY (t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END) DESC,t.observed_at DESC LIMIT 1",
+        [username]
+      );
     } else {
       result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
     }
     const markFreshness=item=>{
-      const age=Date.now()-new Date(item.receivedAt).getTime();
-      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.stale=isTelemetryStale(item);
+      item.lastSeenAt=telemetryLastSeen(item);
       item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
     };
     result.rows.forEach(markFreshness);
