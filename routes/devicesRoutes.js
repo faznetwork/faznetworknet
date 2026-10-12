@@ -4,6 +4,7 @@ const router = express.Router();
 router.get("/", controller.list);
 router.post("/", controller.create);
 router.delete("/:id", controller.remove);
+router.get("/network-map/status", controller.discoveryStatus);
 router.get("/mikrotik/discover", controller.discoverMikrotik);
 router.post("/network-map/discover", controller.discoverNetworkMap);
 module.exports = router;
