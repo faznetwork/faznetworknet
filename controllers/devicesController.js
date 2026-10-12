@@ -154,8 +154,8 @@ exports.discoverMikrotik = async (req, res) => {
     `, [id]);
     const device = found.rows[0];
     if (!device) return res.status(404).json({ success: false, message: "Registered MikroTik device not found." });
-    if (!device.host || !device.user || !device.password) return res.status(400).json({ success: false, message: "This device has no saved API credentials. Register it with its MikroTik API username and password first." });
-    const config = { host: device.host, port: Number(device.port || 8728), user: device.user, password: deviceCredentials.decrypt(device.password) };
+    if (!device.host || !device.user) return res.status(400).json({ success: false, message: "This device has no saved API credentials. Register it with its MikroTik API username first." });
+    const config = { host: device.host, port: Number(device.port || 8728), user: device.user, password: device.password ? deviceCredentials.decrypt(device.password) : "" };
     const data = await withMikroTikDevice(config, async connection => {
       const [identityRows, resourceRows, interfaceRows, bridgeRows] = await Promise.all([
         connection.write("/system/identity/print"), connection.write("/system/resource/print"),
