@@ -34,16 +34,14 @@ exports.getCustomerMap = async (req, res) => {
     if (customerResult.rows.length !== 1) return res.status(409).json({ success: false, message: "Customer identity is ambiguous." });
 
     const customer = customerResult.rows[0];
-    // Never show an RX reading merely because the collector reported the same
-    // PPPoE username: it must match the assigned ONU MAC, or (when none is
-    // assigned) the customer's current/known PPPoE caller MAC.
+    // PPPoE caller-id identifies the customer router/CPE in many networks,
+    // not the ONU. Optical telemetry is matched only against an explicitly
+    // assigned ONU MAC; otherwise leave RX power unassigned until verified.
     const assignedMac = clean(customer.onu_mac, 32);
-    const callerMac = clean(customer.activeCallerMac || customer.storedCallerMac, 32);
     const normalizedAssignedMac = assignedMac.replace(/[^0-9a-f]/gi, "").toLowerCase();
-    const normalizedCallerMac = callerMac.replace(/[^0-9a-f]/gi, "").toLowerCase();
     const mappingMac = /^[0-9a-f]{12}$/.test(normalizedAssignedMac)
       ? normalizedAssignedMac
-      : (/^[0-9a-f]{12}$/.test(normalizedCallerMac) ? normalizedCallerMac : "");
+      : "";
 
     const [observationsResult, telemetryResult] = await Promise.all([
       db.query(
@@ -97,7 +95,7 @@ exports.getCustomerMap = async (req, res) => {
         sourceDevice: telemetry?.oltId || null,
         status: readingIsFresh ? "measured" : (telemetry && (!telemetryFresh || rxStatus === "stale") ? "stale" : rxStatus),
         verified: readingIsFresh,
-        mappingMethod: telemetry ? (normalizedAssignedMac && mappingMac === normalizedAssignedMac ? "assigned_onu_mac" : "pppoe_caller_mac") : null
+        mappingMethod: telemetry ? "assigned_onu_mac" : null
       },
       opticalTelemetry: telemetry ? {
         oltId: telemetry.oltId,
@@ -118,7 +116,7 @@ exports.getCustomerMap = async (req, res) => {
       lastObservedAt: latest?.observedAt || null,
       notes: [
         "ONU MAC is sourced from customer fiber inventory until an OLT/PON adapter verifies it.",
-        "RX power is shown only when OLT telemetry MAC matches the assigned ONU MAC, or the PPPoE caller MAC when no ONU MAC is assigned.",
+        "RX power is shown only when OLT telemetry MAC matches the explicitly assigned ONU MAC. PPPoE caller-id is not used as an ONU identity.",
         "Unknown, stale, and ambiguous identities are not automatically attached to this customer."
       ]
     });
