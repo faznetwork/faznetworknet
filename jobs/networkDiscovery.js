@@ -38,12 +38,8 @@ async function runNetworkDiscovery() {
       );
     } else {
       const fallbackDevice = await db.query("SELECT id FROM network_devices WHERE device_type='mikrotik' ORDER BY id LIMIT 1");
-      if (!fallbackDevice.rowCount) {
-        console.info("[NETWORK DISCOVERY] Skipped: no registered MikroTik device.");
-        return { skipped: true, reason: "no_registered_mikrotik_device" };
-      }
-      deviceId = fallbackDevice.rows[0].id;
-      console.info("[NETWORK DISCOVERY] Using registered MikroTik inventory record; no explicit discovery source is configured.");
+      deviceId = fallbackDevice.rows[0]?.id || null;
+      console.info("[NETWORK DISCOVERY] No explicit discovery source is configured; using the application's configured MikroTik connection" + (deviceId ? " with registered inventory ID " + deviceId + "." : " without a registered inventory record."));
     }
 
     // Create the run before opening sockets so connection failures are visible in history.
