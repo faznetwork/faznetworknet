@@ -3,7 +3,7 @@
 # Replace __OLT_COLLECTOR_TOKEN__ locally before import. Never commit a real token.
 # Uses only SNMP GETNEXT/GET with the read-only community; no OLT/MikroTik config writes.
 
- /system script add name="faz-olt-telemetry-v2" policy=read,test source={
+ /system script add name="faz-olt-telemetry-v2" policy=ftp,read,test source={
 :local oltAddress "172.21.21.2";
 :local oltPort 161;
 :local community "public";
