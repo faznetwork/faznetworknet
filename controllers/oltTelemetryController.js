@@ -119,40 +119,9 @@ exports.listTelemetry = async (req,res) => {
       return res.status(400).json({success:false,message:'Invalid MAC address.'});
     }
 
-    // Reverse mapping is MAC-first: an explicitly assigned ONU MAC takes
-    // precedence; otherwise use the fresh PPPoE caller-id snapshot.
-    const mappingJoin = `
-      LEFT JOIN LATERAL (
-        SELECT c.username,
-               CASE
-                 WHEN regexp_replace(lower(COALESCE(c.onu_mac,'')), '[^0-9a-f]', '', 'g') =
-                      regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g')
-                   THEN 0 ELSE 1
-               END AS priority
-        FROM customers c
-        LEFT JOIN pppoe_users p ON LOWER(p.username)=LOWER(c.username)
-        LEFT JOIN LATERAL (
-          SELECT s.caller_id
-          FROM pppoe_live_sessions s
-          WHERE LOWER(s.username)=LOWER(c.username)
-            AND s.received_at >= NOW() - INTERVAL '3 minutes'
-            AND NULLIF(BTRIM(s.caller_id), '') IS NOT NULL
-          ORDER BY s.received_at DESC
-          LIMIT 1
-        ) live ON TRUE
-        WHERE
-          (NULLIF(BTRIM(c.onu_mac), '') IS NOT NULL
-           AND regexp_replace(lower(c.onu_mac), '[^0-9a-f]', '', 'g') =
-               regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
-          OR
-          (NULLIF(BTRIM(c.onu_mac), '') IS NULL
-           AND NULLIF(BTRIM(COALESCE(live.caller_id,p.caller_id)), '') IS NOT NULL
-           AND regexp_replace(lower(COALESCE(live.caller_id,p.caller_id)), '[^0-9a-f]', '', 'g') =
-               regexp_replace(lower(COALESCE(t.onu_mac::text,'')), '[^0-9a-f]', '', 'g'))
-        ORDER BY priority, c.updated_at DESC NULLS LAST
-        LIMIT 1
-      ) mapped ON TRUE
-    `;
+    // Customer identity is verified only by an explicitly assigned ONU MAC.
+    // PPPoE caller-id normally identifies the customer router/CPE, not the ONU;
+    // do not use it as a substitute for an ONU identity.
     const select = `
       SELECT t.olt_id AS "oltId", t.onu_id AS "onuId",
              t.onu_mac::text AS "onuMac", t.pon_port AS "ponPort",
@@ -160,29 +129,22 @@ exports.listTelemetry = async (req,res) => {
              t.tx_power_dbm AS "txPowerDbm",
              t.observed_at AS "observedAt", t.received_at AS "receivedAt",
              t.source_agent AS "sourceAgent",
-             COALESCE(NULLIF(t.pppoe_username,''), mapped.username) AS "pppoeUsername"
+             NULLIF(t.pppoe_username,'') AS "pppoeUsername"
       FROM olt_telemetry t
-      ${mappingJoin}
     `;
     let result;
     if(username) {
       result=await db.query(`
         ${select}
-        WHERE
-          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NOT NULL
-           AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
-               regexp_replace(lower((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1)), '[^0-9a-f]', '', 'g'))
-          OR
-          (NULLIF((SELECT c.onu_mac FROM customers c WHERE LOWER(c.username)=LOWER($1) LIMIT 1), '') IS NULL
-           AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
-             regexp_replace(lower(COALESCE(
-               (SELECT s.caller_id FROM pppoe_live_sessions s
-                WHERE LOWER(s.username)=LOWER($1)
-                  AND s.received_at >= NOW() - INTERVAL '3 minutes'
-                ORDER BY s.received_at DESC LIMIT 1),
-               (SELECT p.caller_id FROM pppoe_users p WHERE LOWER(p.username)=LOWER($1) LIMIT 1),
-               ''
-             )), '[^0-9a-f]', '', 'g'))
+        WHERE NULLIF(BTRIM((
+          SELECT c.onu_mac FROM customers c
+          WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+        )), '') IS NOT NULL
+          AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g') =
+              regexp_replace(lower((
+                SELECT c.onu_mac FROM customers c
+                WHERE LOWER(c.username)=LOWER($1) LIMIT 1
+              )), '[^0-9a-f]', '', 'g')
         ORDER BY t.observed_at DESC NULLS LAST
         LIMIT 1
       `,[username]);
