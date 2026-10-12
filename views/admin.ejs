@@ -4626,6 +4626,33 @@ async function deletePlan(id,name){
             updateCustomerValidityStatus();
         }
 
+        // Runtime guard: some browsers or stale modal markup may retain native date controls.
+        // Force day-first text inputs whenever customer modals are opened, then normalize stored values.
+        function enforceDayFirstCustomerDateInputs(root=document){
+            const ids=['connectionDate','activationDate','expirationDate','cpExpiration'];
+            ids.forEach(id=>{
+                const input=root.querySelector('#'+id);
+                if(!input)return;
+                if(input.type!=='text')input.setAttribute('type','text');
+                input.setAttribute('placeholder','DD/MM/YYYY');
+                input.setAttribute('inputmode','numeric');
+                input.setAttribute('autocomplete','off');
+                input.setAttribute('maxlength','10');
+                input.setAttribute('pattern','\\d{2}/\\d{2}/\\d{4}');
+                input.removeAttribute('min');input.removeAttribute('max');
+                if(input.value && /^\\d{4}-\\d{2}-\\d{2}$/.test(input.value))input.value=formatDateForInput(input.value);
+            });
+        }
+        document.addEventListener('DOMContentLoaded',()=>enforceDayFirstCustomerDateInputs());
+        document.addEventListener('shown.bs.modal',event=>enforceDayFirstCustomerDateInputs(event.target));
+        // Guard against modal fragments re-rendered by SPA navigation.
+        const customerDateObserver=new MutationObserver(records=>{
+            for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1){
+                if(node.matches?.('#connectionDate,#activationDate,#expirationDate,#cpExpiration')||node.querySelector?.('#connectionDate,#activationDate,#expirationDate,#cpExpiration'))enforceDayFirstCustomerDateInputs(node.matches?.('#connectionDate,#activationDate,#expirationDate,#cpExpiration')?node:node);
+            }
+        });
+        if(document.body)customerDateObserver.observe(document.body,{childList:true,subtree:true});
+
         function initializeCustomerHub(){
             if(window.__customerHubBound)return;
             window.__customerHubBound=true;
