@@ -2,6 +2,18 @@ const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
 let running = false;
+let lastScheduledRunAt = 0;
+const ALLOWED_INTERVALS = new Set([5, 10, 15, 30, 60]);
+
+async function getDiscoveryIntervalMinutes() {
+  try {
+    const result = await db.query("SELECT value FROM app_settings WHERE key='network_discovery_interval_minutes' LIMIT 1");
+    const value = Number(result.rows[0]?.value || 10);
+    return ALLOWED_INTERVALS.has(value) ? value : 10;
+  } catch (_) {
+    return 10;
+  }
+}
 
 async function runNetworkDiscovery() {
   if (running) return { skipped: true, reason: "previous_run_active" };
@@ -9,6 +21,7 @@ async function runNetworkDiscovery() {
   let runId = null;
   let source = null;
   try {
+    const intervalMinutes = await getDiscoveryIntervalMinutes();
     // Only explicitly enabled RouterOS sources may be scanned in the background.
     const sourceResult = await db.query(
       "SELECT s.id AS source_id, s.device_id FROM network_discovery_sources s JOIN network_devices d ON d.id=s.device_id WHERE s.enabled=TRUE AND s.protocol IN ('routeros_api','mikrotik_api') AND d.device_type='mikrotik' ORDER BY s.id LIMIT 1"
@@ -27,7 +40,7 @@ async function runNetworkDiscovery() {
     );
     const created = await db.query(
       "INSERT INTO network_discovery_runs (source_id,device_id,run_type,status,details) VALUES ($1,$2,'scheduled','running',$3::jsonb) RETURNING id",
-      [source.source_id, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: "10m" })]
+      [source.source_id, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: intervalMinutes + "m" })]
     );
     runId = created.rows[0].id;
 
@@ -46,7 +59,7 @@ async function runNetworkDiscovery() {
     const bridgeHosts = bridgeResult.hosts;
     await db.query(
       "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
-      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null })]
+      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: intervalMinutes + "m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null })]
     );
 
     let matched = 0;
@@ -140,12 +153,20 @@ async function runNetworkDiscovery() {
 }
 
 function startNetworkDiscovery() {
-  // First run occurs after schema initialization. A failed router connection is
-  // recorded/logged and does not prevent the web process from starting.
+  // Run once after schema initialization, then re-check the configured cadence
+  // every 30 seconds. The discovery itself remains read-only.
+  lastScheduledRunAt = Date.now();
   runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Initial run failed:", error.message));
-  return setInterval(() => {
-    runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Scheduled run failed:", error.message));
-  }, 10 * 60 * 1000);
+  return setInterval(async () => {
+    try {
+      const intervalMinutes = await getDiscoveryIntervalMinutes();
+      if (running || Date.now() - lastScheduledRunAt < intervalMinutes * 60 * 1000) return;
+      lastScheduledRunAt = Date.now();
+      await runNetworkDiscovery();
+    } catch (error) {
+      console.warn("[NETWORK DISCOVERY] Scheduled run failed:", error.message);
+    }
+  }, 30 * 1000);
 }
 
-module.exports = { runNetworkDiscovery, startNetworkDiscovery };
+module.exports = { runNetworkDiscovery, startNetworkDiscovery, getDiscoveryIntervalMinutes };
