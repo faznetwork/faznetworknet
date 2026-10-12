@@ -34,7 +34,7 @@ function authenticateAgent(req,res,next) {
   const auth=String(req.get('authorization')||'');
   const token=auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
   if (!expected) return res.status(503).json({success:false,message:'OLT collector is not configured on this server.'});
-  if (!secureEqual(token,expected)) return res.status(401).json({success:false,message:'Unauthorized collector.'});
+  if (!secureEqual(token,expected)) { res.set("WWW-Authenticate", 'Bearer realm="OLT collector"'); return res.status(401).json({success:false,message:'Unauthorized collector.'}); }
   next();
 }
 function normalizeMac(value) {
