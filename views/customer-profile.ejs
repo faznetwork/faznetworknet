@@ -101,7 +101,7 @@ async function loadNetworkMap(){
 
   // Real OLT readings are served separately from the local push collector; never substitute router MAC for ONU MAC.
   try {
-   const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
+   const td=d.oltTelemetry?{telemetry:d.oltTelemetry}:await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
     const liveOnuMac=String(t.onuMac||'').trim();
