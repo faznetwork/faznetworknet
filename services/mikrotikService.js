@@ -25,6 +25,11 @@ const CONNECTION_TIMEOUT_MS = 10000;
 const OPERATION_TIMEOUT_MS = 10000;
 const DEFAULT_PORT = 8728;
 
+// IPv4 pool matching helpers: RouterOS ranges, CIDR and single IPs.
+function ipv4ToInt(value){const p=String(value||'').trim().split('.');if(p.length!==4)return null;let n=0;for(const part of p){if(!/^\\d{1,3}$/.test(part))return null;const x=Number(part);if(x<0||x>255)return null;n=n*256+x;}return n>>>0;}
+function ipMatchesPoolRange(ip,range){const target=ipv4ToInt(ip);if(target===null)return false;const value=String(range||'').trim(),dash=value.indexOf('-');if(dash>=0){const a=ipv4ToInt(value.slice(0,dash).trim()),b=ipv4ToInt(value.slice(dash+1).trim());return a!==null&&b!==null&&a<=b&&target>=a&&target<=b;}const slash=value.indexOf('/');if(slash>=0){const base=ipv4ToInt(value.slice(0,slash).trim()),text=value.slice(slash+1).trim();if(base===null||!/^\\d{1,2}$/.test(text))return false;const prefix=Number(text);if(prefix<0||prefix>32)return false;const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;return(target&mask)===(base&mask);}const single=ipv4ToInt(value);return single!==null&&single===target;}
+function resolvePoolFromRanges(ip,pools){if(ipv4ToInt(ip)===null||!Array.isArray(pools))return null;for(const pool of pools){const ranges=String(pool?.ranges||'').split(',').map(x=>x.trim()).filter(Boolean);if(ranges.some(r=>ipMatchesPoolRange(ip,r)))return pool.name||null;}return null;}
+
 class MikroTikService {
   constructor() {
     // One long-lived RouterOS session per Node.js process. Every operation is
@@ -35,6 +40,7 @@ class MikroTikService {
     this._operationQueue = Promise.resolve();
     this._configCache = null;
     this._configCacheUntil = 0;
+    this._ipPoolCache = null;
   }
 
   async _getConfig(override) {
@@ -837,6 +843,8 @@ class MikroTikService {
     });
   }
 
+  async getPoolNameForIp(ip){if(ipv4ToInt(ip)===null)return null;const now=Date.now();if(!this._ipPoolCache||now-this._ipPoolCache.loadedAt>=60000){const pools=await this.getIpPools();this._ipPoolCache={loadedAt:now,pools};}return resolvePoolFromRanges(ip,this._ipPoolCache.pools);}
+
   async getUsedIpPools() {
     return this._withConnection("IP pool allocation query", async (connection) => {
       const rows = await connection.write("/ip/pool/used/print");
@@ -1137,4 +1145,8 @@ class MikroTikService {
   async kickActiveUser(username) { const name = this._str(username).trim(); return this._withConnection("active PPPoE user kick", async (connection) => { const rows = await connection.write("/ppp/active/print"); const matches = (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.name) === name && this._str(item.service).toLowerCase() === "pppoe" && item[".id"]); if (!matches.length) return { username: name, kicked: false, count: 0, message: "User is not currently online." }; for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]); return { username: name, kicked: true, count: matches.length }; }); }
 }
 
-module.exports = new MikroTikService();
+const mikrotikService=new MikroTikService();
+mikrotikService.ipv4ToInt=ipv4ToInt;
+mikrotikService.ipMatchesPoolRange=ipMatchesPoolRange;
+mikrotikService.resolvePoolFromRanges=resolvePoolFromRanges;
+module.exports=mikrotikService;
