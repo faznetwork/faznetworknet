@@ -85,7 +85,7 @@ def collect():
             configured=env(env_key)
             if configured: status_map[configured.lower()]=normalized
         onu_id = key
-        customer_username = customer_map.get(key) or customer_map.get(onu_id)
+        customer_username = customer_map.get(key)
         rows.append({"onuId":onu_id,"onuMac":mac.replace("-",":").lower(),"pppoeUsername":str(customer_username).strip() if customer_username else None,"ponPort":pon,
             "status":status_map.get(status,"unknown"),
             "rxPowerDbm":power(rx,env("RX_POWER_SCALE","1")),
