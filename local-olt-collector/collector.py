@@ -38,8 +38,24 @@ def suffix_map(table):
         result[suffix]=value
     return result
 
+def load_customer_map():
+    """Load only explicit SNMP suffix/ONU-ID to PPPoE username mappings."""
+    raw = env("ONU_CUSTOMER_MAP_JSON", "{}")
+    try:
+        mapping = json.loads(raw or "{}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("ONU_CUSTOMER_MAP_JSON must be valid JSON object text") from exc
+    if not isinstance(mapping, dict):
+        raise RuntimeError("ONU_CUSTOMER_MAP_JSON must be a JSON object")
+    return {
+        str(key).strip(): str(username).strip()
+        for key, username in mapping.items()
+        if str(key).strip() and str(username).strip()
+    }
+
 def collect():
     # Configure these scalar/table roots from the OLT vendor's official MIB for this exact firmware.
+    customer_map = load_customer_map()
     oid_mac=required("OID_ONU_MAC")
     oid_status=required("OID_ONU_STATUS")
     oid_rx=required("OID_ONU_RX_POWER")
@@ -68,7 +84,9 @@ def collect():
         for env_key,normalized in (("ONU_STATUS_ONLINE_VALUE","online"),("ONU_STATUS_OFFLINE_VALUE","offline"),("ONU_STATUS_LOS_VALUE","los")):
             configured=env(env_key)
             if configured: status_map[configured.lower()]=normalized
-        rows.append({"onuId":key,"onuMac":mac.replace("-",":").lower(),"pppoeUsername":str(customer_map.get(key,"")).strip() or None,"ponPort":pon,
+        onu_id = key
+        customer_username = customer_map.get(key) or customer_map.get(onu_id)
+        rows.append({"onuId":onu_id,"onuMac":mac.replace("-",":").lower(),"pppoeUsername":str(customer_username).strip() if customer_username else None,"ponPort":pon,
             "status":status_map.get(status,"unknown"),
             "rxPowerDbm":power(rx,env("RX_POWER_SCALE","1")),
             "txPowerDbm":power(tx,env("TX_POWER_SCALE","1")) if tx is not None else None,
