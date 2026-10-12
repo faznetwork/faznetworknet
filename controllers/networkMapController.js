@@ -1,5 +1,6 @@
 const db = require("../db");
 const { getRxPowerStatus } = require("../lib/network/rxPowerStatus");
+const { isTelemetryStale, telemetryLastSeen, matchTelemetryIdentity } = require("../lib/network/oltTelemetryFreshness");
 
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
@@ -382,16 +383,15 @@ exports.getDiagram = async (req, res) => {
       );
       oltTelemetry = telemetryResult.rows[0] || null;
       if (oltTelemetry) {
-        const freshnessAt = oltTelemetry.observedAt || oltTelemetry.receivedAt;
-        const ageMs = Date.now() - new Date(freshnessAt).getTime();
-        oltTelemetry.stale = !Number.isFinite(ageMs) || ageMs > 15 * 60 * 1000;
-        oltTelemetry.lastSeenAt = freshnessAt || null;
+        oltTelemetry.stale = isTelemetryStale(oltTelemetry);
+        oltTelemetry.lastSeenAt = telemetryLastSeen(oltTelemetry);
         const rx = oltTelemetry.rxPowerDbm;
         oltTelemetry.signalLevel = rx === null || rx === undefined ? "unknown" : Number(rx) < -27 ? "weak" : Number(rx) <= -25 ? "warning" : "good";
-        oltTelemetry.matchedBy = String(oltTelemetry.pppoeUsername || "").toLowerCase() === String(customer.username || "").toLowerCase()
-          ? "pppoe_username"
-          : clean(customer.onu_mac, 100).replace(/-/g, ":").toLowerCase() === String(oltTelemetry.onuMac || "").replace(/-/g, ":").toLowerCase()
-            ? "customer_onu_mac" : "pppoe_caller_id";
+        oltTelemetry.matchedBy = matchTelemetryIdentity({
+          username: customer.username,
+          onuMac: customer.onu_mac,
+          callerId: customer.caller_id
+        }, oltTelemetry) || "unknown";
       }
     } catch (telemetryError) {
       // Telemetry is optional; a missing table/reading must not break Customer 360 mapping.
