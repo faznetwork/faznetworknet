@@ -113,7 +113,9 @@ async function loadNetworkMap(){
     $('topoRx').textContent='RX '+(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm');
     const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
     const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
-    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span>';
+    const lastSeenValue=t.lastSeenAt||t.observedAt||t.receivedAt||null;
+    const lastSeenLabel=lastSeenValue?new Date(lastSeenValue).toLocaleString():'timestamp unavailable';
+    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span> <span class="topology-health '+(t.stale?'warning':'')+'">Last seen: '+esc(lastSeenLabel)+(t.stale?' (Stale)':'')+'</span>';
     $('topologyOverall').textContent=t.stale?'OLT telemetry stale':(t.status==='online'&&!t.stale?'Live OLT telemetry':'OLT telemetry received');
     $('topologyOverall').className='topology-health '+healthClass;
     $('topologyFootnote').textContent='OLT '+(t.oltId||'—')+' · last observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—')+'. ONU MAC is shown only from fresh, authenticated OLT telemetry; saved fields and PPPoE caller-id are not treated as live ONU MAC.';
@@ -129,8 +131,7 @@ async function loadNetworkMap(){
     $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
     $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');
     $('onuTxPowerValue').textContent='TX power: '+(t.txPowerDbm===null||t.txPowerDbm===undefined?'—':Number(t.txPowerDbm).toFixed(2)+' dBm');
-    const lastSeen=t.lastSeenAt||t.observedAt||t.receivedAt||null;
-    $('onuTelemetryFreshness').textContent='Last seen: '+(lastSeen?new Date(lastSeen).toLocaleString():'timestamp unavailable')+(t.stale?' (Stale)':'');
+    $('onuTelemetryFreshness').textContent='Last seen: '+lastSeenLabel+(t.stale?' (Stale)':'');
     $('onuTelemetryFreshness').className='small mt-1 '+(t.stale?'text-warning':'text-muted');
    } else {
     $('onuTelemetryStatus').textContent='ONU status: awaiting verified OLT telemetry';
