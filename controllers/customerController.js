@@ -1174,6 +1174,31 @@ async function updateCustomer(req,res){
 }
 
 
+function normalizeTelemetryMac(value) {
+  const raw = String(value ?? "").trim().replace(/-/g, ":").toLowerCase();
+  return /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw) ? raw : "";
+}
+function getOpticalHealth(telemetry, now = Date.now()) {
+  if (!telemetry || telemetry.identityVerified !== true || telemetry.stale === true) {
+    return { level: "unknown", label: telemetry?.stale ? "Stale telemetry" : "RX not available" };
+  }
+  const receivedAt = new Date(telemetry.receivedAt || "").getTime();
+  const observedAt = new Date(telemetry.observedAt || "").getTime();
+  if (!Number.isFinite(receivedAt) || !Number.isFinite(observedAt) ||
+      receivedAt > now || observedAt > now ||
+      now - receivedAt > 15 * 60 * 1000 || now - observedAt > 30 * 60 * 1000) {
+    return { level: "unknown", label: "Stale telemetry" };
+  }
+  const rx = Number(telemetry.rxPowerDbm);
+  if (telemetry.rxPowerDbm === null || telemetry.rxPowerDbm === undefined ||
+      telemetry.rxPowerDbm === "" || !Number.isFinite(rx)) {
+    return { level: "unknown", label: "RX not available" };
+  }
+  if (rx <= -27) return { level: "critical", label: "Critical" };
+  if (rx < -23) return { level: "warning", label: "Marginal" };
+  if (rx > -12) return { level: "warning", label: "Check Signal" };
+  return { level: "healthy", label: "Optimal" };
+}
 async function resolveCustomer360(idValue){
   const key=clean(idValue,100);
   const customerResult=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
@@ -1194,9 +1219,9 @@ async function resolveCustomer360(idValue){
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(
       `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
-              pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
-              tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
-              received_at AS "receivedAt",source_agent AS "sourceAgent"
+              pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,
+              rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",
+              observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent"
        FROM olt_telemetry
        WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
           OR onu_mac = CASE
@@ -1216,12 +1241,23 @@ async function resolveCustomer360(idValue){
   const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
   const storedMac=callerIdResult.status==="fulfilled"?clean(callerIdResult.value.rows[0]?.caller_id,100):"";
   const telemetryRow=telemetryResult.status==="fulfilled"?telemetryResult.value.rows?.[0]||null:null;
-  const telemetry=telemetryRow?{
-    ...telemetryRow,
-    stale:!telemetryRow.receivedAt||!Number.isFinite(new Date(telemetryRow.receivedAt).getTime())||Date.now()-new Date(telemetryRow.receivedAt).getTime()>15*60*1000,
-    signalLevel:telemetryRow.rxPowerDbm===null||telemetryRow.rxPowerDbm===undefined||!Number.isFinite(Number(telemetryRow.rxPowerDbm))
-      ?"unknown":Number(telemetryRow.rxPowerDbm)<-27?"weak":Number(telemetryRow.rxPowerDbm)<=-25?"warning":"good"
-  }:null;
+  const telemetry=telemetryRow?(() => {
+    const now = Date.now();
+    const received = new Date(telemetryRow.receivedAt || "").getTime();
+    const observed = new Date(telemetryRow.observedAt || "").getTime();
+    const identityVerified = String(telemetryRow.pppoeUsername || "").trim().toLowerCase() === username.toLowerCase() ||
+      (normalizeTelemetryMac(telemetryRow.onuMac) !== "" &&
+       normalizeTelemetryMac(telemetryRow.onuMac) === normalizeTelemetryMac(customer.onu_mac));
+    const stale = !Number.isFinite(received) || !Number.isFinite(observed) ||
+      received > now || observed > now ||
+      now - received > 15 * 60 * 1000 || now - observed > 30 * 60 * 1000;
+    const item = { ...telemetryRow, identityVerified, stale };
+    item.opticalHealth = getOpticalHealth(item);
+    item.signalLevel = item.opticalHealth.level === "critical" ? "weak" :
+      item.opticalHealth.level === "warning" ? "warning" :
+      item.opticalHealth.level === "healthy" ? "good" : "unknown";
+    return item;
+  })():null;
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
   const billing=evaluateCustomerBillingStatus({expiration_date:expiration});
