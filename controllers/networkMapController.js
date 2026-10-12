@@ -11,49 +11,115 @@ exports.getCustomerMap = async (req, res) => {
     if (!key) return res.status(400).json({ success: false, message: "Customer ID or username is required." });
 
     const customerResult = await db.query(
-      "SELECT c.id, c.username, c.onu_mac, c.fiber_box, c.onu_rx_power_dbm, c.onu_rx_power_observed_at, d.name AS rx_power_source FROM customers c LEFT JOIN network_devices d ON d.id=c.onu_rx_power_source_device_id WHERE c.id::text=$1 OR LOWER(c.username)=LOWER($1) LIMIT 2",
+      `SELECT c.id, c.username, c.onu_mac, c.fiber_box,
+              p.caller_id AS "storedCallerMac",
+              live.caller_id AS "activeCallerMac",
+              live.received_at AS "activeSessionReceivedAt"
+       FROM customers c
+       LEFT JOIN pppoe_users p ON LOWER(p.username)=LOWER(c.username)
+       LEFT JOIN LATERAL (
+         SELECT s.caller_id, s.received_at
+         FROM pppoe_live_sessions s
+         WHERE LOWER(s.username)=LOWER(c.username)
+           AND s.received_at >= NOW() - INTERVAL '3 minutes'
+           AND NULLIF(BTRIM(s.caller_id), '') IS NOT NULL
+         ORDER BY s.received_at DESC
+         LIMIT 1
+       ) live ON TRUE
+       WHERE c.id::text=$1 OR LOWER(c.username)=LOWER($1)
+       LIMIT 2`,
       [key]
     );
     if (customerResult.rows.length === 0) return res.status(404).json({ success: false, message: "Customer not found." });
     if (customerResult.rows.length !== 1) return res.status(409).json({ success: false, message: "Customer identity is ambiguous." });
 
     const customer = customerResult.rows[0];
-    const observations = await db.query(
-      `SELECT o.id, o.observation_type AS "observationType",
-              o.identity_type AS "identityType", o.identity_value AS "identityValue",
-              o.observed_value AS "observedValue", o.match_status AS "matchStatus",
-              o.match_confidence AS "matchConfidence", o.evidence,
-              o.observed_at AS "observedAt", d.name AS "sourceDevice"
-       FROM network_observations o
-       LEFT JOIN network_devices d ON d.id=o.source_device_id
-       WHERE o.customer_id=$1
-       ORDER BY o.observed_at DESC, o.id DESC
-       LIMIT 30`,
-      [customer.id]
-    );
-    const latest = observations.rows[0] || null;
-    // Router MAC must be selected from PPPoE observations independently of
-    // newer bridge-host or other observation types.
-    const routerObservation = observations.rows.find(
-      (item) => item.observationType === "pppoe_session"
-    ) || null;
-    const rxStatus = getRxPowerStatus(
-      customer.onu_rx_power_observed_at,
-      customer.onu_rx_power_dbm
-    );
+    // Never show an RX reading merely because the collector reported the same
+    // PPPoE username: it must match the assigned ONU MAC, or (when none is
+    // assigned) the customer's current/known PPPoE caller MAC.
+    const assignedMac = clean(customer.onu_mac, 32);
+    const callerMac = clean(customer.activeCallerMac || customer.storedCallerMac, 32);
+    const normalizedAssignedMac = assignedMac.replace(/[^0-9a-f]/gi, "").toLowerCase();
+    const normalizedCallerMac = callerMac.replace(/[^0-9a-f]/gi, "").toLowerCase();
+    const mappingMac = /^[0-9a-f]{12}$/.test(normalizedAssignedMac)
+      ? normalizedAssignedMac
+      : (/^[0-9a-f]{12}$/.test(normalizedCallerMac) ? normalizedCallerMac : "");
+
+    const [observationsResult, telemetryResult] = await Promise.all([
+      db.query(
+        `SELECT o.id, o.observation_type AS "observationType",
+                o.identity_type AS "identityType", o.identity_value AS "identityValue",
+                o.observed_value AS "observedValue", o.match_status AS "matchStatus",
+                o.match_confidence AS "matchConfidence", o.evidence,
+                o.observed_at AS "observedAt", d.name AS "sourceDevice"
+         FROM network_observations o
+         LEFT JOIN network_devices d ON d.id=o.source_device_id
+         WHERE o.customer_id=$1
+         ORDER BY o.observed_at DESC, o.id DESC
+         LIMIT 30`,
+        [customer.id]
+      ),
+      mappingMac ? db.query(
+        `SELECT t.olt_id AS "oltId", t.onu_id AS "onuId",
+                t.onu_mac::text AS "onuMac", t.pon_port AS "ponPort",
+                t.status, t.rx_power_dbm AS "rxPowerDbm",
+                t.tx_power_dbm AS "txPowerDbm",
+                t.observed_at AS "observedAt", t.received_at AS "receivedAt",
+                t.source_agent AS "sourceAgent"
+         FROM olt_telemetry t
+         WHERE regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=$1
+         ORDER BY t.observed_at DESC NULLS LAST, t.received_at DESC
+         LIMIT 1`,
+        [mappingMac]
+      ) : Promise.resolve({ rows: [] })
+    ]);
+
+    const observations = observationsResult.rows;
+    const latest = observations[0] || null;
+    const routerObservation = observations.find(item => item.observationType === "pppoe_session") || null;
+    const telemetry = telemetryResult.rows[0] || null;
+    const rxStatus = telemetry
+      ? getRxPowerStatus(telemetry.observedAt, telemetry.rxPowerDbm)
+      : "awaiting_olt_reading";
+    const telemetryFresh = telemetry && telemetry.receivedAt
+      ? (Date.now() - new Date(telemetry.receivedAt).getTime() <= 15 * 60 * 1000)
+      : false;
+    const readingIsFresh = Boolean(telemetry && telemetryFresh && rxStatus === "measured");
+
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
       provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
-      rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: rxStatus },
-      routerMac: routerObservation?.observedValue?.routerMac || null,
-      observations: observations.rows,
+      rxPower: {
+        dbm: telemetry?.rxPowerDbm == null ? null : Number(telemetry.rxPowerDbm),
+        observedAt: telemetry?.observedAt || null,
+        receivedAt: telemetry?.receivedAt || null,
+        sourceDevice: telemetry?.oltId || null,
+        status: readingIsFresh ? "measured" : (telemetry && (!telemetryFresh || rxStatus === "stale") ? "stale" : rxStatus),
+        verified: readingIsFresh,
+        mappingMethod: telemetry ? (normalizedAssignedMac && mappingMac === normalizedAssignedMac ? "assigned_onu_mac" : "pppoe_caller_mac") : null
+      },
+      opticalTelemetry: telemetry ? {
+        oltId: telemetry.oltId,
+        onuId: telemetry.onuId,
+        onuMac: telemetry.onuMac,
+        ponPort: telemetry.ponPort,
+        status: telemetry.status,
+        rxPowerDbm: telemetry.rxPowerDbm == null ? null : Number(telemetry.rxPowerDbm),
+        txPowerDbm: telemetry.txPowerDbm == null ? null : Number(telemetry.txPowerDbm),
+        observedAt: telemetry.observedAt,
+        receivedAt: telemetry.receivedAt,
+        sourceAgent: telemetry.sourceAgent,
+        stale: !readingIsFresh
+      } : null,
+      routerMac: routerObservation?.observedValue?.routerMac || customer.activeCallerMac || customer.storedCallerMac || null,
+      observations,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
       lastObservedAt: latest?.observedAt || null,
       notes: [
         "ONU MAC is sourced from customer fiber inventory until an OLT/PON adapter verifies it.",
-        "Router MAC is sourced from MikroTik PPPoE caller-id observations.",
-        "Unknown and ambiguous identities are not automatically attached to this customer."
+        "RX power is shown only when OLT telemetry MAC matches the assigned ONU MAC, or the PPPoE caller MAC when no ONU MAC is assigned.",
+        "Unknown, stale, and ambiguous identities are not automatically attached to this customer."
       ]
     });
   } catch (error) {
