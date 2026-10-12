@@ -148,7 +148,7 @@ exports.getLatestSummary = async (req, res) => {
 
 exports.getDiagram = async (req, res) => {
   try {
-    const [devices, links, latestRun] = await Promise.all([
+    const [devices, links, latestRun, observationCounts] = await Promise.all([
       db.query(
         `SELECT id,device_type AS "deviceType",name,vendor,model,
                 host(management_ip) AS "managementIp",mac_address::text AS "macAddress",
@@ -173,6 +173,14 @@ exports.getDiagram = async (req, res) => {
                 discovered_count AS "discoveredCount",matched_count AS "matchedCount",
                 unmatched_count AS "unmatchedCount"
          FROM network_discovery_runs ORDER BY started_at DESC,id DESC LIMIT 1`
+      ),
+      db.query(
+        `SELECT COUNT(*)::int AS "totalObservations",
+                COUNT(*) FILTER (WHERE match_status='matched')::int AS "matchedObservations",
+                COUNT(*) FILTER (WHERE match_status='ambiguous')::int AS "ambiguousObservations",
+                COUNT(*) FILTER (WHERE match_status='unmatched')::int AS "unmatchedObservations"
+         FROM network_observations
+         WHERE observed_at >= NOW() - INTERVAL '30 minutes'`
       )
     ]);
     return res.json({
@@ -180,7 +188,17 @@ exports.getDiagram = async (req, res) => {
       devices: devices.rows,
       links: links.rows,
       latestRun: latestRun.rows[0] || null,
-      counts: { devices: devices.rowCount, links: links.rowCount }
+      counts: {
+        devices: devices.rowCount,
+        totalMappings: links.rowCount,
+        verifiedMappings: links.rows.filter(link => link.matchStatus === "verified").length,
+        unverifiedMappings: links.rows.filter(link => link.matchStatus === "unverified").length,
+        disputedMappings: links.rows.filter(link => link.matchStatus === "disputed").length,
+        observationsLast30Minutes: observationCounts.rows[0]?.totalObservations || 0,
+        matchedObservationsLast30Minutes: observationCounts.rows[0]?.matchedObservations || 0,
+        ambiguousObservationsLast30Minutes: observationCounts.rows[0]?.ambiguousObservations || 0,
+        unmatchedObservationsLast30Minutes: observationCounts.rows[0]?.unmatchedObservations || 0
+      }
     });
   } catch (error) {
     console.error("[Network diagram API]", error?.message || error);
