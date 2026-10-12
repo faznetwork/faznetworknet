@@ -76,32 +76,37 @@ async function loadNetworkMap(){
   $('topoPool').textContent=pkg.poolName||'Not assigned';
   $('topoIp').textContent='IP '+(live.ip||'—');
   $('topoRouterMac').textContent='Router MAC '+(live.mac||customer.routerMac||'—');
-  // Keep the last known ONU/PON/RX values visible while the next poll runs.
-  if(!$('topoPon').dataset.loaded) $('topoPon').textContent=customer.oltPonPort||'EPON —';
-  if(!$('topoOnu').dataset.loaded) $('topoOnu').textContent='ONU —';
-  if(!$('topoOnuMac').dataset.loaded) $('topoOnuMac').textContent='ONU MAC — (awaiting live OLT data)';
-  $('topologyOnuMissing').classList.remove('d-none');
-  if(!$('topoRx').dataset.loaded) $('topoRx').textContent='RX — dBm';
-  $('topoHealth').innerHTML='<span class="topology-health">Awaiting verified reading</span>';
-  $('topologyOverall').textContent='Partial mapping';
-  $('topologyOverall').className='topology-health';
-  $('topologyFootnote').textContent='Customer IP, router MAC, saved PON and ONU identity are shown separately; live OLT values are added only from the authenticated collector.';
+  // Show useful saved inventory immediately, but label it clearly as unverified.
+  // Only fresh authenticated OLT telemetry may be called a live/verified ONU MAC.
+  const savedOnuMac=String(customer.onuMac||'').trim();
+  const savedOnuId=String(customer.onuSerial||'').trim();
+  if(!$('topoPon').dataset.loaded) $('topoPon').textContent=customer.oltPonPort||'PON not assigned';
+  if(!$('topoOnu').dataset.loaded) $('topoOnu').textContent=savedOnuId||'ONU ID not assigned';
+  if(!$('topoOnuMac').dataset.loaded) $('topoOnuMac').textContent='ONU MAC '+(savedOnuMac?savedOnuMac+' · saved, not live verified':'not assigned');
+  $('topologyOnuMissing').classList.toggle('d-none',Boolean(savedOnuMac));
+  if(!$('topoRx').dataset.loaded) $('topoRx').textContent='RX not available';
+  $('topoHealth').innerHTML='<span class="topology-health warning">Live OLT data pending</span>';
+  const mappedCount=[pkg.poolName,live.ip,live.mac||customer.routerMac,customer.oltPonPort,savedOnuId||savedOnuMac].filter(Boolean).length;
+  $('topologyOverall').textContent='Partial mapping · '+mappedCount+'/5 fields';
+  $('topologyOverall').className='topology-health warning';
+  $('topologyFootnote').textContent='Saved customer fields are shown as saved/unverified. Live ONU MAC, ONU status and optical readings require a fresh authenticated OLT collector report.';
 
   // Real OLT readings are served separately from the local push collector; never substitute router MAC for ONU MAC.
   try {
    const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
-    $('topologyOnuMissing').classList.toggle('d-none',Boolean(!t.stale&&String(t.onuMac||'').trim()));
+    const liveOnuMac=String(t.onuMac||'').trim();
+    $('topologyOnuMissing').classList.toggle('d-none',Boolean(liveOnuMac||savedOnuMac));
     hasFreshCollectorTelemetry=!t.stale;
-    $('topoPon').textContent=t.ponPort||customer.oltPonPort||'EPON —';
-    $('topoOnu').textContent=t.onuId||'ONU —';
-    $('topoOnuMac').textContent='ONU MAC '+(!t.stale&&t.onuMac?t.onuMac:(t.stale?'Not verified · telemetry stale':'Not verified by live OLT'));
+    $('topoPon').textContent=t.ponPort||customer.oltPonPort||'PON not assigned';
+    $('topoOnu').textContent=t.onuId||savedOnuId||'ONU ID not assigned';
+    $('topoOnuMac').textContent='ONU MAC '+(!t.stale&&liveOnuMac?liveOnuMac:(savedOnuMac?savedOnuMac+' · saved, not live verified':(t.stale?'telemetry stale · not verified':'not assigned')));
     $('topoRx').textContent='RX '+(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm');
     const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
     const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
     $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span>';
-    $('topologyOverall').textContent=t.stale?'Telemetry stale':(t.status==='online'&&!t.stale?'Live telemetry':'Telemetry received');
+    $('topologyOverall').textContent=t.stale?'OLT telemetry stale':(t.status==='online'&&!t.stale?'Live OLT telemetry':'OLT telemetry received');
     $('topologyOverall').className='topology-health '+healthClass;
     $('topologyFootnote').textContent='OLT '+(t.oltId||'—')+' · last observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—')+'. ONU MAC is shown only from fresh, authenticated OLT telemetry; saved fields and PPPoE caller-id are not treated as live ONU MAC.';
 
