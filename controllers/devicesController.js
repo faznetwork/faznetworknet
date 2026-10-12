@@ -157,10 +157,12 @@ exports.discoverMikrotik = async (req, res) => {
     if (!device.host || !device.user) return res.status(400).json({ success: false, message: "This device has no saved API credentials. Register it with its MikroTik API username first." });
     const config = { host: device.host, port: Number(device.port || 8728), user: device.user, password: device.password ? deviceCredentials.decrypt(device.password) : "" };
     const data = await withMikroTikDevice(config, async connection => {
-      const [identityRows, resourceRows, interfaceRows, bridgeRows] = await Promise.all([
-        connection.write("/system/identity/print"), connection.write("/system/resource/print"),
-        connection.write("/interface/print"), connection.write("/interface/bridge/host/print").catch(() => [])
-      ]);
+      // RouterOS API replies must be consumed sequentially on a single socket.
+      const identityRows = await connection.write("/system/identity/print");
+      const resourceRows = await connection.write("/system/resource/print");
+      const interfaceRows = await connection.write("/interface/print");
+      let bridgeRows = [];
+      try { bridgeRows = await connection.write("/interface/bridge/host/print"); } catch (_) { bridgeRows = []; }
       const identity = Array.isArray(identityRows) ? identityRows[0] || {} : {};
       const resources = Array.isArray(resourceRows) ? resourceRows[0] || {} : {};
       const allowed = ["ether","ethernet","sfp","sfp-sfpplus","sfpplus","bridge","vlan","pppoe","lte","bonding"];
