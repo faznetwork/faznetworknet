@@ -36,14 +36,19 @@ exports.create = async (req, res) => {
     const ipv4WithPort = managementInput.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
     if (ipv4WithPort) {
       managementInput = ipv4WithPort[1];
-      if (managementPort === null) managementPort = Number(ipv4WithPort[2]);
+      // MikroTik API port is configured once in shared Core/API settings,
+      // never on an inventory record. Only OLT records may keep a per-device port.
+      if (deviceType === "olt" && managementPort === null) managementPort = Number(ipv4WithPort[2]);
     }
+    if (deviceType === "mikrotik") managementPort = null;
     const managementUsername = clean(body.managementUsername, 160) || null;
     const managementPassword = String(body.managementPassword ?? "");
     if (managementPort !== null && (!Number.isInteger(managementPort) || managementPort < 1 || managementPort > 65535)) return res.status(400).json({ success: false, message: "Management port must be from 1 to 65535." });
     if (managementPassword.length > 1024) return res.status(400).json({ success: false, message: "Management password is too long." });
-    if (deviceType !== "olt" && (managementUsername || managementPassword || managementPort !== null)) return res.status(400).json({ success: false, message: "Management credentials are currently supported for OLT devices only." });
-    const encryptedManagementPassword = managementPassword ? deviceCredentials.encrypt(managementPassword) : null;
+    if (deviceType !== "olt" && deviceType !== "mikrotik" && (managementUsername || managementPassword || managementPort !== null)) return res.status(400).json({ success: false, message: "Per-device management credentials are currently supported for OLT devices only." });
+    // MikroTik inventory must never store duplicate API credentials or per-device ports;
+    // its connection details are owned by the shared Core/API settings.
+    const encryptedManagementPassword = deviceType === "olt" && managementPassword ? deviceCredentials.encrypt(managementPassword) : null;
     let ip = managementInput;
     // PostgreSQL inet stores an address, not a browser URL. Accept an IP-based
     // HTTP(S) URL in the form and persist only its host address.
@@ -72,7 +77,7 @@ exports.create = async (req, res) => {
                 host(management_ip) AS "managementIp", management_port AS "managementPort", management_username AS "managementUsername", (encrypted_management_password IS NOT NULL) AS "hasManagementPassword", mac_address::text AS "macAddress",
                 serial_number AS "serialNumber", location, parent_device_id AS "parentDeviceId",
                 notes, last_seen_at AS "lastSeenAt", created_at AS "createdAt"
-    `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,managementPort,managementUsername,encryptedManagementPassword,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
+    `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,deviceType === "olt" ? managementPort : null,deviceType === "olt" ? managementUsername : null,encryptedManagementPassword,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
     res.status(201).json({ success: true, device: result.rows[0] });
   } catch (error) { sendError(res, error); }
 };
