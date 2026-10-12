@@ -36,8 +36,11 @@ exports.create = async (req, res) => {
     const ipv4WithPort = managementInput.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
     if (ipv4WithPort) {
       managementInput = ipv4WithPort[1];
-      if (managementPort === null) managementPort = Number(ipv4WithPort[2]);
+      // MikroTik API port is configured once in shared Core/API settings,
+      // never on an inventory record. Only OLT records may keep a per-device port.
+      if (deviceType === "olt" && managementPort === null) managementPort = Number(ipv4WithPort[2]);
     }
+    if (deviceType === "mikrotik") managementPort = null;
     const managementUsername = clean(body.managementUsername, 160) || null;
     const managementPassword = String(body.managementPassword ?? "");
     if (managementPort !== null && (!Number.isInteger(managementPort) || managementPort < 1 || managementPort > 65535)) return res.status(400).json({ success: false, message: "Management port must be from 1 to 65535." });
