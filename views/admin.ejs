@@ -4943,6 +4943,7 @@ async function deletePlan(id,name){
                 const data=prefetchedData||await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 if(!data||data.success===false||!data.customer||typeof data.customer!=='object')throw new Error(data?.message||'Customer profile response is empty or invalid.');
                 const customer=data.customer||{},live=data.live&&typeof data.live==='object'?data.live:{online:false,bytesIn:0,bytesOut:0},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
+                const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
                 const telemetry=data.telemetry&&typeof data.telemetry==='object'?data.telemetry:null;
                 const optical=telemetry?.opticalHealth||customer.opticalHealth||{level:'unknown',label:'RX not available'};
                 const opticalText=value=>value==null||value===''||!Number.isFinite(Number(value))?'—':Number(value).toFixed(2)+' dBm';
@@ -4955,7 +4956,6 @@ async function deletePlan(id,name){
                 setText('cpOpticalObservedAt',telemetry?.receivedAt?'Last OLT sync: '+new Date(telemetry.receivedAt).toLocaleString():telemetry?'OLT reading received; timestamp unavailable':'Live OLT data pending');
                 setText('cpOnuIdentitySource',telemetry?(telemetry.stale?'OLT telemetry is stale':'Identity from OLT telemetry'):'Waiting for a verified ONU-to-customer match');
                 if(opticalBadge){opticalBadge.textContent=telemetry?.stale?'STALE':optical.label||'RX not available';opticalBadge.className='badge '+(telemetry?.stale?'text-bg-secondary':optical.level==='healthy'?'text-bg-success':optical.level==='warning'?'text-bg-warning':optical.level==='critical'?'text-bg-danger':'text-bg-secondary');}
-                const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
                 const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(!el)return;if(id==='cpExpiration'){setCustomerDateValue(el,value);return;}el.value=value??'';};
                 const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
