@@ -2,6 +2,18 @@ const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
 let running = false;
+let lastScheduledRunAt = 0;
+const ALLOWED_INTERVALS = new Set([5, 10, 15, 30, 60]);
+
+async function getDiscoveryIntervalMinutes() {
+  try {
+    const result = await db.query("SELECT value FROM app_settings WHERE key='network_discovery_interval_minutes' LIMIT 1");
+    const value = Number(result.rows[0]?.value || 10);
+    return ALLOWED_INTERVALS.has(value) ? value : 10;
+  } catch (_) {
+    return 10;
+  }
+}
 
 async function runNetworkDiscovery() {
   if (running) return { skipped: true, reason: "previous_run_active" };
@@ -9,25 +21,29 @@ async function runNetworkDiscovery() {
   let runId = null;
   let source = null;
   try {
+    const intervalMinutes = await getDiscoveryIntervalMinutes();
     // Only explicitly enabled RouterOS sources may be scanned in the background.
     const sourceResult = await db.query(
       "SELECT s.id AS source_id, s.device_id FROM network_discovery_sources s JOIN network_devices d ON d.id=s.device_id WHERE s.enabled=TRUE AND s.protocol IN ('routeros_api','mikrotik_api') AND d.device_type='mikrotik' ORDER BY s.id LIMIT 1"
     );
-    if (!sourceResult.rowCount) {
-      console.info("[NETWORK DISCOVERY] Skipped: no enabled MikroTik discovery source.");
-      return { skipped: true, reason: "no_enabled_mikrotik_discovery_source" };
+    let deviceId = null;
+    if (sourceResult.rowCount) {
+      source = sourceResult.rows[0];
+      deviceId = source.device_id;
+      await db.query(
+        "UPDATE network_discovery_sources SET last_attempt_at=NOW(),last_status='pending',last_error=NULL,updated_at=NOW() WHERE id=$1",
+        [source.source_id]
+      );
+    } else {
+      const fallbackDevice = await db.query("SELECT id FROM network_devices WHERE device_type='mikrotik' ORDER BY id LIMIT 1");
+      deviceId = fallbackDevice.rows[0]?.id || null;
+      console.info("[NETWORK DISCOVERY] No enabled discovery source; using configured MikroTik API connection" + (deviceId ? " (inventory ID " + deviceId + ")." : "."));
     }
-    source = sourceResult.rows[0];
-    const deviceId = source.device_id;
 
     // Create the run before opening sockets so connection failures are visible in history.
-    await db.query(
-      "UPDATE network_discovery_sources SET last_attempt_at=NOW(),last_status='pending',last_error=NULL,updated_at=NOW() WHERE id=$1",
-      [source.source_id]
-    );
     const created = await db.query(
       "INSERT INTO network_discovery_runs (source_id,device_id,run_type,status,details) VALUES ($1,$2,'scheduled','running',$3::jsonb) RETURNING id",
-      [source.source_id, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: "10m" })]
+      [source?.source_id || null, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: intervalMinutes + "m" })]
     );
     runId = created.rows[0].id;
 
@@ -112,10 +128,12 @@ async function runNetworkDiscovery() {
       "UPDATE network_discovery_runs SET status=$2,finished_at=NOW(),discovered_count=$3,matched_count=$4,unmatched_count=$5 WHERE id=$1",
       [runId, status, discovered, matched, unmatched]
     );
-    await db.query(
-      "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status=$2,last_error=$3,updated_at=NOW() WHERE id=$1",
-      [source.source_id, sourceStatus, bridgeResult.error || null]
-    );
+    if (source?.source_id) {
+      await db.query(
+        "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status=$2,last_error=$3,updated_at=NOW() WHERE id=$1",
+        [source.source_id, sourceStatus, bridgeResult.error || null]
+      );
+    }
     await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
     console.log("[NETWORK DISCOVERY] run=" + runId + " status=" + status + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
     return { runId, status, discovered, matched, unmatched };
@@ -140,12 +158,18 @@ async function runNetworkDiscovery() {
 }
 
 function startNetworkDiscovery() {
-  // First run occurs after schema initialization. A failed router connection is
-  // recorded/logged and does not prevent the web process from starting.
+  lastScheduledRunAt = Date.now();
   runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Initial run failed:", error.message));
-  return setInterval(() => {
-    runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Scheduled run failed:", error.message));
-  }, 10 * 60 * 1000);
+  return setInterval(async () => {
+    try {
+      const intervalMinutes = await getDiscoveryIntervalMinutes();
+      if (running || Date.now() - lastScheduledRunAt < intervalMinutes * 60 * 1000) return;
+      lastScheduledRunAt = Date.now();
+      await runNetworkDiscovery();
+    } catch (error) {
+      console.warn("[NETWORK DISCOVERY] Scheduled run failed:", error.message);
+    }
+  }, 30 * 1000);
 }
 
-module.exports = { runNetworkDiscovery, startNetworkDiscovery };
+module.exports = { runNetworkDiscovery, startNetworkDiscovery, getDiscoveryIntervalMinutes };
