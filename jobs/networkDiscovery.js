@@ -45,16 +45,16 @@ async function runNetworkDiscovery() {
       mikrotikService.testConnection()
     ]);
     const bridgeHosts = bridgeResult.hosts;
-    await db.query(
-      "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
-      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null, onuAutoMapped, onuAutoAmbiguous })]
-    );
-
     let matched = 0;
     let unmatched = 0;
     let discovered = 0;
     let onuAutoMapped = 0;
     let onuAutoAmbiguous = 0;
+
+    await db.query(
+      "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
+      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null, onuAutoMapped, onuAutoAmbiguous })]
+    );
 
     for (const session of sessions) {
       const username = String(session.username || "").trim().slice(0, 100);
