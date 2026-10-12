@@ -27,10 +27,15 @@ function selectUniqueTelemetryMatch(rows, mac) {
 
 async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = null } = {}) {
   const candidates = [];
+  const seenCandidates = new Set();
   for (const session of sessions || []) {
     const username = String(session?.username || '').trim().slice(0, 100);
     const routerMac = normalizeMac(session?.callerId);
-    if (username && routerMac) candidates.push({ username, routerMac });
+    const key = username.toLowerCase() + '\\0' + String(routerMac || '');
+    if (username && routerMac && !seenCandidates.has(key)) {
+      seenCandidates.add(key);
+      candidates.push({ username, routerMac });
+    }
   }
   if (!candidates.length) return { matched: 0, ambiguous: 0, unmatched: 0, mapped: [] };
 
@@ -94,7 +99,6 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
 
   let matched = 0, ambiguous = 0, unmatched = 0;
   const mapped = [];
-  const seenCustomer = new Set();
   for (const candidate of candidates) {
     const customerRows = customersByUsername.get(candidate.username.toLowerCase()) || [];
     if (customerRows.length !== 1) {
@@ -102,8 +106,6 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
       continue;
     }
     const customer = customerRows[0];
-    if (seenCustomer.has(String(customer.id))) continue;
-    seenCustomer.add(String(customer.id));
     const result = telemetryByMac.get(candidate.routerMac) || { status: 'not_found' };
     if (result.status === 'ambiguous') { ambiguous++; continue; }
     if (result.status !== 'matched') { unmatched++; continue; }
