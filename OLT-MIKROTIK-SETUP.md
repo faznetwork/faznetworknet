@@ -1,42 +1,40 @@
-# OLT Management: reusable MikroTik onboarding
+# Universal OLT Connector — network path and integration contract
 
-This guide is intended for each ISP/site that uses the FAZ NETWORK panel. Registering an OLT is inventory only; it does not itself poll the device or prove that live ONU telemetry is arriving.
+## Goal
 
-## 1. Register the device
+An ISP must be able to use the panel without a public IP at the OLT site. The supported path is:
 
-In **Core System → OLT Management → Add OLT**, enter:
-- **OLT Name**: a human-readable name for this site.
-- **Vendor / Model**: the exact vendor and firmware model.
-- **Management IP**: only the OLT's IP address (not the MikroTik IP).
-- **Management Port**: the port as a separate value, if the management service uses one.
-- **Username / Password**: only if the device management protocol needs them.
-- **Location / Serial**: optional inventory metadata.
+`OLT (private management network) → MikroTik collector → outbound HTTPS/TCP 443 → FAZ NETWORK API → PostgreSQL telemetry → OLT Management / Customer 360`
 
-Credentials must stay private. Never put production tokens or passwords in screenshots, source control, or support chats.
+The server does not initiate an inbound connection to the ISP's MikroTik or OLT. CGNAT/public-IP absence is therefore not a blocker by itself, provided the MikroTik has outbound internet and can reach the OLT on the private network.
 
-## 2. Verify that the IP is really the OLT
+## ISP-side prerequisites
 
-Run this read-only command in the MikroTik terminal. Replace the placeholders locally:
+The ISP is responsible for its local network permissions:
 
-```routeros
-/tool snmp-get address=<OLT_IP> community=<SNMP_COMMUNITY> oid=1.3.6.1.2.1.1.1.0
-```
+1. Route from the MikroTik to the OLT management IP.
+2. Enable a supported read-only OLT management protocol (usually SNMP) and allow the MikroTik's management-side IP/subnet in the OLT ACL.
+3. Permit MikroTik outbound HTTPS to `faznetwork-web.onrender.com:443`.
+4. If the panel is to connect to RouterOS API directly, provide a reachable and restricted RouterOS API endpoint. A private IP behind CGNAT is not directly reachable from the cloud; use the outbound-collector model instead.
+5. Do not expose the OLT management service or RouterOS API to the whole internet.
 
-The response should identify the OLT vendor/model. If it reports RouterOS, the entered IP points to a MikroTik router rather than the OLT. If it times out, verify routing, SNMP version/community, firewall ACL, and UDP port 161 reachability before proceeding.
+## Server ingestion contract
 
-Use vendor/firmware-verified MIB/OID definitions for PON, ONU identity, MAC, status, and optical power. OIDs and encoded power formats can differ between models; do not reuse an unverified OID map.
-
-## 3. Configure the telemetry collector
-
-The current backend accepts authenticated snapshots at:
+The authenticated endpoint is:
 
 `POST https://faznetwork-web.onrender.com/api/olt/sync-telemetry`
 
-Required request format:
+Header:
+
+`Authorization: Bearer <OLT_COLLECTOR_TOKEN>`
+
+`Content-Type: application/json`
+
+Example body (use real values from the selected OLT profile):
 
 ```json
 {
-  "oltId": "stable-site-specific-olt-id",
+  "oltId": "stable-site-specific-id",
   "readings": [
     {
       "onuId": "vendor-specific-onu-id",
@@ -47,24 +45,35 @@ Required request format:
       "txPowerDbm": 2.1,
       "observedAt": "2026-10-12T12:00:00.000Z",
       "sourceAgent": "mikrotik-routeros-snmp",
-      "raw": {"index": 1}
+      "raw": { "index": 1 }
     }
   ]
 }
 ```
 
-Use actual readings only. `status` must be `online`, `offline`, `los`, or `unknown`; optical power must be a valid dBm value or a format explicitly supported by the backend. The collector must send `Authorization: Bearer <OLT_COLLECTOR_TOKEN>` and `Content-Type: application/json`. Configure the same private token in Render and in the collector; never expose it to the browser or logs.
+A successful response must include `success: true`, `received`, and `processed`. `/healthz` is only a server health check; it is not evidence that a telemetry POST authenticated or wrote database rows.
 
-A successful ingestion returns `success: true` and `received` / `processed` counts. A successful `/healthz` GET only proves the web process responds; it does not prove POST authentication or database writes work.
+## Universal connector behavior required
 
-## 4. Verify the data in the panel
+The connector must perform these checks in order:
 
-After a successful POST:
-1. Refresh OLT Management / ONT Information.
-2. Confirm the record has a recent **Last Sync** and is not marked **STALE**.
-3. Verify PON, ONU ID, ONU MAC, RX and TX power against the device's own SNMP output.
-4. For Customer 360, match the exact ONU MAC assigned to the customer, or an explicitly verified PPPoE username sent by the authenticated collector. Never substitute the customer's router/caller-id MAC for an ONU MAC.
+1. Validate the saved device identity and its vendor/model/firmware profile.
+2. Test OLT reachability from the MikroTik-side collector; verify `sysDescr` before reading vendor-specific tables.
+3. Use a verified adapter for the exact vendor/model/firmware to discover ONU identity, PON, status, MAC, and RX/TX power. Never guess OIDs or decode opaque power values as dBm without a verified rule.
+4. Generate the RouterOS collector configuration for that adapter, using a site-specific stable OLT ID and server endpoint.
+5. Store secrets server-side; use a dedicated collector credential, not a shared hard-coded production token. Never render secrets back to the browser or write them to logs.
+6. Post readings on a controlled interval with bounded payloads and timeouts.
+7. Show Connected only after authenticated ingestion succeeds and fresh records can be read back from PostgreSQL. Show distinct statuses for unreachable OLT, unsupported profile, SNMP denied, authentication failure, invalid payload, and stale data.
+8. Match Customer 360 only by an explicitly assigned ONU MAC or verified PPPoE username. A router/CPE caller-id MAC is not an ONU MAC.
 
-## Current automation boundary
+## Current implementation boundary
 
-This release contains a guided onboarding flow and an authenticated snapshot endpoint. It does **not** yet auto-detect arbitrary vendor OIDs or generate a fully model-aware RouterOS collector for every OLT. That requires a verified adapter/profile for each vendor and firmware family, plus per-ISP credential isolation. Until that is implemented, the panel must not claim an OLT is connected solely because its inventory record exists.
+The current application already has an authenticated telemetry ingestion endpoint and a V-SOL-oriented MikroTik SNMP script used for the existing site. The endpoint accepts normalized readings, but the application does not yet automatically generate and validate a collector for every OLT vendor/model or firmware. OLT inventory fields by themselves do not start collection. Until an adapter has been tested against real OLT output, the UI must not claim universal compatibility or live telemetry.
+
+## Security and operational requirements
+
+- Keep each ISP/site's device credentials and collector credential isolated.
+- Prefer SNMPv3 where supported; otherwise use a read-only community restricted by source ACL and management VLAN.
+- Never paste passwords or bearer tokens into support chats, screenshots, or source control.
+- Do not overwrite existing customer/billing data as part of discovery or OLT sync.
+- Keep collector execution read-only against the OLT; RouterOS script installation must be an explicit, reviewable action.
