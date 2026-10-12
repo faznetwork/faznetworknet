@@ -1277,14 +1277,17 @@ async function getCustomerLiveSession(req,res){
         String(item?.username||item?.name||"").trim().toLowerCase()===target
       );
       if(!session)return res.json({success:true,live:offlineLive(storedMac),statusSource:"mikrotik-active-list"});
+      const liveIp=clean(session.address,100);let livePoolName=null;
+      try{livePoolName=await mikrotikService.getPoolNameForIp(liveIp);}catch(poolError){console.warn('[Customer 360] Live IP pool resolution failed:',poolError.message);}
       const bytesIn=String(session.bytesIn??session.bytes_in??0);
       const bytesOut=String(session.bytesOut??session.bytes_out??0);
       return res.json({
         success:true,
         live:{
           status:"online",isLive:true,online:true,
-          ip:clean(session.address,100),
+          ip:liveIp,
           mac:clean(session.callerId||session.caller_id||storedMac,100),
+          poolName:livePoolName,
           uptime:clean(session.uptime,100),
           bytesIn,bytesOut,
           traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},
