@@ -51,11 +51,11 @@ test("admin dashboard avoids duplicate RouterOS polling and pauses hidden-dashbo
   assert.doesNotMatch(admin, /safeAdminBootStep\('router metrics'/);
 });
 
-test("admin inline script has no accidentally escaped line break before router test handler", () => {
+test("MikroTik Core & Sync handlers are delegated for the dynamically rendered Devices view", () => {
   const admin = read("views/admin.ejs");
-  assert.doesNotMatch(
-    admin,
-    /Boolean\(d\.success\)\);\\n\s*document\.getElementById\('generalRouterTestBtn'\)/
-  );
-  assert.match(admin, /document\.getElementById\('generalRouterTestBtn'\)\?\.addEventListener/);
+  assert.match(admin, /function renderMikroTikCoreSettings\(\)/);
+  assert.match(admin, /document\.addEventListener\('click',async function\(event\)/);
+  assert.match(admin, /event\.target\.closest\('#generalRouterTestBtn,#adminDiagnosticTestBtn,#generalRouterSyncBtn'\)/);
+  assert.match(admin, /document\.addEventListener\('submit',async function\(event\)/);
+  assert.doesNotMatch(admin, /document\.getElementById\('generalRouterTestBtn'\)\?\.addEventListener/);
 });
