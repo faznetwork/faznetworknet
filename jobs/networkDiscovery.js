@@ -22,25 +22,34 @@ async function runNetworkDiscovery() {
   let source = null;
   try {
     const intervalMinutes = await getDiscoveryIntervalMinutes();
-    // Only explicitly enabled RouterOS sources may be scanned in the background.
+    // Prefer an explicitly enabled discovery source. If none exists, use the
+    // registered primary MikroTik inventory record rather than silently skipping
+    // all scheduled collection; the RouterOS calls below remain read-only.
     const sourceResult = await db.query(
       "SELECT s.id AS source_id, s.device_id FROM network_discovery_sources s JOIN network_devices d ON d.id=s.device_id WHERE s.enabled=TRUE AND s.protocol IN ('routeros_api','mikrotik_api') AND d.device_type='mikrotik' ORDER BY s.id LIMIT 1"
     );
-    if (!sourceResult.rowCount) {
-      console.info("[NETWORK DISCOVERY] Skipped: no enabled MikroTik discovery source.");
-      return { skipped: true, reason: "no_enabled_mikrotik_discovery_source" };
+    let deviceId = null;
+    if (sourceResult.rowCount) {
+      source = sourceResult.rows[0];
+      deviceId = source.device_id;
+      await db.query(
+        "UPDATE network_discovery_sources SET last_attempt_at=NOW(),last_status='pending',last_error=NULL,updated_at=NOW() WHERE id=$1",
+        [source.source_id]
+      );
+    } else {
+      const fallbackDevice = await db.query("SELECT id FROM network_devices WHERE device_type='mikrotik' ORDER BY id LIMIT 1");
+      if (!fallbackDevice.rowCount) {
+        console.info("[NETWORK DISCOVERY] Skipped: no registered MikroTik device.");
+        return { skipped: true, reason: "no_registered_mikrotik_device" };
+      }
+      deviceId = fallbackDevice.rows[0].id;
+      console.info("[NETWORK DISCOVERY] Using registered MikroTik inventory record; no explicit discovery source is configured.");
     }
-    source = sourceResult.rows[0];
-    const deviceId = source.device_id;
 
     // Create the run before opening sockets so connection failures are visible in history.
-    await db.query(
-      "UPDATE network_discovery_sources SET last_attempt_at=NOW(),last_status='pending',last_error=NULL,updated_at=NOW() WHERE id=$1",
-      [source.source_id]
-    );
     const created = await db.query(
       "INSERT INTO network_discovery_runs (source_id,device_id,run_type,status,details) VALUES ($1,$2,'scheduled','running',$3::jsonb) RETURNING id",
-      [source.source_id, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: intervalMinutes + "m" })]
+      [source?.source_id || null, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: intervalMinutes + "m" })]
     );
     runId = created.rows[0].id;
 
@@ -125,10 +134,12 @@ async function runNetworkDiscovery() {
       "UPDATE network_discovery_runs SET status=$2,finished_at=NOW(),discovered_count=$3,matched_count=$4,unmatched_count=$5 WHERE id=$1",
       [runId, status, discovered, matched, unmatched]
     );
-    await db.query(
-      "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status=$2,last_error=$3,updated_at=NOW() WHERE id=$1",
-      [source.source_id, sourceStatus, bridgeResult.error || null]
-    );
+    if (source?.source_id) {
+      await db.query(
+        "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status=$2,last_error=$3,updated_at=NOW() WHERE id=$1",
+        [source.source_id, sourceStatus, bridgeResult.error || null]
+      );
+    }
     await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
     console.log("[NETWORK DISCOVERY] run=" + runId + " status=" + status + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
     return { runId, status, discovered, matched, unmatched };
