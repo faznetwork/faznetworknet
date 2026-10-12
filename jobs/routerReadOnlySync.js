@@ -160,4 +160,4 @@ function startRouterReadOnlySync() {
   return timer;
 }
 
-module.exports = { runRouterReadOnlySync, startRouterReadOnlySync };
+module.exports = { runRouterReadOnlySync, startRouterReadOnlySync, sanitizeProfiles, sanitizePools, sanitizeInterfaces, sanitizeBridgeHosts, sanitizeUsedPools };
