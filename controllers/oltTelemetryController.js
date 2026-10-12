@@ -2,6 +2,7 @@
 const crypto = require("crypto");
 const db = require("../db");
 const { parseOpticalPowerDbm } = require("../lib/network/opticalPower");
+const { isTelemetryStale, telemetryLastSeen } = require("../lib/network/oltTelemetryFreshness");
 let schemaReady;
 function ensureSchema() {
   if (!schemaReady) schemaReady = db.query(`
@@ -122,10 +123,8 @@ exports.listTelemetry = async (req,res) => {
     const markFreshness=item=>{
       // Freshness is based on the source observation, not merely when an old
       // sample was re-ingested by a worker.
-      const freshnessTime=item.observedAt||item.receivedAt;
-      const age=Date.now()-new Date(freshnessTime).getTime();
-      item.stale=!Number.isFinite(age)||age>15*60*1000;
-      item.lastSeenAt=item.observedAt||item.receivedAt||null;
+      item.stale=isTelemetryStale(item);
+      item.lastSeenAt=telemetryLastSeen(item);
       item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
     };
     result.rows.forEach(markFreshness);
