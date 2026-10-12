@@ -1193,51 +1193,50 @@ async function resolveCustomer360(idValue){
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(
-      `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
-              pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
-              tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
-              received_at AS "receivedAt",source_agent AS "sourceAgent",
-              pppoe_username AS "pppoeUsername"
-       FROM olt_telemetry
-       WHERE (
-         (NULLIF(BTRIM($2), '') IS NOT NULL
-          AND regexp_replace(lower(onu_mac::text), '[^0-9a-f]', '', 'g') =
-              CASE WHEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
-                   THEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g') ELSE NULL END)
-         OR LOWER(COALESCE(pppoe_username, '')) = LOWER($1)
-         OR regexp_replace(lower(onu_mac::text), '[^0-9a-f]', '', 'g') =
-            CASE
-              WHEN regexp_replace(lower(COALESCE(
-                (SELECT caller_id FROM pppoe_live_sessions
-                 WHERE LOWER(username)=LOWER($1)
-                   AND received_at >= NOW() - INTERVAL '3 minutes'
-                   AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
-                 ORDER BY received_at DESC LIMIT 1),
-                (SELECT caller_id FROM pppoe_users
-                 WHERE LOWER(username)=LOWER($1) LIMIT 1),
-                ''
-              )), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
-              THEN regexp_replace(lower(COALESCE(
-                (SELECT caller_id FROM pppoe_live_sessions
-                 WHERE LOWER(username)=LOWER($1)
-                   AND received_at >= NOW() - INTERVAL '3 minutes'
-                   AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
-                 ORDER BY received_at DESC LIMIT 1),
-                (SELECT caller_id FROM pppoe_users
-                 WHERE LOWER(username)=LOWER($1) LIMIT 1),
-                ''
-              )), '[^0-9a-f]', '', 'g')
-              ELSE NULL
-            END
+      `WITH identity AS (
+         SELECT
+           CASE
+             WHEN regexp_replace(lower(COALESCE($2,'')), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
+             THEN regexp_replace(lower($2), '[^0-9a-f]', '', 'g')
+             ELSE NULL
+           END AS assigned_mac,
+           CASE
+             WHEN regexp_replace(lower(COALESCE(
+               (SELECT caller_id FROM pppoe_live_sessions
+                WHERE LOWER(username)=LOWER($1)
+                  AND received_at >= NOW() - INTERVAL '3 minutes'
+                  AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
+                ORDER BY received_at DESC LIMIT 1),
+               (SELECT caller_id FROM pppoe_users
+                WHERE LOWER(username)=LOWER($1) LIMIT 1),
+               ''
+             )), '[^0-9a-f]', '', 'g') ~ '^[0-9a-f]{12}$'
+             THEN regexp_replace(lower(COALESCE(
+               (SELECT caller_id FROM pppoe_live_sessions
+                WHERE LOWER(username)=LOWER($1)
+                  AND received_at >= NOW() - INTERVAL '3 minutes'
+                  AND NULLIF(BTRIM(caller_id), '') IS NOT NULL
+                ORDER BY received_at DESC LIMIT 1),
+               (SELECT caller_id FROM pppoe_users
+                WHERE LOWER(username)=LOWER($1) LIMIT 1),
+               ''
+             )), '[^0-9a-f]', '', 'g')
+             ELSE NULL
+           END AS caller_mac
        )
-       ORDER BY
-         CASE WHEN NULLIF(BTRIM($2), '') IS NOT NULL
-                    AND regexp_replace(lower(onu_mac::text), '[^0-9a-f]', '', 'g') =
-                        regexp_replace(lower($2), '[^0-9a-f]', '', 'g')
-              THEN 0
-              WHEN LOWER(COALESCE(pppoe_username, '')) = LOWER($1) THEN 1
-              ELSE 2 END,
-         received_at DESC NULLS LAST, observed_at DESC NULLS LAST
+       SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",
+              t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",
+              t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",
+              t.received_at AS "receivedAt",t.source_agent AS "sourceAgent",
+              t.pppoe_username AS "pppoeUsername"
+       FROM olt_telemetry t
+       CROSS JOIN identity i
+       WHERE i.assigned_mac IS NOT NULL
+         AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=i.assigned_mac
+          OR i.assigned_mac IS NULL
+         AND i.caller_mac IS NOT NULL
+         AND regexp_replace(lower(t.onu_mac::text), '[^0-9a-f]', '', 'g')=i.caller_mac
+       ORDER BY t.received_at DESC NULLS LAST,t.observed_at DESC NULLS LAST
        LIMIT 1`,
       [username, clean(customer.onu_mac,100)]
     )
