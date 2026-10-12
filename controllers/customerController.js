@@ -1251,7 +1251,7 @@ async function resolveCustomer360(idValue){
   const telemetryRow=telemetryResult.status==="fulfilled"?telemetryResult.value.rows?.[0]||null:null;
   const telemetry=telemetryRow?{
     ...telemetryRow,
-    stale:!telemetryRow.receivedAt||!Number.isFinite(new Date(telemetryRow.receivedAt).getTime())||Date.now()-new Date(telemetryRow.receivedAt).getTime()>15*60*1000,
+    stale:(()=>{const now=Date.now(),received=telemetryRow.receivedAt?new Date(telemetryRow.receivedAt).getTime():NaN,observed=telemetryRow.observedAt?new Date(telemetryRow.observedAt).getTime():NaN;return !Number.isFinite(received)||received>now||now-received>15*60*1000||!Number.isFinite(observed)||observed>now+5*60*1000||now-observed>30*60*1000;})(),
     signalLevel:telemetryRow.rxPowerDbm===null||telemetryRow.rxPowerDbm===undefined||!Number.isFinite(Number(telemetryRow.rxPowerDbm))
       ?"unknown":Number(telemetryRow.rxPowerDbm)<=-27?"critical":Number(telemetryRow.rxPowerDbm)<-23?"warning":Number(telemetryRow.rxPowerDbm)>-12?"high":"good"
   }:null;
