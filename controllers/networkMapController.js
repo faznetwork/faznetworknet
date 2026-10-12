@@ -79,9 +79,10 @@ exports.getCustomerMap = async (req, res) => {
          FROM olt_telemetry t
          WHERE LOWER(BTRIM(t.pppoe_username))=LOWER($1)
            AND NULLIF(BTRIM(t.pppoe_username), '') IS NOT NULL
+           AND NULLIF(BTRIM($2), '') IS NULL
          ORDER BY t.observed_at DESC NULLS LAST, t.received_at DESC
          LIMIT 1`,
-        [customer.username]
+        [customer.username, customer.onu_mac]
       )
     ]);
 
