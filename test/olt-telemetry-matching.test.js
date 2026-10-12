@@ -16,8 +16,8 @@ test('matches ONU telemetry to saved ONU MAC or PPPoE caller-id when username is
   assert.equal(matchTelemetryIdentity({ username: 'subscriber1', onuMac: null, callerId: null }, telemetry), null);
 });
 
-test('prefers explicit PPPoE username match over MAC fallbacks', () => {
-  assert.equal(matchTelemetryIdentity({ username: 'Subscriber1', onuMac: '11:11:11:11:11:11', callerId: null }, { pppoeUsername: 'subscriber1', onuMac: '22:22:22:22:22:22' }), 'pppoe_username');
+test('does not match unrelated telemetry by PPPoE username alone', () => {
+  assert.equal(matchTelemetryIdentity({ onuMac: null, callerId: null }, { pppoeUsername: 'subscriber1', onuMac: '22:22:22:22:22:22' }), null);
 });
 
 test('marks telemetry stale from observedAt after 15 minutes even if recently received', () => {
