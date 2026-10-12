@@ -2743,8 +2743,20 @@
         // left behind by interrupted modal transitions, without polling RouterOS or APIs.
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
-            const overlayObserver = new MutationObserver(function () {
-                recoverStaleNavigationOverlay();
+            // Avoid a full-document overlay scan on every dynamic-page DOM mutation.
+            // The admin SPA frequently replaces large tables/cards; only inspect overlays
+            // when a modal/offcanvas/backdrop node is actually added or removed.
+            const overlaySelector = '.modal, .offcanvas, .modal-backdrop, .offcanvas-backdrop';
+            const overlayObserver = new MutationObserver(function (records) {
+                const overlayChanged = records.some(function (record) {
+                    const nodes = Array.from(record.addedNodes || []).concat(Array.from(record.removedNodes || []));
+                    return nodes.some(function (node) {
+                        if (!node || node.nodeType !== 1) return false;
+                        return (node.matches && node.matches(overlaySelector)) ||
+                            (node.querySelector && Boolean(node.querySelector(overlaySelector)));
+                    });
+                });
+                if (overlayChanged) recoverStaleNavigationOverlay();
             });
             overlayObserver.observe(document.body, { childList: true, subtree: true });
             document.addEventListener('hidden.bs.modal', function () {
