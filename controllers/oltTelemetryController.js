@@ -113,7 +113,135 @@ exports.listTelemetry = async (req,res) => {
       result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry WHERE onu_mac=$1::macaddr ORDER BY observed_at DESC LIMIT 1`,[mac]);
     } else if(username) {
       // Only match an ONU MAC already stored on this customer record; never equate router MAC with ONU MAC.
-      result=await db.query(`SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",t.pppoe_username AS "pppoeUsername",t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",t.received_at AS "receivedAt",t.source_agent AS "sourceAgent" FROM customers c JOIN olt_telemetry t ON (LOWER(t.pppoe_username)=LOWER(c.username) OR t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$' THEN c.onu_mac::macaddr ELSE NULL END) WHERE LOWER(c.username)=LOWER($1) ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC,t.observed_at DESC LIMIT 1`,[username]);
+      result=await db.query(`SELECT t.olt_id AS "oltId",t.onu_id AS "onuId",t.onu_mac::text AS "onuMac",t.pppoe_username AS "pppoeUsername",t.pon_port AS "ponPort",t.status,t.rx_power_dbm AS "rxPowerDbm",t.tx_power_dbm AS "txPowerDbm",t.observed_at AS "observedAt",t.received_at AS "receivedAt",t.source_agent AS "sourceAgent",
+                CASE WHEN LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username) THEN 'pppoe_username'
+                     WHEN t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      // Freshness is based on the source observation, not merely when an old
+      // sample was re-ingested by a worker.
+      const freshnessTime=item.observedAt||item.receivedAt;
+      const age=Date.now()-new Date(freshnessTime).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.lastSeenAt=item.observedAt||item.receivedAt||null;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN c.onu_mac::macaddr ELSE NULL END THEN 'customer_onu_mac'
+                     WHEN t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      const age=Date.now()-new Date(item.receivedAt).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END THEN 'pppoe_caller_id'
+                     ELSE 'unknown' END AS "matchedBy"
+         FROM customers c
+         LEFT JOIN pppoe_users pu ON LOWER(pu.username)=LOWER(c.username)
+         JOIN olt_telemetry t ON (
+           LOWER(t.pppoe_username)=LOWER(c.username)
+           OR t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      const age=Date.now()-new Date(item.receivedAt).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN c.onu_mac::macaddr ELSE NULL END
+           OR t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      const age=Date.now()-new Date(item.receivedAt).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END
+         )
+         WHERE LOWER(c.username)=LOWER($1)
+         ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC,
+                  (t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      const age=Date.now()-new Date(item.receivedAt).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN c.onu_mac::macaddr ELSE NULL END) DESC,
+                  (t.onu_mac=CASE WHEN pu.caller_id ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}
+    } else {
+      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
+    }
+    const markFreshness=item=>{
+      const age=Date.now()-new Date(item.receivedAt).getTime();
+      item.stale=!Number.isFinite(age)||age>15*60*1000;
+      item.signalLevel=item.rxPowerDbm===null?'unknown':Number(item.rxPowerDbm)<-27?'weak':Number(item.rxPowerDbm)<=-25?'warning':'good';
+    };
+    result.rows.forEach(markFreshness);
+    const row=result.rows[0]||null;
+    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
+  } catch(error) {
+    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
+    console.error('[OLT telemetry read]',error.message);
+    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
+  }
+};
+ THEN REPLACE(pu.caller_id,'-',':')::macaddr ELSE NULL END) DESC,
+                  t.observed_at DESC LIMIT 1`,[username]);
     } else {
       result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pppoe_username AS "pppoeUsername",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
     }
