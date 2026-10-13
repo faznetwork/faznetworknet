@@ -1155,7 +1155,6 @@
                 </button>
                 <ul class="submenu">
                     <li><a href="javascript:void(0)" onclick="window.loadDevices(); return false;"><i class="bi bi-hdd-network me-2"></i><span data-key="devices">MikroTik Devices</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadMikrotikCoreSettings(); return false;"><i class="bi bi-sliders me-2"></i><span>MikroTik Core &amp; API Settings</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadPlanPackages()"><span data-key="plan_packages">Plan & Packages</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadIpPools()"><span data-key="ip_pools">IP Pools</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadOltManagement('overview'); return false;"><i class="bi bi-diagram-3 me-2"></i><span data-key="olt_management">OLT Management</span></a></li>
@@ -2692,13 +2691,6 @@
 
 
         window.loadDevices = loadDevices;
-        window.loadMikrotikCoreSettings = async function(){
-            await loadDevices();
-            const section=document.getElementById('mikrotikCoreSettingsSection');
-            const host=document.getElementById('generalRouterHost');
-            if(section)section.scrollIntoView({behavior:'smooth',block:'start'});
-            if(host)window.setTimeout(()=>host.focus({preventScroll:true}),250);
-        };
         async function loadDevices(){
             purgeStuckBackdrops(); currentCustomerTitleKey=''; currentPaymentTitleKey=''; setPageTitleSafe('MikroTik Management');
             hideAdminViews(); removeHotspotView();
