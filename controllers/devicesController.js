@@ -103,7 +103,8 @@ exports.update = async (req, res) => {
     const model = clean(body.model,120) || null;
     const host = clean(body.managementIp,512);
     if (!name) return res.status(400).json({success:false,message:"Device name is required."});
-    if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host) || host.split(".").some(part => Number(part)>255)) return res.status(400).json({success:false,message:"Enter a valid IPv4 address."});
+    const ipParts = host.split(".");
+    if (ipParts.length !== 4 || ipParts.some(part => !/^[0-9]{1,3}$/.test(part) || Number(part) > 255)) return res.status(400).json({success:false,message:"Enter a valid IPv4 address."});
     const conflict = await db.query(
       `SELECT id,name,host(management_ip) AS "managementIp" FROM network_devices
         WHERE device_type='mikrotik' AND id<>$1
