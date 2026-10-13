@@ -2703,7 +2703,13 @@
             try{
                 const response=await jsonFetch('/api/devices');
                 const allDevices=Array.isArray(response.devices)?response.devices:[];
-                const devices=allDevices.filter(d=>String(d.deviceType||'').toLowerCase()==='mikrotik');
+                const rawMikroTikDevices=allDevices.filter(d=>String(d.deviceType||'').toLowerCase()==='mikrotik');
+                // Avoid rendering the same router more than once when legacy inventory rows share an IP.
+                // Keep the most recently seen row; never delete or mutate database records here.
+                const routerIdentity=d=>{const ip=String(d.managementIp||'').trim().toLowerCase();return ip?'ip:'+ip:'name:'+String(d.name||'').trim().toLowerCase();};
+                const preferredRouter=(a,b)=>{const seenA=Date.parse(a.lastSeenAt||a.updatedAt||a.createdAt||0)||0;const seenB=Date.parse(b.lastSeenAt||b.updatedAt||b.createdAt||0)||0;return seenB-seenA;};
+                const devices=[...rawMikroTikDevices].sort(preferredRouter).filter((d,i,arr)=>arr.findIndex(other=>routerIdentity(other)===routerIdentity(d))===i);
+                const hiddenDuplicateCount=rawMikroTikDevices.length-devices.length;
                 const counts={mikrotik:0,olt:0,onu:0,ont:0,other:0};
                 devices.forEach(d=>{counts[d.deviceType]=(counts[d.deviceType]||0)+1;});
                 const typeLabel=function(t){return ({mikrotik:'MikroTik Router',olt:'OLT',onu:'ONU',ont:'ONT',access_point:'Access Point',cpe:'CPE',other:'Other'})[t]||t;};
@@ -2712,6 +2718,7 @@
                 const corePanel=existingCorePanel;
                 const corePanelMount=document.getElementById('mikrotikCorePanelMount');
                 if(corePanel&&corePanelMount){corePanel.style.display='block';corePanel.classList.remove('general-settings-panel');corePanel.classList.add('mikrotik-core-settings-panel');corePanelMount.appendChild(corePanel);}
+                if(hiddenDuplicateCount>0){const inventoryHeader=dynamic.querySelector('.card-header');if(inventoryHeader){const warning=document.createElement('div');warning.className='alert alert-warning py-2 px-3 mt-2 mb-0 small';warning.textContent=hiddenDuplicateCount+' duplicate MikroTik inventory record(s) hidden from this list. Database records were not deleted; review them before cleanup.';inventoryHeader.appendChild(warning);}}
                 const deviceFormWrap=document.getElementById('devicesFormWrap');
                 if(deviceFormWrap)deviceFormWrap.classList.add('d-none');
                 document.getElementById('devicesAddBtn')?.addEventListener('click',()=>document.getElementById('devicesFormWrap')?.classList.toggle('d-none'));
