@@ -999,7 +999,6 @@ class MikroTikService {
       const secret = await this._findSecret(connection, name);
       const params = ["=.id=" + secret[".id"], "=comment=" + comment, "=disabled=" + (data?.disabled ? "yes" : "no")];
       const cmdArray=["/ppp/secret/set",...params];
-      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
       await connection.write(cmdArray);
       return { username: name, id: this._str(secret[".id"]), disabled: Boolean(data?.disabled), comment };
     });
@@ -1074,7 +1073,6 @@ class MikroTikService {
         "=disabled=" + (data?.disabled ? "yes" : "no")
       ];
       const cmdArray=["/ppp/secret/set",...params];
-      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
       await connection.write(cmdArray);
       return { username: newName, previousUsername: oldName, id: this._str(secret[".id"]) };
     });
@@ -1100,7 +1098,6 @@ class MikroTikService {
         disabled:data.disabled?"yes":"no"
       });
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],...params];
-      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
       await connection.write(cmdArray);
       return {username:name};
     });
@@ -1127,7 +1124,6 @@ class MikroTikService {
     return this._withConnection("PPPoE package profile change",async(connection)=>{
       const secret=await this._findSecret(connection,name);
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=profile="+profile];
-      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
       await connection.write(cmdArray);
       return {username:name,profile};
     });
@@ -1137,7 +1133,6 @@ class MikroTikService {
     return this._withConnection("PPPoE user toggle",async(connection)=>{
       const secret=await this._findSecret(connection,name);
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=disabled="+(disabled?"yes":"no")];
-      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
       await connection.write(cmdArray);
       return {username:name,disabled:Boolean(disabled)};
     });
