@@ -4014,7 +4014,7 @@ async function deletePlan(id,name){
             const unmatched = tx.status === 'unmatched';
             const gateway = String(tx.channel || '').toLowerCase();
             const gatewayLabel = gateway === 'bkash' ? 'bKash' : gateway === 'nagad' ? 'Nagad' : gateway === 'rocket' ? 'Rocket' : gateway || '-';
-            const action = unmatched ? '<button class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" onclick="openManualMatchModal(' + JSON.stringify(tx.trx_id) + ')"><i class="bi bi-person-check"></i></button>' : '<span class="text-muted">—</span>';
+            const action = unmatched ? '<button type="button" class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" aria-label="' + escapeHtml(t.manual_match) + '" data-manual-match-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-person-check"></i></button>' : '<span class="text-muted">—</span>';
             return '<tr data-payment-row>' +
                 '<td>' + index + '</td>' +
                 '<td><strong>' + escapeHtml(tx.trx_id || '-') + '</strong></td>' +
@@ -4058,6 +4058,21 @@ async function deletePlan(id,name){
         async function changePaymentsPage(delta) {
             currentPaymentPage = Math.max(1, currentPaymentPage + delta);
             await fetchPaymentsSection();
+        }
+
+        // Use delegated clicks and data attributes rather than inline onclick strings.
+        // This safely handles TrxIDs without breaking HTML attribute quoting.
+        if (!window.__fazManualMatchClickBound) {
+            window.__fazManualMatchClickBound = true;
+            document.addEventListener('click', function(event) {
+                const button = event.target.closest('[data-manual-match-trx]');
+                if (!button) return;
+                event.preventDefault();
+                const trxId = button.getAttribute('data-manual-match-trx') || '';
+                if (trxId && typeof openManualMatchModal === 'function') {
+                    void openManualMatchModal(trxId);
+                }
+            });
         }
 
         async function openManualMatchModal(trxId) {
@@ -5394,9 +5409,12 @@ async function deletePlan(id,name){
                 safeSetText('metricOffline', usersAvailable ? customerRows.filter(user => user.online === false || user.active === false).length : '—');
                 safeSetText('metricCollection', '৳' + Number(summary.summary?.today_collection || 0).toFixed(2));
                 const recent = summary.recent || [];
-                document.getElementById('recentPaymentsBody').innerHTML = recent.slice(0,5).map(t =>
-                    '<tr><td>' + escapeHtml(t.trx_id) + '</td><td>' + escapeHtml(t.channel) + '</td><td>৳' + Number(t.amount || 0).toFixed(2) + '</td><td><span class="badge ' + (t.status === 'processed' ? 'bg-success' : 'bg-warning text-dark') + '">' + escapeHtml(t.status) + '</span></td><td>' + escapeHtml(FazDate.formatDateTime(t.created_at)) + '</td></tr>'
-                ).join('') || '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
+                const recentPaymentsBody = document.getElementById('recentPaymentsBody');
+                if (recentPaymentsBody) {
+                    recentPaymentsBody.innerHTML = recent.slice(0,5).map(t =>
+                        '<tr><td>' + escapeHtml(t.trx_id) + '</td><td>' + escapeHtml(t.channel) + '</td><td>৳' + Number(t.amount || 0).toFixed(2) + '</td><td><span class="badge ' + (String(t.status || '').toLowerCase() === 'processed' || String(t.status || '').toUpperCase() === 'PAID' ? 'bg-success' : 'bg-warning text-dark') + '">' + escapeHtml(t.status) + '</span></td><td>' + escapeHtml(FazDate.formatDateTime(t.created_at)) + '</td></tr>'
+                    ).join('') || '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
+                }
             } catch (error) {
                 console.error('[Dashboard]', error);
             }
@@ -5413,10 +5431,12 @@ async function deletePlan(id,name){
                 const ram = Number(r.memoryUsagePercent || 0);
                 safeSetText('metricCpu', cpu + '%');
                 safeSetText('metricRam', ram + '%');
-                document.getElementById('cpuBar').style.width = Math.min(cpu,100) + '%';
-                document.getElementById('ramBar').style.width = Math.min(ram,100) + '%';
+                const cpuBar = document.getElementById('cpuBar');
+                const ramBar = document.getElementById('ramBar');
+                if (cpuBar) cpuBar.style.width = Math.min(cpu,100) + '%';
+                if (ramBar) ramBar.style.width = Math.min(ram,100) + '%';
                 const status = document.getElementById('dashboardRouterStatus');
-                status.className = 'badge bg-success ms-auto';
+                if (status) status.className = 'badge bg-success ms-auto';
                 safeSetText('dashboardRouterStatus', 'Online');
                 safeSetText('dashboardRoundRouterStatus', 'Online');
             } catch (error) {
@@ -5424,7 +5444,7 @@ async function deletePlan(id,name){
                 safeSetText('metricRam', '—');
                 safeSetText('dashboardRoundRouterStatus', 'Offline');
                 const status = document.getElementById('dashboardRouterStatus');
-                status.className = 'badge bg-danger ms-auto';
+                if (status) status.className = 'badge bg-danger ms-auto';
                 safeSetText('dashboardRouterStatus', 'Offline');
             }
         }
