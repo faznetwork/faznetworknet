@@ -67,7 +67,18 @@ exports.create = async (req, res) => {
       }
     }
     if (ip && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.includes(":")) return res.status(400).json({ success: false, message: "Enter a valid IPv4 or IPv6 management address, or an IP-based browser URL." });
-    if (mac && !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) return res.status(400).json({ success: false, message: "Enter a valid MAC address." });
+
+    if (deviceType === "mikrotik") {
+      const duplicate = await db.query(
+        `SELECT id,name,host(management_ip) AS "managementIp"
+           FROM network_devices
+          WHERE device_type='mikrotik'
+            AND (lower(name)=lower($1) OR ($2::inet IS NOT NULL AND management_ip=$2::inet))
+          ORDER BY id LIMIT 1`,
+        [name, ip || null]
+      );
+      if (duplicate.rowCount) return res.status(409).json({success:false,code:"DEVICE_DUPLICATE",message:"A MikroTik device with this name or IP already exists.",duplicate:duplicate.rows[0]});
+    }    if (mac && !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) return res.status(400).json({ success: false, message: "Enter a valid MAC address." });
     const parentId = body.parentDeviceId ? Number(body.parentDeviceId) : null;
     const result = await db.query(`
       INSERT INTO network_devices
@@ -80,6 +91,35 @@ exports.create = async (req, res) => {
     `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,deviceType === "olt" ? managementPort : null,deviceType === "olt" ? managementUsername : null,encryptedManagementPassword,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
     res.status(201).json({ success: true, device: result.rows[0] });
   } catch (error) { sendError(res, error); }
+};
+exports.update = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({success:false,message:"Invalid device ID."});
+    const body = req.body || {};
+    const name = clean(body.name,120);
+    const location = clean(body.location,240) || null;
+    const vendor = clean(body.vendor,120) || null;
+    const model = clean(body.model,120) || null;
+    const host = clean(body.managementIp,512);
+    if (!name) return res.status(400).json({success:false,message:"Device name is required."});
+    if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(host) || host.split(".").some(part => Number(part)>255)) return res.status(400).json({success:false,message:"Enter a valid IPv4 address."});
+    const conflict = await db.query(
+      `SELECT id,name,host(management_ip) AS "managementIp" FROM network_devices
+        WHERE device_type='mikrotik' AND id<>$1
+          AND (lower(name)=lower($2) OR management_ip=$3::inet) LIMIT 1`,
+      [id,name,host]
+    );
+    if (conflict.rowCount) return res.status(409).json({success:false,code:"DEVICE_DUPLICATE",message:"Another MikroTik device already uses this name or IP.",duplicate:conflict.rows[0]});
+    const result = await db.query(
+      `UPDATE network_devices SET name=$2,vendor=$3,model=$4,management_ip=$5::inet,location=$6,notes=$7,updated_at=NOW()
+        WHERE id=$1 AND device_type='mikrotik'
+        RETURNING id,device_type AS "deviceType",name,vendor,model,host(management_ip) AS "managementIp",location,notes,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt"`,
+      [id,name,vendor,model,host,location,clean(body.notes,2000)||null]
+    );
+    if (!result.rowCount) return res.status(404).json({success:false,message:"MikroTik device not found."});
+    return res.json({success:true,device:result.rows[0],message:"MikroTik inventory record updated."});
+  } catch (error) { sendError(res,error); }
 };
 exports.remove = async (req, res) => {
   try {
