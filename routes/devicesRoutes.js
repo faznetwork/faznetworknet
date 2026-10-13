@@ -3,6 +3,7 @@ const controller = require("../controllers/devicesController");
 const router = express.Router();
 router.get("/", controller.list);
 router.post("/", controller.create);
+router.put("/:id", controller.update);
 router.delete("/:id", controller.remove);
 router.get("/mikrotik/discover", controller.discoverMikrotik);
 router.post("/network-map/discover", controller.discoverNetworkMap);
