@@ -22,8 +22,6 @@
   <form id="hotspot-login" name="login" action="$(link-login-only)" method="post">
     <input type="hidden" name="dst" value="$(link-orig)">
     <input type="hidden" name="popup" value="true">
-    <input type="hidden" name="chap-id" value="$(chap-id)">
-    <input type="hidden" name="chap-challenge" value="$(chap-challenge)">
     <input type="hidden" id="router-mac" value="$(mac)">
     <input type="hidden" name="username" id="router-username" value="$(mac)">
     <input type="hidden" name="password" id="router-password">
@@ -35,7 +33,6 @@
   <a class="pay" href="https://faznetwork-web.onrender.com/portal?mac=$(mac)">নতুন প্যাকেজ কিনুন / রিচার্জ</a>
   <small>Username = Device MAC Address · Password = Customer Phone</small>
 </main>
-<script src="md5.js"></script>
 <script>
 (function(){
   const form=document.getElementById("hotspot-login");
@@ -53,19 +50,11 @@
     event.preventDefault();
     const mac=normalizeMac(document.getElementById("router-mac").value);
     const phone=normalizePhone(phoneInput.value);
-    const chapId=form.elements.namedItem("chap-id").value||"";
-    const challenge=form.elements.namedItem("chap-challenge").value||"";
     if(!mac){status.style.display="block";status.textContent="RouterOS থেকে ডিভাইসের MAC Address পাওয়া যায়নি।";return;}
     if(!phone){status.style.display="block";status.textContent="সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।";return;}
     document.getElementById("router-username").value=mac;
-    const password=document.getElementById("router-password");
-    // Recompute from the raw phone on every attempt; never hash an already-hashed value.
-    if(chapId&&challenge){
-      if(typeof hexMD5!=="function"){status.style.display="block";status.textContent="RouterOS CHAP helper md5.js লোড হয়নি।";return;}
-      password.value=hexMD5(chapId+phone+challenge);
-    }else{
-      password.value=phone;
-    }
+    // This form deliberately uses HTTP-PAP: send the raw phone once and never hash it twice.
+    document.getElementById("router-password").value=phone;
     form.submit();
   });
 })();
