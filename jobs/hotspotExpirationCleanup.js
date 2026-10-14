@@ -98,9 +98,11 @@ function createHotspotExpirationCleanup(deps = {}) {
       // In that case, persist expired/pending state and let the targeted router
       // cleanup fail safely so the next hourly run can retry it.
       let snapshot = { users: [], schedulerNames: [] };
+      let snapshotAvailable = true;
       try {
         snapshot = await router.getHotspotExpirationSnapshot();
       } catch (error) {
+        snapshotAvailable = false;
         logger.warn("[HOTSPOT EXPIRY] RouterOS snapshot unavailable; using persisted expiry and retrying cleanup later:", error.message);
       }
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
@@ -174,12 +176,16 @@ function createHotspotExpirationCleanup(deps = {}) {
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
         const commentExpiry = parseCommentExpiry(voucher.comment);
-        // The one-shot RouterOS scheduler may remove the router account before this poll.
-        // Reconcile the retained voucher row after its persisted Exp date passes.
+        // A successful router snapshot that no longer contains a MAC-named account
+        // means its one-shot expiry scheduler (or an administrator) removed it.
+        // Do not infer absence while RouterOS itself is unreachable.
+        const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
+        const missingMacUser = snapshotAvailable && !user && macNamedVoucher &&
+          ["active", "unused"].includes(effectiveStatus);
         const commentExpiryReached = !user && ["active", "unused"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
         const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
-        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached) continue;
+        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
