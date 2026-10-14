@@ -42,14 +42,26 @@ exports.traffic = async (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
   try {
     const interfaceName = String(req.query.interface || "").trim();
-    if (!interfaceName || interfaceName.length > 100 || /[\\r\\n\\0]/.test(interfaceName)) {
+    if (!interfaceName || interfaceName.length > 100 || /[\r\n\0]/.test(interfaceName)) {
       return res.status(400).json({ error: "A valid interface query parameter is required." });
     }
+
+    // Prefer the role supplied by the interface selector; infer only unambiguous names otherwise.
+    let role = String(req.query.role || "").trim().toLowerCase();
+    if (role !== "wan" && role !== "lan") {
+      const key = interfaceName.toLowerCase();
+      if (/(pppoe|wireguard|eoip|l2tp|sstp|ovpn|openvpn|gre|ipip|ipsec|lte|starlink|wan|uplink|external|internet|isp|provider|tunnel)/i.test(key)) role = "wan";
+      else if (/(bridge|lan|subscriber|onu|distribution|access|switch|ether|sfp|vlan|bonding)/i.test(key)) role = "lan";
+      else return res.status(400).json({ error: "Interface role is ambiguous; choose a WAN or LAN interface from the dashboard." });
+    }
+
     const traffic = await mikrotikService.getInterfaceTraffic(interfaceName);
-    // RouterOS reports bits/sec; expose only bytes/sec plus a numeric epoch timestamp.
+    const rxBps = Math.max(0, Number(traffic.rxBitsPerSecond) || 0);
+    const txBps = Math.max(0, Number(traffic.txBitsPerSecond) || 0);
+    // WAN RX/TX maps to download/upload; subscriber-facing LAN reverses the direction.
     return res.json({
-      rx: Math.max(0, Number(traffic.rxBitsPerSecond) || 0) / 8,
-      tx: Math.max(0, Number(traffic.txBitsPerSecond) || 0) / 8,
+      rx: (role === "wan" ? rxBps : txBps) / 8,
+      tx: (role === "wan" ? txBps : rxBps) / 8,
       timestamp: Date.now()
     });
   } catch (error) {
