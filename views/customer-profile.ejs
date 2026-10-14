@@ -219,6 +219,50 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
   #app > section.row.g-3.mb-3 .label { font-size: .66rem; }
   #app > section.row.g-3.mb-3 .metric { font-size: 1rem; }
 }
+
+/* Final responsive summary-card layout: mobile swipe rail, desktop three-column grid. */
+@media (max-width: 767.98px) {
+  #app > section.row.g-3.mb-3 {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: .75rem !important;
+    margin: 0 -.15rem .9rem !important;
+    padding: .15rem .15rem .65rem;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  #app > section.row.g-3.mb-3::-webkit-scrollbar { display: none; }
+  #app > section.row.g-3.mb-3 > .col-xl-4 {
+    flex: 0 0 min(82%, 330px) !important;
+    width: min(82%, 330px) !important;
+    max-width: min(82%, 330px) !important;
+    min-width: 0;
+    padding: 0 !important;
+    scroll-snap-align: start;
+  }
+  #app > section.row.g-3.mb-3 > .col-xl-4 > .card { height: 100% !important; }
+}
+@media (min-width: 1200px) {
+  #app > section.row.g-3.mb-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 1rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  #app > section.row.g-3.mb-3 > .col-xl-4 {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0;
+    padding: 0 !important;
+  }
+  #app > section.row.g-3.mb-3 > .col-xl-4 > .card { height: 100% !important; }
+}
 </style><script src="/js/date-format.js"></script>
 </head>
 <body>
