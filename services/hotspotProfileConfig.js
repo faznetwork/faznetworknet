@@ -31,31 +31,36 @@ function parseStoredValidity(profile) {
 function buildHotspotOnLoginScript(config) {
   const validity = normalizeProfileValidity(config.validityValue, config.validityUnit);
   const sharedUsers = Math.max(1, Number(config.sharedUsers) || 1);
-  const profileName = String(config.name || "").replace(/[^a-zA-Z0-9_. -]/g, "").slice(0, 80);
-  const policy = validity.validity || validity.validityLabel;
-  const bindMac = sharedUsers === 1 ? " /ip hotspot user set $uid mac-address=$loginMac;" : "";
+  const bindMac = sharedUsers === 1
+    ? ':if ([:len $uid] > 0 && [:len $uMac] > 0) do={ /ip hotspot user set $uid mac-address=$uMac; }'
+    : '';
   const prefix = [
-    ':local u $user',
-    ':local loginMac $"mac-address"',
-    ':local auth "unknown"',
-    ':local activeId [/ip hotspot active find where user=$u]',
-    ':if ([:len $activeId] > 0) do={ :set auth [/ip hotspot active get $activeId login-by]; }',
-    ':local uid [/ip hotspot user find where name=$u]',
-    ':if ([:len $uid] > 0) do={ :local oldComment [/ip hotspot user get $uid comment]; :if ([:find $oldComment "FIRST_LOGIN="] = nil) do={ /ip hotspot user set $uid comment=("FAZ|EXP=0|PROF=' + profileName + '|INIT=1|PROFILE=' + profileName + '|VALIDITY=' + policy + '|FIRST_LOGIN=" . [/system clock get date] . " " . [/system clock get time] . "|MAC=" . $loginMac . "|AUTH=" . $auth); };' + bindMac + ' }'
-  ].join("; ");
+    ':local uName $user',
+    ':local uMac $"mac-address"',
+    ':local uAddress $address',
+    ':local activeId [/ip hotspot active find where user=$uName]',
+    ':local uid [/ip hotspot user find where name=$uName]',
+    bindMac
+  ].filter(Boolean).join('; ');
 
+  // Preserve the backend-owned "Exp: YYYY-MM-DD" comment. The scheduler carries
+  // its own user/MAC/IP values and removes itself after the one expiry run.
   if (validity.unit === "gb") {
-    return prefix + " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=" + validity.limitBytesTotal + "; };";
+    return prefix + ' :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=' + validity.limitBytesTotal + '; };';
   }
 
-  // Anchor expiry to first login; reconnects must not extend prepaid validity.
   const schedulerEvent =
-    '("/ip hotspot active remove [find where user=\\"' + '" . $u . "' +
-    '\\"]; /ip hotspot user disable [find where name=\\"' + '" . $u . "' +
-    '\\"]; /system scheduler remove [find where name=\\"faz-exp-' + '" . $u . "' + '\\"];")';
+    '("/ip hotspot active remove [find where user=\\"' + '" . $uName . "' +
+    '\\"]; /ip hotspot cookie remove [find where user=\\"' + '" . $uName . "' +
+    '\\"]; /ip hotspot cookie remove [find where mac-address=\\"' + '" . $uMac . "' +
+    '\\"]; /ip hotspot user remove [find where name=\\"' + '" . $uName . "' +
+    '\\"]; /ip hotspot host remove [find where mac-address=\\"' + '" . $uMac . "' +
+    '\\"]; /ip hotspot host remove [find where address=\\"' + '" . $uAddress . "' +
+    '\\"]; /system scheduler remove [find where name=\\"faz-exp-' + '" . $uName . "' + '\\"];")';
+
   return prefix +
-    " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };" +
-    ' :local sched ("faz-exp-" . $u);' +
+    ' :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };' +
+    ' :local sched ("faz-exp-" . $uName);' +
     ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' +
     validity.validity +
     ' start-time=[/system clock get time] on-event=' + schedulerEvent + '; };';
