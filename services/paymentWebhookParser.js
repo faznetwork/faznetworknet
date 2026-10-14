@@ -81,7 +81,12 @@ function extractAmount(text) {
   for (const re of patterns) { const m = t.match(re); if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; } }
   return NaN;
 }
-function extractRecipientPhone(text) {\n  const m = String(text || "").match(/\\bto\\s*((?:\\+?880[\\s-]*|0)1(?:[\\s-]*\\d){9})/i);\n  const value = m ? normalizePhone(m[1]) : "";\n  return /^01\\d{9}$/.test(value) ? value : "";\n}\nfunction extractSenderPhone(text) {
+function extractRecipientPhone(text) {
+  const m = String(text || "").match(/\bto\s*((?:\+?880[\s-]*|0)1(?:[\s-]*\d){9})/i);
+  const value = m ? normalizePhone(m[1]) : "";
+  return /^01\d{9}$/.test(value) ? value : "";
+}
+function extractSenderPhone(text) {
   const matches = String(text || "").match(/(?:\+?880[\s-]*|0)1(?:[\s-]*\d){9}/g) || [];
   const normalized = matches.map(normalizePhone).filter(v => /^01\d{9}$/.test(v));
   return normalized[0] || "";
