@@ -2459,14 +2459,12 @@
         async function refreshHotspotDashboardMetrics(){
             const body=document.getElementById('hotspotDashboardSessions'); if(!body)return;
             try{
-                const [metricsResponse,activeResponse]=await Promise.all([
-                    fetch('/api/hotspot/dashboard-metrics'),
-                    fetch('/api/hotspot/active')
+                const [d,activeData]=await Promise.all([
+                    jsonFetch('/api/hotspot/dashboard-metrics', {timeout:8000}),
+                    jsonFetch('/api/hotspot/active', {timeout:8000})
                 ]);
-                if(!metricsResponse.ok) throw new Error('Unable to load Hotspot dashboard metrics.');
-                if(!activeResponse.ok) throw new Error('Unable to load active Hotspot users.');
-                const d=await metricsResponse.json();
-                const activeData=await activeResponse.json();
+                if(d.success===false) throw new Error(d.message||'Unable to load Hotspot dashboard metrics.');
+                if(activeData.success===false) throw new Error(activeData.message||'Unable to load active Hotspot users.');
                 safeSetText('hsTotalUsers',Number(d.totalUsers||0));
                 safeSetText('hsActiveUsers',Number(d.activeUsers||0));
                 safeSetText('hsOfflineUsers',Number(d.offlineUsers||0));
