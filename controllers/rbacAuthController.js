@@ -438,7 +438,7 @@ async function createUser(req, res) {
   const requestedUsername = String(req.body?.username || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = normalizeRole(req.body?.role);
-  const selfServiceSignup = req.body?.selfServiceSignup === true && role === 'staff';
+  const selfServiceSignup = req.selfServiceInvitationRoute === true && req.body?.selfServiceSignup === true && role === 'staff';
   const username = selfServiceSignup ? null : requestedUsername;
   if (!selfServiceSignup && !/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3-60 characters (letters, numbers, dot, underscore or hyphen).' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
@@ -475,6 +475,12 @@ async function createUser(req, res) {
     return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
   }
 }
+async function createSubStaffInvitation(req, res) {
+  req.selfServiceInvitationRoute = true;
+  req.body = { ...(req.body || {}), role: 'staff', selfServiceSignup: true };
+  return createUser(req, res);
+}
+
 async function resendInvitation(req,res) {
   const id=Number(req.params.id);
   if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({success:false,message:'Invalid account ID.'});
@@ -681,4 +687,4 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, createSubStaffInvitation, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
