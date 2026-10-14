@@ -56,7 +56,7 @@ exports.addDevice = async (req, res) => {
        RETURNING id, router_name, host, api_type, api_port, username, use_ssl, timeout_ms,
                  status, last_synced, board_model, ros_version, cpu_load, identity, created_at`,
       [input.router_name, handshake.host, handshake.api_type, handshake.api_port, input.username,
-       encryptedPassword, input.api_type === 'native_api' ? input.use_ssl : true,
+       encryptedPassword, handshake.api_type === 'native_api' ? input.use_ssl : true,
        Number(input.timeout || 8000), handshake.board_model, handshake.ros_version, handshake.cpu_load, handshake.identity]
     );
     return res.status(201).json({ success: true, router: result.rows[0], message: 'MikroTik router saved after a successful handshake.' });
