@@ -2744,7 +2744,19 @@
         // Heal stale invisible Bootstrap backdrops that can intercept sidebar clicks.
         // Only clean overlays when no modal/offcanvas is actually open.
         function recoverStaleNavigationOverlay() {
-            if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing')) return;
+            // Bootstrap may leave .show on a modal that is already hidden after an
+            // interrupted transition. Class-only checks treat that stale modal as live
+            // and leave its full-screen backdrop blocking every admin click.
+            const visibleOverlay = Array.from(document.querySelectorAll(
+                '.modal.show, .offcanvas.show, .offcanvas.showing'
+            )).some(function (el) {
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    el.getClientRects().length > 0;
+            });
+            if (visibleOverlay) return;
+
             const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
             if (!stale.length) return;
             stale.forEach(function (el) { el.remove(); });
@@ -2805,6 +2817,21 @@
                 if (backdropChanged) recoverStaleNavigationOverlay();
             });
             overlayObserver.observe(document.body, { childList: true });
+
+            // Last-resort recovery: when an orphan backdrop is already present it
+            // intercepts clicks, so no sidebar handler can run. Capture that first
+            // click, remove only a backdrop with no visibly open modal, then the next
+            // click works normally. This never closes a genuinely visible modal.
+            document.addEventListener('pointerdown', function (event) {
+                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop')) {
+                    recoverStaleNavigationOverlay();
+                }
+            }, true);
+            document.addEventListener('click', function (event) {
+                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop')) {
+                    recoverStaleNavigationOverlay();
+                }
+            }, true);
             document.addEventListener('hidden.bs.modal', function () {
                 window.setTimeout(recoverStaleNavigationOverlay, 80);
             }, true);
