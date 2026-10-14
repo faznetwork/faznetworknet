@@ -3,6 +3,7 @@ require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const {startNetworkDiscovery}=require("./jobs/networkDiscovery");const {startHotspotExpirationCleanup}=require("./jobs/hotspotExpirationCleanup");const ipPoolRoutes=require("./routes/ipPoolRoutes");const devicesRoutes=require("./routes/devicesRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const {requireRole,requireStaffReadOnly}=require("./middleware/rbac");
+const dashboardController=require("./controllers/dashboardController");
 const rbacAuthController=require("./controllers/rbacAuthController");
 const adminUserRoutes=require("./routes/adminUserRoutes");
 const adminSecurityRoutes=require("./routes/adminSecurityRoutes");
@@ -38,6 +39,7 @@ app.use(async(req,res,next)=>{try{res.locals.brandSettings=await appSettingsServ
 app.get("/api/settings/public",settingsController.publicSettings);
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
+app.get("/api/dashboard/stats",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.stats);
 app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
 app.get("/login",(req,res)=>{
   if(isAdminAuthenticated(req)) return res.redirect("/admin");
