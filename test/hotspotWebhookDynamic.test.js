@@ -15,12 +15,12 @@ function responseRecorder(){
 
 test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit",async()=>{
   const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
-  let profileMetadata={Weekend:{price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
+  let profileMetadata={Weekend:{id:"pkg-weekend",price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
   let rechargePayload=null;
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
-    profileMetadata={Weekend:{price:15,validityValue:2,validityUnit:"days",validityLabel:"2 Days",limitBytesTotal:0}};
+    profileMetadata={Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",validityLabel:"2 Days",limitBytesTotal:0}};
     db.query=async(sql,params=[])=>{
       if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
       if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
@@ -28,7 +28,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
-      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
+      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -36,7 +36,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
     mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-price-sync-15",body:{phone:"01712345678",trxId:"PRICE15"}};
+    const req={ip:"test-price-sync-15",body:{phone:"01712345678",trxId:"PRICE15",amount:15,profile_id:"pkg-weekend"}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
@@ -49,7 +49,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
 
     // The old Tk 10 amount must stop matching immediately after the profile price is changed.
     const oldAmountResponse=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10"}},oldAmountResponse);
+    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10",amount:10,profile_id:"pkg-weekend"}},oldAmountResponse);
     assert.equal(oldAmountResponse.statusCode,400);
     assert.match(oldAmountResponse.body.error,/no active Hotspot profile currently has a price of ৳10\.00/i);
   }finally{
@@ -92,8 +92,8 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
       if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched",matched_username:null}]};}
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
-      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",aliases:["1-Hour","1h","pkg-1-hour"],limitBytesTotal:0}})}]};
-      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",id:"pkg-1-hour",aliases:["1-Hour","1h","pkg-1-hour"],limitBytesTotal:0}})}]};
+      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -101,7 +101,7 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
     mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  ",profileName:"1h"},query:{}};
+    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  ",profile_id:"pkg-1-hour",amount:15},query:{}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
@@ -131,8 +131,8 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:111,trx_id:"PARTIAL-111",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
-      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
-      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.includes("SET status='unmatched'")){released=true;return {rows:[{id:params[0]}]};}
       if(sql.includes("SELECT status,used FROM transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
@@ -147,7 +147,7 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       throw new Error("simulated commit failure");
     };
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-partial-commit",body:{phone:"01712345678",trxId:"PARTIAL-111"}},res);
+    await paymentController.verifyTrx({ip:"test-partial-commit",body:{phone:"01712345678",trxId:"PARTIAL-111",amount:15,profile_id:"pkg-weekend"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(commitAttempted,true);
     assert.equal(released,false,"successful RouterOS provisioning must not release the transaction for reuse");
@@ -167,8 +167,8 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:112,trx_id:"ROUTER-FAIL-112",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
-      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
-      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.includes("SET status='unmatched'")){released=true;return {rows:[{id:params[0]}]};}
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -178,7 +178,7 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
     mikrotik.rechargeHotspotUser=async()=>{throw new Error("simulated RouterOS failure");};
     db.withTransaction=async()=>{throw new Error("should not finalize after RouterOS failure");};
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-router-fail",body:{phone:"01712345678",trxId:"ROUTER-FAIL-112"}},res);
+    await paymentController.verifyTrx({ip:"test-router-fail",body:{phone:"01712345678",trxId:"ROUTER-FAIL-112",amount:15,profile_id:"pkg-weekend"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(released,true,"a confirmed RouterOS failure should release the claim");
   }finally{
@@ -198,8 +198,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:113,trx_id:"CONCURRENT-113",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
-      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
-      if(sql.includes("SET used=true,status='processing'")){claimAttempts++;return claimAttempts===1?{rows:[{id:113}]}:{rows:[]};}
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("SET status='processing',used=true")){claimAttempts++;return claimAttempts===1?{rows:[{id:113}]}:{rows:[]};}
       if(sql.includes("SELECT status,used FROM transactions"))return {rows:[{status:"processing",used:true}]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -210,8 +210,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     const a=responseRecorder(),b=responseRecorder();
     await Promise.all([
-      paymentController.verifyTrx({ip:"test-concurrent-a",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},a),
-      paymentController.verifyTrx({ip:"test-concurrent-b",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},b)
+      paymentController.verifyTrx({ip:"test-concurrent-a",body:{phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},a),
+      paymentController.verifyTrx({ip:"test-concurrent-b",body:{phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},b)
     ]);
     assert.equal(claimAttempts,2);
     assert.equal(rechargeCount,1,"only the winning atomic claim may invoke RouterOS");
