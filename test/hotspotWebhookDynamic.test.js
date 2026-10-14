@@ -13,6 +13,16 @@ function responseRecorder(){
   };
 }
 
+test("verifyTrx requires a valid client MAC before claiming a payment", async () => {
+  const res = responseRecorder();
+  await paymentController.verifyTrx({
+    ip: "test-invalid-hotspot-mac",
+    body: { account_phone: "01712345678", trxId: "INVALID-MAC", amount: 15, profile_id: "pkg-weekend" }
+  }, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, "INVALID_MAC");
+});
+
 test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit",async()=>{
   const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let profileMetadata={Weekend:{id:"pkg-weekend",price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
