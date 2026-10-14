@@ -56,7 +56,6 @@ function buildHotspotOnLoginScript(config = {}) {
     ':local fazManaged "FAZ_HOTSPOT_EXPIRY_V2"',
     ':local uName $user',
     ':local uMac $"mac-address"',
-    ':local uAddress $address',
     ':local uid [/ip hotspot user find where name=$uName]',
     bindMac
   ].filter(Boolean).join('; ');
@@ -71,7 +70,6 @@ function buildHotspotOnLoginScript(config = {}) {
     '\\\"]; /ip hotspot cookie remove [find where mac-address=\\\"' + '" . $uMac . "' +
     '\\\"]; /ip hotspot user remove [find where name=\\\"' + '" . $uName . "' +
     '\\\"]; /ip hotspot host remove [find where mac-address=\\\"' + '" . $uMac . "' +
-    '\\\"]; /ip hotspot host remove [find where address=\\\"' + '" . $uAddress . "' +
     '\\\"]; /system scheduler remove [find where name=\\\"faz-exp-' + '" . $uName . "' +
     '\\\"];")';
 
