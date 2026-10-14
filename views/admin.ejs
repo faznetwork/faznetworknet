@@ -4765,10 +4765,21 @@ async function deletePlan(id,name){
                     paidBtn.disabled=true;
                     try{
                         const data=await jsonFetch('/api/customers/mark-paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
-                        paidBtn.innerHTML='Paid';paidBtn.dataset.status='Paid';paidBtn.title='Already paid for current cycle';
-                        paidBtn.classList.remove('btn-danger','btn-outline-success');paidBtn.classList.add('btn-success','text-white');
-                        const billingBadge=paidBtn.closest('tr')?.querySelector('.customer-billing-badge');
-                        if(billingBadge){billingBadge.className='badge bg-success-subtle text-success border customer-billing-badge ms-1';billingBadge.textContent='Paid';}
+                        if(data&&data.success===false)throw new Error(data.message||'Unable to mark bill as paid.');
+                        const customerRow=paidBtn.closest('tr');
+                        if(customerRow){
+                            customerRow.dataset.billingStatus='paid';
+                            customerRow.querySelectorAll('.action-paid-btn').forEach(function(btn){
+                                btn.dataset.status='paid';
+                                btn.title='Already paid for current cycle';
+                                btn.setAttribute('aria-label','Already paid for current cycle');
+                                btn.classList.remove('btn-danger','btn-outline-success','is-unpaid');
+                                btn.classList.add('btn-success','text-white','is-paid');
+                                btn.innerHTML='<i class="bi bi-check2-circle"></i>';
+                            });
+                            const billingBadge=customerRow.querySelector('.customer-billing-badge');
+                            if(billingBadge){billingBadge.className='badge bg-success-subtle text-success border customer-billing-badge ms-1';billingBadge.textContent='Paid';}
+                        }
                         if(data.message)console.info(data.message);
                     }catch(error){alert(error.message||'Unable to mark bill as paid.');}
                     finally{paidBtn.disabled=false;}
