@@ -3,6 +3,7 @@ router.get("/",controller.page);
 router.get("/users",controller.list);
 router.post("/users",controller.createUser);
 router.post("/users/create",controller.createUser);
+router.post("/users/update",controller.updateUser);
 router.get("/dashboard-metrics",controller.dashboardMetrics);
 router.get("/voucher-stats",controller.voucherStats);
 router.get("/voucher-records",controller.voucherRecords);
