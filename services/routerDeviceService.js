@@ -60,27 +60,35 @@ async function testNative(config) {
     keepalive: false,
     ...(config.useSsl ? { tls: { rejectUnauthorized: false } } : {})
   });
-  let timer;
+  let connectTimer;
+  let handshakeTimer;
   try {
     await Promise.race([
       router.connect(),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('Connection timed out'), { code: 'ETIMEDOUT' })), config.timeout); })
+      new Promise((_, reject) => { connectTimer = setTimeout(() => reject(Object.assign(new Error('Connection timed out'), { code: 'ETIMEDOUT' })), config.timeout); })
     ]);
-    const [identityRows, resourceRows] = await Promise.race([
-      Promise.all([router.write('/system/identity/print'), router.write('/system/resource/print')]),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('Handshake timed out'), { code: 'ETIMEDOUT' })), config.timeout); })
+    if (connectTimer) clearTimeout(connectTimer);
+    const handshake = (async () => {
+      const identityRows = await router.write('/system/identity/print');
+      const resourceRows = await router.write('/system/resource/print');
+      return { identityRows, resourceRows };
+    })();
+    const { identityRows, resourceRows } = await Promise.race([
+      handshake,
+      new Promise((_, reject) => { handshakeTimer = setTimeout(() => reject(Object.assign(new Error('Handshake timed out'), { code: 'ETIMEDOUT' })), config.timeout); })
     ]);
     const identity = identityRows?.[0] || {};
     const resource = resourceRows?.[0] || {};
     return {
       status: 'online', latency_ms: Date.now() - started,
       identity: String(identity.name || 'MikroTik'),
-      board_model: String(resource['board-name'] || resource['platform'] || 'Unknown'),
+      board_model: String(resource['board-name'] || resource.platform || 'Unknown'),
       ros_version: String(resource.version || 'Unknown'),
       cpu_load: Number.isFinite(Number(resource['cpu-load'])) ? Number(resource['cpu-load']) : null
     };
   } finally {
-    if (timer) clearTimeout(timer);
+    if (connectTimer) clearTimeout(connectTimer);
+    if (handshakeTimer) clearTimeout(handshakeTimer);
     try { router.close(); } catch (_) {}
   }
 }
