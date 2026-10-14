@@ -315,7 +315,20 @@ class MikroTikService {
 
   async testConnection(configOverride) { return this._withConnection("connection test", async (connection) => { const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query"); const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query"); return { routerName: this._str(identity.name) || "Unknown Router", version: this._str(resources.version) || "Unknown", model:this._str(resources["board-name"])||this._str(resources["platform"])||"RouterOS device", boardName:this._str(resources["board-name"])||this._str(resources["platform"])||"RouterOS device", uptime:this._str(resources.uptime)||"unknown" }; },configOverride); }
   async getSystemResources() { return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); const totalHddBytes = this._number(resource["total-hdd-space"]); const freeHddBytes = this._number(resource["free-hdd-space"]); return { cpuLoad: this._number(resource["cpu-load"]), cpuCount: this._number(resource["cpu-count"]), cpuFrequencyMHz: this._number(resource["cpu-frequency"]), cpu: this._str(resource.cpu) || "Unknown", architectureName: this._str(resource["architecture-name"]) || "Unknown", boardName: this._str(resource["board-name"]) || "Unknown", platform: this._str(resource.platform) || "Unknown", version: this._str(resource.version) || "Unknown", buildTime: this._str(resource["build-time"]) || "Unknown", factorySoftware: this._str(resource["factory-software"]) || "Unknown", freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number((Math.max(0, totalMemoryBytes - freeMemoryBytes) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, freeHddMb: Number((freeHddBytes / 1024 / 1024).toFixed(2)), totalHddMb: Number((totalHddBytes / 1024 / 1024).toFixed(2)), hddUsagePercent: totalHddBytes > 0 ? Number((((totalHddBytes - freeHddBytes) / totalHddBytes) * 100).toFixed(1)) : 0, writeSectsSinceReboot: this._number(resource["write-sect-since-reboot"]), writeSectsTotal: this._number(resource["write-sect-total"]), badBlocks: this._str(resource["bad-blocks"]) || "0%", uptime: this._str(resource.uptime) || "unknown" }; }); }
-  async getInterfaces() { return this._withConnection("interface query", async (connection) => { const rows = await connection.write("/interface/print"); return (Array.isArray(rows) ? rows : []).filter((item) => { const type = this._str(item.type).toLowerCase(); return ["ether","ethernet","sfp","sfp-sfpplus","sfpplus","bridge","vlan","pppoe","lte","bonding","eoip","wireguard","l2tp","sstp","ovpn","openvpn","gre","ipip","ipsec","vxlan"].some((allowed) => type.includes(allowed)); }).map((item) => ({ name: this._str(item.name), type: this._str(item.type) || "unknown", running: this._bool(item.running), disabled: this._bool(item.disabled), comment: this._str(item.comment) })).filter((item) => item.name); }); }
+  async getInterfaces() {
+    return this._withConnection("interface query", async (connection) => {
+      const rows = await connection.write("/interface/print");
+      return (Array.isArray(rows) ? rows : [])
+        .map((item) => ({
+          name: this._str(item.name),
+          type: this._str(item.type) || "unknown",
+          running: this._bool(item.running),
+          disabled: this._bool(item.disabled),
+          comment: this._str(item.comment)
+        }))
+        .filter((item) => item.name);
+    });
+  }
 
   async getBridgeHosts() {
     return this._withConnection("bridge host discovery", async (connection) => {
@@ -332,7 +345,63 @@ class MikroTikService {
     });
   }
 
-  async getInterfaceTraffic(interfaceName) { const name = String(interfaceName || "").trim(); if (!name || name.length > 100) throw new Error("MikroTik traffic query failed: a valid interface name is required."); return this._withConnection("traffic query for " + name, async (connection) => { const rows = await connection.write("/interface/monitor-traffic", ["=interface=" + name, "=once=true"]); const traffic = this._firstRow(rows, "traffic query"); const rxBitsPerSecond = this._number(traffic["rx-bits-per-second"]); const txBitsPerSecond = this._number(traffic["tx-bits-per-second"]); return { interface: name, rxBitsPerSecond, txBitsPerSecond, rxMbps: Number((rxBitsPerSecond / 1000000).toFixed(3)), txMbps: Number((txBitsPerSecond / 1000000).toFixed(3)), rxKbps: Number((rxBitsPerSecond / 1000).toFixed(1)), txKbps: Number((txBitsPerSecond / 1000).toFixed(1)), timestamp: new Date().toISOString() }; }); }
+  async getInterfaceTraffic(interfaceName) {
+    const name = String(interfaceName || "").trim();
+    if (!name || name.length > 100 || /[\r\n\0]/.test(name)) {
+      throw new Error("MikroTik traffic query failed: a valid interface name is required.");
+    }
+
+    return this._withConnection("traffic query for " + name, async (connection) => {
+      const rows = await connection.write("/interface/monitor-traffic", [
+        "=interface=" + name,
+        "=once=true"
+      ]);
+      const traffic = Array.isArray(rows) ? rows[0] : rows;
+      if (!traffic || typeof traffic !== "object") {
+        throw new Error("MikroTik traffic query returned no monitor-traffic row.");
+      }
+
+      const parseRate = (value, field) => {
+        if (value === undefined || value === null || String(value).trim() === "") {
+          throw new Error("MikroTik monitor-traffic response is missing " + field + ".");
+        }
+        if (typeof value === "number") {
+          if (!Number.isFinite(value) || value < 0) throw new Error("Invalid MikroTik rate for " + field + ".");
+          return value;
+        }
+
+        const text = String(value).trim().replace(/,/g, "");
+        const numeric = Number(text);
+        if (Number.isFinite(numeric)) {
+          if (numeric < 0) throw new Error("Invalid MikroTik rate for " + field + ".");
+          return numeric;
+        }
+
+        const match = text.match(/^(\d+(?:\.\d+)?)\s*([kmg]?)\s*(?:bits?|b)?(?:\/s|ps)?$/i);
+        if (!match) throw new Error("Unrecognized MikroTik rate format for " + field + ": " + text);
+        const multiplier = { "": 1, k: 1e3, m: 1e6, g: 1e9 }[match[2].toLowerCase()];
+        const parsed = Number(match[1]) * multiplier;
+        if (!Number.isFinite(parsed) || parsed < 0) throw new Error("Invalid MikroTik rate for " + field + ".");
+        return parsed;
+      };
+
+      const rxValue = traffic["rx-bits-per-second"] ?? traffic.rxBitsPerSecond ?? traffic["rx-bps"] ?? traffic["rx-rate"];
+      const txValue = traffic["tx-bits-per-second"] ?? traffic.txBitsPerSecond ?? traffic["tx-bps"] ?? traffic["tx-rate"];
+      const rxBitsPerSecond = parseRate(rxValue, "rx-bits-per-second");
+      const txBitsPerSecond = parseRate(txValue, "tx-bits-per-second");
+
+      return {
+        interface: name,
+        rxBitsPerSecond,
+        txBitsPerSecond,
+        rxMbps: Number((rxBitsPerSecond / 1000000).toFixed(3)),
+        txMbps: Number((txBitsPerSecond / 1000000).toFixed(3)),
+        rxKbps: Number((rxBitsPerSecond / 1000).toFixed(1)),
+        txKbps: Number((txBitsPerSecond / 1000).toFixed(1)),
+        timestamp: new Date().toISOString()
+      };
+    });
+  }
   async getPppoeLiveTraffic(username) {
     const name=String(username||"").trim();
     if(!name||name.length>100)throw new Error("A valid PPPoE username is required.");
