@@ -4510,7 +4510,7 @@ async function deletePlan(id,name){
             };
             window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
         };
-        (function bindMobileCustomerRenewalForm() {
+        document.addEventListener('DOMContentLoaded', function bindMobileCustomerRenewalForm() {
             const form = document.getElementById('mobileCustomerRenewalForm');
             if (!form || form.dataset.bound === '1') return;
             form.dataset.bound = '1';
@@ -4541,7 +4541,7 @@ async function deletePlan(id,name){
                     button.disabled = false;
                 }
             });
-        })();
+        });
 
         async function quickRenewCustomer(customerId, packagePrice) {
             const id=String(customerId||'').trim();
