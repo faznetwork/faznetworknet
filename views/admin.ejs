@@ -6550,6 +6550,93 @@ async function deletePlan(id,name){
     <script src="/js/rbac-sidebar.js?v=staff-actions-20261010" defer></script>
 
     <!-- Dedicated MikroTik router onboarding; does not modify the shared Core connection or customer records. -->
+    <style id="mikrotikAddRouterResponsiveStyles">
+      /* Keep the desktop modal unchanged; let the mobile viewport scroll the dialog naturally. */
+      @media (max-width: 767.98px) {
+        #mikrotikAddRouterModal {
+          padding: max(env(safe-area-inset-top), .35rem) .35rem max(env(safe-area-inset-bottom), .35rem);
+          overflow-x: hidden;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-y: contain;
+        }
+        #mikrotikAddRouterModal .modal-dialog,
+        #mikrotikAddRouterModal .modal-dialog.modal-dialog-centered,
+        #mikrotikAddRouterModal .modal-dialog.modal-dialog-scrollable {
+          width: 100%;
+          max-width: none;
+          min-height: 0;
+          height: auto;
+          margin: 0 auto;
+          display: block;
+          align-items: initial;
+        }
+        #mikrotikAddRouterModal .modal-content,
+        #mikrotikAddRouterModal .modal-dialog-scrollable .modal-content {
+          width: 100%;
+          max-height: none;
+          min-height: 0;
+          overflow: visible;
+          border-radius: .8rem;
+        }
+        #mikrotikAddRouterModal .modal-body,
+        #mikrotikAddRouterModal .modal-dialog-scrollable .modal-body {
+          max-height: none;
+          overflow: visible;
+          padding: 1rem .9rem;
+          -webkit-overflow-scrolling: touch;
+        }
+        #mikrotikAddRouterModal .modal-header {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          padding: .85rem .95rem;
+          border-radius: .8rem .8rem 0 0;
+        }
+        #mikrotikAddRouterModal .modal-header .modal-title {
+          font-size: 1.05rem;
+          line-height: 1.35;
+        }
+        #mikrotikAddRouterModal .modal-footer {
+          position: sticky;
+          bottom: 0;
+          z-index: 2;
+          display: flex;
+          flex-wrap: wrap;
+          gap: .5rem;
+          padding: .75rem .9rem calc(.75rem + env(safe-area-inset-bottom));
+          background: var(--bs-modal-bg, #fff);
+          border-top: 1px solid var(--bs-border-color, #dee2e6);
+          border-radius: 0 0 .8rem .8rem;
+        }
+        #mikrotikAddRouterModal .modal-footer > #routerDeviceTestBtn {
+          flex: 1 1 100%;
+          width: 100%;
+        }
+        #mikrotikAddRouterModal .modal-footer > div {
+          display: flex;
+          flex: 1 1 100%;
+          gap: .5rem;
+        }
+        #mikrotikAddRouterModal .modal-footer > div button {
+          flex: 1 1 0;
+          min-width: 0;
+        }
+        #mikrotikAddRouterModal .form-control,
+        #mikrotikAddRouterModal .btn {
+          min-height: 42px;
+          font-size: 16px;
+        }
+        #mikrotikAddRouterModal .form-text {
+          overflow-wrap: anywhere;
+        }
+        #mikrotikAddRouterModal #routerDeviceTestDetails .border {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+      }
+    </style>
+
     <div class="modal fade" id="mikrotikAddRouterModal" tabindex="-1" aria-labelledby="mikrotikAddRouterTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content border-0 shadow">
