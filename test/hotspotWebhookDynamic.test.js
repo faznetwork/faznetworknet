@@ -107,10 +107,10 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     assert.equal(res.statusCode,200);
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"01712345678");
-    assert.equal(lookupValue,"  aBc-123  ");
-    assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*UPPER\(TRIM\(\$1\)\)/i);
-    assert.match(lookupSql,/used\s*=\s*false/i);
-    assert.match(lookupSql,/unmatched/i);
+    assert.equal(lookupValue,"ABC-123");
+    assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
+    assert.match(lookupSql,/status='unmatched' AND \(used=false OR used IS NULL\)/i);
+    assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
     assert.equal(rechargePayload.username,"01712345678");
   }finally{
     db.query=originalQuery;
@@ -134,7 +134,7 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
       if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.includes("SET status='unmatched'")){released=true;return {rows:[{id:params[0]}]};}
-      if(sql.includes("SELECT status,used FROM transactions"))return {rows:[]};
+      if(sql.includes("SELECT status FROM transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
@@ -200,7 +200,7 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
       if(sql.includes("SET status='processing',used=true")){claimAttempts++;return claimAttempts===1?{rows:[{id:113}]}:{rows:[]};}
-      if(sql.includes("SELECT status,used FROM transactions"))return {rows:[{status:"processing",used:true}]};
+      if(sql.includes("SELECT status FROM transactions"))return {rows:[{status:"processing"}]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
