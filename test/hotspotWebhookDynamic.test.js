@@ -36,7 +36,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
     mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-price-sync-15",body:{trxId:"PRICE15",profileName:"Weekend"}};
+    const req={ip:"test-price-sync-15",body:{phone:"01712345678",trxId:"PRICE15"}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
@@ -49,7 +49,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
 
     // The old Tk 10 amount must stop matching immediately after the profile price is changed.
     const oldAmountResponse=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{trxId:"PRICE10",profileName:"Weekend"}},oldAmountResponse);
+    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10"}},oldAmountResponse);
     assert.equal(oldAmountResponse.statusCode,400);
     assert.match(oldAmountResponse.body.error,/no active Hotspot profile currently has a price of ৳10\.00/i);
   }finally{
@@ -107,7 +107,7 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     assert.equal(res.statusCode,200);
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"01712345678");
-    assert.equal(lookupValue,"ABC-123");
+    assert.equal(lookupValue,"  aBc-123  ");
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*UPPER\(TRIM\(\$1\)\)/i);
     assert.match(lookupSql,/used\s*=\s*false/i);
     assert.match(lookupSql,/unmatched/i);
@@ -147,7 +147,7 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       throw new Error("simulated commit failure");
     };
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-partial-commit",body:{trxId:"PARTIAL-111",profileName:"Weekend"}},res);
+    await paymentController.verifyTrx({ip:"test-partial-commit",body:{phone:"01712345678",trxId:"PARTIAL-111"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(commitAttempted,true);
     assert.equal(released,false,"successful RouterOS provisioning must not release the transaction for reuse");
@@ -178,7 +178,7 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
     mikrotik.rechargeHotspotUser=async()=>{throw new Error("simulated RouterOS failure");};
     db.withTransaction=async()=>{throw new Error("should not finalize after RouterOS failure");};
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-router-fail",body:{trxId:"ROUTER-FAIL-112",profileName:"Weekend"}},res);
+    await paymentController.verifyTrx({ip:"test-router-fail",body:{phone:"01712345678",trxId:"ROUTER-FAIL-112"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(released,true,"a confirmed RouterOS failure should release the claim");
   }finally{
@@ -210,8 +210,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     const a=responseRecorder(),b=responseRecorder();
     await Promise.all([
-      paymentController.verifyTrx({ip:"test-concurrent-a",body:{trxId:"CONCURRENT-113",profileName:"Weekend"}},a),
-      paymentController.verifyTrx({ip:"test-concurrent-b",body:{trxId:"CONCURRENT-113",profileName:"Weekend"}},b)
+      paymentController.verifyTrx({ip:"test-concurrent-a",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},a),
+      paymentController.verifyTrx({ip:"test-concurrent-b",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},b)
     ]);
     assert.equal(claimAttempts,2);
     assert.equal(rechargeCount,1,"only the winning atomic claim may invoke RouterOS");
