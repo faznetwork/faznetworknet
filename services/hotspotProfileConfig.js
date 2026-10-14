@@ -22,10 +22,22 @@ function normalizeProfileValidity(value, unit) {
 }
 
 function parseStoredValidity(profile) {
-  const timeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim();
-  const match = timeout.match(/^(\d+)(m|h|d)$/i);
-  if (!match) return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
-  return normalizeProfileValidity(Number(match[1]), match[2].toLowerCase());
+  const timeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim().toLowerCase();
+  const compact = timeout.replace(/\s+/g, "");
+  const durationPattern = /(\d+)(w|d|h|m)/g;
+  let match, consumed = "", totalMs = 0;
+  const units = { w: 604800000, d: 86400000, h: 3600000, m: 60000 };
+  while ((match = durationPattern.exec(compact))) {
+    consumed += match[0];
+    totalMs += Number(match[1]) * units[match[2]];
+  }
+  if (!compact || consumed !== compact || !Number.isSafeInteger(totalMs) || totalMs <= 0) {
+    return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
+  }
+  if (totalMs % units.d === 0) return normalizeProfileValidity(totalMs / units.d, "days");
+  if (totalMs % units.h === 0) return normalizeProfileValidity(totalMs / units.h, "hours");
+  if (totalMs % units.m === 0) return normalizeProfileValidity(totalMs / units.m, "minutes");
+  return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
 }
 
 /**
