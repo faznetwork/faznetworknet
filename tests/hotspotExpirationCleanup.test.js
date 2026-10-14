@@ -201,6 +201,8 @@ test("recognizes UNIX epoch expiry metadata and ignores initial zero marker", ()
   const expired = Math.floor((Date.now() - 60000) / 1000);
   assert.equal(routerUserExpired({username:"EPOCH-USER",disabled:false,comment:"FAZ|EXP="+expired+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
   assert.equal(routerUserExpired({username:"UNSTARTED",disabled:false,comment:"FAZ|EXP=0|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),false);
+  const dhakaExpiry = new Date(Date.now() - 6 * 60 * 60 * 1000 - 60000).toISOString().slice(0, 19).replace("T", " ");
+  assert.equal(routerUserExpired({username:"DHAKA-EXP",disabled:false,comment:"FAZ|EXP: "+dhakaExpiry+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
 });
 
 test("retention archives transaction history before purging expired vouchers", async () => {
@@ -215,5 +217,5 @@ test("retention archives transaction history before purging expired vouchers", a
   assert.equal(result.archivedTransactions,1);
   assert.equal(result.deletedVouchers,1);
   assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
-  assert.ok(calls[1].includes("INTERVAL '7 days'"));
+  assert.ok(calls[1].includes("INTERVAL '3 days'"));
 });
