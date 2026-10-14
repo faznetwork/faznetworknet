@@ -146,7 +146,7 @@ test("marks due database vouchers expired and retains retry state when RouterOS 
 });
 
 test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler removed the user", async () => {
-  const rows = [{ id: 18, username: "AA:BB:CC:DD:EE:FF", status: "unused", comment: "Exp: 2026-10-10", cleanup_status: "not_required" }];
+  const rows = [{ id: 18, username: "AA:BB:CC:DD:EE:FF", status: "unused", comment: "Exp: 2026-10-20", cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const cleaned = [];
   const router = {
