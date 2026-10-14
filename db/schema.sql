@@ -586,3 +586,30 @@ CREATE INDEX IF NOT EXISTS idx_olt_telemetry_mac ON olt_telemetry(onu_mac);
 CREATE INDEX IF NOT EXISTS idx_olt_telemetry_seen ON olt_telemetry(received_at DESC);
 
 ALTER TABLE olt_telemetry ADD COLUMN IF NOT EXISTS pppoe_username VARCHAR(160);
+
+
+-- Dedicated RouterOS connection records for MikroTik Management > Add Device.
+-- Separate from network_devices inventory and completely independent of customer/billing tables.
+CREATE TABLE IF NOT EXISTS router_devices (
+  id BIGSERIAL PRIMARY KEY,
+  router_name VARCHAR(120) NOT NULL,
+  host VARCHAR(253) NOT NULL,
+  api_type VARCHAR(20) NOT NULL CHECK (api_type IN ('native_api','rest_api')),
+  api_port INTEGER NOT NULL CHECK (api_port BETWEEN 1 AND 65535),
+  username VARCHAR(160) NOT NULL,
+  password_encrypted TEXT NOT NULL,
+  use_ssl BOOLEAN NOT NULL DEFAULT FALSE,
+  timeout_ms INTEGER NOT NULL DEFAULT 8000 CHECK (timeout_ms BETWEEN 1000 AND 30000),
+  status VARCHAR(20) NOT NULL DEFAULT 'offline' CHECK (status IN ('online','offline','auth_failed')),
+  last_synced TIMESTAMPTZ,
+  board_model VARCHAR(160),
+  ros_version VARCHAR(120),
+  cpu_load SMALLINT CHECK (cpu_load IS NULL OR cpu_load BETWEEN 0 AND 100),
+  identity VARCHAR(160),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_router_devices_status ON router_devices(status);
+CREATE INDEX IF NOT EXISTS idx_router_devices_host ON router_devices(lower(host));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_name ON router_devices(lower(router_name));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_host_api ON router_devices(lower(host), api_type);
