@@ -29,7 +29,7 @@ test("parses Rocket cash-in format",()=>{
   const result=parseSms(
     {text:"Cash in from 01812345678 to 01912345678 Tk 100.00 successful. TxnId: RX123456789"},
     {},
-    {"x-sms-sender":"DBBL Rocket"}
+    {"x-sms-sender":"DBBL"}
   );
   assert.equal(result.channel,"rocket");
   assert.equal(result.amount,100);
