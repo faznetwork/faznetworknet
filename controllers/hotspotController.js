@@ -5,6 +5,7 @@ function randomPin(length=8){return crypto.randomBytes(Math.ceil(length*1.5)).to
 function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","active"].includes(filter)?filter:"all";}
 function validityMs(value){const m=String(value||"").trim().match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!m)return 0;const n=Number(m[1]),u=m[2].toLowerCase();const unit=u.startsWith("m")?60000:u.startsWith("h")?3600000:u.startsWith("w")?604800000:86400000;return n*unit;}
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
+function hotspotExpiryComment(validity){const ms=validityMs(validity);if(!ms)return "";return "Exp: "+new Date(Date.now()+ms+6*60*60*1000).toISOString().slice(0,10);}
 async function page(req,res){res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"});}
 async function readProfileMetadata(){const r=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");try{const v=JSON.parse(r.rows[0]?.value||"{}");return v&&typeof v==="object"&&!Array.isArray(v)?v:{};}catch(_){return {};}}
 async function ensureCalendarProfile(profile, routerProfile, profileValidity) {
@@ -140,9 +141,8 @@ async function generate(req,res){
      candidates.push({username,password});
    }
    for(const candidate of candidates){
-     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-     const managedComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+validity;
-     await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,comment:managedComment});
+     const managedComment=hotspotExpiryComment(validity);
+     await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,validity,comment:managedComment});
      provisioned.push(candidate.username);
      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",
        [candidate.username,candidate.password,profile,validity,price,managedComment]);
@@ -198,9 +198,8 @@ async function createUser(req,res){
     if(!profileValidity.validity)return res.status(400).json({success:false,message:"The selected profile has no time-based calendar validity. Configure a minutes, hours, or days profile first."});
     const validity=profileValidity.validity;
     await ensureCalendarProfile(routerProfile.name,routerProfile,profileValidity);
-    const safeProfile=routerProfile.name.replace(/[|]/g,"").slice(0,80);
-    const routerComment="FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1";
-    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,comment:routerComment});
+    const routerComment=hotspotExpiryComment(validity);
+    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,validity,comment:routerComment});
     try{
       const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[routerProfile.name]);
       const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||profileMeta.price||0);
