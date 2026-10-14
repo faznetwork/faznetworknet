@@ -1,6 +1,7 @@
 const express=require("express");
 const cors=require("cors");
 const controller=require("../controllers/paymentController");
+const customerSelfCareController=require("../controllers/customerSelfCareController");
 const {requireAdmin}=require("../middleware/adminAuth");
 const {requireRole}=require("../middleware/rbac");
 const router=express.Router();
@@ -9,6 +10,7 @@ router.post("/forward",controller.webhook);
 const verifyTrxCors=cors({origin:"*",methods:["POST","OPTIONS"],allowedHeaders:["Content-Type","Authorization"]});
 router.options("/verify-trx",verifyTrxCors);
 router.post("/verify-trx",verifyTrxCors,controller.verifyTrx);
+router.post("/portal/verify-trx",customerSelfCareController.renew);
 router.get("/payments/transactions",requireAdmin,requireRole(["super_admin","admin"]),controller.list);
 router.post("/payments/manual-match",requireAdmin,requireRole(["super_admin","admin"]),controller.manualMatch);
 router.get("/payments/summary",requireAdmin,requireRole(["super_admin","admin"]),controller.summary);

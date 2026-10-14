@@ -38,7 +38,7 @@ async function renewalExpirationDate(durationMonths,query=db.query){
 }
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
 async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const expiration=await renewalExpirationDate(c.duration_months,query),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});onRouterMutation();await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
-async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
+async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',billing_status='paid',paid_until=$4,last_paid_at=NOW(),updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,billing_status='paid',paid_until=$3,last_paid_at=NOW(),comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 async function webhook(req,res){
  let claimedTransactionId=null,routerSucceeded=false;
  try{
@@ -56,12 +56,8 @@ async function webhook(req,res){
   if(existing.rows.length)return res.json({success:true,status:"duplicate",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
   let user=null;
   if(payment.customerRef){
-   const found=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) OR id::text=$1 LIMIT 1",[payment.customerRef]);
+   const found=await db.query("SELECT username FROM pppoe_users WHERE (LOWER(username)=LOWER($1) OR id::text=$1) AND COALESCE(disabled,false)=false AND LOWER(COALESCE(status,'active'))='active' ORDER BY CASE WHEN LOWER(username)=LOWER($1) THEN 0 ELSE 1 END LIMIT 1",[payment.customerRef]);
    user=found.rows[0]||null;
-  }
-  if(!user&&payment.senderPhone){
-   const found=await db.query("SELECT username,phone FROM pppoe_users WHERE phone IS NOT NULL");
-   user=found.rows.find(row=>normalizePhone(row.phone)===payment.senderPhone)||null;
   }
   let status="unmatched";
   if(user){
@@ -69,13 +65,13 @@ async function webhook(req,res){
    if(customer&&customer.plan_name){
     const expectedAmount=Number(customer.price||0);
     if(moneyCents(payment.amount)!==moneyCents(expectedAmount)){
-     await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
+     await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,customer_type) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false,'PPPoE')",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
      return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expectedAmount.toFixed(2)} is required to activate or renew service.`,expectedAmount,paidAmount:payment.amount});
     }
     // Persist the claim before calling RouterOS. The unique TrxID constraint arbitrates concurrent webhook retries.
     let claim;
     try{
-     claim=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'processing',$5,$6,true) RETURNING id",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
+     claim=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,customer_type) VALUES($1,$2,$3,$4,'processing',$5,$6,true,'PPPoE') RETURNING id",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
     }catch(claimError){
      if(claimError?.code==="23505")return res.status(409).json({success:false,status:"duplicate",error:"This TrxID has already been received or claimed."});
      throw claimError;
@@ -85,18 +81,17 @@ async function webhook(req,res){
     const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
     await db.withTransaction(async client=>{
      await persistCustomerRenewal(client.query.bind(client),customer,renewal);
-     const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
+     const finalized=await client.query("UPDATE transactions SET status='matched',used=true,matched_username=$1,customer_type='PPPoE' WHERE id=$2 AND status='processing' AND used=true AND customer_type='PPPoE' RETURNING id",[user.username,claimedTransactionId]);
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
     });
     claimedTransactionId=null;
     // SMS delivery is best-effort and must never delay or roll back a verified payment.
     Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",event:"payment_receipt",variables:{name:customer.full_name||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}})).catch(error=>console.warn("[SMS] Payment receipt notification failed:",error.message));
-    return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
+    return res.json({success:true,status:"matched",customer_type:"PPPoE",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
-  const renewalCompleted=status==="PAID";
-  await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,renewalCompleted&&user?user.username:null,payment.rawSms,renewalCompleted]);
-  return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
+  await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,customer_type) VALUES($1,$2,$3,$4,$5,$6,$7,false,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,user?user.username:null,payment.rawSms,user?"PPPoE":null]);
+  return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,customer_type:user?"PPPoE":null,amount:payment.amount,channel:payment.channel});
  }catch(error){
   if(claimedTransactionId!==null&&!routerSucceeded){
    try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
@@ -135,7 +130,7 @@ async function list(req,res){
   const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions "+where,params);
   const total=Number(countQuery.rows[0]?.count||0);
   params.push(limit,offset);
-  const querySql="SELECT t.*, CASE WHEN NULLIF(BTRIM(t.matched_username), '') IS NULL THEN 'unassigned' WHEN EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))) THEN 'pppoe' WHEN BTRIM(t.matched_username) ~ '^01[0-9]{9}$' THEN 'hotspot' ELSE 'unknown' END AS customer_type FROM transactions t "+where.replace("channel", "t.channel").replace("status", "t.status")+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(params.length-1)+" OFFSET $"+params.length;
+  const querySql="SELECT t.*, COALESCE(NULLIF(BTRIM(t.customer_type), ''), CASE WHEN NULLIF(BTRIM(t.matched_username), '') IS NULL THEN 'unassigned' WHEN EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))) THEN 'pppoe' WHEN BTRIM(t.matched_username) ~ '^01[0-9]{9}$' THEN 'hotspot' ELSE 'unknown' END) AS customer_type FROM transactions t "+where.replace("channel", "t.channel").replace("status", "t.status")+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(params.length-1)+" OFFSET $"+params.length;
   const r=await db.query(querySql,params);
   const summaryParams=where ? params.slice(0,-2) : [];
   const summary=await db.query("SELECT COALESCE(SUM(amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE status='unmatched')::int AS unmatched_count FROM transactions "+where,summaryParams);
@@ -151,7 +146,8 @@ async function manualMatch(req,res){
   const t=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
   if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
   const tx=t.rows[0],status=String(tx.status||"").trim().toLowerCase();
-  if(tx.used===true||["paid","processed","processing","duplicate"].includes(status))return res.status(409).json({success:false,error:"This transaction has already been claimed or processed and cannot be manually matched."});
+  if(String(tx.customer_type||"").trim().toLowerCase()==="hotspot")return res.status(409).json({success:false,error:"Hotspot transactions cannot be manually matched to a PPPoE customer."});
+  if(tx.used===true||["paid","matched","processed","processing","duplicate"].includes(status))return res.status(409).json({success:false,error:"This transaction has already been claimed or processed and cannot be manually matched."});
   if(status!=="unmatched")return res.status(409).json({success:false,error:"Only unmatched transactions can be manually matched."});
   const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
   if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
@@ -159,13 +155,13 @@ async function manualMatch(req,res){
   if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});
   const expected=Number(customer.price||0);
   if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1,customer_type='PPPoE' WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' AND (customer_type IS NULL OR LOWER(TRIM(customer_type))='pppoe') RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
   await db.withTransaction(async client=>{
    await persistCustomerRenewal(client.query.bind(client),customer,renewal);
-   const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
+   const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true,customer_type='PPPoE' WHERE id=$2 AND status='processing' AND used=true AND customer_type='PPPoE' RETURNING id",[user.rows[0].username,tx.id]);
    if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
   });
   claimedTransactionId=null;
@@ -181,7 +177,7 @@ async function manualMatch(req,res){
   return errorResponse(res,e,500);
  }
 }
-async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
+async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID','matched')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
 
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
@@ -192,38 +188,38 @@ async function verifyTrx(req,res){
  const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
  let claimedTransactionId=null,routerSucceeded=false;
  try{
-  const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
-  if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
   const rawTrx = body.trxId || body.trx_id || body.transaction_id || body.trx || body.txnid || query.trxId || '';
   const cleanTrx = String(rawTrx).trim().toUpperCase();
+  const requestedProfile=String(body.profileName||body.profile_name||"").trim();
   if(!cleanTrx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
+  if(!requestedProfile)return res.status(400).json({success:false,error:"Select a Hotspot profile before verifying payment."});
   console.log('[VERIFY-TRX QUERY PARAM]:', cleanTrx);
   const q=await db.query(`SELECT * FROM transactions
      WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1))
        AND (used = false OR used IS NULL)
        AND LOWER(TRIM(status)) = 'unmatched'
-     LIMIT 1;`,[rawTrx]);
+       AND (customer_type IS NULL OR LOWER(TRIM(customer_type)) = 'hotspot')
+     LIMIT 1;`,[cleanTrx]);
   console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length){
-   const existing=await db.query("SELECT status,used,matched_username FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
-   if(existing.rows.length&&(existing.rows[0].used||["processing","processed","PAID","duplicate"].includes(String(existing.rows[0].status||""))))return res.status(409).json({success:false,error:"This transaction has already been used or is being processed and cannot be reused for Hotspot."});
+   const existing=await db.query("SELECT status,used,matched_username,customer_type FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
+   if(existing.rows.length&&(String(existing.rows[0].customer_type||"").trim().toLowerCase()==="pppoe"||existing.rows[0].used||["processing","matched","processed","paid","duplicate"].includes(String(existing.rows[0].status||"").trim().toLowerCase())))return res.status(409).json({success:false,error:"This transaction has already been used or is assigned to PPPoE and cannot be reused for Hotspot."});
    return res.status(404).json({success:false,error:"Transaction not found or not yet eligible. Please wait for SMS verification."});
   }
   const tx=q.rows[0];
+  // Context isolation: sender phone is only a Hotspot login seed; it is never looked up in PPPoE tables.
+  const senderPhone=normalizePhone(tx.sender_phone);
+  const requestedPhone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
+  const contactPhone=/^01\d{9}$/.test(senderPhone)?senderPhone:null;
+  const phone=/^01\d{9}$/.test(requestedPhone)?requestedPhone:(contactPhone||("FZ"+cleanTrx.replace(/[^A-Z0-9]/g,"").slice(-12)));
   const requestedMethod=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
   if(requestedMethod&&["bkash","nagad","rocket","upay"].includes(requestedMethod)&&String(tx.channel||"").trim().toLowerCase()!==requestedMethod)return res.status(400).json({success:false,error:"The TrxID was recorded under a different payment method. Select the method used to send the money."});
-  const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
-  // An unused unmatched transaction can be associated with a PPPoE username when
-  // its amount did not match that customer's bill. It is still eligible for
-  // Hotspot if the exact selected profile price matches below. Paid, processing,
-  // and already-used transactions are excluded by the initial query.
-
-  if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
+  const amount=Number(tx.amount);
+  // The transaction amount in the trusted SMS ledger is authoritative; the client submits only TrxID and profile.
   const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
   if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
   const hotspotProfiles=await mikrotikService.getHotspotProfiles();
-  const requestedProfile=String(body.profileName||body.profile_name||"").trim();
   const matchingProfiles=hotspotProfiles.filter(item=>{
    const profileName=String(item.name||"");
    const metadata=profileMetadata[profileName]||{};
@@ -242,9 +238,10 @@ async function verifyTrx(req,res){
   // Mark it used before touching RouterOS so a parallel request cannot reset the
   // user's quota/counters by invoking rechargeHotspotUser a second time.
   const claim=await db.query(`UPDATE transactions
-     SET used=true,status='processing',matched_username=$1
+     SET used=true,status='processing',matched_username=$1,customer_type='Hotspot'
      WHERE id=$2 AND (used=false OR used IS NULL)
        AND LOWER(TRIM(status)) = 'unmatched'
+       AND (customer_type IS NULL OR LOWER(TRIM(customer_type))='hotspot')
      RETURNING id;`,[phone,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;
@@ -257,15 +254,15 @@ async function verifyTrx(req,res){
   await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:hotspotComment});
   routerSucceeded=true;
   if(validity){
-   const updatedVoucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$1,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
-   if(!updatedVoucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$1,'all')",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
+   const updatedVoucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$7,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment,contactPhone]);
+   if(!updatedVoucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$7,'all')",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment,contactPhone]);
   }
   await db.withTransaction(async client=>{
-   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
+   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,customer_type='Hotspot' WHERE id=$2 AND status='processing' AND used=true AND customer_type='Hotspot' RETURNING id",[phone,tx.id]);
    if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization did not update the claimed transaction.");
   });
   claimedTransactionId=null;
-  return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
+  return res.json({success:true,message:'সফল হয়েছে!',customer_type:'Hotspot',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
    try{
