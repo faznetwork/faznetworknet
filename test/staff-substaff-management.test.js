@@ -28,6 +28,9 @@ test('Staff pages are admin-only and use the existing invitation/account APIs', 
 });
 
 test('Sub-Staff only shows staff-role accounts and keeps the form/table responsive', () => {
+  assert.ok(adminView.includes('id="rbacUsernameField" hidden'));
+  assert.ok(adminView.includes("let currentStaffMode = (window.location.pathname.replace(/\\/+$/, '') === '/admin/resellers/sub-staff') ? 'sub-staff' : 'all';"));
+  assert.ok(adminView.includes('usernameInput.required = !selfServiceMode'));
   assert.ok(adminView.includes("if (currentStaffMode === 'sub-staff') users = users.filter(user => user.role === 'staff');"));
   assert.ok(adminView.includes("role:currentStaffMode === 'sub-staff' || !currentAdminCanInvitePrivileged ? 'staff'"));
   assert.ok(adminView.includes('class="card-body p-0 table-responsive"'));
