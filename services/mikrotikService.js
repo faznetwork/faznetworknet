@@ -789,10 +789,8 @@ class MikroTikService {
     if(!username||username.length>100) throw new Error("A valid Hotspot username is required.");
     if(!profile||profile.length>100) throw new Error("A valid Hotspot profile is required.");
     return this._withConnection("Hotspot user update", async (connection) => {
-      const [userRows, profileRows]=await Promise.all([
-        connection.write("/ip/hotspot/user/print"),
-        connection.write("/ip/hotspot/user/profile/print")
-      ]);
+      const userRows=await connection.write("/ip/hotspot/user/print");
+      const profileRows=await connection.write("/ip/hotspot/user/profile/print");
       const user=(Array.isArray(userRows)?userRows:[]).find(row=>this._str(row.name).trim().toLowerCase()===username.toLowerCase()&&row[".id"]);
       if(!user) throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");
       const profiles=(Array.isArray(profileRows)?profileRows:[]).map(row=>this._str(row.name));
