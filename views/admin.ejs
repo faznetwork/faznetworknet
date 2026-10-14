@@ -5757,10 +5757,11 @@ async function deletePlan(id,name){
             if (!select || !select.value) return;
             trafficPollInFlight = true;
             try {
-                const data = await jsonFetch('/api/router/traffic?interface=' + encodeURIComponent(select.value));
+                const data = await jsonFetch('/api/dashboard/stats?interface=' + encodeURIComponent(select.value));
                 const t = data.traffic || data;
                 safeSetText('dashboardTrafficRx', Number(t.rxMbps || 0).toFixed(3));
                 safeSetText('dashboardTrafficTx', Number(t.txMbps || 0).toFixed(3));
+                if (typeof nocTrafficHistory !== 'undefined') { nocTrafficHistory.push({rx:Number(t.rxMbps)||0,tx:Number(t.txMbps)||0}); if(nocTrafficHistory.length>60)nocTrafficHistory.shift(); nocChart(); }
                 const trafficStatus = document.getElementById('dashboardTrafficStatus');
                 if (trafficStatus) { trafficStatus.className = 'badge bg-success ms-auto'; trafficStatus.textContent = 'LIVE'; }
             } catch (error) {
