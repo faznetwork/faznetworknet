@@ -1968,8 +1968,11 @@
         window.updateLanguage = window.updateLanguage || function(){};
         // Defensive UI reset: a stale Bootstrap backdrop must never own the click layer.
         try {
-            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop').forEach(el => el.remove());
-            document.body.classList.remove('modal-open');
+            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop:not(#sidebarBackdrop)').forEach(el => el.remove());
+            // Preserve the real mobile-sidebar backdrop element; clear stale state instead.
+            const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+            document.body.classList.remove('modal-open', 'offcanvas-open', 'sidebar-open');
             document.body.style.removeProperty('overflow');
             document.body.style.removeProperty('padding-right');
         } catch (error) {
@@ -2755,13 +2758,24 @@
                     style.visibility !== 'hidden' &&
                     el.getClientRects().length > 0;
             });
+            const sidebar = document.getElementById('sidebar');
+            const sidebarIsActuallyOpen = Boolean(
+                window.innerWidth < 768 && sidebar &&
+                sidebar.classList.contains('show') &&
+                sidebar.getClientRects().length > 0
+            );
             if (visibleOverlay) return;
 
-            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
-            if (!stale.length) return;
-            stale.forEach(function (el) { el.remove(); });
+            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop');
+            stale.forEach(function (el) {
+                // Do not remove the canonical sidebar backdrop; just reset its stale
+                // state. It is reused by the mobile drawer.
+                if (el.id === 'sidebarBackdrop') el.classList.remove('show');
+                else el.remove();
+            });
             if (document.body) {
                 document.body.classList.remove('modal-open', 'offcanvas-open');
+                if (!sidebarIsActuallyOpen) document.body.classList.remove('sidebar-open');
                 document.body.style.removeProperty('overflow');
                 document.body.style.removeProperty('padding-right');
                 document.body.style.pointerEvents = 'auto';
@@ -2823,7 +2837,7 @@
             // click, remove only a backdrop with no visibly open modal, then the next
             // click works normally. This never closes a genuinely visible modal.
             document.addEventListener('pointerdown', function (event) {
-                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop')) {
+                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop')) {
                     recoverStaleNavigationOverlay();
                 }
             }, true);
