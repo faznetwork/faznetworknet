@@ -48,8 +48,9 @@ function routerUserExpired(user, schedulerNames) {
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
   const expValue = comment.match(/(?:^|\|)EXP=([^|]+)/i)?.[1]?.trim();
-  if (expValue && expValue.toUpperCase() !== "PENDING") {
-    const expDate = new Date(expValue);
+  if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
+    const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
+    const expDate = Number.isFinite(epoch) ? new Date(epoch) : new Date(expValue);
     if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
   if (!managed) return false;
@@ -143,9 +144,10 @@ function createHotspotExpirationCleanup(deps = {}) {
 
         // Persist the absolute deadline marker for auditability; PostgreSQL remains authoritative.
         if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
-            /(?:^|\\|)EXP=PENDING(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
-          const absoluteComment = comment.replace(/(?:^|\\|)EXP=PENDING(?=\\||$)/i, function(match) {
-            return match.startsWith("|") ? "|EXP=" + expiryAt.toISOString() : "EXP=" + expiryAt.toISOString();
+            /(?:^|\\|)EXP=(?:PENDING|0)(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
+          const absoluteExpiry = String(Math.floor(expiryAt.getTime() / 1000));
+          const absoluteComment = comment.replace(/(?:^|\\|)EXP=(?:PENDING|0)(?=\\||$)/i, function(match) {
+            return match.startsWith("|") ? "|EXP=" + absoluteExpiry : "EXP=" + absoluteExpiry;
           });
           await router.setHotspotUserComment(username, absoluteComment).catch(error =>
             logger.warn("[HOTSPOT EXPIRY] Could not persist absolute expiry comment for " + username + ": " + error.message));
@@ -223,7 +225,7 @@ function startHotspotRetentionCleanup() {
   let lastRunDate = "";
   return setInterval(() => {
     const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit",
+      timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit",
       hour: "2-digit", minute: "2-digit", hourCycle: "h23"
     }).formatToParts(new Date()).reduce((acc, part) => { acc[part.type] = part.value; return acc; }, {});
     const dateKey = parts.year + "-" + parts.month + "-" + parts.day;
