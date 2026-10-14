@@ -46,27 +46,42 @@ exports.traffic = async (req, res) => {
       return res.status(400).json({ error: "A valid interface query parameter is required." });
     }
 
-    // Prefer the role supplied by the interface selector; infer only unambiguous names otherwise.
+    const key = interfaceName.toLowerCase();
     let role = String(req.query.role || "").trim().toLowerCase();
     if (role !== "wan" && role !== "lan") {
-      const key = interfaceName.toLowerCase();
-      if (/(pppoe|wireguard|eoip|l2tp|sstp|ovpn|openvpn|gre|ipip|ipsec|lte|starlink|wan|uplink|external|internet|isp|provider|tunnel)/i.test(key)) role = "wan";
-      else if (/(bridge|lan|subscriber|onu|distribution|access|switch|bonding)/i.test(key)) role = "lan";
-      else return res.status(400).json({ error: "Interface role is ambiguous; choose a WAN or LAN interface from the dashboard." });
+      if (/(wan|ether|sfp|starlink|pppoe-out|eoip|wireguard|l2tp|sstp|ovpn|openvpn|gre|ipip|ipsec|lte|tunnel|(^|[\s_-])wg(?:\d|[\s_-]|$))/i.test(key)) role = "wan";
+      else if (/(bridge|lan|wlan|wifi|wireless)/i.test(key)) role = "lan";
+      else role = "wan";
     }
 
     const traffic = await mikrotikService.getInterfaceTraffic(interfaceName);
-    const rxBps = Math.max(0, Number(traffic.rxBitsPerSecond) || 0);
-    const txBps = Math.max(0, Number(traffic.txBitsPerSecond) || 0);
-    // WAN RX/TX maps to download/upload; subscriber-facing LAN reverses the direction.
+    const rawRxBps = Number(traffic.rxBitsPerSecond);
+    const rawTxBps = Number(traffic.txBitsPerSecond);
+    if (!Number.isFinite(rawRxBps) || rawRxBps < 0 || !Number.isFinite(rawTxBps) || rawTxBps < 0) {
+      throw new Error("MikroTik returned invalid numeric interface rates.");
+    }
+
+    const downloadBps = role === "lan" ? rawTxBps : rawRxBps;
+    const uploadBps = role === "lan" ? rawRxBps : rawTxBps;
     return res.json({
-      rx: (role === "wan" ? rxBps : txBps) / 8,
-      tx: (role === "wan" ? txBps : rxBps) / 8,
+      success: true,
+      interface: interfaceName,
+      role,
+      rx: rawRxBps,
+      tx: rawTxBps,
+      rawRxBps,
+      rawTxBps,
+      downloadBps,
+      uploadBps,
       timestamp: Date.now()
     });
   } catch (error) {
-    console.warn("[Router API] live traffic unavailable:", error.message || error);
-    return res.status(503).json({ error: "Live traffic is temporarily unavailable.", timestamp: Date.now() });
+    console.warn("[Router API] live traffic poll failed:", error.message || error);
+    return res.status(503).json({
+      success: false,
+      error: "Live traffic poll failed; retrying.",
+      timestamp: Date.now()
+    });
   }
 };
 
