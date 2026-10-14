@@ -864,7 +864,7 @@ class MikroTikService {
   async rechargeHotspotUser(data) {
     const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
     if(!username||!password||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires username, password, profile, and time validity or a data quota.");
-    const limits={"limit-uptime":validity||undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
+    const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
       const matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
@@ -872,6 +872,8 @@ class MikroTikService {
       if(matches.length){
         const item=matches[0];
         await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],password,profile,disabled:false,...limits,comment}));
+        const schedulers=await connection.write("/system/scheduler/print");
+        for(const scheduler of (Array.isArray(schedulers)?schedulers:[]).filter(s=>this._str(s.name).toLowerCase()===("faz-exp-"+username).toLowerCase()&&s[".id"]))await connection.write("/system/scheduler/remove",["=.id="+scheduler[".id"]]);
         await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
         const activeRows=await connection.write("/ip/hotspot/active/print");
         for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(s=>this._str(s.user)===username&&s[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
