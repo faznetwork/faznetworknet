@@ -2236,6 +2236,32 @@
   }
 }
 </style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
+    <div class="modal fade" id="mobileCustomerRenewalModal" tabindex="-1" aria-labelledby="mobileCustomerRenewalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="mobileCustomerRenewalForm">
+          <div class="modal-header">
+            <h5 class="modal-title" id="mobileCustomerRenewalTitle"><i class="bi bi-credit-card me-2 text-success"></i>Payment / Renew</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="small text-muted mb-3">Customer: <strong id="mobileRenewCustomerName">—</strong></div>
+            <input type="hidden" id="mobileRenewCustomerId">
+            <label class="form-label" for="mobileRenewAmount">Amount (৳)</label>
+            <input class="form-control mb-3" type="number" id="mobileRenewAmount" min="0.01" step="0.01" required>
+            <label class="form-label" for="mobileRenewMethod">Payment method</label>
+            <select class="form-select mb-3" id="mobileRenewMethod" required>
+              <option value="CASH">Cash</option><option value="BKASH">bKash</option><option value="NAGAD">Nagad</option><option value="ROCKET">Rocket</option>
+            </select>
+            <label class="form-label" for="mobileRenewTrx">Transaction ID (required for MFS)</label>
+            <input class="form-control" id="mobileRenewTrx" maxlength="120" autocomplete="off" placeholder="Enter transaction ID for mobile banking">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-success" id="mobileRenewSubmit"><i class="bi bi-check2-circle me-1"></i>Confirm Payment & Renew</button>
+          </div>
+        </form>
+      </div>
+    </div>
 </body></html>`);
             w.document.close();
         }
@@ -4468,6 +4494,55 @@ async function deletePlan(id,name){
             }
         }
 
+        window.openCustomerRenewalModal = function(customerId, username, price) {
+            const id = String(customerId || '').trim();
+            if (!id) { alert('Customer ID is missing.'); return; }
+            const modalEl = document.getElementById('mobileCustomerRenewalModal');
+            const form = document.getElementById('mobileCustomerRenewalForm');
+            if (!modalEl || !form || !window.bootstrap?.Modal) { alert('Payment modal is unavailable. Please refresh the admin panel.'); return; }
+            form.reset();
+            document.getElementById('mobileRenewCustomerId').value = id;
+            document.getElementById('mobileRenewCustomerName').textContent = String(username || id);
+            document.getElementById('mobileRenewAmount').value = Number(price) > 0 ? Number(price).toFixed(2) : '';
+            document.getElementById('mobileRenewTrx').required = false;
+            document.getElementById('mobileRenewMethod').onchange = function() {
+                document.getElementById('mobileRenewTrx').required = this.value !== 'CASH';
+            };
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        };
+        (function bindMobileCustomerRenewalForm() {
+            const form = document.getElementById('mobileCustomerRenewalForm');
+            if (!form || form.dataset.bound === '1') return;
+            form.dataset.bound = '1';
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                const id = String(document.getElementById('mobileRenewCustomerId').value || '').trim();
+                const amount = Number(document.getElementById('mobileRenewAmount').value);
+                const method = String(document.getElementById('mobileRenewMethod').value || 'CASH').toUpperCase();
+                const trx = String(document.getElementById('mobileRenewTrx').value || '').trim();
+                if (!id || !Number.isFinite(amount) || amount <= 0) { alert('Enter a valid customer and payment amount.'); return; }
+                if (method !== 'CASH' && !trx) { alert('Transaction ID is required for mobile banking.'); return; }
+                const button = document.getElementById('mobileRenewSubmit');
+                if (button.disabled) return;
+                button.disabled = true;
+                try {
+                    const data = await jsonFetch('/api/customers/' + encodeURIComponent(id) + '/renew', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount, paymentMethod: method, trxId: trx || 'CASH-RENEW-' + Date.now() })
+                    });
+                    window.bootstrap.Modal.getInstance(document.getElementById('mobileCustomerRenewalModal'))?.hide();
+                    if (typeof showCustomerActionToast === 'function') showCustomerActionToast(data.message || 'Payment recorded and customer renewed.');
+                    await refreshCustomerSection();
+                } catch (error) {
+                    alert(error.message || 'Unable to record payment / renew customer.');
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        })();
+
         async function quickRenewCustomer(customerId, packagePrice) {
             const id=String(customerId||'').trim();
             if(!id)return;
@@ -4701,7 +4776,7 @@ async function deletePlan(id,name){
                   '<div class="mc-row mc-head"><span class="mc-avatar">' + escapeHtml(initials) + '</span><div class="mc-identity"><a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link mc-name fw-bold text-decoration-none" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a><a class="mc-phone" href="tel:' + escapeHtml(metadata.displayPhone || '') + '"><i class="bi bi-telephone-fill"></i> ' + escapeHtml(metadata.displayPhone || '-') + '</a></div><div class="mc-dock"><span class="mc-live ' + (networkStatus.online ? 'online' : 'offline') + '"><i></i>' + escapeHtml(networkStatus.online ? (user.session_uptime || 'Online') : statusLabel) + '</span><span class="mc-package">⚡ ' + escapeHtml(user.package_name || user.profile || 'N/A') + '</span><a class="mc-call" href="tel:' + escapeHtml(metadata.displayPhone || '') + '" aria-label="Call customer">📞</a></div></div>' +
                   '<div class="mc-telemetry-grid"><div class="mc-telemetry-item"><span>🔑 PPPoE</span><code>' + escapeHtml(user.username || '-') + '</code></div><div class="mc-telemetry-item"><span>🌐 IP</span><code>' + escapeHtml(ip || 'Dynamic') + '</code></div><div class="mc-telemetry-item mc-mac"><span>MAC</span><code>' + escapeHtml(user.mac || user.router_mac || user.routerMac || caller || '--') + '</code></div></div>' +
                   '<div class="mc-row mc-foot"><div class="mc-validity"><span>📅 Exp: ' + escapeHtml(validityLabel || '—') + '</span>' + (daysLabel ? '<small class="' + daysClass + '">' + escapeHtml(daysLabel) + '</small>' : '') + '</div><div class="mc-actions">' +
-                    '<button type="button" class="btn mc-pay action-paid-btn" data-username="' + escapeHtml(user.username || '') + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid / active' : 'Mark as Paid') + '" aria-label="Pay or renew customer">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
+                    '<button type="button" class="btn mc-pay action-paid-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid / active' : 'Record payment / renew') + '" aria-label="Pay or renew customer" onclick="event.preventDefault(); event.stopPropagation(); if (this.dataset.status !== \'paid\') window.openCustomerRenewalModal(this.dataset.id, this.dataset.username, Number(this.dataset.price || 0));">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
                     '<button type="button" class="btn mc-sync" title="Open All Customer sync control" aria-label="Sync customer" onclick="document.getElementById(\'customerPushSyncBtn\')?.scrollIntoView({behavior:\'smooth\',block:\'center\'}); document.getElementById(\'customerPushSyncBtn\')?.focus();"><i class="bi bi-arrow-repeat"></i></button>' +
                     '<button type="button" class="btn mc-view action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Customer 360" aria-label="View customer"><i class="bi bi-eye"></i></button>' +
                     '<button type="button" class="btn mc-edit action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit customer" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
