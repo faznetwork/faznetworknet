@@ -845,7 +845,12 @@ class MikroTikService {
   async createHotspotUser(data) {
     const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
-    return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":data.timeLimit||data["limit-uptime"], "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment:data.comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
+    const suppliedComment=this._str(data.comment);
+    const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
+    const commentIsManaged=/^FAZ\\|EXP=[^|]*\\|PROF=[^|]*\\|INIT=1(?:\\||$)/i.test(suppliedComment);
+    const validity=suppliedComment.match(/(?:^|\\|)VALIDITY=([^|]+)/i)?.[1]||"";
+    const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
+    return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":undefined, "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
   }
   async kickActiveHotspotUser(username,idValue) {
     const name=this._str(username).trim(), requestedId=this._str(idValue).trim();
@@ -865,10 +870,13 @@ class MikroTikService {
     const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
     if(!username||!password||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires username, password, profile, and time validity or a data quota.");
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
+    const suppliedComment=this._str(data.comment);
+    const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
+    const commentIsManaged=/^FAZ\\|EXP=[^|]*\\|PROF=[^|]*\\|INIT=1(?:\\||$)/i.test(suppliedComment);
+    const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
       const matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
-      const comment=data.comment||("FAZ NETWORK | Recharge | "+username);
       if(matches.length){
         const item=matches[0];
         await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],password,profile,disabled:false,...limits,comment}));
