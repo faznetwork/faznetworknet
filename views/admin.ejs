@@ -1075,6 +1075,58 @@
 @media(max-width:390px){#view-customer-filter .customer-live-table tbody tr[data-customer-row]>td.mobile-customer-card-cell{padding:9px!important}.mc-head{gap:5px}.mc-dock{gap:3px}.mc-live{font-size:9px;padding:4px 5px}.mc-package{font-size:10px;padding:4px 5px}.mc-actions{gap:3px}.mc-actions .btn{width:27px;height:27px;min-width:27px;min-height:27px}.mc-actions .mc-pay{width:32px;min-width:32px}}
 @media(prefers-reduced-motion:reduce){.mc-live.online i{animation:none}}
 </style>
+<style id="mobile-customer-density-fix">
+/* Keep mobile All Customer cards compact without truncating network identifiers. */
+@media (max-width: 767.98px) {
+  #view-customer-filter .customer-live-table tbody tr[data-customer-row] {
+    min-height: 220px;
+    margin-bottom: 8px;
+  }
+  #view-customer-filter .customer-live-table tbody tr[data-customer-row] > td.mobile-customer-card-cell {
+    box-sizing: border-box;
+    min-height: 220px;
+    padding: 8px 10px !important;
+  }
+  #view-customer-filter .mc-head { gap: 6px; padding-bottom: 7px; }
+  #view-customer-filter .mc-avatar { width: 32px; height: 32px; flex-basis: 32px; border-radius: 10px; }
+  #view-customer-filter .mc-identity { gap: 3px; }
+  #view-customer-filter .mc-name { font-size: 12.5px; line-height: 1.25; }
+  #view-customer-filter .mc-phone { font-size: 10px; line-height: 1.25; }
+  #view-customer-filter .mc-telemetry-grid {
+    gap: 5px;
+    padding: 7px;
+    margin: 6px 0;
+  }
+  #view-customer-filter .mc-telemetry-item { gap: 2px; }
+  #view-customer-filter .mc-telemetry-item > span { font-size: 9px; }
+  #view-customer-filter .mc-telemetry-item code {
+    font-size: 10px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #view-customer-filter .mc-foot { align-items: center; gap: 6px; }
+  #view-customer-filter .mc-validity { font-size: 10px; line-height: 1.25; }
+  #view-customer-filter .mc-validity small { font-size: 9px; }
+  #view-customer-filter .mc-actions { gap: 4px; }
+  #view-customer-filter .mc-actions .btn {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 30px;
+    min-width: 28px;
+    min-height: 30px;
+    touch-action: manipulation;
+  }
+  #view-customer-filter .mc-actions .mc-pay { flex-basis: 32px; width: 32px; min-width: 32px; }
+}
+@media (max-width: 390px) {
+  #view-customer-filter .customer-live-table tbody tr[data-customer-row] > td.mobile-customer-card-cell { padding: 8px !important; }
+  #view-customer-filter .mc-actions { gap: 3px; }
+}
+</style>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
@@ -2236,32 +2288,6 @@
   }
 }
 </style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
-    <div class="modal fade" id="mobileCustomerRenewalModal" tabindex="-1" aria-labelledby="mobileCustomerRenewalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content" id="mobileCustomerRenewalForm">
-          <div class="modal-header">
-            <h5 class="modal-title" id="mobileCustomerRenewalTitle"><i class="bi bi-credit-card me-2 text-success"></i>Payment / Renew</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="small text-muted mb-3">Customer: <strong id="mobileRenewCustomerName">—</strong></div>
-            <input type="hidden" id="mobileRenewCustomerId">
-            <label class="form-label" for="mobileRenewAmount">Amount (৳)</label>
-            <input class="form-control mb-3" type="number" id="mobileRenewAmount" min="0.01" step="0.01" required>
-            <label class="form-label" for="mobileRenewMethod">Payment method</label>
-            <select class="form-select mb-3" id="mobileRenewMethod" required>
-              <option value="CASH">Cash</option><option value="BKASH">bKash</option><option value="NAGAD">Nagad</option><option value="ROCKET">Rocket</option>
-            </select>
-            <label class="form-label" for="mobileRenewTrx">Transaction ID (required for MFS)</label>
-            <input class="form-control" id="mobileRenewTrx" maxlength="120" autocomplete="off" placeholder="Enter transaction ID for mobile banking">
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-success" id="mobileRenewSubmit"><i class="bi bi-check2-circle me-1"></i>Confirm Payment & Renew</button>
-          </div>
-        </form>
-      </div>
-    </div>
 </body></html>`);
             w.document.close();
         }
@@ -4776,7 +4802,7 @@ async function deletePlan(id,name){
                   '<div class="mc-row mc-head"><span class="mc-avatar">' + escapeHtml(initials) + '</span><div class="mc-identity"><a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link mc-name fw-bold text-decoration-none" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a><a class="mc-phone" href="tel:' + escapeHtml(metadata.displayPhone || '') + '"><i class="bi bi-telephone-fill"></i> ' + escapeHtml(metadata.displayPhone || '-') + '</a></div><div class="mc-dock"><span class="mc-live ' + (networkStatus.online ? 'online' : 'offline') + '"><i></i>' + escapeHtml(networkStatus.online ? (user.session_uptime || 'Online') : statusLabel) + '</span><span class="mc-package">⚡ ' + escapeHtml(user.package_name || user.profile || 'N/A') + '</span><a class="mc-call" href="tel:' + escapeHtml(metadata.displayPhone || '') + '" aria-label="Call customer">📞</a></div></div>' +
                   '<div class="mc-telemetry-grid"><div class="mc-telemetry-item"><span>🔑 PPPoE</span><code>' + escapeHtml(user.username || '-') + '</code></div><div class="mc-telemetry-item"><span>🌐 IP</span><code>' + escapeHtml(ip || 'Dynamic') + '</code></div><div class="mc-telemetry-item mc-mac"><span>MAC</span><code>' + escapeHtml(user.mac || user.router_mac || user.routerMac || caller || '--') + '</code></div></div>' +
                   '<div class="mc-row mc-foot"><div class="mc-validity"><span>📅 Exp: ' + escapeHtml(validityLabel || '—') + '</span>' + (daysLabel ? '<small class="' + daysClass + '">' + escapeHtml(daysLabel) + '</small>' : '') + '</div><div class="mc-actions">' +
-                    '<button type="button" class="btn mc-pay action-paid-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid / active' : 'Record payment / renew') + '" aria-label="Pay or renew customer" onclick="event.preventDefault(); event.stopPropagation(); if (this.dataset.status !== \'paid\') window.openCustomerRenewalModal(this.dataset.id, this.dataset.username, Number(this.dataset.price || 0));">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
+                    '<button type="button" class="btn mc-pay action-paid-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-status="' + escapeHtml(billingStatus) + '" title="Record payment / renew" aria-label="Pay or renew customer" onclick="event.preventDefault(); event.stopPropagation(); window.openCustomerRenewalModal(this.dataset.id, this.dataset.username, Number(this.dataset.price || 0));">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
                     '<button type="button" class="btn mc-sync" title="Open All Customer sync control" aria-label="Sync customer" onclick="document.getElementById(\'customerPushSyncBtn\')?.scrollIntoView({behavior:\'smooth\',block:\'center\'}); document.getElementById(\'customerPushSyncBtn\')?.focus();"><i class="bi bi-arrow-repeat"></i></button>' +
                     '<button type="button" class="btn mc-view action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Customer 360" aria-label="View customer"><i class="bi bi-eye"></i></button>' +
                     '<button type="button" class="btn mc-edit action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit customer" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
@@ -6582,5 +6608,33 @@ async function deletePlan(id,name){
       $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{form.reset();$('routerDevicePort').value='8728';$('routerDeviceSsl').disabled=false;invalidateTest();result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');});
     })();
     </script>
+
+    <!-- Mobile All Customer payment modal (kept in the live admin DOM, not the print-slip template). -->
+<div class="modal fade" id="mobileCustomerRenewalModal" tabindex="-1" aria-labelledby="mobileCustomerRenewalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="mobileCustomerRenewalForm">
+          <div class="modal-header">
+            <h5 class="modal-title" id="mobileCustomerRenewalTitle"><i class="bi bi-credit-card me-2 text-success"></i>Payment / Renew</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="small text-muted mb-3">Customer: <strong id="mobileRenewCustomerName">—</strong></div>
+            <input type="hidden" id="mobileRenewCustomerId">
+            <label class="form-label" for="mobileRenewAmount">Amount (৳)</label>
+            <input class="form-control mb-3" type="number" id="mobileRenewAmount" min="0.01" step="0.01" required>
+            <label class="form-label" for="mobileRenewMethod">Payment method</label>
+            <select class="form-select mb-3" id="mobileRenewMethod" required>
+              <option value="CASH">Cash</option><option value="BKASH">bKash</option><option value="NAGAD">Nagad</option><option value="ROCKET">Rocket</option>
+            </select>
+            <label class="form-label" for="mobileRenewTrx">Transaction ID (required for MFS)</label>
+            <input class="form-control" id="mobileRenewTrx" maxlength="120" autocomplete="off" placeholder="Enter transaction ID for mobile banking">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-success" id="mobileRenewSubmit"><i class="bi bi-check2-circle me-1"></i>Confirm Payment & Renew</button>
+          </div>
+        </form>
+      </div>
+    </div>
 </body>
 </html>

@@ -67,6 +67,63 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
   .metric { font-size: 1.15rem; }
   .mono, code, [id="liveIp"] { overflow-wrap: anywhere; word-break: break-word; }
 }
+
+/* Keep customer key/value panels inside the mobile viewport. */
+@media (max-width: 767.98px) {
+  #app .customer-info-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem !important;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  #app .customer-info-grid > .customer-info-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  #app .customer-info-grid h5 { overflow-wrap: anywhere; }
+  #app .customer-info-grid .row {
+    --bs-gutter-x: .75rem;
+    --bs-gutter-y: .7rem;
+    min-width: 0;
+  }
+  #app .customer-info-grid .label {
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  #app .customer-info-grid [id="fullName"],
+  #app .customer-info-grid [id="phone2"],
+  #app .customer-info-grid [id="alt"],
+  #app .customer-info-grid [id="nid"],
+  #app .customer-info-grid [id="address"],
+  #app .customer-info-grid [id="area"],
+  #app .customer-info-grid [id="connection"],
+  #app .customer-info-grid [id="contactEmail"],
+  #app .customer-info-grid [id="contactWhatsapp"],
+  #app .customer-info-grid [id="contactTelegram"],
+  #app .customer-info-grid [id="contactFacebook"],
+  #app .customer-info-grid [id="user2"],
+  #app .customer-info-grid [id="onu"],
+  #app .customer-info-grid [id="routerMac"],
+  #app .customer-info-grid [id="box"],
+  #app .customer-info-grid [id="core"],
+  #app .customer-info-grid [id="olt"],
+  #app .customer-info-grid [id="remote"],
+  #app .customer-info-grid .mono,
+  #app .customer-info-grid code {
+    display: block;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #app .customer-info-grid .input-group { min-width: 0; max-width: 100%; }
+  #app .customer-info-grid .form-control { min-width: 0; }
+}
 </style><script src="/js/date-format.js"></script>
 </head>
 <body>
@@ -92,9 +149,9 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Billing Status & Expiry</div><div id="days" class="metric mt-1">—</div><div class="text-muted mt-2">Expiry: <strong id="expiry">—</strong></div><div class="small mt-2">Billing cycle: <strong id="cycle">1 month</strong></div></div></div></div>
 <div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Real-time Session</div><div id="uptime" class="metric mt-1">Offline</div><div class="small text-muted mt-2">Download rate <strong id="rx" title="Live receive rate">—</strong> · Upload rate <strong id="tx" title="Live transmit rate">—</strong></div><div class="small text-muted mt-1" id="trafficStatus">Checking live traffic…</div><div class="small mt-2">Last disconnect: <span id="reason">—</span></div></div></div></div>
 </section>
-<section class="card border-0 rounded-3 mb-3"><div class="card-body"><div class="row g-4">
-<div class="col-lg-6"><h5>Personal & Compliance</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="col-md-6"><div class="label">Phone</div><div id="phone2">—</div></div><div class="col-md-6"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="col-md-6"><div class="label">NID Number</div><div id="nid">—</div></div><div class="col-12"><div class="label">Installation Address</div><div id="address">—</div></div><div class="col-md-6"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="col-md-6"><div class="label">Connection Date</div><div id="connection">—</div></div></div><div class="border rounded-3 p-3 mt-4 bg-light-subtle"><div class="d-flex align-items-center gap-2 mb-3"><i class="bi bi-chat-dots fs-5 text-success"></i><div><h6 class="mb-0 fw-bold">Contact &amp; Notification Channels</h6><div class="small text-muted">Saved customer contact details</div></div></div><div class="row g-3"><div class="col-md-6"><div class="label">Email</div><div id="contactEmail" class="text-break">—</div></div><div class="col-md-6"><div class="label">WhatsApp</div><div id="contactWhatsapp" class="text-break">—</div></div><div class="col-md-6"><div class="label">Telegram</div><div id="contactTelegram" class="text-break">—</div></div><div class="col-md-6"><div class="label">Facebook / Messenger</div><div id="contactFacebook" class="text-break">—</div></div></div><div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Contact information does not send messages by itself. SMS/email or messaging providers must be configured separately.</div></div></div>
-<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">Waiting for local OLT collector…</div><div id="onuTelemetryStatus" class="small mt-1 text-muted">ONU status: —</div><div id="onuTxPowerValue" class="small mono mt-1">TX power: —</div><div id="onuTelemetryFreshness" class="small mt-1 text-muted" aria-live="polite">Last seen: —</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
+<section class="card border-0 rounded-3 mb-3"><div class="card-body"><div class="row g-4 customer-info-grid">
+<div class="col-lg-6 customer-info-panel"><h5>Personal & Compliance</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="col-md-6"><div class="label">Phone</div><div id="phone2">—</div></div><div class="col-md-6"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="col-md-6"><div class="label">NID Number</div><div id="nid">—</div></div><div class="col-12"><div class="label">Installation Address</div><div id="address">—</div></div><div class="col-md-6"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="col-md-6"><div class="label">Connection Date</div><div id="connection">—</div></div></div><div class="border rounded-3 p-3 mt-4 bg-light-subtle"><div class="d-flex align-items-center gap-2 mb-3"><i class="bi bi-chat-dots fs-5 text-success"></i><div><h6 class="mb-0 fw-bold">Contact &amp; Notification Channels</h6><div class="small text-muted">Saved customer contact details</div></div></div><div class="row g-3"><div class="col-md-6"><div class="label">Email</div><div id="contactEmail" class="text-break">—</div></div><div class="col-md-6"><div class="label">WhatsApp</div><div id="contactWhatsapp" class="text-break">—</div></div><div class="col-md-6"><div class="label">Telegram</div><div id="contactTelegram" class="text-break">—</div></div><div class="col-md-6"><div class="label">Facebook / Messenger</div><div id="contactFacebook" class="text-break">—</div></div></div><div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>Contact information does not send messages by itself. SMS/email or messaging providers must be configured separately.</div></div></div>
+<div class="col-lg-6 customer-info-panel"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">Waiting for local OLT collector…</div><div id="onuTelemetryStatus" class="small mt-1 text-muted">ONU status: —</div><div id="onuTxPowerValue" class="small mono mt-1">TX power: —</div><div id="onuTelemetryFreshness" class="small mt-1 text-muted" aria-live="polite">Last seen: —</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
 </div></div></section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Universal Network Mapping</h5><div class="small text-muted">Cached read-only observations · reload does not trigger a new router scan</div></div><button id="refreshNetworkMap" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat me-1"></i>Reload Observations</button></div>
