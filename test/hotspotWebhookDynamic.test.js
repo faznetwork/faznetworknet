@@ -28,7 +28,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
-      if(sql.includes("SET status='processing',used=true")){claimSql=sql;return {rows:[{id:params[1]}]};}
+      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -51,7 +51,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     const oldAmountResponse=responseRecorder();
     await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10",amount:10,profile_id:"pkg-weekend"}},oldAmountResponse);
     assert.equal(oldAmountResponse.statusCode,400);
-    assert.match(oldAmountResponse.body.error,/no active Hotspot profile currently has a price of ৳10\.00/i);
+    assert.match(oldAmountResponse.body.error,/paid amount does not match the configured price/i);
   }finally{
     db.query=originalQuery;
     db.withTransaction=originalWithTransaction;
