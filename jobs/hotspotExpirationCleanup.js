@@ -47,10 +47,13 @@ function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
-  const expValue = comment.match(/(?:^|\|)EXP(?::|=)\\s*([^|]+)/i)?.[1]?.trim();
+  const expValue = comment.match(/(?:^|\|)EXP(?::|=)\s*([^|]+)/i)?.[1]?.trim();
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
     const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
-    const expDate = Number.isFinite(epoch) ? new Date(epoch) : new Date(expValue);
+    const dhakaMatch = expValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
+    const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
+      ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
+      : new Date(expValue);
     if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
   if (!managed) return false;
@@ -144,9 +147,9 @@ function createHotspotExpirationCleanup(deps = {}) {
 
         // Persist the absolute deadline marker for auditability; PostgreSQL remains authoritative.
         if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
-            /(?:^|\\|)EXP(?::|=)\\s*(?:PENDING|0)(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
+            /(?:^|\|)EXP(?::|=)\s*(?:PENDING|0)(?:\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
           const absoluteExpiry = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(expiryAt).replace("T", " ");
-          const absoluteComment = comment.replace(/(?:^|\\|)EXP(?::|=)\\s*(?:PENDING|0)(?=\\||$)/i, function(match) {
+          const absoluteComment = comment.replace(/(?:^|\|)EXP(?::|=)\s*(?:PENDING|0)(?=\||$)/i, function(match) {
             return match.startsWith("|") ? "|EXP: " + absoluteExpiry : "EXP: " + absoluteExpiry;
           });
           await router.setHotspotUserComment(username, absoluteComment).catch(error =>
