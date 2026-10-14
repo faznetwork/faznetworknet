@@ -5,6 +5,12 @@ const {parseSms}=require("../services/paymentWebhookParser");
 const {buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
+async function flagStalePaymentClaims(){
+ const stale=await db.query("UPDATE transactions SET needs_reconciliation=true WHERE status='processing' AND used=true AND claimed_at < NOW() - INTERVAL '5 minutes' AND needs_reconciliation=false RETURNING id,claim_flow,claimed_by");
+ for(const row of stale.rows||[]){
+  await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,$2,$3,$4::jsonb)",[row.id,["hotspot","pppoe","webhook"].includes(row.claim_flow)?row.claim_flow:"recovery",row.claimed_by||null,JSON.stringify({reason:"STALE_PROCESSING_CLAIM",thresholdMinutes:5,detectedAt:new Date().toISOString(),action:"flagged_only_not_released"})]);
+ }
+}
 function normalizePhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
 function normalizeProfileIdentifier(value){
