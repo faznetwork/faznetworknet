@@ -14,7 +14,7 @@ function responseRecorder(){
 }
 
 test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit",async()=>{
-  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let profileMetadata={Weekend:{price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
   let rechargePayload=null;
   try{
@@ -31,6 +31,8 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
+    mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
     const req={ip:"test-price-sync-15",body:{phone:"01712345678",trxId:"PRICE15"}};
     const res=responseRecorder();
@@ -52,7 +54,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     db.query=originalQuery;
     db.withTransaction=originalWithTransaction;
     mikrotik.getHotspotProfiles=originalProfiles;
-    mikrotik.rechargeHotspotUser=originalRecharge;
+    mikrotik.rechargeHotspotUser=originalRecharge;mikrotik.updateHotspotProfile=originalUpdateProfile;
   }
 });
 
@@ -78,7 +80,7 @@ test("dynamicWebhook catches a custom full-URL path from app_settings",async()=>
 
 
 test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensitive lookup",async()=>{
-  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let lookupSql="",lookupValue="",rechargePayload=null;
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
@@ -86,14 +88,16 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
       if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched",matched_username:null}]};}
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
-      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",aliases:["1-Hour","1h","pkg-1-hour"],limitBytesTotal:0}})}]};
       if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
+    mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  "},query:{}};
+    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  ",profileName:"1h"},query:{}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
@@ -108,13 +112,13 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     db.query=originalQuery;
     db.withTransaction=originalWithTransaction;
     mikrotik.getHotspotProfiles=originalProfiles;
-    mikrotik.rechargeHotspotUser=originalRecharge;
+    mikrotik.rechargeHotspotUser=originalRecharge;mikrotik.updateHotspotProfile=originalUpdateProfile;
   }
 });
 
 
 test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB commit fails",async()=>{
-  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let released=false,commitAttempted=false;
   try{
     db.query=async(sql,params=[])=>{
@@ -128,6 +132,8 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
+    mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async()=>({username:"01712345678"});
     db.withTransaction=async callback=>{
       commitAttempted=true;
@@ -141,12 +147,12 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
     assert.equal(released,false,"successful RouterOS provisioning must not release the transaction for reuse");
   }finally{
     db.query=originalQuery;db.withTransaction=originalWithTransaction;
-    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;
+    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;mikrotik.updateHotspotProfile=originalUpdateProfile;
   }
 });
 
 test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
-  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let released=false;
   try{
     db.query=async(sql,params=[])=>{
@@ -159,6 +165,8 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
+    mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async()=>{throw new Error("simulated RouterOS failure");};
     db.withTransaction=async()=>{throw new Error("should not finalize after RouterOS failure");};
     const res=responseRecorder();
@@ -167,13 +175,13 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
     assert.equal(released,true,"a confirmed RouterOS failure should release the claim");
   }finally{
     db.query=originalQuery;db.withTransaction=originalWithTransaction;
-    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;
+    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;mikrotik.updateHotspotProfile=originalUpdateProfile;
   }
 });
 
 
 test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async()=>{
-  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let claimAttempts=0,rechargeCount=0;
   try{
     db.query=async(sql,params=[])=>{
@@ -186,6 +194,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
       throw new Error("Unexpected SQL in test: "+sql);
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
+    mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async()=>{rechargeCount++;return {username:"01712345678"};};
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     const a=responseRecorder(),b=responseRecorder();
@@ -198,6 +208,6 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
     assert.deepEqual([a.statusCode,b.statusCode].sort(),[200,409]);
   }finally{
     db.query=originalQuery;db.withTransaction=originalWithTransaction;
-    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;
+    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;mikrotik.updateHotspotProfile=originalUpdateProfile;
   }
 });

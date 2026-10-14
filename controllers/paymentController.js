@@ -7,6 +7,23 @@ function errorResponse(res,error,code=400){console.error("[Payment API]",error);
 
 function normalizePhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
+function normalizeProfileIdentifier(value){
+ return String(value??"").normalize("NFKC").trim().toLowerCase()
+  .replace(/\b(hours?|hrs?)\b/g,"h")
+  .replace(/\b(minutes?|mins?)\b/g,"m")
+  .replace(/\b(seconds?|secs?)\b/g,"s")
+  .replace(/\b(days?)\b/g,"d")
+  .replace(/\b(weeks?)\b/g,"w")
+  .replace(/\b(months?)\b/g,"mo")
+  .replace(/[^a-z0-9]/g,"");
+}
+function profileIdentifierMatches(profileName,metadata,requested){
+ if(!requested)return true;
+ const aliases=[profileName,metadata?.id,metadata?.profileId,metadata?.profile_id,metadata?.packageId,metadata?.package_id,metadata?.packageName,metadata?.package_name,metadata?.alias,metadata?.aliases];
+ const candidates=aliases.flatMap(value=>Array.isArray(value)?value:[value]).filter(value=>value!==undefined&&value!==null&&String(value).trim()!=="");
+ const target=normalizeProfileIdentifier(requested);
+ return Boolean(target)&&candidates.some(value=>normalizeProfileIdentifier(value)===target);
+}
 function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
 function addDays(v,days){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;d.setUTCDate(d.getUTCDate()+Number(days));return d.toISOString().slice(0,10);}
 function endOfBillingMonth(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Math.max(1,Number(months)||1),0)).toISOString().slice(0,10);}
@@ -211,7 +228,7 @@ async function verifyTrx(req,res){
    const profileName=String(item.name||"");
    const metadata=profileMetadata[profileName]||{};
    const priceMatches=Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
-   return priceMatches&&(!requestedProfile||profileName===requestedProfile);
+   return priceMatches&&profileIdentifierMatches(profileName,metadata,requestedProfile);
   });
   if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
   const hotspotProfile=matchingProfiles[0];
