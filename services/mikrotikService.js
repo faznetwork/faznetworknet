@@ -853,7 +853,7 @@ class MikroTikService {
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
     const suppliedComment=this._str(data.comment);
     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
+    const commentIsManaged=/^FAZ\|EXP(?::|=)[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
     const validity=suppliedComment.match(/(?:^|\|)VALIDITY=([^|]+)/i)?.[1]||"";
     const comment=commentIsManaged?suppliedComment:"FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"");
     return this._withConnection("Hotspot user creation", async (connection) => {

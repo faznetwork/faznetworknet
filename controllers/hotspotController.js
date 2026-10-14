@@ -199,11 +199,12 @@ async function createUser(req,res){
     if(!username||!profile||!server)return res.status(400).json({success:false,message:"Phone number, profile, and a detected Hotspot server are required."});
     if(!/^[A-Za-z0-9._@+-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username / phone number contains unsupported characters."});
     if(password.length>100)return res.status(400).json({success:false,message:"Password must be 100 characters or fewer."});
-    const existingDb=await db.query("SELECT 1 FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
-    if(existingDb.rows.length)return res.status(409).json({success:false,message:"Hotspot username already exists in database."});
+    const existingDb=await db.query("SELECT id,status FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) AND status IN ('unused','active') ORDER BY id DESC LIMIT 1",[username]);
+    if(existingDb.rows.length)return res.status(409).json({success:false,message:"This phone number already has an unused or active Hotspot package. Expired packages can be purchased again."});
     const [mtUsers,profiles,servers]=await Promise.all([mikrotikService.getHotspotUsers(),mikrotikService.getHotspotProfiles(),mikrotikService.getHotspotServers()]);
     if(mtUsers.some(u=>String(u.username||"").toLowerCase()===username.toLowerCase()))return res.status(409).json({success:false,message:"Hotspot username already exists in MikroTik."});
-    if(!servers.some(s=>String(s.name)===server))return res.status(400).json({success:false,message:"Selected Hotspot server is not present on MikroTik."});
+    const matchedServer=servers.find(s=>String(s.name||"").trim().toLowerCase()===server.trim().toLowerCase());
+    if(!matchedServer)return res.status(409).json({success:false,message:"Selected Hotspot server is no longer present on MikroTik. Refresh the detected server list."});
     const routerProfile=profiles.find(p=>String(p.name||"").toLowerCase()===profile.toLowerCase());
     if(!routerProfile)return res.status(400).json({success:false,message:"The selected Hotspot profile does not exist on MikroTik."});
     const profileMeta=(await readProfileMetadata())[routerProfile.name]||{};
@@ -213,7 +214,7 @@ async function createUser(req,res){
     await ensureCalendarProfile(routerProfile.name,routerProfile,profileValidity);
     const safeProfile=routerProfile.name.replace(/[|]/g,"").slice(0,80);
     const routerComment="FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1";
-    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server,comment:routerComment});
+    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,comment:routerComment});
     try{
       const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[routerProfile.name]);
       const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||profileMeta.price||0);
@@ -232,7 +233,7 @@ async function dashboardMetrics(req,res){
       mikrotikService.getHotspotUsers(),
       mikrotikService.getActiveHotspotSessions(),
       db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers"),
-      db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(t.amount),0)::numeric(12,2) AS total_amount FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status='processed' AND t.created_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
+      db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(t.amount),0)::numeric(12,2) AS total_amount FROM transactions t WHERE t.status='processed' AND EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE LOWER(v.username)=LOWER(t.matched_username)) AND t.created_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
       db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='expired' AND expired_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND expired_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
       db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '1 hour'"),
       db.query("SELECT COUNT(*) FILTER (WHERE status='expired' AND cleanup_status IN ('pending','failed'))::int AS cleanup_pending, COUNT(*) FILTER (WHERE status='expired' AND expired_at >= date_trunc('day',NOW()))::int AS evicted_today FROM hotspot_vouchers")

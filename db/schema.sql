@@ -189,6 +189,9 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_attempts INTEGER N
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_error TEXT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS router_removed_at TIMESTAMPTZ;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+-- Permit repeat purchases after expiry while preventing simultaneous live vouchers for one phone.
+ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_username_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_live_username_ci ON hotspot_vouchers (LOWER(username)) WHERE status IN ('unused','active');
 CREATE TABLE IF NOT EXISTS hotspot_voucher_sales_archive (
   transaction_id BIGINT PRIMARY KEY,
   channel VARCHAR(40),

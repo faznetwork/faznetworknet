@@ -47,7 +47,7 @@ function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
-  const expValue = comment.match(/(?:^|\|)EXP=([^|]+)/i)?.[1]?.trim();
+  const expValue = comment.match(/(?:^|\|)EXP(?::|=)\\s*([^|]+)/i)?.[1]?.trim();
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
     const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : new Date(expValue);
@@ -209,7 +209,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expired_at <= NOW() - INTERVAL '7 days' RETURNING id"
+      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expired_at <= NOW() - INTERVAL '3 days' RETURNING id"
     );
     const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
     if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
