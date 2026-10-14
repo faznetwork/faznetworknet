@@ -84,6 +84,8 @@ exports.getCustomerMap = async (req, res) => {
       provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
       rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: rxStatus },
       routerMac: routerObservation?.observedValue?.routerMac || null,
+      liveTelemetry: oltTelemetry,
+      oltTelemetry,
       observations: observations.rows,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
       lastObservedAt: latest?.observedAt || null,
