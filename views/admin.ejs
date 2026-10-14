@@ -4002,6 +4002,8 @@ async function deletePlan(id,name){
             const usernameInput = document.getElementById('rbacUsername');
             const inviteInstructions = document.getElementById('rbacInviteInstructions');
             const selfServiceMode = currentStaffMode === 'sub-staff';
+            const inviteResult = document.getElementById('rbacCreateUserResult');
+            if (inviteResult) { inviteResult.className = 'small'; inviteResult.textContent = ''; }
             if (usernameField) usernameField.hidden = selfServiceMode;
             if (usernameInput) { usernameInput.required = !selfServiceMode; if (selfServiceMode) usernameInput.value = ''; }
             if (inviteInstructions) inviteInstructions.textContent = selfServiceMode
