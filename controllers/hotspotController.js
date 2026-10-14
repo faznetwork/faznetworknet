@@ -71,7 +71,9 @@ async function list(req,res){
     comment:user.comment||"",
     disabled:Boolean(user.disabled)
   }));
-  return res.json({success:true,filter:"all",count:users.length,users});
+  const sessions=await mikrotikService.getActiveHotspotSessions();
+  const activeUsers=Array.isArray(sessions)?sessions.filter(s=>String(s.username||"").trim().toLowerCase()!=="default-trial").map(s=>({user:s.username,address:s.address||"",macAddress:s.macAddress||"",uptime:s.uptime||"",bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0),server:s.server||"",profile:s.profile||""})):[];
+  return res.json({success:true,filter:"all",count:users.length,users,activeUsers});
  }catch(e){return errorResponse(res,e);}
 }
 async function active(req,res){
