@@ -2080,81 +2080,6 @@
         // Bind navigation to the current All Hotspot Users renderer; do not override it with the legacy table loader.
         window.loadHotspotSection = loadHotspotSection;
 
-        function formatHotspotDuration(value) {
-            const raw=String(value||'').trim();
-            if(!raw) return '-';
-            const m=raw.match(/(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/i);
-            if(!m || !m[0]) return raw;
-            const parts=[];
-            if(m[1]) parts.push(m[1]+'w');
-            if(m[2]) parts.push(m[2]+'d');
-            if(m[3]) parts.push(m[3]+'h');
-            if(m[4]) parts.push(m[4]+'m');
-            if(m[5]) parts.push(m[5]+'s');
-            return parts.length?parts.slice(0,3).join(' '):raw;
-        }
-
-        function formatHotspotBytes(value) {
-            const n=Number(value||0);
-            if(!Number.isFinite(n)||n<=0) return '0 B';
-            const units=['B','KB','MB','GB','TB'];
-            const i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),units.length-1);
-            return (n/Math.pow(1024,i)).toFixed(i?1:0)+' '+units[i];
-        }
-
-        function renderAllHotspotUsers(users, activeUsers) {
-            const tbody=document.getElementById('hotspotUserBody');
-            if(!tbody) return;
-            const activeMap=new Map((Array.isArray(activeUsers)?activeUsers:[]).map(s=>[String(s.user||'').toLowerCase(),s]));
-            const rows=(Array.isArray(users)?users:[]).map(function(u,index){
-                const name=String(u.name||u.username||'-');
-                const live=activeMap.get(name.toLowerCase());
-                const status=live?'<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle"><i class="bi bi-circle-fill me-1" style="font-size:7px"></i>Active</span>':'<span class="badge rounded-pill bg-light text-secondary border"><i class="bi bi-circle me-1"></i>Offline</span>';
-                return '<tr data-hotspot-row><td class="text-muted fw-semibold">'+(index+1)+'</td><td><div class="d-flex align-items-center gap-2"><span class="hotspot-user-icon"><i class="bi bi-telephone-fill"></i></span><strong>'+escapeHtml(name)+'</strong></div></td><td><span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">'+escapeHtml(u.profile||'No Plan')+'</span></td><td><span class="font-monospace">'+escapeHtml(formatHotspotDuration(u.uptime||u.limitUptime))+'</span></td><td>'+status+'</td><td><span class="small text-muted">'+escapeHtml(u.comment||'—')+'</span></td><td class="text-end"><div class="btn-group btn-group-sm"><button type="button" class="btn btn-outline-success" title="Edit" onclick="openHotspotUserEditModal('+JSON.stringify(u)+')"><i class="bi bi-pencil-square"></i></button><button type="button" class="btn btn-outline-danger" title="Delete" onclick="removeHotspotUser('+JSON.stringify(name)+')"><i class="bi bi-trash3"></i></button></div></td></tr>';
-            }).join('');
-            tbody.innerHTML=rows||'<tr><td colspan="7" class="text-center py-5"><div class="hotspot-empty-icon"><i class="bi bi-database"></i></div><div class="fw-semibold text-secondary mt-2">No Hotspot users found</div><div class="small text-muted">Create a customer account to get started.</div></td></tr>';
-            safeSetText('hotspotSectionCount',Array.isArray(users)?users.length:0);
-            updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
-        }
-
-        function renderActiveHotspotUsers(users) {
-            const tbody=document.getElementById('hotspotUserBody');
-            if(!tbody) return;
-            const rows=(Array.isArray(users)?users:[]).map(function(s,index){
-                return '<tr><td class="text-muted fw-semibold">'+(index+1)+'</td><td><strong>'+escapeHtml(s.user||'-')+'</strong></td><td><span class="badge rounded-pill bg-light text-dark border font-monospace">'+escapeHtml(s.address||'-')+'</span></td><td class="font-monospace text-secondary">'+escapeHtml(s.macAddress||'-')+'</td><td class="font-monospace">'+escapeHtml(formatHotspotDuration(s.uptime))+'</td><td><span class="text-primary">'+formatHotspotBytes(s.bytesIn)+'</span> <span class="text-muted">/</span> <span class="text-success">'+formatHotspotBytes(s.bytesOut)+'</span></td><td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectHotspotActive('+JSON.stringify(s.id)+','+JSON.stringify(s.user||'')+')"><i class="bi bi-power me-1"></i>Disconnect</button></td></tr>';
-            }).join('');
-            tbody.innerHTML=rows||'<tr><td colspan="7" class="text-center py-5"><div class="hotspot-empty-icon"><i class="bi bi-wifi-off"></i></div><div class="fw-semibold text-secondary mt-2">No live active sessions at the moment</div><div class="small text-muted">Connected Hotspot clients will appear here automatically.</div></td></tr>';
-            safeSetText('hotspotSectionCount',Array.isArray(users)?users.length:0);
-            const lang=localStorage.getItem('faz_preferred_lang')||'en'; updateLanguage(lang);
-        }
-
-        function filterHotspotRows(query) {
-            const q=String(query||'').trim().toLowerCase();
-            document.querySelectorAll('#hotspotUserBody tr[data-hotspot-row]').forEach(function(row){row.style.display=row.innerText.toLowerCase().includes(q)?'':'none';});
-        }
-
-        async function disconnectHotspotActive(id, username) {
-            if(!id) return;
-            if(!confirm('Disconnect '+(username||'this active session')+'?')) return;
-            try {
-                await jsonFetch('/api/hotspot/active/disconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
-                await window.loadHotspotSection('active','active_user');
-            } catch(error){ alert(error.message); }
-        }
-
-        function openHotspotUserEditModal(user) {
-            purgeStuckBackdrops();
-            const existing=document.getElementById('hotspotUserEditModal');
-            if(existing) existing.remove();
-            const modal=document.createElement('div');
-            modal.id='hotspotUserEditModal'; modal.className='modal fade'; modal.tabIndex=-1;
-            modal.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-square text-success me-2"></i>Edit Hotspot User</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-light border mb-3">User editing is currently limited to MikroTik-backed account details.</div><div class="row g-3"><div class="col-12"><label class="form-label">User / Phone</label><input class="form-control" value="'+escapeHtml(user.name||user.username||'')+'" readonly></div><div class="col-md-6"><label class="form-label">Profile / Plan</label><input class="form-control" value="'+escapeHtml(user.profile||'')+'" readonly></div><div class="col-md-6"><label class="form-label">Uptime Limit</label><input class="form-control" value="'+escapeHtml(user.limitUptime||'')+'" readonly></div><div class="col-12"><label class="form-label">Comment</label><textarea class="form-control" rows="3" readonly>'+escapeHtml(user.comment||'')+'</textarea></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div>';
-            document.body.appendChild(modal);
-            const instance=bootstrap.Modal.getOrCreateInstance(modal,{backdrop:'static',keyboard:true});
-            modal.addEventListener('hidden.bs.modal',function(){modal.remove();purgeStuckBackdrops();},{once:true});
-            instance.show();
-        }
-
         window.loadHotspotVoucherRecords = async function(filter,title){
             const container=document.getElementById('dynamicPageContent');
             if(document.getElementById('view-dashboard'))document.getElementById('view-dashboard').style.display='none';
@@ -2557,11 +2482,6 @@
                 await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,username:username})});
                 await refreshHotspotCurrent();
             } catch(error){ alert(error.message); }
-        }
-
-                function filterHotspotRows(query) {
-            const q=String(query||'').trim().toLowerCase();
-            document.querySelectorAll('#hotspotUserBody tr[data-hotspot-row]').forEach(function(row){row.style.display=row.innerText.toLowerCase().includes(q)?'':'none';});
         }
 
         window.viewHotspotUser=function(username){
