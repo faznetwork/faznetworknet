@@ -253,6 +253,24 @@
         .customer-action-group .btn { min-width: 34px; min-height: 32px; border-radius: 7px !important; display: inline-flex; align-items: center; justify-content: center; } .customer-action-group .btn:hover { transform: translateY(-1px); }
         .customer-serial { color: #64748b; font: 800 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
         .customer-live-table .customer-session { font-size: 11px; line-height: 1.35; margin-top: 4px; }
+<style id="all-customer-operations-hub">
+#view-customer-filter .customer-hub-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:20px 20px 14px;background:linear-gradient(120deg,#fff 0%,#f0fdf4 100%);border-bottom:1px solid #e2e8f0}
+#view-customer-filter .customer-hub-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#dcfce7;color:#047857;font-size:22px}
+#view-customer-filter .customer-hub-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+#view-customer-filter .customer-hub-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:14px 20px;background:#fff}
+#view-customer-filter .customer-hub-metric{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;padding:13px 12px;text-align:left;background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 2px 5px rgba(15,23,42,.025);transition:transform .16s,border-color .16s,box-shadow .16s}
+#view-customer-filter .customer-hub-metric:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(15,23,42,.07);border-color:#a7f3d0}
+#view-customer-filter .customer-hub-metric span{display:flex;align-items:center;gap:6px;color:#475569;font-size:11px;font-weight:750;line-height:1.3}
+#view-customer-filter .customer-hub-metric strong{font-size:26px;line-height:1.1;letter-spacing:-.04em;color:#0f172a}
+#view-customer-filter .customer-hub-metric small{font-size:10px;color:#64748b;line-height:1.3}
+#view-customer-filter .metric-online span i{color:#059669}#view-customer-filter .metric-active span i{color:#2563eb}#view-customer-filter .metric-expired span i{color:#dc2626}#view-customer-filter .metric-inactive span i{color:#d97706}
+#view-customer-filter .customer-hub-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 20px;background:#f8fafc;border-top:1px solid #e2e8f0}
+#view-customer-filter .customer-hub-toolbar .customer-search-wrap{width:min(420px,100%);min-width:0;margin:0!important}
+#view-customer-filter .customer-result-count{font-size:12px;color:#64748b}
+@media(max-width:1100px){#view-customer-filter .customer-hub-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:767.98px){#view-customer-filter .customer-hub-heading{padding:15px 12px 12px;align-items:flex-start}#view-customer-filter .customer-hub-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}#view-customer-filter .customer-hub-actions .btn{min-height:40px;white-space:normal}#view-customer-filter .customer-hub-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px 12px}#view-customer-filter .customer-hub-metric{padding:12px 10px}#view-customer-filter .customer-hub-metric strong{font-size:24px}#view-customer-filter .customer-hub-toolbar{padding:10px 12px}#view-customer-filter .customer-hub-toolbar .customer-search-wrap{width:100%}}
+@media(prefers-reduced-motion:reduce){#view-customer-filter .customer-hub-metric{transition:none}}
+</style>
         .customer-search-wrap { min-width: 260px; } .customer-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
         .ip-pool-page{--pool-ink:#0f172a;--pool-muted:#64748b;color:var(--pool-ink)}
         .ip-pool-hero{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;padding:24px;margin-bottom:22px;border:1px solid #dbeafe;border-radius:18px;background:linear-gradient(120deg,#fff 0%,#f0fdf4 100%);box-shadow:0 8px 26px rgba(15,23,42,.045)}
@@ -4534,7 +4552,7 @@ async function deletePlan(id,name){
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row=>{
                 const billing=String(row.getAttribute('data-billing-status')||'').toLowerCase();
                 const expiry=String(row.getAttribute('data-expiry-state')||'unknown');
-                const match=wanted==='all'||(wanted==='paid'&&billing==='paid')||(wanted==='active'&&expiry!=='expired')||(wanted==='due'&&expiry==='due')||(wanted==='expired'&&expiry==='expired')||(wanted==='unexpired'&&expiry==='unexpired');
+                const match=wanted==='all'||(wanted==='paid'&&billing==='paid')||(wanted==='active'&&expiry!=='expired')||(wanted==='due'&&expiry==='due')||(wanted==='expired'&&expiry==='expired')||(wanted==='unexpired'&&expiry==='unexpired')||(wanted==='inactive'&&row.getAttribute('data-account-inactive')==='true');
                 row.style.display=match&&(!q||row.innerText.toLowerCase().includes(q))?'':'none';
             });
         }
@@ -4793,8 +4811,56 @@ async function deletePlan(id,name){
             console.error('[Customer Actions] Event binding failed:', actionBindingError);
         }
 
+
+        function customerCsvCell(value){const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+        function downloadCustomerCsv(){
+            const users=Array.isArray(window.cachedCustomers)?window.cachedCustomers:[];
+            if(!users.length){alert('No customer records are loaded to export. Refresh the All Customer list first.');return;}
+            const cols=[['fullName',u=>u.full_name||u.fullName||u.name||''],['phone',u=>u.phone||''],['username',u=>u.username||''],['password',u=>u.password||''],['package',u=>u.package_name||u.packageName||u.profile||''],['expirationDate',u=>u.expiration_date||u.expiry_date||''],['nid',u=>u.nid||''],['installationAddress',u=>u.installation_address||u.installationAddress||u.address||''],['areaZone',u=>u.area_zone||u.areaZone||''],['onuMac',u=>u.onu_mac||u.onuMac||''],['oltPonPort',u=>u.olt_pon_port||u.oltPonPort||''],['alternativePhone',u=>u.alternative_phone||u.alternativePhone||''],['email',u=>u.email||''],['whatsappPhone',u=>u.whatsapp_phone||u.whatsappPhone||''],['telegramLink',u=>u.telegram_link||u.telegramLink||''],['facebookLink',u=>u.facebook_link||u.facebookLink||'']];
+            const csv=[cols.map(c=>c[0]).join(','),...users.map(u=>cols.map(c=>customerCsvCell(c[1](u))).join(','))].join('\r\n');
+            const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'})),a=document.createElement('a');a.href=url;a.download='faz-network-customers-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+        }
+        function parseCustomerCsv(text){
+            const rows=[];let row=[],cell='',quoted=false;
+            for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(c==='"')quoted=false;else cell+=c;}else if(c==='"')quoted=true;else if(c===','){row.push(cell);cell='';}else if(c==='\n'){row.push(cell.replace(/\r$/,''));if(row.some(v=>v.trim()))rows.push(row);row=[];cell='';}else cell+=c;}
+            if(quoted)throw Error('CSV contains an unclosed quoted field.');if(cell.length||row.length){row.push(cell.replace(/\r$/,''));if(row.some(v=>v.trim()))rows.push(row);}
+            if(rows.length<2)throw Error('CSV must include a header and at least one customer row.');
+            const headers=rows.shift().map(v=>v.trim().replace(/^\ufeff/,'').toLowerCase());
+            return rows.map((values,index)=>{const o={};headers.forEach((h,i)=>o[h]=String(values[i]??'').trim());o.__row=index+2;return o;});
+        }
+        async function importCustomerCsv(input){
+            const file=input?.files?.[0];if(!file)return;
+            input.value='';
+            try{
+                if(file.size>5*1024*1024)throw Error('CSV must be 5 MB or smaller.');
+                const records=parseCustomerCsv(await file.text());
+                const required=['fullname','phone','username','password'];
+                const first=records[0]||{};
+                const headers=Object.keys(first);
+                const missing=required.filter(k=>!headers.includes(k));
+                if(missing.length)throw Error('Missing required CSV columns: '+missing.join(', ')+'. Use Export All as a template, then edit the CSV.');
+                const bad=records.filter(r=>!r.fullname||!r.phone||!r.username||!r.password||!(r.package||r.packagename||r.profile)||!(r.expirationdate||r.expiration_date||r.expiry_date));
+                if(bad.length)throw Error('Import stopped before changing any records: rows '+bad.slice(0,10).map(r=>r.__row).join(', ')+(bad.length>10?' …':'')+' need fullName, phone, username, password, package/profile, and expirationDate.');
+                const duplicateNames=new Set();const seen=new Set();for(const r of records){const k=r.username.toLowerCase();if(seen.has(k))duplicateNames.add(r.username);seen.add(k);}
+                if(duplicateNames.size)throw Error('Duplicate usernames inside CSV: '+Array.from(duplicateNames).slice(0,8).join(', ')+'. No records were imported.');
+                const preview=records.slice(0,5).map(r=>'• '+r.fullname+' ('+r.username+')').join('\n');
+                const accepted=confirm('Import '+records.length+' customer records from '+file.name+'?\n\nPreview:\n'+preview+(records.length>5?'\n… and '+(records.length-5)+' more':'')+'\n\nThis creates customer records and may provision matching MikroTik PPPoE secrets. Existing records are not overwritten. Continue only with a trusted CSV backup.');
+                if(!accepted)return;
+                let created=0,failed=[];
+                for(const r of records){
+                    const payload={fullName:r.fullname,phone:r.phone,username:r.username,password:r.password,package:r.package||r.packagename||r.profile,packageProfile:r.packageprofile||r.profile||r.package||r.packagename,expirationDate:r.expirationdate||r.expiration_date||r.expiry_date,connectionDate:r.connectiondate||r.connection_date||r.activationdate||r.activation_date||r.expirationdate||r.expiration_date||r.expiry_date,nid:r.nid,installationAddress:r.installationaddress||r.installation_address||r.address,areaZone:r.areazone||r.area_zone,onuMac:r.onumac||r.onu_mac,oltPonPort:r.oltponport||r.olt_pon_port,alternativePhone:r.alternativephone||r.alternative_phone,email:r.email,whatsappPhone:r.whatsappphone||r.whatsapp_phone,telegramLink:r.telegramlink||r.telegram_link,facebookLink:r.facebooklink||r.facebook_link,remarks:r.remarks||r.note};
+                    try{const d=await jsonFetch('/api/customers/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),timeout:30000});if(!d||d.success===false)throw Error(d?.message||'Request failed');created++;}
+                    catch(e){failed.push('Row '+r.__row+' ('+r.username+'): '+(e.message||'failed'));if(failed.length>=20)break;}
+                }
+                alert('Customer CSV import finished. Created: '+created+'; failed: '+failed.length+(failed.length?'\n\n'+failed.slice(0,8).join('\n'):''));
+                await refreshCustomerSection();
+            }catch(e){alert(e.message||'Unable to import CSV. No customer records were changed before validation completed.');}
+        }
+        window.downloadCustomerCsv=downloadCustomerCsv;window.importCustomerCsv=importCustomerCsv;
+
         function customerBillingCounts(users) {
-            const counts = {all:0,paid:0,active:0,due:0,expired:0,unexpired:0};
+            const liveKnown=window.__customerLiveSessionKnown===true;
+            const counts = {all:0,paid:0,active:0,due:0,expired:0,unexpired:0,inactive:0,online:0,offline:0,onlineLabel:'—',offlineLabel:'—',liveKnown};
             const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
             (users||[]).forEach(function(user){
                 counts.all++;
@@ -4803,12 +4869,18 @@ async function deletePlan(id,name){
                 const valid=/^\d{4}-\d{2}-\d{2}$/.test(exp);
                 const days=valid?Math.floor((Date.parse(exp+'T00:00:00+06:00')-Date.parse(today+'T00:00:00+06:00'))/86400000):null;
                 const expired=status==='expired'||(days!==null&&days<0);
+                const accountState=String(user?.status||user?.customer_billing_state||'').toLowerCase();
+                const inactive=Boolean(user?.disabled||user?.pppoe_disabled)||['inactive','disabled','suspended','left','terminated'].includes(accountState);
                 if(status==='paid')counts.paid++;
-                if(!expired)counts.active++;
+                if(!expired&&!inactive)counts.active++;
+                if(inactive)counts.inactive++;
                 if(!expired&&days!==null&&days<=7)counts.due++;
                 if(expired)counts.expired++;
                 if(days!==null&&days>=0)counts.unexpired++;
+                if(user?.online)counts.online++;
             });
+            counts.offline=liveKnown?Math.max(0,counts.all-counts.online):null;
+            counts.onlineLabel=liveKnown?String(counts.online):'—';counts.offlineLabel=liveKnown?String(counts.offline):'—';
             return counts;
         }
 
@@ -4841,21 +4913,28 @@ async function deletePlan(id,name){
             content.innerHTML = `
                     <div class="card card-custom">
                         <div class="card-custom-header flex-wrap">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-people text-success fs-5"></i>
-                                <span data-key="customer_table">${escapeHtml(t.customer_table)}</span>
-                                <span class="badge bg-success">${visibleUsers.length}</span>
-                                <span class="badge bg-light text-success border"><i class="bi bi-broadcast"></i> <span data-key="router_live">${escapeHtml(t.router_live)}</span></span>
-                            </div>
-                            <div class="customer-search-wrap ms-auto mt-2 mt-md-0">
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                                    <input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)">
+                            <div class="customer-hub-heading">
+                                <div class="d-flex align-items-center gap-2"><span class="customer-hub-icon"><i class="bi bi-people-fill"></i></span><div><div class="fw-bold fs-5">All Customers</div><div class="small text-muted">Subscriber operations · live network snapshot</div></div></div>
+                                <div class="customer-hub-actions">
+                                    <button class="btn btn-outline-success btn-sm" type="button" onclick="downloadCustomerCsv()"><i class="bi bi-download me-1"></i>Export All</button>
+                                    <button class="btn btn-success btn-sm" type="button" onclick="document.getElementById('customerImportFile').click()"><i class="bi bi-upload me-1"></i>Import CSV</button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync to MikroTik</button>
+                                    <button class="btn btn-light border btn-sm" type="button" onclick="refreshCustomerSection()" title="Refresh customers"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <input id="customerImportFile" type="file" accept=".csv,text/csv" hidden onchange="importCustomerCsv(this)">
                                 </div>
                             </div>
-                            
-                            <button class="btn btn-success btn-sm mt-2 mt-md-0" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button>
-                            <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshCustomerSection()"><i class="bi bi-arrow-clockwise"></i></button>
+                            <div class="customer-hub-metrics" aria-label="Customer summary">
+                                <button type="button" class="customer-hub-metric metric-total" onclick="setCustomerBillingFilter('all',this)"><span><i class="bi bi-people"></i> Total Customers</span><strong>${counts.all}</strong><small>All registered records</small></button>
+                                <button type="button" class="customer-hub-metric metric-online" onclick="loadCustomerSection('online','online_customer')"><span><i class="bi bi-wifi"></i> Online Now</span><strong>${counts.onlineLabel}</strong><small>${counts.liveKnown ? 'Live MikroTik sessions' : 'Live count unavailable'}</small></button>
+                                <button type="button" class="customer-hub-metric metric-offline" onclick="loadCustomerSection('offline','offline_customer')"><span><i class="bi bi-wifi-off"></i> Offline</span><strong>${counts.offlineLabel}</strong><small>${counts.liveKnown ? 'No active session' : 'Live count unavailable'}</small></button>
+                                <button type="button" class="customer-hub-metric metric-active" onclick="setCustomerBillingFilter('active',this)"><span><i class="bi bi-check-circle"></i> Active</span><strong>${counts.active}</strong><small>Not expired / enabled</small></button>
+                                <button type="button" class="customer-hub-metric metric-expired" onclick="setCustomerBillingFilter('expired',this)"><span><i class="bi bi-calendar-x"></i> Expired</span><strong>${counts.expired}</strong><small>Expiry date passed</small></button>
+                                <button type="button" class="customer-hub-metric metric-inactive" onclick="setCustomerBillingFilter('inactive',this)"><span><i class="bi bi-pause-circle"></i> Inactive</span><strong>${counts.inactive}</strong><small>Disabled / suspended</small></button>
+                            </div>
+                            <div class="customer-hub-toolbar">
+                                <div class="customer-search-wrap"><div class="input-group"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)"></div></div>
+                                <span class="customer-result-count"><i class="bi bi-list-ul me-1"></i><strong>${visibleUsers.length}</strong> records in this view</span>
+                            </div>
                         </div>
                         <div id="customerBillingTabs" class="customer-filter-pills" role="group" aria-label="Customer filters">
 <button type="button" class="customer-filter-pill filter-all active" data-billing-filter="all" aria-pressed="true" onclick="setCustomerBillingFilter('all',this)">All Customers <b>${counts.all}</b></button>
@@ -4864,6 +4943,7 @@ async function deletePlan(id,name){
 <button type="button" class="customer-filter-pill filter-due" data-billing-filter="due" aria-pressed="false" onclick="setCustomerBillingFilter('due',this)">Due Soon <b>${counts.due}</b></button>
 <button type="button" class="customer-filter-pill filter-expired" data-billing-filter="expired" aria-pressed="false" onclick="setCustomerBillingFilter('expired',this)">Expired <b>${counts.expired}</b></button>
 <button type="button" class="customer-filter-pill filter-unexpired" data-billing-filter="unexpired" aria-pressed="false" onclick="setCustomerBillingFilter('unexpired',this)">Unexpired <b>${counts.unexpired}</b></button>
+<button type="button" class="customer-filter-pill filter-expired" data-billing-filter="inactive" aria-pressed="false" onclick="setCustomerBillingFilter('inactive',this)">Inactive <b>${counts.inactive}</b></button>
 </div>
                         <div class="card-body p-0 mt-2 table-responsive">
                             <table class="table table-hover mb-0 customer-live-table">
@@ -5184,32 +5264,22 @@ async function deletePlan(id,name){
                 }
                 let users = Array.isArray(data.users) ? data.users.slice() : data.customers.slice();
 
-                if (filterType === 'online' || filterType === 'offline') {
-                    // Require a successful live-session response; never guess network state.
-                    const liveData = await jsonFetch('/api/pppoe/active', { cache: 'no-store', timeout: 20000 });
-                    if (!liveData || liveData.success === false || !Array.isArray(liveData.sessions)) {
-                        throw new Error(liveData?.message || liveData?.error || 'Live MikroTik sessions are unavailable. Online/offline status was not guessed.');
+                // Obtain a real session snapshot for the dashboard counters. If the router is unreachable,
+                // leave online/offline counts unknown rather than presenting guessed numbers.
+                let liveKnown=false;
+                try {
+                    const liveData=await jsonFetch('/api/pppoe/active',{cache:'no-store',timeout:12000});
+                    if(liveData&&liveData.success!==false&&Array.isArray(liveData.sessions)){
+                        const sessionByUsername=new Map();
+                        liveData.sessions.forEach(function(session){const name=String(session?.username||session?.name||'').trim().toLowerCase();if(name&&!sessionByUsername.has(name))sessionByUsername.set(name,session);});
+                        users=users.map(function(user){const username=String(user?.username||'').trim().toLowerCase(),session=username?(sessionByUsername.get(username)||null):null;return {...user,online:Boolean(session),active:Boolean(session),session,session_ip:session?.address||null,session_uptime:session?.uptime||null,session_caller_id:session?.callerId||session?.caller_id||null};});
+                        liveKnown=true;
                     }
-                    const sessionByUsername = new Map();
-                    liveData.sessions.forEach(function(session) {
-                        const name = String(session?.username || session?.name || '').trim().toLowerCase();
-                        if (name && !sessionByUsername.has(name)) sessionByUsername.set(name, session);
-                    });
-                    users = users.map(function(user) {
-                        const username = String(user?.username || '').trim().toLowerCase();
-                        const session = username ? (sessionByUsername.get(username) || null) : null;
-                        return {
-                            ...user,
-                            online: Boolean(session),
-                            active: Boolean(session),
-                            session: session,
-                            session_ip: session?.address || null,
-                            session_uptime: session?.uptime || null,
-                            session_caller_id: session?.callerId || session?.caller_id || null
-                        };
-                    }).filter(function(user) {
-                        return filterType === 'online' ? user.online : !user.online;
-                    });
+                } catch(liveError) { console.warn('[Customer Section] Live session counts unavailable:',liveError.message); }
+                window.__customerLiveSessionKnown=liveKnown;
+                if(filterType==='online'||filterType==='offline'){
+                    if(!liveKnown)throw new Error('Live MikroTik sessions are unavailable. Online/offline status was not guessed.');
+                    users=users.filter(user=>filterType==='online'?Boolean(user.online):!user.online);
                 } else if (filterType === 'active') {
                     users = users.filter(function(user) {
                         const status = customerStatus(user);
