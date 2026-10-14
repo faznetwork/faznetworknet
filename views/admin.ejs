@@ -1978,12 +1978,12 @@
 
         // Guaranteed Global Fetch Helper
         window.jsonFetch = async function(url, options = {}) {
-            const timeoutMs = options.timeout || 8000;
+            const timeoutMs = Number(options.timeout) > 0 ? Number(options.timeout) : 8000;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
-                const { timeout: _ignoredTimeout, ...fetchOptions } = options;
+                const { timeout: _ignoredTimeout, signal: _ignoredSignal, ...fetchOptions } = options;
                 const res = await fetch(url, {
                     credentials: 'include',
                     headers: {
@@ -1992,10 +1992,8 @@
                         ...(fetchOptions.headers || {})
                     },
                     ...fetchOptions,
-                    signal: fetchOptions.signal || controller.signal
+                    signal: controller.signal
                 });
-
-                clearTimeout(timeoutId);
 
                 if (res.status === 401) {
                     window.location.href = '/login';
@@ -2010,12 +2008,14 @@
                 const text = await res.text();
                 return { success: res.ok, data: text };
             } catch (err) {
-                clearTimeout(timeoutId);
                 console.error('[jsonFetch Failed]:', url, err.name === 'AbortError' ? 'Request Timed Out' : err.message);
                 return {
                     success: false,
                     message: err.name === 'AbortError' ? 'Request Timed Out' : err.message
                 };
+            } finally {
+                // Keep the deadline active through response-body parsing, not just headers.
+                clearTimeout(timeoutId);
             }
         };
         // Alias for backward compatibility
@@ -2794,10 +2794,19 @@
         // left behind by interrupted modal transitions, without polling RouterOS or APIs.
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
-            const overlayObserver = new MutationObserver(function () {
-                recoverStaleNavigationOverlay();
+            // Watch only direct children of <body>. Observing every descendant made
+            // each table/card DOM mutation trigger a full-document overlay scan.
+            const overlayObserver = new MutationObserver(function (records) {
+                const backdropChanged = records.some(function (record) {
+                    return [...record.addedNodes, ...record.removedNodes].some(function (node) {
+                        return node.nodeType === Node.ELEMENT_NODE &&
+                            (node.matches?.('.modal-backdrop, .offcanvas-backdrop') ||
+                             node.querySelector?.('.modal-backdrop, .offcanvas-backdrop'));
+                    });
+                });
+                if (backdropChanged) recoverStaleNavigationOverlay();
             });
-            overlayObserver.observe(document.body, { childList: true, subtree: true });
+            overlayObserver.observe(document.body, { childList: true });
             document.addEventListener('hidden.bs.modal', function () {
                 window.setTimeout(recoverStaleNavigationOverlay, 80);
             }, true);
@@ -5871,20 +5880,18 @@ async function deletePlan(id,name){
             document.documentElement.dataset.customerDateGuardBound = '1';
             document.addEventListener('show.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
             document.addEventListener('shown.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
+            // Date fields are normalized at startup and when their Bootstrap modal opens.
+            // Only observe type changes; watching every inserted DOM node caused repeated
+            // scans while large customer/payment tables were rendered.
             const observer = new MutationObserver(records => {
                 records.forEach(record => {
-                    // Catch scripts that change an existing date field back to type="date".
                     if (record.type === 'attributes' && record.target instanceof HTMLInputElement) {
                         enforceCustomerDateDisplay(record.target);
-                        return;
                     }
-                    record.addedNodes?.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) enforceCustomerDateDisplay(node);
-                    });
                 });
             });
             observer.observe(document.documentElement, {
-                childList: true, subtree: true, attributes: true, attributeFilter: ['type']
+                subtree: true, attributes: true, attributeFilter: ['type']
             });
         }
 
