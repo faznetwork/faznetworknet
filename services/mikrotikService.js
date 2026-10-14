@@ -802,6 +802,12 @@ class MikroTikService {
       return {username:this._str(item.user),address:this._str(item.address),uptime:this._str(item.uptime),bytesIn:this._number(item["bytes-in"]),bytesOut:this._number(item["bytes-out"]),mac:this._str(item["mac-address"])};
     });
   }
+  async getHotspotServers() {
+    return this._withConnection("Hotspot server query", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/print");
+      return (Array.isArray(rows) ? rows : []).map(item => ({id:this._str(item[".id"]),name:this._str(item.name),interface:this._str(item.interface),profile:this._str(item.profile),disabled:this._bool(item.disabled),raw:item})).filter(item=>item.name&&!item.disabled);
+    });
+  }
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
@@ -849,13 +855,13 @@ class MikroTikService {
     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
     const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
     const validity=suppliedComment.match(/(?:^|\|)VALIDITY=([^|]+)/i)?.[1]||"";
-    const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
+    const comment=commentIsManaged?suppliedComment:"FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"");
     return this._withConnection("Hotspot user creation", async (connection) => {
       const params=this._writeParams({
         name: username,
         password,
         profile,
-        server:data.server||"all",
+        server:data.server,
         "limit-bytes-total":data.dataLimit||data["limit-bytes-total"],
         comment
       });

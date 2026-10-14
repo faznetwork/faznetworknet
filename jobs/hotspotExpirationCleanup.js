@@ -144,10 +144,10 @@ function createHotspotExpirationCleanup(deps = {}) {
 
         // Persist the absolute deadline marker for auditability; PostgreSQL remains authoritative.
         if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
-            /(?:^|\\|)EXP=(?:PENDING|0)(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
-          const absoluteExpiry = String(Math.floor(expiryAt.getTime() / 1000));
-          const absoluteComment = comment.replace(/(?:^|\\|)EXP=(?:PENDING|0)(?=\\||$)/i, function(match) {
-            return match.startsWith("|") ? "|EXP=" + absoluteExpiry : "EXP=" + absoluteExpiry;
+            /(?:^|\\|)EXP(?::|=)\\s*(?:PENDING|0)(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
+          const absoluteExpiry = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(expiryAt).replace("T", " ");
+          const absoluteComment = comment.replace(/(?:^|\\|)EXP(?::|=)\\s*(?:PENDING|0)(?=\\||$)/i, function(match) {
+            return match.startsWith("|") ? "|EXP: " + absoluteExpiry : "EXP: " + absoluteExpiry;
           });
           await router.setHotspotUserComment(username, absoluteComment).catch(error =>
             logger.warn("[HOTSPOT EXPIRY] Could not persist absolute expiry comment for " + username + ": " + error.message));
@@ -205,7 +205,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
       "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
       "FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) " +
-      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '7 days' " +
+      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '3 days' " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );
     const deleted = await database.query(
