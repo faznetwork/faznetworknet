@@ -22,7 +22,7 @@ test('Staff pages are admin-only and use the existing invitation/account APIs', 
   assert.ok(routes.includes("router.get('/invitations', controller.listInvitations)"));
   assert.ok(routes.includes("router.patch('/:id/status', controller.updateUserStatus)"));
   assert.ok(adminView.includes("if (currentStaffMode === 'sub-staff') invitations = invitations.filter(item => item.role === 'staff');"));
-  assert.ok(routes.includes("router.get('/invitations', controller.listInvitations)"));\n  assert.ok(adminView.includes("if (currentStaffMode === 'sub-staff') invitations = invitations.filter(item => item.role === 'staff');"));
+  // The existing UI uses the shared invitations endpoint and filters staff-role invitations client-side.
   assert.ok(routes.includes("router.post('/', controller.createUser)"));
   assert.ok(adminView.includes("window.jsonFetch('/api/admin/users/invitations')"));
 });
