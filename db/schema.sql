@@ -135,11 +135,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   trx_id VARCHAR(100) NOT NULL UNIQUE,
   sender_phone VARCHAR(40),
   amount NUMERIC(12,2) NOT NULL,
-  status VARCHAR(20) NOT NULL CHECK (status IN ('processed','unmatched','duplicate','matched','PAID','processing')),
+  status VARCHAR(20) NOT NULL CHECK (status IN ('processed','unmatched','duplicate')),
   matched_username VARCHAR(100),
   raw_sms TEXT,
   used BOOLEAN NOT NULL DEFAULT FALSE,
-  customer_type VARCHAR(20),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -178,7 +177,6 @@ BEGIN
   END IF;
 END $$;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS used BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS customer_type VARCHAR(20);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS phone VARCHAR(40);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS server VARCHAR(100) DEFAULT 'all';
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS time_limit VARCHAR(50);
@@ -280,7 +278,7 @@ ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_channel_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_channel_check CHECK(channel IN ('bkash','nagad','rocket','upay','cash'));
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
 -- Hotspot verification claims a transaction before calling RouterOS; keep this state durable on ambiguous failures.
-ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK(status IN ('processed','unmatched','duplicate','PAID','processing','matched'));
+ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK(status IN ('processed','unmatched','duplicate','PAID','processing'));
 CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
 
 
