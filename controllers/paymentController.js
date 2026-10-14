@@ -102,9 +102,12 @@ async function webhook(req,res){
    try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
    catch(rollbackError){console.error("[Payment Webhook] Failed to release claim after RouterOS failure",claimedTransactionId,rollbackError?.message||rollbackError);}
   }else if(claimedTransactionId!==null&&routerSucceeded){
-   console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,trxId:req.body?.trxId||req.body?.trx_id||null,error:error?.message||String(error)});
+   const detail={flow:"pppoe",transactionId:claimedTransactionId,trxId:req.body?.trxId||req.body?.trx_id||null,error:error?.message||String(error),recordedAt:new Date().toISOString()};
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimedTransactionId,String(req.body?.username||""),JSON.stringify(detail)]);}catch(auditError){console.error("[CRITICAL] Webhook reconciliation audit write failed",claimedTransactionId,auditError?.message||auditError);}
+   console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",detail);
   }
-  return errorResponse(res,error,claimedTransactionId!==null&&routerSucceeded?500:400);
+  if(error?.code==="UNTRUSTED_FORWARDER_SENDER"||error?.code==="INVALID_RECIPIENT")return res.status(403).json({success:false,code:error.code,error:error.message});
+  return errorResponse(res,error,claimedTransactionId!==null&&routerSucceeded?500:(error?.statusCode||400));
  }
 }
 async function dynamicWebhook(req,res,next){
