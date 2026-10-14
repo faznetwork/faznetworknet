@@ -217,7 +217,7 @@ function formatResource(identity, resource) {
   };
 }
 
-function requestRest(config, protocol) {
+function requestRest(config, protocol, path = '/rest/system/resource') {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const transport = protocol === 'https:' ? https : http;
@@ -226,7 +226,6 @@ function requestRest(config, protocol) {
       Authorization: 'Basic ' + Buffer.from(config.username + ':' + config.password).toString('base64'),
       Accept: 'application/json'
     };
-    const path = '/rest/system/resource';
     const req = transport.request({
       protocol,
       hostname: config.host,
@@ -256,8 +255,8 @@ function requestRest(config, protocol) {
 }
 
 async function testRest(config, protocol) {
-  const result = await requestRest(config, protocol);
-  const identityResult = await requestRest(config, protocol === 'https:' ? 'https:' : 'http:').catch(() => null);
+  const result = await requestRest(config, protocol, '/rest/system/resource');
+  const identityResult = await requestRest(config, protocol, '/rest/system/identity').catch(() => null);
   // Resource endpoint alone proves REST. Identity is supplemental; it must not make a valid REST handshake fail.
   const identity = identityResult?.resource?.name ? identityResult.resource : {};
   return {
