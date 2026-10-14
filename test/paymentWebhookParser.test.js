@@ -57,3 +57,31 @@ test("normalizes punctuation, commas and decimal amounts",()=>{
 test("rejects payloads without a transaction id or amount",()=>{
   assert.throws(()=>parseSms({sender:"bKash",message:"Payment received successfully"}, {}, {}),/Could not parse transaction ID or amount/);
 });
+
+
+test("rejects personal phone numbers as forwarding sender metadata",()=>{
+  assert.throws(
+    ()=>parseSms({sender:"01712345678",message:"Received Tk 50.00 TrxID ABC1234567"}, {}, {}),
+    error=>error.code==="UNTRUSTED_FORWARDER_SENDER"&&error.statusCode===403
+  );
+});
+
+test("does not infer MFS channel from SMS body when sender is not allowlisted",()=>{
+  assert.throws(
+    ()=>parseSms({sender:"UnknownSender",message:"bKash received Tk 50.00 TrxID ABC1234567"}, {}, {}),
+    error=>error.code==="UNTRUSTED_FORWARDER_SENDER"
+  );
+});
+
+test("rejects a present recipient that differs from configured wallet",()=>{
+  assert.throws(
+    ()=>parseSms({sender:"bKash",recipient:"01911112222",message:"Received Tk 50.00 TrxID ABC1234567"}, {}, {}, {recipientNumbers:{bkash:"01711112222"}}),
+    error=>error.code==="INVALID_RECIPIENT"&&error.statusCode===403
+  );
+});
+
+test("normalizes TrxID to uppercase and accepts only allowlisted service sender",()=>{
+  const result=parseSms({sender:"16247",message:"Received Tk 50.00 TrxID abc1234567"}, {}, {});
+  assert.equal(result.channel,"bkash");
+  assert.equal(result.trxId,"ABC1234567");
+});
