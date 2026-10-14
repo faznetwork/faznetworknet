@@ -61,7 +61,7 @@ test("markPaid changes billing state only and never renews or writes to MikroTik
     assert.equal(updates.length, 2, "both billing records should be updated");
     for (const { sql } of updates) {
       assert.match(sql, /billing_status\s*=\s*'paid'/i);
-      assert.doesNotMatch(sql, /(?:expiration_date|expiry_date|profile|disabled|status)\s*=/i);
+      assert.doesNotMatch(sql, /\b(?:expiration_date|expiry_date|profile|disabled|status)\s*=/i);
     }
     assert.equal(routerWrites, 0, "mark-paid must not call MikroTik write/kick methods");
     assert.ok(statements.some(entry => entry.sql.includes("INSERT INTO audit_logs") && entry.params[2] === "MARK_PAID"));
