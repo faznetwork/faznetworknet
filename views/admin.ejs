@@ -4782,7 +4782,7 @@ async function deletePlan(id,name){
                 counts.all++;
                 const status=String(user?.billing_status||'').toLowerCase();
                 const exp=String(user?.expiry_date||user?.expiration_date||'').slice(0,10);
-                const valid=/^\\d{4}-\\d{2}-\\d{2}$/.test(exp);
+                const valid=/^\d{4}-\d{2}-\d{2}$/.test(exp);
                 const days=valid?Math.floor((Date.parse(exp+'T00:00:00+06:00')-Date.parse(today+'T00:00:00+06:00'))/86400000):null;
                 const expired=status==='expired'||(days!==null&&days<0);
                 if(status==='paid')counts.paid++;
