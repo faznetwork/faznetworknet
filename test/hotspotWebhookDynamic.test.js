@@ -93,7 +93,7 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{id:"pkg-weekend",price:15,validityValue:2,validityUnit:"days",id:"pkg-1-hour",aliases:["1-Hour","1h","pkg-1-hour"],limitBytesTotal:0}})}]};
-      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
+      if(sql.includes("SET status='processing',used=true")){claimSql=sql;return {rows:[{id:params[1]}]};}
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
