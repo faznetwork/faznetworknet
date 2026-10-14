@@ -783,9 +783,9 @@ class MikroTikService {
     });
   }
   async updateHotspotUser(usernameValue,profileValue,commentValue,passwordValue){
-    const username=this._str(usernameValue).trim(),profile=this._str(profileValue).trim(),comment=this._str(commentValue).slice(0,500),password=this._str(passwordValue);
+    const username=this._str(usernameValue).trim(),profile=this._str(profileValue).trim(),requestedComment=this._str(commentValue).trim(),password=this._str(passwordValue);
     if(!username||username.length>100)throw new Error("A valid Hotspot username is required.");if(!profile||profile.length>100)throw new Error("A valid Hotspot profile is required.");if(password.length>128)throw new Error("Password must be 128 characters or fewer.");
-    return this._withConnection("Hotspot user update",async connection=>{const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toLowerCase()===username.toLowerCase()&&r[".id"]);if(!user)throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");if(!(Array.isArray(profiles)?profiles:[]).some(r=>this._str(r.name)===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");const params=["=.id="+user[".id"],"=profile="+profile,"=comment="+comment];if(password)params.push("=password="+password);await connection.write("/ip/hotspot/user/set",params);return {username,profile,comment,passwordUpdated:Boolean(password),updated:true};});
+    return this._withConnection("Hotspot user update",async connection=>{const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toLowerCase()===username.toLowerCase()&&r[".id"]);if(!user)throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");if(!(Array.isArray(profiles)?profiles:[]).some(r=>this._str(r.name)===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});const params=["=.id="+user[".id"],"=profile="+profile,"=comment="+comment];if(password)params.push("=password="+password);await connection.write("/ip/hotspot/user/set",params);return {username,profile,comment,passwordUpdated:Boolean(password),updated:true};});
   }
   async getHotspotUser(usernameValue) {
     const username=this._str(usernameValue).trim();
@@ -856,8 +856,18 @@ class MikroTikService {
   _hotspotExpiryComment(data) {
     const supplied=this._str(data?.comment).trim();
     if(/^Exp: \d{4}-\d{2}-\d{2}$/.test(supplied))return supplied;
+
     const date=this._str(data?.expiryDate).trim();
-    return /^\d{4}-\d{2}-\d{2}$/.test(date)?"Exp: "+date:"";
+    if(/^\d{4}-\d{2}-\d{2}$/.test(date))return "Exp: "+date;
+
+    // Panel-created users and generated vouchers pass the selected package validity.
+    const validity=this._str(data?.validity).trim();
+    const match=validity.match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);
+    if(!match)return "";
+    const amount=Number(match[1]),u=match[2].toLowerCase();
+    const unitMs=u.startsWith("m")?60*1000:u.startsWith("h")?60*60*1000:u.startsWith("w")?7*24*60*60*1000:24*60*60*1000;
+    const expiry=new Date(Date.now()+amount*unitMs+6*60*60*1000);
+    return "Exp: "+expiry.toISOString().slice(0,10);
   }
   async createHotspotUser(data) {
     const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
