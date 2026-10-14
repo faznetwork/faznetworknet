@@ -49,9 +49,9 @@ function buildHotspotOnLoginScript(config = {}) {
     bindMac
   ].filter(Boolean).join('; ');
 
-  if (validity.unit === "gb") {
-    return prefix + '; :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=' + validity.limitBytesTotal + '; };';
-  }
+  // Quotas are provisioned on the individual Hotspot user by the backend.
+  // The shared on-login hook must never reset a user's byte counter/limit.
+  if (validity.unit === "gb") return prefix + ';';
 
   const schedulerEvent =
     '("/ip hotspot active remove [find where user=\\\"' + '" . $uName . "' +
@@ -82,7 +82,6 @@ function buildHotspotOnLoginScript(config = {}) {
   ].join('; ');
 
   return prefix +
-    '; :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };' +
     ' :local sched ("faz-exp-" . $uName);' +
     ' ' + timingScript + ';' +
     ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' +
