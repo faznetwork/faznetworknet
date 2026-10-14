@@ -43,8 +43,8 @@ test("public hotspot package checkout uses configured MFS accounts and TrxID ver
 test("Hotspot checkout allows only unused unmatched payments and validates Hotspot price instead of PPPoE linkage", () => {
   const controller = read("controllers/paymentController.js");
   const verify = controller.slice(controller.indexOf("async function verifyTrx"), controller.indexOf("module.exports"));
-  assert.match(verify, /AND \(used = false OR used IS NULL\)/);
-  assert.match(verify, /LOWER\(TRIM\(status\)\) = 'unmatched'/);
+  assert.match(verify, /status='unmatched' AND \(used=false OR used IS NULL\)/);
+  assert.match(verify, /status='unmatched' AND \(used=false OR used IS NULL\)/);
   assert.match(verify, /const matches=profiles\.filter/);
   assert.match(verify, /profileIdentifierMatches/);
   assert.match(verify, /claimed_at=NOW\(\),claimed_by=\$1,claim_flow='hotspot'/);
