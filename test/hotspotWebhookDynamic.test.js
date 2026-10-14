@@ -26,7 +26,7 @@ test("verifyTrx requires a valid client MAC before claiming a payment", async ()
 test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit",async()=>{
   const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let profileMetadata={Weekend:{id:"pkg-weekend",price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
-  let rechargePayload=null;
+  let rechargePayload=null,profileUpdatePayload=null;
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
@@ -44,7 +44,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
-    mikrotik.updateHotspotProfile=async()=>({success:true});
+    mikrotik.updateHotspotProfile=async(payload)=>{profileUpdatePayload=payload;return {success:true};};
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
     const req={ip:"test-price-sync-15",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"PRICE15",amount:15,profile_id:"pkg-weekend"}};
     const res=responseRecorder();
@@ -56,6 +56,9 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     assert.equal(res.body.amount,15);
     assert.equal(rechargePayload.profile,"Weekend");
     assert.equal(rechargePayload.validity,"2d");
+    assert.deepEqual(Object.keys(profileUpdatePayload).sort(),["name","onLogin"],"a purchase must not mutate shared session-timeout, rate-limit, or other profile settings");
+    assert.match(profileUpdatePayload.onLogin,/FAZ_HOTSPOT_EXPIRY_V2/);
+    assert.doesNotMatch(profileUpdatePayload.onLogin,/FAZ\\|EXP=|FIRST_LOGIN=|session-timeout|interval=2d/);
 
     // The old Tk 10 amount must stop matching immediately after the profile price is changed.
     const oldAmountResponse=responseRecorder();
