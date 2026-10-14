@@ -27,3 +27,14 @@ test('classifies auth failures and connection refused distinctly', () => {
   assert.equal(classifyError(Object.assign(new Error('Authentication failed'), { code: 'EAUTH' })).status, 'auth_failed');
   assert.equal(classifyError(Object.assign(new Error('Connection refused'), { code: 'ECONNREFUSED' })).code, 'CONNECTION_REFUSED');
 });
+
+
+test('rejects native API port and TLS mismatches', () => {
+  assert.throws(() => validateConfig({ host: '10.20.0.1', username: 'api', password: 'secret', api_type: 'native_api', api_port: 8729, use_ssl: false }), /API-SSL/i);
+  assert.throws(() => validateConfig({ host: '10.20.0.1', username: 'api', password: 'secret', api_type: 'native_api', api_port: 8728, use_ssl: true }), /API-SSL/i);
+});
+
+test('classifies an aborted REST request as a connection timeout', () => {
+  const error = Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+  assert.equal(classifyError(error).code, 'CONNECTION_TIMEOUT');
+});
