@@ -141,8 +141,8 @@ async function generate(req,res){
    }
    for(const candidate of candidates){
      const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-     const managedComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+validity;
-     await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,comment:managedComment});
+     const managedComment="";
+     await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,validity,comment:managedComment});
      provisioned.push(candidate.username);
      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",
        [candidate.username,candidate.password,profile,validity,price,managedComment]);
@@ -198,9 +198,8 @@ async function createUser(req,res){
     if(!profileValidity.validity)return res.status(400).json({success:false,message:"The selected profile has no time-based calendar validity. Configure a minutes, hours, or days profile first."});
     const validity=profileValidity.validity;
     await ensureCalendarProfile(routerProfile.name,routerProfile,profileValidity);
-    const safeProfile=routerProfile.name.replace(/[|]/g,"").slice(0,80);
-    const routerComment="FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1";
-    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,comment:routerComment});
+    const routerComment="";
+    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,validity,comment:routerComment});
     try{
       const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[routerProfile.name]);
       const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||profileMeta.price||0);
