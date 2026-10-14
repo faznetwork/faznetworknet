@@ -22,6 +22,8 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
     profileMetadata={Weekend:{price:15,validityValue:2,validityUnit:"days",validityLabel:"2 Days",limitBytesTotal:0}};
     db.query=async(sql,params=[])=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:params[0]==="PRICE10"?72:71,trx_id:params[0],amount:params[0]==="PRICE10"?10:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
@@ -85,6 +87,8 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     db.query=async(sql,params=[])=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
       if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched",matched_username:null}]};}
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
@@ -122,6 +126,8 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
   let released=false,commitAttempted=false;
   try{
     db.query=async(sql,params=[])=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:111,trx_id:"PARTIAL-111",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
@@ -156,6 +162,8 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
   let released=false;
   try{
     db.query=async(sql,params=[])=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:112,trx_id:"ROUTER-FAIL-112",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
@@ -185,6 +193,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
   let claimAttempts=0,rechargeCount=0;
   try{
     db.query=async(sql,params=[])=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:1}]};
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:113,trx_id:"CONCURRENT-113",amount:15,used:false,status:"unmatched",matched_username:null}]};
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
