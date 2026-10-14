@@ -262,7 +262,7 @@ async function verifyTrx(req,res){
   if(!claim.rows.length){const latest=await db.query("SELECT status FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);const ls=String(latest.rows[0]?.status||"").toLowerCase();return fail(409,ls==="processing"?"TRANSACTION_IN_PROCESS":"TRANSACTION_ALREADY_USED","Another request has claimed this TrxID. No RouterOS provisioning was attempted.");}
   claimedTransactionId=tx.id;
   const expiryDate=validity?calculateHotspotExpiryDate(validityConfig):null;
-  const comment=expiryDate?"Exp: "+expiryDate:"Exp: DATA";
+  const comment=expiryDate?"Exp: "+expiryDate:"";
   const oldLogin=String(profile?.raw?.["on-login"]||"");
   const loginScript=buildHotspotOnLoginScript({name:profile.name,sharedUsers:Number(profile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"});
   // Replace the legacy FAZ comment-mutating script; preserve unrelated custom hooks.
