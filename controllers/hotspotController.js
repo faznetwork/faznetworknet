@@ -54,28 +54,12 @@ async function updateProfile(req,res){try{
  return res.json({success:true,message:"Hotspot profile updated and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin}});
 }catch(e){return errorResponse(res,e);}}
 async function deleteProfile(req,res){try{const name=clean(req.body.name,100);if(!name||name.toLowerCase()==="default")return res.status(400).json({success:false,message:"The default profile cannot be deleted here."});const result=await mikrotikService.deleteHotspotProfile(name);const meta=await readProfileMetadata();delete meta[name];await writeProfileMetadata(meta);return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
-async function list(req,res){
- try{
-  const rows=await mikrotikService.getHotspotUsers();
-  const users=(Array.isArray(rows)?rows:[]).filter(user=>{
-    const name=String(user?.username||"").trim().toLowerCase();
-    return name&&name!=="default-trial";
-  }).map(user=>({
-    id:user.id,
-    name:user.username,
-    profile:user.profile||"",
-    uptime:user.uptime||"",
-    limitUptime:user.limitUptime||"",
-    bytesIn:Number(user.bytesIn||0),
-    bytesOut:Number(user.bytesOut||0),
-    comment:user.comment||"",
-    disabled:Boolean(user.disabled)
-  }));
-  const sessions=await mikrotikService.getActiveHotspotSessions();
-  const activeUsers=Array.isArray(sessions)?sessions.filter(s=>String(s.username||"").trim().toLowerCase()!=="default-trial").map(s=>({user:s.username,address:s.address||"",macAddress:s.macAddress||"",uptime:s.uptime||"",bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0),server:s.server||"",profile:s.profile||""})):[];
-  return res.json({success:true,filter:"all",count:users.length,users,activeUsers});
- }catch(e){return errorResponse(res,e);}
+let hotspotListCache={expiresAt:0,users:null,activeUsers:[]},hotspotListRefresh=null;
+async function refreshHotspotListCache(){
+ if(hotspotListRefresh)return hotspotListRefresh;
+ hotspotListRefresh=(async()=>{const [routerRows,sessionRows,ledger]=await Promise.all([mikrotikService.getHotspotUsers(),mikrotikService.getActiveHotspotSessions(),db.query("SELECT username,status,comment,expires_at,first_login_at,validity FROM hotspot_vouchers ORDER BY id DESC").catch(()=>({rows:[]}))]);const byName=new Map();for(const r of ledger.rows||[]){const k=String(r.username||"").trim().toLowerCase();if(k&&!byName.has(k))byName.set(k,r);}const users=(Array.isArray(routerRows)?routerRows:[]).filter(u=>String(u?.username||"").trim()&&String(u.username).toLowerCase()!=="default-trial").map(u=>{const d=byName.get(String(u.username).toLowerCase())||{};return {id:u.id,username:u.username,name:u.username,profile:u.profile||"",uptime:u.uptime||"",limitUptime:u.limitUptime||"",bytesIn:Number(u.bytesIn||0),bytesOut:Number(u.bytesOut||0),comment:u.comment||d.comment||"",disabled:Boolean(u.disabled),status:d.status||"",expires_at:d.expires_at||null,first_login_at:d.first_login_at||null,validity:d.validity||""};});const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(s=>String(s.username||"").toLowerCase()!=="default-trial").map(s=>({user:s.username,username:s.username,address:s.address||"",macAddress:s.macAddress||"",uptime:s.uptime||"",sessionTimeLeft:s.sessionTimeLeft||"",bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0),server:s.server||"",profile:s.profile||""}));hotspotListCache={expiresAt:Date.now()+8000,users,activeUsers};return hotspotListCache;})().finally(()=>{hotspotListRefresh=null;});return hotspotListRefresh;
 }
+async function list(req,res){try{if(hotspotListCache.users&&hotspotListCache.expiresAt>Date.now()){const c=hotspotListCache;res.json({success:true,filter:"all",count:c.users.length,users:c.users,activeUsers:c.activeUsers,cached:true});refreshHotspotListCache().catch(e=>console.warn("[Hotspot API] Background refresh failed:",e.message));return;}const c=await refreshHotspotListCache();return res.json({success:true,filter:"all",count:c.users.length,users:c.users,activeUsers:c.activeUsers,cached:false);}catch(e){return errorResponse(res,e);}}
 async function active(req,res){
  try{
   const sessions=await mikrotikService.getActiveHotspotSessions();
@@ -298,10 +282,6 @@ async function voucherSales(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
-async function remove(req,res){try{
- const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
- await mikrotikService.cleanupExpiredHotspotUser(username);
- await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,NOW()),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[username]);
- res.json({success:true,username});
-}catch(e){return errorResponse(res,e);}}
-module.exports={page,servers,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove};
+async function updateUser(req,res){try{const username=clean(req.body.username,100),profile=clean(req.body.profile,100),comment=clean(req.body.comment,500),password=String(req.body.password??"").slice(0,128);if(!username)return res.status(400).json({success:false,message:"Username is required."});if(!profile)return res.status(400).json({success:false,message:"Profile is required."});const result=await mikrotikService.updateHotspotUser(username,profile,comment,password);hotspotListCache.expiresAt=0;return res.json({success:true,message:"Hotspot user updated on MikroTik.",...result});}catch(e){return errorResponse(res,e);}}
+async function remove(req,res){try{const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,message:"Username is required."});await mikrotikService.cleanupExpiredHotspotUser(username);await db.query("DELETE FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1)",[username]);hotspotListCache.expiresAt=0;return res.json({success:true,username,deleted:true});}catch(e){return errorResponse(res,e);}}catch(e){return errorResponse(res,e);}}
+module.exports={page,servers,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser};
