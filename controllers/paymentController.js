@@ -2,6 +2,7 @@ const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 
 const {parseSms}=require("../services/paymentWebhookParser");
+const {buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
 function normalizePhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
@@ -230,8 +231,18 @@ async function verifyTrx(req,res){
      RETURNING id;`,[phone,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;
-  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+cleanTrx+" | Paid: ৳"+amount});
+  const safeProfile=String(hotspotProfile.name||"").replace(/[|]/g,"").slice(0,80);
+  const hotspotComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+(validity||"0")+"|CHANNEL=PORTAL|TRX="+cleanTrx;
+  const existingLogin=String(hotspotProfile?.raw?.["on-login"]||"");
+  const profileLogin=buildHotspotOnLoginScript({name:hotspotProfile.name,sharedUsers:Number(hotspotProfile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"});
+  const preservedLogin=existingLogin.trim()&&!existingLogin.includes("FAZ|PROFILE=")?" ; "+existingLogin.trim():"";
+  await mikrotikService.updateHotspotProfile({name:hotspotProfile.name,rateLimit:hotspotProfile.rateLimit,sharedUsers:Number(hotspotProfile.sharedUsers)||1,sessionTimeout:validity||"",clearSessionTimeout:false,keepaliveTimeout:hotspotProfile.keepaliveTimeout,onLogin:profileLogin+preservedLogin});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:hotspotComment});
   routerSucceeded=true;
+  if(validity){
+   const updatedVoucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$1,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
+   if(!updatedVoucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$1,'all')",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
+  }
   await db.withTransaction(async client=>{
    const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
    if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization did not update the claimed transaction.");
