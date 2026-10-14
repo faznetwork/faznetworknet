@@ -4552,7 +4552,7 @@ async function deletePlan(id,name){
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row=>{
                 const billing=String(row.getAttribute('data-billing-status')||'').toLowerCase();
                 const expiry=String(row.getAttribute('data-expiry-state')||'unknown');
-                const match=wanted==='all'||(wanted==='paid'&&billing==='paid')||(wanted==='active'&&expiry!=='expired')||(wanted==='due'&&expiry==='due')||(wanted==='expired'&&expiry==='expired')||(wanted==='unexpired'&&expiry==='unexpired')||(wanted==='inactive'&&row.getAttribute('data-account-inactive')==='true');
+                const match=wanted==='all'||(wanted==='paid'&&billing==='paid')||(wanted==='active'&&expiry!=='expired'&&row.getAttribute('data-account-inactive')!=='true')||(wanted==='due'&&expiry==='due')||(wanted==='expired'&&expiry==='expired')||(wanted==='unexpired'&&expiry==='unexpired')||(wanted==='inactive'&&row.getAttribute('data-account-inactive')==='true');
                 row.style.display=match&&(!q||row.innerText.toLowerCase().includes(q))?'':'none';
             });
         }
@@ -4834,13 +4834,13 @@ async function deletePlan(id,name){
             try{
                 if(file.size>5*1024*1024)throw Error('CSV must be 5 MB or smaller.');
                 const records=parseCustomerCsv(await file.text());
-                const required=['fullname','phone','username','password'];
+                const required=['fullname','phone','username','password','connectiondate'];
                 const first=records[0]||{};
                 const headers=Object.keys(first);
                 const missing=required.filter(k=>!headers.includes(k));
                 if(missing.length)throw Error('Missing required CSV columns: '+missing.join(', ')+'. Use Export All as a template, then edit the CSV.');
-                const bad=records.filter(r=>!r.fullname||!r.phone||!r.username||!r.password||!(r.package||r.packagename||r.profile)||!(r.expirationdate||r.expiration_date||r.expiry_date));
-                if(bad.length)throw Error('Import stopped before changing any records: rows '+bad.slice(0,10).map(r=>r.__row).join(', ')+(bad.length>10?' …':'')+' need fullName, phone, username, password, package/profile, and expirationDate.');
+                const bad=records.filter(r=>!r.fullname||!r.phone||!r.username||!r.password||!(r.package||r.packagename||r.profile)||!(r.connectiondate||r.connection_date||r.activationdate||r.activation_date)||!(r.expirationdate||r.expiration_date||r.expiry_date));
+                if(bad.length)throw Error('Import stopped before changing any records: rows '+bad.slice(0,10).map(r=>r.__row).join(', ')+(bad.length>10?' …':'')+' need fullName, phone, connectionDate, username, password, package/profile, and expirationDate.');
                 const duplicateNames=new Set();const seen=new Set();for(const r of records){const k=r.username.toLowerCase();if(seen.has(k))duplicateNames.add(r.username);seen.add(k);}
                 if(duplicateNames.size)throw Error('Duplicate usernames inside CSV: '+Array.from(duplicateNames).slice(0,8).join(', ')+'. No records were imported.');
                 const preview=records.slice(0,5).map(r=>'• '+r.fullname+' ('+r.username+')').join('\n');
