@@ -44,7 +44,7 @@ function classifyError(error) {
   const message = String(error?.message || error || 'Connection failed.');
   if (/AUTH|LOGIN|WRONG USER|INVALID USER|BAD CREDENTIAL/i.test(message) || /^(EAUTH|ELOGIN)$/.test(code)) return { status: 'auth_failed', code: 'AUTH_FAILED', message: 'Authentication failed. Check the RouterOS username and password.' };
   if (/ECONNREFUSED/.test(code) || /connection refused/i.test(message)) return { status: 'offline', code: 'CONNECTION_REFUSED', message: 'Connection refused. Check the host, API service and port.' };
-  if (/ETIMEDOUT|TIMEOUT/.test(code) || /timed? ?out|timeout/i.test(message)) return { status: 'offline', code: 'CONNECTION_TIMEOUT', message: 'Connection timed out. Check routing, firewall and API reachability.' };
+  if (/ETIMEDOUT|TIMEOUT|ABORT_ERR/.test(code) || error?.name === 'AbortError' || /timed? ?out|timeout|operation was aborted|aborted/i.test(message)) return { status: 'offline', code: 'CONNECTION_TIMEOUT', message: 'Connection timed out. Check routing, firewall and API reachability.' };
   if (/ENOTFOUND|EAI_AGAIN/.test(code)) return { status: 'offline', code: 'HOST_NOT_FOUND', message: 'Hostname could not be resolved.' };
   if (/CERT|TLS|SSL/i.test(message) || /CERT|TLS|SSL/.test(code)) return { status: 'offline', code: 'TLS_ERROR', message: 'TLS handshake failed. Check HTTPS/API-SSL configuration and certificate.' };
   return { status: 'offline', code: 'CONNECTION_FAILED', message: 'Connection failed. Check RouterOS API settings and network reachability.' };
