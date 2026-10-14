@@ -278,7 +278,7 @@ async function testConnection(input) {
   const errors = [];
   for (const protocol of ['https:', 'http:']) {
     try {
-      const result = await testRest(config, protocol);
+      const result = await testRest({ ...config, timeout: Math.min(config.timeout, 700) }, protocol);
       return { ...result, host: config.host, api_port: config.port };
     } catch (error) {
       if (error?.code === 'EAUTH') {
@@ -290,7 +290,7 @@ async function testConnection(input) {
   }
   for (const secure of [true, false]) {
     try {
-      const result = await nativeRequest(config, secure);
+      const result = await nativeRequest({ ...config, timeout: Math.min(config.timeout, 1700) }, secure);
       return { ...result, host: config.host, api_port: config.port, use_ssl: secure };
     } catch (error) {
       errors.push(error);
@@ -298,7 +298,6 @@ async function testConnection(input) {
         const classified = classifyError(error);
         throw Object.assign(new Error(classified.message), { statusCode: 401, routerStatus: classified.status, errorCode: classified.code });
       }
-      if (error?.code === 'ETIMEDOUT') break;
     }
   }
   const best = errors.find(error => error?.code === 'ETIMEDOUT') || errors[errors.length - 1] || new Error('RouterOS service was not detected.');
