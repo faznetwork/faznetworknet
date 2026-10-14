@@ -1647,7 +1647,6 @@
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 id="rbacStaffHeading" class="h4 fw-bold mb-1">Staff Management</h2><p class="text-muted mb-0">Create and manage individual accounts with first-login email verification.</p></div><span class="badge text-bg-success">RBAC enabled</span></div>
               <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-person-plus text-success fs-5"></i><span id="rbacCreateAccountHeading">Create Admin / Staff Account</span></div><div class="card-body p-4">
                 <form id="rbacCreateUserForm" class="row g-3">
-                  <div class="col-md-6" id="rbacUsernameField"><label class="form-label" for="rbacUsername">Username</label><input id="rbacUsername" name="username" class="form-control" minlength="3" maxlength="60" pattern="[A-Za-z0-9._-]+" autocomplete="off"></div>
                   <div class="col-md-6"><label class="form-label" for="rbacEmail">Email</label><input id="rbacEmail" name="email" type="email" class="form-control" maxlength="254" required></div>
                   <div class="col-md-6"><label class="form-label" for="rbacRole">Role</label><select id="rbacRole" name="role" class="form-select" required><option value="staff">Staff</option><option value="admin">Admin</option><option value="super_admin" data-super-admin-only>Super Admin</option></select></div>
                   <div class="col-12"><div id="rbacInviteInstructions" class="alert alert-info py-2 mb-0">An invitation link will be emailed to this address. The account is created only after email OTP verification and password setup. Invitations expire after 24 hours.</div></div>
@@ -4001,14 +4000,12 @@ async function deletePlan(id,name){
             const usernameField = document.getElementById('rbacUsernameField');
             const usernameInput = document.getElementById('rbacUsername');
             const inviteInstructions = document.getElementById('rbacInviteInstructions');
-            const selfServiceMode = currentStaffMode === 'sub-staff';
+            const selfServiceMode = true;
             const inviteResult = document.getElementById('rbacCreateUserResult');
             if (inviteResult) { inviteResult.className = 'small'; inviteResult.textContent = ''; }
-            if (usernameField) usernameField.hidden = selfServiceMode;
-            if (usernameInput) { usernameInput.required = !selfServiceMode; if (selfServiceMode) usernameInput.value = ''; }
-            if (inviteInstructions) inviteInstructions.textContent = selfServiceMode
-                ? 'An invitation link will be emailed to this address. The invitee chooses their own username, password and confirmation. Email OTP is not required. Link expires after 24 hours.'
-                : 'An invitation link will be emailed to this address. The account is created only after email OTP verification and password setup. Invitations expire after 24 hours.';
+            if (usernameField) usernameField.hidden = true;
+            if (usernameInput) { usernameInput.required = false; usernameInput.value = ''; }
+            if (inviteInstructions) inviteInstructions.textContent = 'An invitation link will be emailed to this address. The invitee chooses their own username and password and confirms it on the secure registration page. Link expires after 24 hours.';
             if (accountsHeading) accountsHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Accounts' : currentStaffMode === 'account-manage' ? 'Managed Accounts' : 'Accounts';
             if (invitesHeading) invitesHeading.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff Invitations' : currentStaffMode === 'account-manage' ? 'Account Invitations' : 'Pending Invitations';
             const roleSelect = document.getElementById('rbacRole');
@@ -4061,16 +4058,15 @@ async function deletePlan(id,name){
                         const result = document.getElementById('rbacCreateUserResult');
                         const button = document.getElementById('rbacCreateUserBtn');
                         const payload = {
-                            username:currentStaffMode === 'sub-staff' ? '' : (document.getElementById('rbacUsername')?.value || ''),
                             email:document.getElementById('rbacEmail')?.value || '',
                             role:currentStaffMode === 'sub-staff' || !currentAdminCanInvitePrivileged ? 'staff' : (document.getElementById('rbacRole')?.value || 'staff'),
-                            selfServiceSignup:currentStaffMode === 'sub-staff'
+                            selfServiceSignup:true
                         };
                         if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending…'; }
                         if (result) { result.className = 'small'; result.textContent = ''; }
                         try {
                             await window.jsonFetch(currentStaffMode === 'sub-staff' ? '/api/admin/users/sub-staff-invitations' : '/api/admin/users', {method:'POST',body:JSON.stringify(payload)});
-                            if (result) { result.className = 'small text-success'; result.textContent = currentStaffMode === 'sub-staff' ? 'Sub-Staff invitation link sent. The invitee can choose a username and password without email OTP.' : 'Invitation sent successfully. The account activates after email verification.'; }
+                            if (result) { result.className = 'small text-success'; result.textContent = 'Invitation link sent. The invitee will choose their own username and password.'; }
                             form.reset();
                             if (roleSelect) roleSelect.value = 'staff';
                             await window.loadStaffManagement(currentStaffMode);
