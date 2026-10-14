@@ -25,11 +25,9 @@ function inputFrom(body) {
   return {
     router_name: clean(body.router_name, 120),
     host: clean(body.host, 253),
-    api_type: clean(body.api_type, 24),
-    api_port: body.api_port,
+    api_port: body.api_port ?? body.port,
     username: clean(body.username, 160),
     password: String(body.password ?? ''),
-    use_ssl: body.use_ssl === true || body.use_ssl === 'true' || body.use_ssl === 'on',
     timeout: body.timeout
   };
 }
@@ -52,7 +50,7 @@ exports.addDevice = async (req, res) => {
     const handshake = await routerDeviceService.testConnection(input);
     const encryptedPassword = credentials.encrypt(input.password);
     const apiType = handshake.api_type;
-    const ssl = apiType === 'rest_api' ? true : input.use_ssl;
+    const ssl = Boolean(handshake.use_ssl);
     const timeout = Number(input.timeout || 8000);
 
     const saved = await db.withTransaction(async client => {
