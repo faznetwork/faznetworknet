@@ -37,7 +37,7 @@ test("public hotspot package checkout uses configured MFS accounts and TrxID ver
   assert.match(view, /hotspotBuyerTrxId/);
   assert.match(server, /paymentAccounts/);
   assert.match(controller, /requestedProfile/);
-  assert.match(controller, /requestedMethod/);
+  assert.match(controller, /const method=String\(body\.paymentMethod\|\|body\.gateway/);
 });
 
 test("Hotspot checkout allows only unused unmatched payments and validates Hotspot price instead of PPPoE linkage", () => {
@@ -45,7 +45,9 @@ test("Hotspot checkout allows only unused unmatched payments and validates Hotsp
   const verify = controller.slice(controller.indexOf("async function verifyTrx"), controller.indexOf("module.exports"));
   assert.match(verify, /AND \(used = false OR used IS NULL\)/);
   assert.match(verify, /LOWER\(TRIM\(status\)\) = 'unmatched'/);
-  assert.match(verify, /matchingProfiles/);
+  assert.match(verify, /const matches=profiles\.filter/);
+  assert.match(verify, /profileIdentifierMatches/);
+  assert.match(verify, /claimed_at=NOW\(\),claimed_by=\$1,claim_flow='hotspot'/);
   assert.doesNotMatch(verify, /This transaction is linked to a PPPoE customer/);
   assert.doesNotMatch(verify, /const pppoePrice=/);
 });
