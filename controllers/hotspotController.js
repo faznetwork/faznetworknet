@@ -154,7 +154,7 @@ async function generate(req,res){
    }
    for(const candidate of candidates){
      const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-     const managedComment="FAZ|EXP=PENDING|PROF="+safeProfile+"|PROFILE="+safeProfile+"|VALIDITY="+validity;
+     const managedComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+validity;
      await mikrotikService.createHotspotUser({username:candidate.username,password:candidate.password,profile,comment:managedComment});
      provisioned.push(candidate.username);
      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment) VALUES($1,$2,$3,$4,$5,'unused',$6)",
@@ -213,7 +213,7 @@ async function createUser(req,res){
     const validity=profileValidity.validity;
     await ensureCalendarProfile(profile,routerProfile,profileValidity);
     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const routerComment="FAZ|EXP=PENDING|PROF="+safeProfile+"|PROFILE="+safeProfile+"|VALIDITY="+validity+(note?"|NOTE="+note:"");
+    const routerComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+validity+(note?"|NOTE="+note:"");
     await mikrotikService.createHotspotUser({username,password,profile,server,"limit-uptime":undefined,"limit-bytes-total":dataLimit,comment:routerComment});
     try{
       const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[profile]);
@@ -229,12 +229,14 @@ async function createUser(req,res){
 }
 async function dashboardMetrics(req,res){
   try{
-    const [allUsers,activeSessions,voucherRows,salesRows,expiredRows]=await Promise.all([
+    const [allUsers,activeSessions,voucherRows,salesRows,expiredRows,expiringRows,cleanupRows]=await Promise.all([
       mikrotikService.getHotspotUsers(),
       mikrotikService.getActiveHotspotSessions(),
       db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers"),
       db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(t.amount),0)::numeric(12,2) AS total_amount FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status='processed' AND t.created_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
-      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='expired' AND expired_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND expired_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')")
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='expired' AND expired_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND expired_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '1 hour'"),
+      db.query("SELECT COUNT(*) FILTER (WHERE status='expired' AND cleanup_status IN ('pending','failed'))::int AS cleanup_pending, COUNT(*) FILTER (WHERE status='expired' AND expired_at >= date_trunc('day',NOW()))::int AS evicted_today FROM hotspot_vouchers")
     ]);
     const customerUsers=(Array.isArray(allUsers)?allUsers:[]).filter(user=>{
       const username=String(user?.username||"").trim().toLowerCase();
@@ -251,7 +253,10 @@ async function dashboardMetrics(req,res){
     const vouchersSoldToday=Number(salesRows?.rows?.[0]?.count||0);
     const activeRevenue=Number(salesRows?.rows?.[0]?.total_amount||0);
     const expiredToday=Number(expiredRows?.rows?.[0]?.count||0);
-    return res.json({success:true,totalUsers,activeUsers,onlineClients:activeUsers,offlineUsers:Math.max(0,totalUsers-activeUsers),totalVouchers,vouchersSoldToday,activeRevenue,todayRevenue:activeRevenue,expiredToday});
+    const expiringWithinHour=Number(expiringRows?.rows?.[0]?.count||0);
+    const cleanupPending=Number(cleanupRows?.rows?.[0]?.cleanup_pending||0);
+    const evictedToday=Number(cleanupRows?.rows?.[0]?.evicted_today||0);
+    return res.json({success:true,totalUsers,activeUsers,onlineClients:activeUsers,offlineUsers:Math.max(0,totalUsers-activeUsers),totalVouchers,vouchersSoldToday,activeRevenue,todayRevenue:activeRevenue,expiredToday,expiringWithinHour,cleanupPending,evictedToday});
   }catch(e){return errorResponse(res,e);}
 }
 async function voucherStats(req,res){
