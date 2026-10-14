@@ -850,7 +850,18 @@ class MikroTikService {
     const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
     const validity=suppliedComment.match(/(?:^|\|)VALIDITY=([^|]+)/i)?.[1]||"";
     const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
-    return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":undefined, "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
+    return this._withConnection("Hotspot user creation", async (connection) => {
+      const params=this._writeParams({
+        name: username,
+        password,
+        profile,
+        server:data.server||"all",
+        "limit-bytes-total":data.dataLimit||data["limit-bytes-total"],
+        comment
+      });
+      await connection.write("/ip/hotspot/user/add", params);
+      return { username };
+    });
   }
   async kickActiveHotspotUser(username,idValue) {
     const name=this._str(username).trim(), requestedId=this._str(idValue).trim();

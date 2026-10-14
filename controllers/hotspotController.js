@@ -192,39 +192,36 @@ async function generate(req,res){
 async function createUser(req,res){
   try{
     const username=clean(req.body.username,100);
+    const password=String(req.body.password??"");
     const profile=clean(req.body.profile,100);
-    const password=clean(req.body.password,100)||username;
     const server=clean(req.body.server||"all",100)||"all";
-    const timeLimit=clean(req.body.timeLimit,50);
-    const dataLimit=clean(req.body.dataLimit,50);
-    const note=clean(req.body.comment,400).replace(/[|]/g,"/");
-    if(!username||!profile)return res.status(400).json({success:false,message:"Username / phone number and profile are required."});
+    if(!username||!password.trim()||!profile)return res.status(400).json({success:false,message:"Username / phone number, password, and profile are required."});
     if(!/^[A-Za-z0-9._@+-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username / phone number contains unsupported characters."});
+    if(password.length>100)return res.status(400).json({success:false,message:"Password must be 100 characters or fewer."});
     const existingDb=await db.query("SELECT 1 FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     if(existingDb.rows.length)return res.status(409).json({success:false,message:"Hotspot username already exists in database."});
     const [mtUsers,profiles]=await Promise.all([mikrotikService.getHotspotUsers(),mikrotikService.getHotspotProfiles()]);
     if(mtUsers.some(u=>String(u.username||"").toLowerCase()===username.toLowerCase()))return res.status(409).json({success:false,message:"Hotspot username already exists in MikroTik."});
     const routerProfile=profiles.find(p=>String(p.name||"").toLowerCase()===profile.toLowerCase());
     if(!routerProfile)return res.status(400).json({success:false,message:"The selected Hotspot profile does not exist on MikroTik."});
-    const profileMeta=(await readProfileMetadata())[profile]||{};
+    const profileMeta=(await readProfileMetadata())[routerProfile.name]||{};
     const profileValidity=profileMeta.validityValue?normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit):parseStoredValidity(routerProfile);
     if(!profileValidity.validity)return res.status(400).json({success:false,message:"The selected profile has no time-based calendar validity. Configure a minutes, hours, or days profile first."});
-    if(timeLimit&&validityMs(timeLimit)!==validityMs(profileValidity.validity))return res.status(400).json({success:false,message:"Calendar validity must match the selected profile ("+profileValidity.validity+"). Uptime limits are not used for calendar expiry."});
     const validity=profileValidity.validity;
-    await ensureCalendarProfile(profile,routerProfile,profileValidity);
-    const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const routerComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+validity+(note?"|NOTE="+note:"");
-    await mikrotikService.createHotspotUser({username,password,profile,server,"limit-uptime":undefined,"limit-bytes-total":dataLimit,comment:routerComment});
+    await ensureCalendarProfile(routerProfile.name,routerProfile,profileValidity);
+    const safeProfile=routerProfile.name.replace(/[|]/g,"").slice(0,80);
+    const routerComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1";
+    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server,comment:routerComment});
     try{
-      const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[profile]);
+      const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[routerProfile.name]);
       const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||profileMeta.price||0);
-      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit) VALUES($1,$2,$3,$4,$5,'unused',$6,$7,$8,$9,$10)",
-        [username,password,profile,validity,profilePrice,routerComment,username,server,validity,dataLimit||null]);
+      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,cleanup_status,comment,phone,server,time_limit,data_limit,created_at) VALUES($1,$2,$3,$4,$5,'unused','pending',$6,$7,$8,$9,NULL,NOW())",
+        [username,password,routerProfile.name,validity,profilePrice,routerComment,username,server,validity]);
     }catch(dbError){
       try{await mikrotikService.removeHotspotUser(username);}catch(_){}
       throw dbError;
     }
-    return res.json({success:true,message:"Hotspot user created; calendar validity starts on first login.",user:{username,password,profile,server,validity,dataLimit,phone:username,comment:routerComment,status:"unused"}});
+    return res.status(201).json({success:true,message:"Hotspot user provisioned successfully on MikroTik",user:{username,profile:routerProfile.name}});
   }catch(e){return errorResponse(res,e);}
 }
 async function dashboardMetrics(req,res){
