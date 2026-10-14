@@ -37,6 +37,15 @@ function parseFirstLoginAt(comment) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseCommentExpiry(comment) {
+  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})(?:[ T](\\d{2}:\\d{2}:\\d{2}))?/i);
+  if (!match) return null;
+  const date = match[2]
+    ? new Date(match[1] + "T" + match[2] + "+06:00")
+    : new Date(match[1] + "T23:59:59+06:00");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function parseValidityMs(value) {
   const match = String(value || "").trim().match(/^(\d+(?:\.\d+)?)(m|h|d|w)$/i);
   if (!match) return 0;
