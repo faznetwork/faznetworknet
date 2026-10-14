@@ -13,10 +13,20 @@ function responseRecorder(){
   };
 }
 
+test("verifyTrx requires a valid client MAC before claiming a payment", async () => {
+  const res = responseRecorder();
+  await paymentController.verifyTrx({
+    ip: "test-invalid-hotspot-mac",
+    body: { account_phone: "01712345678", trxId: "INVALID-MAC", amount: 15, profile_id: "pkg-weekend" }
+  }, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, "INVALID_MAC");
+});
+
 test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit",async()=>{
   const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
   let profileMetadata={Weekend:{id:"pkg-weekend",price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
-  let rechargePayload=null;
+  let rechargePayload=null,profileUpdatePayload=null;
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
@@ -34,9 +44,9 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     };
     mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
-    mikrotik.updateHotspotProfile=async()=>({success:true});
+    mikrotik.updateHotspotProfile=async(payload)=>{profileUpdatePayload=payload;return {success:true};};
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-price-sync-15",body:{phone:"01712345678",trxId:"PRICE15",amount:15,profile_id:"pkg-weekend"}};
+    const req={ip:"test-price-sync-15",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"PRICE15",amount:15,profile_id:"pkg-weekend"}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
@@ -46,10 +56,14 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     assert.equal(res.body.amount,15);
     assert.equal(rechargePayload.profile,"Weekend");
     assert.equal(rechargePayload.validity,"2d");
+    assert.deepEqual(Object.keys(profileUpdatePayload).sort(),["name","onLogin"],"a purchase must not mutate shared session-timeout, rate-limit, or other profile settings");
+    assert.match(profileUpdatePayload.onLogin,/FAZ_HOTSPOT_EXPIRY_V2/);
+    assert.match(profileUpdatePayload.onLogin,/interval=2d/);
+    assert.doesNotMatch(profileUpdatePayload.onLogin,/FAZ\\|EXP=|FIRST_LOGIN=|session-timeout|hotspot user disable/);
 
     // The old Tk 10 amount must stop matching immediately after the profile price is changed.
     const oldAmountResponse=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10",amount:10,profile_id:"pkg-weekend"}},oldAmountResponse);
+    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"PRICE10",amount:10,profile_id:"pkg-weekend"}},oldAmountResponse);
     assert.equal(oldAmountResponse.statusCode,400);
     assert.match(oldAmountResponse.body.error,/paid amount does not match the configured price/i);
   }finally{
@@ -101,17 +115,19 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     // verifyTrx updates the profile before provisioning; never open a RouterOS socket in CI.
     mikrotik.updateHotspotProfile=async()=>({success:true});
     mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
-    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  ",profile_id:"pkg-1-hour",amount:15},query:{}};
+    const req={ip:"test-alias-trim-case",body:{mac:"aa-bb-cc-dd-ee-ff",account_phone:" 01712345678 ",trx_id:"  aBc-123  ",profile_id:"pkg-1-hour",amount:15},query:{}};
     const res=responseRecorder();
     await paymentController.verifyTrx(req,res);
     assert.equal(res.statusCode,200);
     assert.equal(res.body.success,true);
-    assert.equal(res.body.username,"01712345678");
+    assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
+    assert.equal(res.body.password,"01712345678");
     assert.equal(lookupValue,"ABC-123");
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
     assert.match(claimSql,/status='unmatched' AND \(used=false OR used IS NULL\)/i);
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
-    assert.equal(rechargePayload.username,"01712345678");
+    assert.equal(rechargePayload.username,"AA:BB:CC:DD:EE:FF");
+    assert.equal(rechargePayload.password,"01712345678");
   }finally{
     db.query=originalQuery;
     db.withTransaction=originalWithTransaction;
@@ -147,7 +163,7 @@ test("verifyTrx keeps a durable processing claim if RouterOS succeeds but DB com
       throw new Error("simulated commit failure");
     };
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-partial-commit",body:{phone:"01712345678",trxId:"PARTIAL-111",amount:15,profile_id:"pkg-weekend"}},res);
+    await paymentController.verifyTrx({ip:"test-partial-commit",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"PARTIAL-111",amount:15,profile_id:"pkg-weekend"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(commitAttempted,true);
     assert.equal(released,false,"successful RouterOS provisioning must not release the transaction for reuse");
@@ -178,7 +194,7 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
     mikrotik.rechargeHotspotUser=async()=>{throw new Error("simulated RouterOS failure");};
     db.withTransaction=async()=>{throw new Error("should not finalize after RouterOS failure");};
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"test-router-fail",body:{phone:"01712345678",trxId:"ROUTER-FAIL-112",amount:15,profile_id:"pkg-weekend"}},res);
+    await paymentController.verifyTrx({ip:"test-router-fail",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"ROUTER-FAIL-112",amount:15,profile_id:"pkg-weekend"}},res);
     assert.equal(res.statusCode,500);
     assert.equal(released,true,"a confirmed RouterOS failure should release the claim");
   }finally{
@@ -210,8 +226,8 @@ test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     const a=responseRecorder(),b=responseRecorder();
     await Promise.all([
-      paymentController.verifyTrx({ip:"test-concurrent-a",body:{phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},a),
-      paymentController.verifyTrx({ip:"test-concurrent-b",body:{phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},b)
+      paymentController.verifyTrx({ip:"test-concurrent-a",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},a),
+      paymentController.verifyTrx({ip:"test-concurrent-b",body:{mac:"AA-BB-CC-DD-EE-FF",account_phone:"01712345678",trxId:"CONCURRENT-113",amount:15,profile_id:"pkg-weekend"}},b)
     ]);
     assert.equal(claimAttempts,2);
     assert.equal(rechargeCount,1,"only the winning atomic claim may invoke RouterOS");

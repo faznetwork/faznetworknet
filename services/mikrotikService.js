@@ -746,27 +746,49 @@ class MikroTikService {
     const username = this._str(usernameValue).trim();
     if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
     return this._withConnection("expired Hotspot user cleanup", async (connection) => {
-      const userRows = await connection.write("/ip/hotspot/user/print");
-      const activeRows = await connection.write("/ip/hotspot/active/print");
-      const schedulerRows = await connection.write("/system/scheduler/print");
-      const matches = (Array.isArray(userRows) ? userRows : []).filter(item =>
-        this._str(item.name).trim().toLowerCase() === username.toLowerCase() && item[".id"]);
+      const [userRows, activeRows, cookieRows, hostRows, schedulerRows] = await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/active/print"),
+        connection.write("/ip/hotspot/cookie/print"),
+        connection.write("/ip/hotspot/host/print"),
+        connection.write("/system/scheduler/print")
+      ]);
+      const lower = value => this._str(value).trim().toLowerCase();
+      const macLike = value => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(this._str(value).trim());
+      const userMatches = (Array.isArray(userRows) ? userRows : []).filter(item =>
+        lower(item.name) === lower(username) && item[".id"]);
       const activeMatches = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
-        this._str(item.user).trim().toLowerCase() === username.toLowerCase() && item[".id"]);
+        lower(item.user) === lower(username) && item[".id"]);
+      const knownMacs = new Set([...(macLike(username) ? [lower(username)] : []),
+        ...activeMatches.map(item => lower(item["mac-address"])).filter(Boolean)]);
+      const knownIps = new Set(activeMatches.map(item => lower(item.address)).filter(Boolean));
+      for (const host of (Array.isArray(hostRows) ? hostRows : [])) {
+        if (knownMacs.has(lower(host["mac-address"]))) {
+          if (host[".id"] && host.address) knownIps.add(lower(host.address));
+        }
+      }
+      const cookieMatches = (Array.isArray(cookieRows) ? cookieRows : []).filter(item =>
+        item[".id"] && (lower(item.user) === lower(username) || knownMacs.has(lower(item["mac-address"]))));
+      const hostMatches = (Array.isArray(hostRows) ? hostRows : []).filter(item =>
+        item[".id"] && (knownMacs.has(lower(item["mac-address"])) || knownIps.has(lower(item.address))));
       const schedulerName = ("faz-exp-" + username).toLowerCase();
       const schedulerMatches = (Array.isArray(schedulerRows) ? schedulerRows : []).filter(item =>
-        this._str(item.name).trim().toLowerCase() === schedulerName && item[".id"]);
+        lower(item.name) === schedulerName && item[".id"]);
 
-      for (const session of activeMatches) {
-        await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
-      }
-      for (const user of matches) {
-        await connection.write("/ip/hotspot/user/remove", ["=.id=" + user[".id"]]);
-      }
-      for (const scheduler of schedulerMatches) {
-        await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
-      }
-      return { username, sessionsRemoved: activeMatches.length, usersRemoved: matches.length, schedulersRemoved: schedulerMatches.length, alreadyAbsent: matches.length === 0 };
+      for (const session of activeMatches) await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
+      for (const cookie of cookieMatches) await connection.write("/ip/hotspot/cookie/remove", ["=.id=" + cookie[".id"]]);
+      for (const host of hostMatches) await connection.write("/ip/hotspot/host/remove", ["=.id=" + host[".id"]]);
+      for (const user of userMatches) await connection.write("/ip/hotspot/user/remove", ["=.id=" + user[".id"]]);
+      for (const scheduler of schedulerMatches) await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
+      return {
+        username,
+        sessionsRemoved: activeMatches.length,
+        cookiesRemoved: cookieMatches.length,
+        hostsRemoved: hostMatches.length,
+        usersRemoved: userMatches.length,
+        schedulersRemoved: schedulerMatches.length,
+        alreadyAbsent: userMatches.length === 0
+      };
     });
   }
   async setHotspotUserComment(usernameValue, commentValue) {

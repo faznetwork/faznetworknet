@@ -37,6 +37,15 @@ function parseFirstLoginAt(comment) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseCommentExpiry(comment) {
+  const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}:\d{2}))?/i);
+  if (!match) return null;
+  const date = match[2]
+    ? new Date(match[1] + "T" + match[2] + "+06:00")
+    : new Date(match[1] + "T23:59:59+06:00");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function parseValidityMs(value) {
   const match = String(value || "").trim().match(/^(\d+(?:\.\d+)?)(m|h|d|w)$/i);
   if (!match) return 0;
@@ -45,21 +54,24 @@ function parseValidityMs(value) {
 
 function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
+  const username = String(user?.username || "");
+  const schedulerName = "faz-exp-" + username;
+  const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
   const expValue = comment.match(/(?:^|\|)EXP(?::|=)\s*([^|]+)/i)?.[1]?.trim();
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
     const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
     const dhakaMatch = expValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
+    const dateOnly = expValue.match(/^(\d{4}-\d{2}-\d{2})$/);
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
-      : new Date(expValue);
-    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
+      : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
+    // When a first-login scheduler exists, its exact duration-based deadline
+    // takes precedence over the date-only purchase comment.
+    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now() && !hasExpiryScheduler) return true;
   }
   if (!managed) return false;
-
-  const schedulerName = "faz-exp-" + String(user.username || "");
-  const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
   if (user.disabled && !hasExpiryScheduler) return true;
 
   const byteLimit = Math.max(0, Number(user.limitBytesTotal) || 0);
@@ -88,9 +100,11 @@ function createHotspotExpirationCleanup(deps = {}) {
       // In that case, persist expired/pending state and let the targeted router
       // cleanup fail safely so the next hourly run can retry it.
       let snapshot = { users: [], schedulerNames: [] };
+      let snapshotAvailable = true;
       try {
         snapshot = await router.getHotspotExpirationSnapshot();
       } catch (error) {
+        snapshotAvailable = false;
         logger.warn("[HOTSPOT EXPIRY] RouterOS snapshot unavailable; using persisted expiry and retrying cleanup later:", error.message);
       }
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
@@ -163,12 +177,21 @@ function createHotspotExpirationCleanup(deps = {}) {
         const databaseExpiryReached = ["active", "unused"].includes(effectiveStatus) &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
+        const commentExpiry = parseCommentExpiry(voucher.comment);
+        // A successful router snapshot that no longer contains a MAC-named account
+        // means its one-shot expiry scheduler (or an administrator) removed it.
+        // Do not infer absence while RouterOS itself is unreachable.
+        const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
+        const missingMacUser = snapshotAvailable && !user && macNamedVoucher &&
+          ["active", "unused"].includes(effectiveStatus);
+        const commentExpiryReached = !user && ["active", "unused"].includes(effectiveStatus) &&
+          commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
         const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
-        if (!databaseExpiryReached && !routerExpiryReached) continue;
+        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, databaseExpiryReached ? expiryAt : currentTime, voucher.id]
+          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
         );
         expired++;
         try {

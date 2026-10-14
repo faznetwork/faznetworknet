@@ -145,6 +145,27 @@ test("marks due database vouchers expired and retains retry state when RouterOS 
   assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
 });
 
+test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler removed the user", async () => {
+  const rows = [{ id: 18, username: "AA:BB:CC:DD:EE:FF", status: "unused", comment: "Exp: 2026-10-20", cleanup_status: "not_required" }];
+  const database = mockDb(rows);
+  const cleaned = [];
+  const router = {
+    async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { alreadyAbsent: true }; }
+  };
+  const run = createHotspotExpirationCleanup({
+    db: database, mikrotikService: router, logger: quietLogger(),
+    now: () => new Date("2026-10-11T12:00:00.000Z")
+  });
+  const result = await run();
+  assert.equal(result.expired, 1);
+  assert.equal(result.removed, 1);
+  assert.deepEqual(cleaned, ["AA:BB:CC:DD:EE:FF"]);
+  assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
+  assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())), "voucher/payment audit rows must be retained");
+});
+
 test("does not expire an unused voucher solely because it was created long ago", async () => {
   const rows = [{
     id: 6, username: "UNUSED-OLD", status: "unused",
