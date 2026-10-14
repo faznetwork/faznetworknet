@@ -174,7 +174,10 @@
         .traffic-sidebar-link{margin:5px 10px 9px;border:1px solid rgba(167,243,208,.35)!important;border-radius:10px;background:linear-gradient(100deg,rgba(16,185,129,.22),rgba(59,130,246,.15))!important;color:#fff!important;font-weight:800!important}
         .traffic-sidebar-link i{color:#6ee7b7!important}
         .traffic-sidebar-link:hover,.traffic-sidebar-link:focus-visible{background:linear-gradient(100deg,rgba(16,185,129,.38),rgba(139,92,246,.28))!important;outline:2px solid #6ee7b7;outline-offset:1px}
-        .hotspot-dashboard-shortcuts{justify-content:flex-start}
+        /* Content-aware Hotspot metric layout: auto-fit to the available content width, not named devices. */
+        .hotspot-dashboard-shortcuts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,158px),1fr));justify-content:stretch;align-items:center;gap:clamp(12px,1.4vw,24px);width:100%;padding:8px 0}
+        .hotspot-dashboard-shortcuts>.dashboard-round-button{justify-self:center}
+        @media(min-width:768px){.hotspot-dashboard-shortcuts>.dashboard-round-button{width:clamp(140px,11vw,178px);height:clamp(140px,11vw,178px);flex:0 0 auto}.hotspot-dashboard-shortcuts>.hotspot-router-action{max-width:100%}}
         @media(max-width:575.98px){.hotspot-dashboard-shortcuts{gap:12px}}
         @media(max-width:575.98px){.dashboard-shortcuts{gap:12px}.dashboard-round-button{width:calc(50vw - 28px);height:calc(50vw - 28px);flex-basis:calc(50vw - 28px);max-width:158px;max-height:158px;min-width:132px;min-height:132px}.dashboard-round-button>strong{font-size:21px}.dashboard-round-label{font-size:11px}}
         .card-custom {
