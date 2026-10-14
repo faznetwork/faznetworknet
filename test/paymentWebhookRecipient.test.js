@@ -19,7 +19,7 @@ test("SMS parser accepts a recipient matching the current General Settings numbe
 test("SMS parser rejects an explicitly mismatched receiving number", () => {
   assert.throws(
     () => parseSms(
-      { message, recipient: "01800000000" },
+      { sender: "bKash", message, recipient: "01800000000" },
       {},
       {},
       { recipientNumbers: { bkash: "01700000000" } }
