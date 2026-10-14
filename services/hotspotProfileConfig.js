@@ -46,7 +46,7 @@ function buildHotspotOnLoginScript(config) {
   // Preserve the backend-owned "Exp: YYYY-MM-DD" comment. The scheduler carries
   // its own user/MAC/IP values and removes itself after the one expiry run.
   if (validity.unit === "gb") {
-    return prefix + ' :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=' + validity.limitBytesTotal + '; };';
+    return prefix + '; :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=' + validity.limitBytesTotal + '; };';
   }
 
   const schedulerEvent =
@@ -59,11 +59,11 @@ function buildHotspotOnLoginScript(config) {
     '\\"]; /system scheduler remove [find where name=\\"faz-exp-' + '" . $uName . "' + '\\"];")';
 
   return prefix +
-    ' :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };' +
+    '; :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };' +
     ' :local sched ("faz-exp-" . $uName);' +
     ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' +
     validity.validity +
-    ' start-time=[/system clock get time] on-event=' + schedulerEvent + '; };';
+    ' start-time=([/system clock get time] + ' + validity.validity + ') on-event=' + schedulerEvent + '; };';
 }
 
 module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
