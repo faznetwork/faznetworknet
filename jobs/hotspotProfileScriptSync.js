@@ -1,0 +1,110 @@
+"use strict";
+
+const db = require("../db");
+const mikrotikService = require("../services/mikrotikService");
+const { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript } = require("../services/hotspotProfileConfig");
+
+const LEGACY_HOTSPOT_HOOK = /FAZ\\|(?:EXP|PROFILE|INIT)=|FIRST_LOGIN=/i;
+const MANAGED_HOTSPOT_HOOK = /FAZ_HOTSPOT_EXPIRY_V2/i;
+const CUSTOM_HOOK_MARKER = "FAZ_CUSTOM_ON_LOGIN_HOOK_START";
+
+function parseMetadata(value) {
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function customHookFrom(oldLogin) {
+  const script = String(oldLogin || "").trim();
+  const markerAt = script.indexOf(CUSTOM_HOOK_MARKER);
+  if (markerAt >= 0) {
+    const markerEnd = script.indexOf(";", markerAt);
+    return markerEnd >= 0 ? script.slice(markerEnd + 1).trim() : "";
+  }
+  if (!script || LEGACY_HOTSPOT_HOOK.test(script) || MANAGED_HOTSPOT_HOOK.test(script)) return "";
+  return script;
+}
+
+function validityForProfile(profile, metadata) {
+  if (metadata && metadata.validityValue !== undefined && metadata.validityValue !== null &&
+      String(metadata.validityValue).trim() !== "" && metadata.validityUnit) {
+    try {
+      return normalizeProfileValidity(metadata.validityValue, metadata.validityUnit);
+    } catch (_) {}
+  }
+
+  const oldLogin = String(profile?.raw?.["on-login"] || "");
+  const legacyValidity = oldLogin.match(/VALIDITY\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(m|min|minutes?|h|hr|hours?|d|days?|gb)\\b/i);
+  if (legacyValidity) {
+    const unit = legacyValidity[2].toLowerCase().startsWith("g") ? "gb"
+      : legacyValidity[2].toLowerCase().startsWith("m") ? "minutes"
+      : legacyValidity[2].toLowerCase().startsWith("h") ? "hours" : "days";
+    try {
+      return normalizeProfileValidity(Number(legacyValidity[1]), unit);
+    } catch (_) {}
+  }
+
+  const bytes = Number(metadata?.limitBytesTotal || 0);
+  if (Number.isSafeInteger(bytes) && bytes > 0 && bytes % 1073741824 === 0) {
+    try { return normalizeProfileValidity(bytes / 1073741824, "gb"); } catch (_) {}
+  }
+
+  return parseStoredValidity(profile);
+}
+
+/**
+ * Idempotently normalize FAZ-managed / package-configured Hotspot User Profiles.
+ * This only writes each profile's on-login field; it does not alter rate limits,
+ * session timeouts, shared-user counts, user passwords, or RouterOS server login-by.
+ */
+async function syncHotspotProfileScripts(deps = {}) {
+  const database = deps.db || db;
+  const router = deps.mikrotikService || mikrotikService;
+  const logger = deps.logger || console;
+  const settings = await database.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  const metadata = parseMetadata(settings.rows?.[0]?.value);
+  const profiles = await router.getHotspotProfiles();
+  let checked = 0, updated = 0, skipped = 0, failed = 0;
+
+  for (const profile of profiles || []) {
+    const name = String(profile?.name || "").trim();
+    if (!name) { skipped++; continue; }
+    const oldLogin = String(profile?.raw?.["on-login"] || "");
+    const configured = metadata[name] && typeof metadata[name] === "object";
+    const legacy = LEGACY_HOTSPOT_HOOK.test(oldLogin);
+    const alreadyManaged = MANAGED_HOTSPOT_HOOK.test(oldLogin);
+    // Do not rewrite unrelated manually-created profiles unless the package
+    // metadata explicitly manages them or they still contain the old FAZ hook.
+    if (!configured && !legacy && !alreadyManaged) { skipped++; continue; }
+
+    checked++;
+    try {
+      const validity = validityForProfile(profile, configured ? metadata[name] : {});
+      const onLogin = buildHotspotOnLoginScript({
+        name,
+        sharedUsers: Number(profile.sharedUsers) || 1,
+        validityValue: validity.value,
+        validityUnit: validity.unit
+      });
+      const customHook = customHookFrom(oldLogin);
+      const nextScript = onLogin + (customHook
+        ? '; :local fazCustomHookMarker "' + CUSTOM_HOOK_MARKER + '"; ' + customHook
+        : "");
+      if (nextScript === oldLogin) { skipped++; continue; }
+      await router.updateHotspotProfile({ name, onLogin: nextScript });
+      updated++;
+    } catch (error) {
+      failed++;
+      logger.warn("[HOTSPOT PROFILE SYNC] Could not normalize " + name + ": " + (error?.message || error));
+    }
+  }
+
+  const result = { checked, updated, skipped, failed };
+  logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
+  return result;
+}
+
+module.exports = { syncHotspotProfileScripts, validityForProfile, customHookFrom };
