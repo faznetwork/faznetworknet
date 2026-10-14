@@ -298,10 +298,17 @@ async function voucherSales(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
+async function updateUser(req,res){try{
+ const username=clean(req.body.username,100),profile=clean(req.body.profile,100),comment=clean(req.body.comment,500);
+ if(!username)return res.status(400).json({success:false,message:"Username is required."});
+ if(!profile)return res.status(400).json({success:false,message:"Profile is required."});
+ const result=await mikrotikService.updateHotspotUser(username,profile,comment);
+ return res.json({success:true,...result});
+}catch(e){return errorResponse(res,e);}}
 async function remove(req,res){try{
  const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
  await mikrotikService.cleanupExpiredHotspotUser(username);
  await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,NOW()),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,servers,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove};
+module.exports={page,servers,profiles,createProfile,updateProfile,deleteProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser};
