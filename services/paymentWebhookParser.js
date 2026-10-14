@@ -105,9 +105,13 @@ function parseSms(body, query = {}, headers = {}, options = {}) {
     error.code = "INVALID_SMS_PAYLOAD"; error.statusCode = 400; throw error;
   }
   const recipient = normalizePhone(payload.recipient || extractRecipientPhone(payload.text));
-  if (payload.recipient) {
+  if (recipient) {
     const configured = normalizePhone(options.recipientNumbers?.[channel] || "");
-    if (!configured || !recipient || recipient !== configured) {
+    if (!configured) {
+      const error = new Error("Receiving number is not configured for " + channel + ".");
+      error.code = "RECIPIENT_NOT_CONFIGURED"; error.statusCode = 403; throw error;
+    }
+    if (recipient !== configured) {
       const error = new Error("SMS recipient does not match the configured " + channel + " receiving number.");
       error.code = "INVALID_RECIPIENT"; error.statusCode = 403; throw error;
     }
