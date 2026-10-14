@@ -5762,7 +5762,6 @@ async function deletePlan(id,name){
                 const txMbps = Number(data.tx || 0) * 8 / 1000000;
                 safeSetText('dashboardTrafficRx', rxMbps.toFixed(3));
                 safeSetText('dashboardTrafficTx', txMbps.toFixed(3));
-                if (typeof nocTrafficHistory !== 'undefined') { nocTrafficHistory.push({rx:rxMbps,tx:txMbps}); if(nocTrafficHistory.length>60)nocTrafficHistory.shift(); nocChart(); }
                 const trafficStatus = document.getElementById('dashboardTrafficStatus');
                 if (trafficStatus) { trafficStatus.className = 'badge bg-success ms-auto'; trafficStatus.textContent = 'LIVE'; }
             } catch (error) {
