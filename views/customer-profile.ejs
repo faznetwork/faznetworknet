@@ -276,7 +276,6 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2 text-success"></i>Network Topology Bridge</h5><div class="small text-muted">Customer-to-OLT connection path · live values appear only when verified</div></div><span id="topologyOverall" class="topology-health">Awaiting telemetry</span></div>
 <div class="topology-chain" aria-label="Network connection topology">
 <div class="topology-node"><div class="topology-step">01 · MikroTik IP Pool</div><div id="topoPool" class="topology-value">—</div><div class="topology-detail">Assigned subscriber pool</div></div>
-<div class="topology-node"><div class="topology-step">02 · Customer endpoint</div><div id="topoIp" class="topology-value mono">IP —</div><div id="topoRouterMac" class="topology-detail mono">Router MAC —</div></div>
 <div class="topology-node"><div class="topology-step">03 · OLT PON Port</div><div id="topoPon" class="topology-value">EPON —</div><div class="topology-detail">OLT uplink / PON mapping</div></div>
 <div class="topology-node"><div class="topology-step">04 · ONU identity</div><div id="topoOnu" class="topology-value">ONU —</div><div id="topoOnuMac" class="topology-detail mono">ONU MAC —</div></div>
 <div class="topology-node"><div class="topology-step">05 · Optical health</div><div id="topoRx" class="topology-value">RX — dBm</div><div id="topoHealth" class="topology-detail"><span class="topology-health">No verified reading</span></div></div>
@@ -316,7 +315,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 let livePollBusy=false,networkMapBusy=false,profileLoadBusy=false;
 const hasValue=v=>v!==null&&v!==undefined&&String(v).trim()!==''&&String(v).trim()!=='—';
 function mergeCustomerState(incoming){const previous=state||{},next=incoming||{},oldLive=previous.live||{},newLive=next.live||{};state={...previous,...next,customer:{...(previous.customer||{}),...(next.customer||{})},package:{...(previous.package||{}),...(next.package||{})},live:{...oldLive,...newLive,mac:hasValue(newLive.mac)?newLive.mac:(oldLive.mac||''),ip:hasValue(newLive.ip)?newLive.ip:(oldLive.ip||''),poolName:hasValue(newLive.poolName)?newLive.poolName:(oldLive.poolName||'')}};render();renderRouterIdentity();}
-function renderRouterIdentity(){const c=state?.customer||{},l=state?.live||{},p=state?.package||{},mac=(hasValue(l.mac)?l.mac:'')||(hasValue(c.routerMac)?c.routerMac:'')||'—',pool=hasValue(l.poolName)?l.poolName:(hasValue(p.poolName)?p.poolName:'');$('topoRouterMac').textContent='Router MAC '+mac;$('networkMapRouterMac').textContent=mac;$('routerMac').textContent=mac;$('liveIp').textContent=(hasValue(l.ip)?'IP '+l.ip:'IP —')+' · Router MAC '+mac;$('topoPool').textContent=pool||'Pool not resolved';$('pool').textContent=pool||'Pool not resolved';}
+function renderRouterIdentity(){const c=state?.customer||{},l=state?.live||{},p=state?.package||{},mac=(hasValue(l.mac)?l.mac:'')||(hasValue(c.routerMac)?c.routerMac:'')||'—',pool=hasValue(l.poolName)?l.poolName:(hasValue(p.poolName)?p.poolName:'');$('networkMapRouterMac').textContent=mac;$('routerMac').textContent=mac;$('liveIp').textContent=(hasValue(l.ip)?'IP '+l.ip:'IP —')+' · Router MAC '+mac;$('topoPool').textContent=pool||'Pool not resolved';$('pool').textContent=pool||'Pool not resolved';}
 const api=async(url,o={})=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),8000);try{const r=await fetch(url,{...o,signal:c.signal,headers:{Accept:'application/json',...(o.headers||{})}}),d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw Error(d.message||'Request failed');return d}catch(e){if(e.name==='AbortError')throw Error('Request timed out after 8 seconds.');throw e}finally{clearTimeout(t)}};
 const toast=(m,type='success')=>{const e=$('toast');e.className='toast text-bg-'+type;e.querySelector('.toast-body').textContent=m;bootstrap.Toast.getOrCreateInstance(e,{delay:3500}).show()};
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -337,7 +336,6 @@ async function loadNetworkMap(){
  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
  const initialPool=hasValue(live.poolName)?live.poolName:(hasValue(pkg.poolName)?pkg.poolName:'');
  $('topoPool').textContent=initialPool||'Pool not resolved';
- $('topoIp').textContent='IP '+(live.ip||'—');
  renderRouterIdentity();
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
@@ -351,8 +349,8 @@ async function loadNetworkMap(){
   $('topologyOnuMissing').classList.toggle('d-none',Boolean(savedOnuMac));
   if(!$('topoRx').dataset.loaded) $('topoRx').textContent='RX not available';
   $('topoHealth').innerHTML='<span class="topology-health warning">Live OLT data pending</span>';
-  const mappedCount=[pkg.poolName,live.ip,live.mac||customer.routerMac,customer.oltPonPort,savedOnuId||savedOnuMac].filter(Boolean).length;
-  $('topologyOverall').textContent='Partial mapping · '+mappedCount+'/5 fields';
+  const mappedCount=[pkg.poolName,customer.oltPonPort,savedOnuId||savedOnuMac].filter(Boolean).length;
+  $('topologyOverall').textContent='Partial mapping · '+mappedCount+'/3 fields';
   $('topologyOverall').className='topology-health warning';
   $('topologyFootnote').textContent='Saved customer fields are shown as saved/unverified. Live ONU MAC, ONU status and optical readings require a fresh authenticated OLT collector report.';
 
@@ -399,7 +397,7 @@ async function loadNetworkMap(){
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
   const currentLive=state?.live||{},currentCustomer=state?.customer||{};
   const finalMac=(hasValue(currentLive.mac)?currentLive.mac:'')||(hasValue(d.routerMac)?d.routerMac:'')||(hasValue(currentCustomer.routerMac)?currentCustomer.routerMac:'');
-  if(hasValue(finalMac)){mac.textContent=finalMac;$('topoRouterMac').textContent='Router MAC '+finalMac;$('routerMac').textContent=finalMac;}
+  if(hasValue(finalMac)){mac.textContent=finalMac;$('routerMac').textContent=finalMac;}
   const poolName=hasValue(currentLive.poolName)?currentLive.poolName:(hasValue(state?.package?.poolName)?state.package.poolName:'');$('topoPool').textContent=poolName||'Pool not resolved';
   // Legacy customer-column readings must not overwrite fresher collector telemetry.
   if(!hasCollectorTelemetry){
