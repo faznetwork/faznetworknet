@@ -38,7 +38,7 @@ function parseFirstLoginAt(comment) {
 }
 
 function parseCommentExpiry(comment) {
-  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})(?:[ T](\\d{2}:\\d{2}:\\d{2}))?/i);
+  const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}:\d{2}))?/i);
   if (!match) return null;
   const date = match[2]
     ? new Date(match[1] + "T" + match[2] + "+06:00")
@@ -60,7 +60,7 @@ function routerUserExpired(user, schedulerNames) {
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
     const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
     const dhakaMatch = expValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
-    const dateOnly = expValue.match(/^(\\d{4}-\\d{2}-\\d{2})$/);
+    const dateOnly = expValue.match(/^(\d{4}-\d{2}-\d{2})$/);
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
       : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
