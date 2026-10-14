@@ -53,7 +53,7 @@ async function webhook(req,res){
   if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
   // Never mutate the original transaction when MacroDroid retries delivery.
-  if(existing.rows.length)return res.json({success:true,status:"duplicate",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
+  if(existing.rows.length)return res.json({success:true,status:"duplicate_ignored",code:"DUPLICATE_IGNORED",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
   let user=null;
   if(payment.customerRef){
    const found=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) OR id::text=$1 LIMIT 1",[payment.customerRef]);
@@ -75,7 +75,7 @@ async function webhook(req,res){
     // Persist the claim before calling RouterOS. The unique TrxID constraint arbitrates concurrent webhook retries.
     let claim;
     try{
-     claim=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'processing',$5,$6,true) RETURNING id",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
+     claim=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claimed_at,claimed_by,claim_flow) VALUES($1,$2,$3,$4,'processing',$5,$6,true,NOW(),$5,'pppoe') RETURNING id",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
     }catch(claimError){
      if(claimError?.code==="23505")return res.status(409).json({success:false,status:"duplicate",error:"This TrxID has already been received or claimed."});
      throw claimError;
@@ -85,7 +85,7 @@ async function webhook(req,res){
     const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
     await db.withTransaction(async client=>{
      await persistCustomerRenewal(client.query.bind(client),customer,renewal);
-     const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
+     const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
     });
     claimedTransactionId=null;
@@ -99,7 +99,7 @@ async function webhook(req,res){
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
  }catch(error){
   if(claimedTransactionId!==null&&!routerSucceeded){
-   try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
+   try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
    catch(rollbackError){console.error("[Payment Webhook] Failed to release claim after RouterOS failure",claimedTransactionId,rollbackError?.message||rollbackError);}
   }else if(claimedTransactionId!==null&&routerSucceeded){
    console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,trxId:req.body?.trxId||req.body?.trx_id||null,error:error?.message||String(error)});
@@ -159,20 +159,20 @@ async function manualMatch(req,res){
   if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});
   const expected=Number(customer.price||0);
   if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='pppoe',matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
   await db.withTransaction(async client=>{
    await persistCustomerRenewal(client.query.bind(client),customer,renewal);
-   const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
+   const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
    if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
   });
   claimedTransactionId=null;
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
-   try{const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);}
+   try{const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);}
    catch(rollbackError){console.error("[Manual Match] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
   }else if(claimedTransactionId!==null&&routerSucceeded){
    console.error("[CRITICAL_PARTIAL_PROVISION] Manual PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:req.body?.username,error:e?.message||String(e)});
@@ -186,97 +186,52 @@ async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
 async function verifyTrx(req,res){
- console.log('[VERIFY-TRX HIT]', req.body, req.query);
- const body=req.body&&typeof req.body==="object"?req.body:{};
- const query=req.query&&typeof req.query==="object"?req.query:{};
- const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
+ const body=req.body&&typeof req.body==="object"?req.body:{}, query=req.query&&typeof req.query==="object"?req.query:{};
+ const fail=(status,code,message,extra={})=>res.status(status).json({success:false,code,error:message,message,...extra});
+ if(!rateLimit(String(req.ip||"unknown")))return fail(429,"RATE_LIMITED","Too many verification attempts. Try again later.");
  let claimedTransactionId=null,routerSucceeded=false;
  try{
   const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
-  if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
-  const rawTrx = body.trxId || body.trx_id || body.transaction_id || body.trx || body.txnid || query.trxId || '';
-  const cleanTrx = String(rawTrx).trim().toUpperCase();
-  if(!cleanTrx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
-  console.log('[VERIFY-TRX QUERY PARAM]:', cleanTrx);
-  const q=await db.query(`SELECT * FROM transactions
-     WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1))
-       AND (used = false OR used IS NULL)
-       AND LOWER(TRIM(status)) = 'unmatched'
-     LIMIT 1;`,[rawTrx]);
-  console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
-  if(!q.rows.length){
-   const existing=await db.query("SELECT status,used,matched_username FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
-   if(existing.rows.length&&(existing.rows[0].used||["processing","processed","PAID","duplicate"].includes(String(existing.rows[0].status||""))))return res.status(409).json({success:false,error:"This transaction has already been used or is being processed and cannot be reused for Hotspot."});
-   return res.status(404).json({success:false,error:"Transaction not found or not yet eligible. Please wait for SMS verification."});
-  }
-  const tx=q.rows[0];
-  const requestedMethod=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
-  if(requestedMethod&&["bkash","nagad","rocket","upay"].includes(requestedMethod)&&String(tx.channel||"").trim().toLowerCase()!==requestedMethod)return res.status(400).json({success:false,error:"The TrxID was recorded under a different payment method. Select the method used to send the money."});
-  const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
-  // An unused unmatched transaction can be associated with a PPPoE username when
-  // its amount did not match that customer's bill. It is still eligible for
-  // Hotspot if the exact selected profile price matches below. Paid, processing,
-  // and already-used transactions are excluded by the initial query.
-
-  if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
-  const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
-  let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
+  if(!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Hotspot account phone/username.");
+  const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
+  if(!cleanTrx)return fail(400,"TRXID_REQUIRED","TrxID/TxnID is required.");
+  const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
+  if(!found.rows.length)return fail(404,"NOT_FOUND_OR_DELAYED","Transaction not found yet. Wait for the SMS forwarder and try again.");
+  const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  if(tx.used===true||["processing","processed","paid","duplicate"].includes(status))return fail(409,"ALREADY_CLAIMED","This TrxID has already been used or is being processed.");
+  if(status!=="unmatched")return fail(409,"TRANSACTION_NOT_ELIGIBLE","This transaction is not eligible for Hotspot verification.");
+  const method=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
+  if(method&&["bkash","nagad","rocket","upay"].includes(method)&&String(tx.channel||"").toLowerCase()!==method)return fail(400,"PAYMENT_METHOD_MISMATCH","Select the payment method used for this TrxID.");
+  const amount=Number(tx.amount),requestedAmount=Number(body.amount);
+  if(!Number.isFinite(requestedAmount)||requestedAmount<=0||moneyCents(requestedAmount)!==moneyCents(amount))return fail(400,"AMOUNT_MISMATCH","The paid amount does not match the selected package price.");
+  const requestedProfile=String(body.profile_id||body.profileId||body.package_id||body.packageId||"").trim();
+  if(!requestedProfile)return fail(400,"PROFILE_REQUIRED","Select a specific Hotspot package before verifying payment.");
+  const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  let profileMetadata={};try{profileMetadata=JSON.parse(metaResult.rows[0]?.value||"{}");}catch(_){}
   if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
-  const hotspotProfiles=await mikrotikService.getHotspotProfiles();
-  const requestedProfile=String(body.profileName||body.profile_name||"").trim();
-  const matchingProfiles=hotspotProfiles.filter(item=>{
-   const profileName=String(item.name||"");
-   const metadata=profileMetadata[profileName]||{};
-   const priceMatches=Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
-   return priceMatches&&profileIdentifierMatches(profileName,metadata,requestedProfile);
-  });
-  if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
-  const hotspotProfile=matchingProfiles[0];
-  const metadata=profileMetadata[String(hotspotProfile.name||"")]||{};
-  const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
-  let validityConfig;
-  try{validityConfig=metadata.validityValue?normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):parseStoredValidity(hotspotProfile);}catch(_){validityConfig=parseStoredValidity(hotspotProfile);}
+  const profiles=await mikrotikService.getHotspotProfiles();
+  const matches=profiles.filter(item=>profileIdentifierMatches(String(item.name||""),profileMetadata[String(item.name||"")]||{},requestedProfile));
+  if(matches.length!==1)return fail(400,"PROFILE_NOT_FOUND_OR_AMBIGUOUS","The selected package ID does not map to exactly one active Hotspot profile.");
+  const profile=matches[0],metadata=profileMetadata[String(profile.name||"")]||{};
+  if(!Number.isFinite(Number(metadata.price))||moneyCents(metadata.price)!==moneyCents(amount))return fail(400,"AMOUNT_MISMATCH","The paid amount does not match the configured price for this exact package.",{expectedAmount:Number(metadata.price)});
+  const hc=require("../services/hotspotProfileConfig");let validityConfig;
+  try{validityConfig=metadata.validityValue?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}catch(_){validityConfig=hc.parseStoredValidity(profile);}
   const validity=String(validityConfig.validity||"").trim();
-  if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return res.status(400).json({success:false,error:"The selected Hotspot profile has no usable validity or data quota configured."});
-  // Atomic compare-and-set: only one concurrent request can claim this payment.
-  // Mark it used before touching RouterOS so a parallel request cannot reset the
-  // user's quota/counters by invoking rechargeHotspotUser a second time.
-  const claim=await db.query(`UPDATE transactions
-     SET used=true,status='processing',matched_username=$1
-     WHERE id=$2 AND (used=false OR used IS NULL)
-       AND LOWER(TRIM(status)) = 'unmatched'
-     RETURNING id;`,[phone,tx.id]);
-  if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
+  if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return fail(400,"PROFILE_INVALID","The selected Hotspot profile has no usable validity or data quota configured.");
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1 WHERE id=$2 AND UPPER(TRIM(trx_id))=$3 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[phone,tx.id,cleanTrx]);
+  if(!claim.rows.length){const latest=await db.query("SELECT status FROM transactions WHERE id=$1",[tx.id]);const ls=String(latest.rows[0]?.status||"").toLowerCase();return fail(409,ls==="processing"?"TRANSACTION_IN_PROCESS":"TRANSACTION_ALREADY_USED","Another request has claimed this TrxID. No RouterOS provisioning was attempted.");}
   claimedTransactionId=tx.id;
-  const safeProfile=String(hotspotProfile.name||"").replace(/[|]/g,"").slice(0,80);
-  const hotspotComment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+(validity||"0")+"|CHANNEL=PORTAL|TRX="+cleanTrx;
-  const existingLogin=String(hotspotProfile?.raw?.["on-login"]||"");
-  const profileLogin=buildHotspotOnLoginScript({name:hotspotProfile.name,sharedUsers:Number(hotspotProfile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"});
-  const preservedLogin=existingLogin.trim()&&!existingLogin.includes("FAZ|PROFILE=")?" ; "+existingLogin.trim():"";
-  await mikrotikService.updateHotspotProfile({name:hotspotProfile.name,rateLimit:hotspotProfile.rateLimit,sharedUsers:Number(hotspotProfile.sharedUsers)||1,sessionTimeout:validity||"",clearSessionTimeout:false,keepaliveTimeout:hotspotProfile.keepaliveTimeout,onLogin:profileLogin+preservedLogin});
-  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:hotspotComment});
-  routerSucceeded=true;
-  if(validity){
-   const updatedVoucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$1,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
-   if(!updatedVoucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$1,'all')",[phone,phone,hotspotProfile.name,validity,amount,hotspotComment]);
-  }
-  await db.withTransaction(async client=>{
-   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
-   if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization did not update the claimed transaction.");
-  });
-  claimedTransactionId=null;
-  return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
+  const safeProfile=String(profile.name||"").replace(/[|]/g,"").slice(0,80),comment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+(validity||"0")+"|CHANNEL=PORTAL|TRX="+cleanTrx;
+  const oldLogin=String(profile?.raw?.["on-login"]||""),loginScript=buildHotspotOnLoginScript({name:profile.name,sharedUsers:Number(profile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"}),preserved=oldLogin.trim()&&!oldLogin.includes("FAZ|PROFILE=")?" ; "+oldLogin.trim():"";
+  await mikrotikService.updateHotspotProfile({name:profile.name,rateLimit:profile.rateLimit,sharedUsers:Number(profile.sharedUsers)||1,sessionTimeout:validity||"",clearSessionTimeout:false,keepaliveTimeout:profile.keepaliveTimeout,onLogin:loginScript+preserved});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:profile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment});routerSucceeded=true;
+  if(validity){const voucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$1,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,profile.name,validity,amount,comment]);if(!voucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$1,'all')",[phone,phone,profile.name,validity,amount,comment]);}
+  await db.withTransaction(async client=>{const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);if(!finalized.rows.length)throw new Error("Hotspot provisioning succeeded but transaction finalization failed.");});
+  claimedTransactionId=null;return res.json({success:true,message:"সফল হয়েছে!",username:phone,password:phone,profile:profile.name,profile_id:requestedProfile,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){
-  if(claimedTransactionId!==null&&!routerSucceeded){
-   try{
-    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);
-    if(!rollback.rows.length)console.error("[VERIFY-TRX] Claim rollback found no processing row for transaction",claimedTransactionId);
-   }catch(rollbackError){console.error("[VERIFY-TRX] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
-  }else if(claimedTransactionId!==null&&routerSucceeded){
-   console.error("[CRITICAL_PARTIAL_PROVISION] Hotspot provisioning succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:body.username||body.phone||body.customer_phone||body.user||null,error:e?.message||String(e)});
-  }
-  console.error("[VERIFY-TRX] Provisioning failed:",e?.message||e);
-  return errorResponse(res,e,500);
+  if(claimedTransactionId!==null&&!routerSucceeded){try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}}
+  else if(claimedTransactionId!==null&&routerSucceeded){try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'hotspot',$2,$3::jsonb)",[claimedTransactionId,String(body.username||body.phone||""),JSON.stringify({flow:"hotspot",transactionId:claimedTransactionId,error:e?.message||String(e),recordedAt:new Date().toISOString()})]);}catch(auditError){console.error("[CRITICAL] Durable reconciliation audit failed",claimedTransactionId,auditError?.message||auditError);}return fail(500,"RECONCILIATION_REQUIRED","Payment is secured but finalization needs administrator reconciliation. Do not retry this TrxID.");}
+  const code=e?.code||"ROUTER_ERROR";return fail(e?.statusCode||500,code,e?.message||"Payment verification failed.");
  }
 }
 
