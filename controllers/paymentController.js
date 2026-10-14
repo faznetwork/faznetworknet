@@ -264,7 +264,7 @@ async function verifyTrx(req,res){
   const expiryDate=validity?calculateHotspotExpiryDate(validityConfig):null;
   const comment=expiryDate?"Exp: "+expiryDate:"";
   const oldLogin=String(profile?.raw?.["on-login"]||"");
-  const loginScript=buildHotspotOnLoginScript({sharedUsers:Number(profile.sharedUsers)||1});
+  const loginScript=buildHotspotOnLoginScript({sharedUsers:Number(profile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"});
   // Keep unrelated custom hooks, but never re-install the old duplicate FAZ expiry
   // script or append a second copy of our managed hook on each payment.
   const customMarker='FAZ_CUSTOM_ON_LOGIN_HOOK_START';
