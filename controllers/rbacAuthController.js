@@ -438,7 +438,7 @@ async function createUser(req, res) {
   const requestedUsername = String(req.body?.username || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = normalizeRole(req.body?.role);
-  const selfServiceSignup = req.body?.selfServiceSignup === true;
+  const selfServiceSignup = req.selfServiceInvitationRoute === true && req.body?.selfServiceSignup === true && role === 'staff';
   const username = selfServiceSignup ? null : requestedUsername;
   if (!selfServiceSignup && !/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3-60 characters (letters, numbers, dot, underscore or hyphen).' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
@@ -592,11 +592,8 @@ async function acceptInvitation(req, res) {
     const invite=found.rows[0];
     if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
     const selfServiceSignup=invite.self_service_signup===true;
-    // Self-service invitations may create any role that the authenticated
-    // inviter was authorized to invite. Role authorization is enforced when
-    // the invitation is created; the token cannot be changed by the invitee.
     if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Password must be 12–128 characters.'});
-    if(!confirmPassword || password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Passwords do not match. Enter the same password in both fields.'});
+    if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Passwords do not match.'});
     const acceptedUsername=selfServiceSignup?requestedUsername:String(invite.username||'').trim();
     if(!/^[a-zA-Z0-9._-]{3,60}$/.test(acceptedUsername)) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Username must be 3–60 characters (letters, numbers, dot, underscore or hyphen).'});
     if(!selfServiceSignup) {
