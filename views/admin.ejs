@@ -1354,7 +1354,7 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher Management</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher &amp; Recharge Ledger</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('cleanup','Expired &amp; Cleanup'); return false;"><span>Expired &amp; Cleanup</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherSales(); return false;"><span>Voucher Sales History</span></a></li>
                 </ul>
@@ -2434,10 +2434,10 @@
             '<button type="button" class="dashboard-round-button dashboard-round-collection" onclick="window.loadHotspotVoucherSales()" title="Open Hotspot voucher sales history"><span class="dashboard-round-icon"><i class="bi bi-cash-coin"></i></span><strong id="hsRoundTodayRevenue" class="dashboard-round-amount">৳0.00</strong><span class="dashboard-round-label">Today\'s Collection</span><span class="dashboard-round-hint">Voucher sales</span></button>'+
             '<button type="button" class="dashboard-round-button dashboard-round-router" onclick="window.loadDevices()" title="Open MikroTik devices"><span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><strong>Open</strong><span class="dashboard-round-label">MikroTik</span><span class="dashboard-round-hint">Device management</span></button>'+
             '</div><div class="row g-3 mb-4">'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Vouchers Sold Today</div><span id="hsVouchersSoldToday" class="fs-3 fw-bold mt-1 d-block">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Hotspot Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expired Today</div><span id="hsExpiredToday" class="fs-3 fw-bold mt-1 d-block text-danger">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Revenue</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div></div></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Sessions</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Sales</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div><span id="hsVouchersSoldToday" class="small text-muted">0 payments</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expiring in &lt; 1h</div><span id="hsExpiringWithinHour" class="fs-3 fw-bold mt-1 d-block text-warning">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Cleanup Pending / Evicted Today</div><span id="hsCleanupPending" class="fs-3 fw-bold mt-1 d-block text-danger">0</span><span id="hsEvictedToday" class="small text-muted">0 evicted today</span></div></div></div></div>'+
             '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 mt-2"><div><h5 class="mb-1 fw-bold">Voucher Inventory</h5><div class="small text-muted">Counts from PostgreSQL voucher records</div></div><button type="button" class="btn btn-outline-success btn-sm" onclick="window.refreshHotspotVoucherStats()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>'+
             '<div class="row g-3 mb-4">'+
             '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Vouchers</div><span id="hsVoucherTotal" class="fs-3 fw-bold d-block mt-1">—</span></div></div></div>'+
@@ -2487,6 +2487,9 @@
                 safeSetText('hsTodayRevenue',Number(d.activeRevenue??d.todayRevenue??0).toFixed(2));
                 safeSetText('hsVouchersSoldToday',Number(d.vouchersSoldToday||0).toLocaleString());
                 safeSetText('hsExpiredToday',Number(d.expiredToday||0).toLocaleString());
+                safeSetText('hsExpiringWithinHour',Number(d.expiringWithinHour||0).toLocaleString());
+                safeSetText('hsCleanupPending',Number(d.cleanupPending||0).toLocaleString());
+                safeSetText('hsEvictedToday',Number(d.evictedToday||0).toLocaleString()+' evicted today');
                 safeSetText('hsRoundTotalUsers',Number(d.totalUsers||0).toLocaleString());
                 safeSetText('hsRoundActiveUsers',Number(d.activeUsers||0).toLocaleString());
                 safeSetText('hsRoundOfflineUsers',Number(d.offlineUsers||0).toLocaleString());
