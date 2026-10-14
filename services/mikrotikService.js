@@ -847,8 +847,8 @@ class MikroTikService {
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
     const suppliedComment=this._str(data.comment);
     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const commentIsManaged=/^FAZ\\|EXP=[^|]*\\|PROF=[^|]*\\|INIT=1(?:\\||$)/i.test(suppliedComment);
-    const validity=suppliedComment.match(/(?:^|\\|)VALIDITY=([^|]+)/i)?.[1]||"";
+    const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
+    const validity=suppliedComment.match(/(?:^|\|)VALIDITY=([^|]+)/i)?.[1]||"";
     const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
     return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":undefined, "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
   }
@@ -872,7 +872,7 @@ class MikroTikService {
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
     const suppliedComment=this._str(data.comment);
     const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const commentIsManaged=/^FAZ\\|EXP=[^|]*\\|PROF=[^|]*\\|INIT=1(?:\\||$)/i.test(suppliedComment);
+    const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
     const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
