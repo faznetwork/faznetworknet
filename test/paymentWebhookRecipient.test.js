@@ -6,7 +6,7 @@ const message = "bKash Payment Received Tk 500 TrxID ABC12345";
 
 test("SMS parser accepts a recipient matching the current General Settings number", () => {
   const payment = parseSms(
-    { message, recipient: "01700000000" },
+    { sender: "bKash", message, recipient: "01700000000" },
     {},
     {},
     { recipientNumbers: { bkash: "01700000000" } }
@@ -19,7 +19,7 @@ test("SMS parser accepts a recipient matching the current General Settings numbe
 test("SMS parser rejects an explicitly mismatched receiving number", () => {
   assert.throws(
     () => parseSms(
-      { message, recipient: "01800000000" },
+      { sender: "bKash", message, recipient: "01800000000" },
       {},
       {},
       { recipientNumbers: { bkash: "01700000000" } }
@@ -30,13 +30,13 @@ test("SMS parser rejects an explicitly mismatched receiving number", () => {
 
 test("SMS parser fails closed when recipient context exists but no MFS number is configured", () => {
   assert.throws(
-    () => parseSms({ message, recipient: "01700000000" }, {}, {}, { recipientNumbers: {} }),
+    () => parseSms({ sender: "bKash", message, recipient: "01700000000" }, {}, {}, { recipientNumbers: {} }),
     /Receiving number is not configured for bkash/
   );
 });
 
 test("SMS parser remains compatible with forwarders that do not send recipient context", () => {
-  const payment = parseSms({ message }, {}, {}, { recipientNumbers: {} });
+  const payment = parseSms({ sender: "bKash", message }, {}, {}, { recipientNumbers: {} });
   assert.equal(payment.channel, "bkash");
   assert.equal(payment.recipientPhone, "");
 });
