@@ -2255,10 +2255,11 @@
         function hotspotSubnavMarkup() {
             return '<nav class="hotspot-subnav" aria-label="Hotspot sections">'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotDashboard()">▦ Dashboard</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher Management\')">▤ Vouchers</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'active\',\'active_user\')">◉ Active Sessions</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotProfiles(\'hotspot_profile\')">⚙ Profiles</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadVoucherGeneratorSection()">＋ Generate Vouchers</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\\'all\\',\\'all_user\\')">▤ All Hotspot Users</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\\'active\\',\\'active_user\\')">◉ Active Sessions</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotProfiles(\\'hotspot_profile\\')">⚙ Profiles &amp; Packages</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadVoucherGeneratorSection()">＋ Generate / Print</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\\'all\\',\\'Voucher & Recharge Ledger\\')">▤ Voucher &amp; Recharge Ledger</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherSales()">৳ Sales History</button>'+
             '</nav>';
         }
