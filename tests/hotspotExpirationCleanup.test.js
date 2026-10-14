@@ -6,7 +6,8 @@ const {
   createHotspotExpirationCleanup,
   parseRouterOsDuration,
   parseFirstLoginAt,
-  routerUserExpired
+  routerUserExpired,
+  runHotspotRetentionCleanup
 } = require("../jobs/hotspotExpirationCleanup");
 
 function mockDb(rows) {
@@ -181,4 +182,32 @@ test("keeps cleanup pending and records the error when MikroTik removal fails", 
   assert.equal(result.expired, 1);
   assert.equal(result.failed, 1);
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='pending'") && call.params.includes("Router API timeout")));
+});
+
+test("does not expire calendar-validity users based on cumulative uptime", () => {
+  assert.equal(routerUserExpired({
+    username: "CALENDAR-USER",
+    disabled: false,
+    comment: "FAZ|EXP=PENDING|PROF=Gold|PROFILE=Gold|VALIDITY=1h|FIRST_LOGIN=oct/14/2026 10:00:00",
+    uptime: "1h",
+    limitUptime: "1h",
+    limitBytesTotal: 0,
+    bytesIn: 0,
+    bytesOut: 0
+  }, new Set(["faz-exp-CALENDAR-USER"])), false);
+});
+
+test("retention archives transaction history before purging expired vouchers", async () => {
+  const calls=[];
+  const database={async query(sql){
+    calls.push(sql);
+    if(sql.startsWith("INSERT INTO hotspot_voucher_sales_archive")) return {rows:[{transaction_id:1}]};
+    if(sql.startsWith("DELETE FROM hotspot_vouchers")) return {rows:[{id:9}]};
+    return {rows:[]};
+  }};
+  const result=await runHotspotRetentionCleanup({db:database,logger:quietLogger()});
+  assert.equal(result.archivedTransactions,1);
+  assert.equal(result.deletedVouchers,1);
+  assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
+  assert.ok(calls[1].includes("INTERVAL '7 days'"));
 });

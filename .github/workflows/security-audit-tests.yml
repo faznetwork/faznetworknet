@@ -42,5 +42,11 @@ jobs:
           node --check routes/pppoeRoutes.js
           node --check public/js/rbac-sidebar.js
           node -e "const fs=require('fs'),ejs=require('ejs'); ejs.compile(fs.readFileSync('views/admin.ejs','utf8')); ejs.compile(fs.readFileSync('views/verify-otp.ejs','utf8')); console.log('RBAC EJS templates compile')"
+      - name: Hotspot calendar validity syntax and build
+        run: |
+          node --check controllers/hotspotController.js
+          node --check services/hotspotProfileConfig.js
+          node --check jobs/hotspotExpirationCleanup.js
+          npm run build
       - name: Regression tests
         run: npm test

@@ -760,13 +760,26 @@ class MikroTikService {
       for (const session of activeMatches) {
         await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
       }
-      for (const scheduler of schedulerMatches) {
-        await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
-      }
       for (const user of matches) {
         await connection.write("/ip/hotspot/user/remove", ["=.id=" + user[".id"]]);
       }
+      for (const scheduler of schedulerMatches) {
+        await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
+      }
       return { username, sessionsRemoved: activeMatches.length, usersRemoved: matches.length, schedulersRemoved: schedulerMatches.length, alreadyAbsent: matches.length === 0 };
+    });
+  }
+  async setHotspotUserComment(usernameValue, commentValue) {
+    const username = this._str(usernameValue).trim();
+    const comment = this._str(commentValue).slice(0, 500);
+    if (!username || username.length > 100) throw new Error("A valid Hotspot username is required.");
+    return this._withConnection("Hotspot user comment update", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/user/print");
+      const item = (Array.isArray(rows) ? rows : []).find(row =>
+        this._str(row.name).trim().toLowerCase() === username.toLowerCase() && row[".id"]);
+      if (!item) return { username, updated: false, alreadyAbsent: true };
+      await connection.write("/ip/hotspot/user/set", ["=.id=" + item[".id"], "=comment=" + comment]);
+      return { username, updated: true };
     });
   }
   async getHotspotUser(usernameValue) {

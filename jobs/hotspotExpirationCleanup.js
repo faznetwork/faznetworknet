@@ -3,7 +3,7 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 function parseRouterOsDuration(value) {
   const text = String(value || "").trim().toLowerCase();
@@ -47,15 +47,16 @@ function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
+  const expValue = comment.match(/(?:^|\|)EXP=([^|]+)/i)?.[1]?.trim();
+  if (expValue && expValue.toUpperCase() !== "PENDING") {
+    const expDate = new Date(expValue);
+    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
+  }
   if (!managed) return false;
 
   const schedulerName = "faz-exp-" + String(user.username || "");
   const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
   if (user.disabled && !hasExpiryScheduler) return true;
-
-  const allowedUptime = parseRouterOsDuration(user.limitUptime);
-  const usedUptime = parseRouterOsDuration(user.uptime);
-  if (allowedUptime > 0 && usedUptime >= allowedUptime) return true;
 
   const byteLimit = Math.max(0, Number(user.limitBytesTotal) || 0);
   const usedBytes = Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0);
@@ -117,7 +118,7 @@ function createHotspotExpirationCleanup(deps = {}) {
 
         const comment = String(user?.comment || "");
         const firstLogin = parseFirstLoginAt(comment);
-        const hasLoginMarker = Boolean(user && /FAZ\|PROFILE=/i.test(comment));
+        const hasLoginMarker = Boolean(user && /FAZ\|PROFILE=/i.test(comment) && firstLogin);
         let effectiveStatus = voucher.status;
         let expiryAt = voucher.expires_at ? new Date(voucher.expires_at) : null;
         if (expiryAt && Number.isNaN(expiryAt.getTime())) expiryAt = null;
@@ -140,11 +141,21 @@ function createHotspotExpirationCleanup(deps = {}) {
           );
         }
 
+        // Persist the absolute deadline marker for auditability; PostgreSQL remains authoritative.
+        if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
+            /(?:^|\\|)EXP=PENDING(?:\\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
+          const absoluteComment = comment.replace(/(?:^|\\|)EXP=PENDING(?=\\||$)/i, function(match) {
+            return match.startsWith("|") ? "|EXP=" + expiryAt.toISOString() : "EXP=" + expiryAt.toISOString();
+          });
+          await router.setHotspotUserComment(username, absoluteComment).catch(error =>
+            logger.warn("[HOTSPOT EXPIRY] Could not persist absolute expiry comment for " + username + ": " + error.message));
+        }
+
         // PostgreSQL's first-login expiry is authoritative when available. This
         // covers missed RouterOS scheduler events and users already absent from
         // the router, without ever expiring an unused voucher by creation date.
         const currentTime = now();
-        const databaseExpiryReached = effectiveStatus === "active" &&
+        const databaseExpiryReached = ["active", "unused"].includes(effectiveStatus) &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
         const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
@@ -184,16 +195,57 @@ function createHotspotExpirationCleanup(deps = {}) {
   };
 }
 
+async function runHotspotRetentionCleanup(deps = {}) {
+  const database = deps.db || db;
+  const logger = deps.logger || console;
+  try {
+    const archived = await database.query(
+      "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
+      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
+      "FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) " +
+      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '7 days' " +
+      "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
+    );
+    const deleted = await database.query(
+      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expired_at <= NOW() - INTERVAL '7 days' RETURNING id"
+    );
+    const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
+    if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
+    return result;
+  } catch (error) {
+    logger.error("[HOTSPOT RETENTION] Failed; voucher rows were retained:", error.message);
+    return { archivedTransactions: 0, deletedVouchers: 0, error: error.message };
+  }
+}
+
+function startHotspotRetentionCleanup() {
+  runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Initial run failed:", error.message));
+  let lastRunDate = "";
+  return setInterval(() => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).formatToParts(new Date()).reduce((acc, part) => { acc[part.type] = part.value; return acc; }, {});
+    const dateKey = parts.year + "-" + parts.month + "-" + parts.day;
+    if (parts.hour === "00" && parts.minute === "00" && lastRunDate !== dateKey) {
+      lastRunDate = dateKey;
+      runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Scheduled run failed:", error.message));
+    }
+  }, MINUTE_MS);
+}
+
 const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
 
 function startHotspotExpirationCleanup() {
   runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Initial run failed:", error.message));
-  return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), HOUR_MS);
+  return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
 }
 
 module.exports = {
   runHotspotExpirationCleanup,
   startHotspotExpirationCleanup,
+  runHotspotRetentionCleanup,
+  startHotspotRetentionCleanup,
   createHotspotExpirationCleanup,
   parseRouterOsDuration,
   parseFirstLoginAt,

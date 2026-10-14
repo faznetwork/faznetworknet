@@ -1249,7 +1249,26 @@
 #view-customer-filter .mc-actions .mc-pay{background:#059669!important;color:#fff!important;border-color:#047857!important}
 }
 </style>
-</head>
+<style>
+.hotspot-subnav{display:flex;gap:.45rem;align-items:center;overflow-x:auto;white-space:nowrap;padding:.55rem;margin:0 0 1rem;background:#fff;border:1px solid #e2e8f0;border-radius:14px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.hotspot-subnav .hotspot-subnav-link{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;color:#334155;padding:.55rem .8rem;font-size:.82rem;font-weight:650;text-decoration:none;min-height:38px}
+.hotspot-subnav .hotspot-subnav-link:hover,.hotspot-subnav .hotspot-subnav-link:focus{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
+.hotspot-voucher-mobile-list{display:grid;gap:.55rem}
+.hotspot-voucher-card{border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:.7rem;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.hotspot-voucher-row1{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.8fr) auto;align-items:center;gap:.45rem}
+.hotspot-voucher-row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.5rem;align-items:center;margin-top:.55rem;padding-top:.55rem;border-top:1px solid #f1f5f9;font-size:.76rem}
+.hotspot-voucher-user,.hotspot-voucher-profile,.hotspot-voucher-expiry{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.hotspot-voucher-user{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;font-weight:750}
+.hotspot-voucher-profile{font-size:.76rem;color:#64748b}
+.hotspot-voucher-status{font-size:.68rem;line-height:1.15;padding:.3rem .45rem;border-radius:999px;white-space:nowrap}
+.hotspot-voucher-actions{display:flex;gap:.3rem;justify-content:flex-end;grid-column:1/-1}
+.hotspot-voucher-actions .btn{font-size:.72rem;padding:.32rem .5rem;min-height:32px}
+.hotspot-voucher-desktop-wrap{min-width:0}
+.hotspot-voucher-desktop-wrap table{font-size:.84rem}
+.hotspot-voucher-desktop-wrap th,.hotspot-voucher-desktop-wrap td{vertical-align:middle;white-space:nowrap}
+.hotspot-voucher-desktop-wrap td:first-child{white-space:normal;max-width:180px;overflow-wrap:anywhere}
+@media(max-width:767.98px){.hotspot-subnav{margin-left:-.2rem;margin-right:-.2rem;border-radius:10px}.hotspot-subnav .hotspot-subnav-link{font-size:.76rem;padding:.5rem .68rem}.hotspot-voucher-row1{grid-template-columns:minmax(0,1fr) minmax(0,.7fr) auto}.hotspot-voucher-card{padding:.62rem}.hotspot-voucher-actions .btn{min-height:34px}.hotspot-dynamic-view .card-custom-header{gap:.5rem}.hotspot-dynamic-view .card-body{padding:.7rem}}
+</style></head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
@@ -2020,6 +2039,7 @@
             safeSetText('pageTitle', 'Hotspot Dashboard');
             setMobilePageLoading(true, 'LOADING');
             container.innerHTML =
+                hotspotSubnavMarkup()+
                 '<div class="dashboard-shortcuts hotspot-dashboard-shortcuts mb-4">'+
                     '<button type="button" class="dashboard-round-button dashboard-round-customers" onclick="window.loadHotspotSection(\'all\',\'all_user\')" title="Open all Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-people-fill"></i></span><strong id="hsTotal">—</strong><span class="dashboard-round-label">Total Hotspot Users</span><span class="dashboard-round-hint">View user list</span></button>'+
                     '<button type="button" class="dashboard-round-button dashboard-round-online" onclick="window.loadHotspotSection(\'active\',\'active_user\')" title="Open active Hotspot sessions"><span class="dashboard-round-icon"><i class="bi bi-wifi"></i></span><strong id="hsOnline">—</strong><span class="dashboard-round-label">Online</span><span class="dashboard-round-hint">Live sessions</span></button>'+
@@ -2164,23 +2184,40 @@
 
         window.loadHotspotVoucherRecords = async function(filter,title){
             const container=document.getElementById('dynamicPageContent');
-            if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
-            if(!container) return false;
-            container.style.display='block'; if(typeof closeSidebarMobile==='function') closeSidebarMobile();
+            if(document.getElementById('view-dashboard'))document.getElementById('view-dashboard').style.display='none';
+            if(!container)return false;
+            container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
             safeSetText('pageTitle',title||'Voucher Management');
-            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-ticket-perforated-fill text-success me-2"></i><strong>'+escapeHtml(title||'Voucher Management')+'</strong><div class="small text-muted mt-1">PostgreSQL voucher records; historical records are retained</div></div><div class="d-flex flex-wrap gap-2 ms-auto"><button class="btn btn-outline-success btn-sm" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher Management\')">All</button><button class="btn btn-outline-primary btn-sm" onclick="window.loadHotspotVoucherRecords(\'unused\',\'Unused Vouchers\')">Unused</button><button class="btn btn-outline-success btn-sm" onclick="window.loadHotspotVoucherRecords(\'active\',\'Active Vouchers\')">Active</button><button class="btn btn-outline-danger btn-sm" onclick="window.loadHotspotVoucherRecords(\'expired\',\'Expired Vouchers\')">Expired</button><button class="btn btn-outline-secondary btn-sm" onclick="window.loadHotspotVoucherRecords(\'cleanup\',\'Expired & Cleanup\')">Cleanup Pending</button></div></div><div class="card-body"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Voucher</th><th>Profile</th><th>Status</th><th>Price</th><th>First Used</th><th>Expires</th><th>Cleanup</th><th>Created</th></tr></thead><tbody id="hsVoucherRecordsBody"><tr><td colspan="8" class="text-center py-4">Loading voucher records...</td></tr></tbody></table></div><div id="hsVoucherRecordsNote" class="small text-muted"></div></div></div></section>';
+            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-ticket-perforated-fill text-success me-2"></i><strong>Voucher Management</strong><div class="small text-muted mt-1">Calendar validity · First login starts the timer · Expired credentials are evicted</div></div><div class="d-flex flex-wrap gap-2 ms-auto"><button class="btn btn-outline-secondary btn-sm" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher Management\')">All</button><button class="btn btn-outline-secondary btn-sm" onclick="window.loadHotspotVoucherRecords(\'unused\',\'Unused Vouchers\')">Unused</button><button class="btn btn-outline-success btn-sm" onclick="window.loadHotspotVoucherRecords(\'active\',\'Active Vouchers\')">Active</button><button class="btn btn-outline-danger btn-sm" onclick="window.loadHotspotVoucherRecords(\'expired\',\'Expired Vouchers\')">Expired</button><button class="btn btn-outline-warning btn-sm" onclick="window.loadHotspotVoucherRecords(\'cleanup\',\'Cleanup Pending\')">Cleanup Pending</button></div></div><div class="card-body"><div class="hotspot-voucher-desktop-wrap d-none d-md-block table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Username</th><th>Password</th><th>Profile</th><th>Validity</th><th>First Login</th><th>Expiry</th><th>Status</th><th>Actions</th></tr></thead><tbody id="hsVoucherRecordsBody"><tr><td colspan="8" class="text-center py-4">Loading voucher records...</td></tr></tbody></table></div><div id="hsVoucherMobileList" class="hotspot-voucher-mobile-list d-md-none"><div class="text-center py-4 text-muted">Loading voucher records...</div></div><div id="hsVoucherRecordsNote" class="small text-muted mt-2"></div></div></div></section>';
             try{
                 const data=await jsonFetch('/api/hotspot/voucher-records?status='+encodeURIComponent(filter||'all'));
                 const rows=Array.isArray(data.vouchers)?data.vouchers:[];
-                const body=document.getElementById('hsVoucherRecordsBody');
-                const fmt=function(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-GB',{timeZone:'Asia/Dhaka'});};
-                const badge=function(status){const s=String(status||'unknown');const cls=s==='active'?'bg-success':s==='unused'?'bg-primary':s==='expired'?'bg-danger':'bg-secondary';return '<span class="badge '+cls+'">'+escapeHtml(s)+'</span>';};
-                if(body)body.innerHTML=rows.map(function(v){return '<tr><td><strong>'+escapeHtml(v.username)+'</strong><div class="small text-muted">'+escapeHtml(v.phone||'')+'</div></td><td>'+escapeHtml(v.profile||'—')+'</td><td>'+badge(v.status)+'</td><td>৳ '+Number(v.price||0).toFixed(2)+'</td><td>'+fmt(v.first_login_at)+'</td><td>'+fmt(v.expires_at)+'</td><td><span class="badge '+(v.cleanup_status==='failed'?'bg-danger':v.cleanup_status==='pending'?'bg-warning text-dark':'bg-secondary')+'">'+escapeHtml(v.cleanup_status||'—')+'</span>'+(v.cleanup_error?'<div class="small text-danger">'+escapeHtml(v.cleanup_error)+'</div>':'')+'</td><td>'+fmt(v.created_at)+'</td></tr>';}).join('')||'<tr><td colspan="8" class="text-center py-5 text-muted">No voucher records found for this filter.</td></tr>';
-                safeSetText('hsVoucherRecordsNote','Showing '+rows.length+' records (maximum 500 per view). Voucher history is not deleted by cleanup.');
-            }catch(error){const body=document.getElementById('hsVoucherRecordsBody');if(body)body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">'+escapeHtml(error.message||'Could not load voucher records')+'</td></tr>';}
+                const body=document.getElementById('hsVoucherRecordsBody'),mobile=document.getElementById('hsVoucherMobileList');
+                const fmt=function(value){if(!value)return 'Not activated';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('en-GB',{timeZone:'Asia/Dhaka',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});};
+                const badge=function(status){const st=String(status||'unused').toLowerCase();const cls=st==='active'?'bg-success':st==='expired'?'bg-danger':'bg-secondary';const label=st==='active'?'Active':st==='expired'?'Expired':'Unused';return '<span class="badge hotspot-voucher-status '+cls+'">'+label+'</span>';};
+                const enc=function(value){return encodeURIComponent(String(value||''));};
+                if(body)body.innerHTML=rows.map(function(v){return '<tr><td><strong class="font-monospace">'+escapeHtml(v.username||'—')+'</strong></td><td class="font-monospace">'+escapeHtml(v.password||'—')+'</td><td>'+escapeHtml(v.profile||'—')+'</td><td>'+escapeHtml(v.validity||'—')+'</td><td>'+escapeHtml(fmt(v.first_login_at))+'</td><td>'+escapeHtml(fmt(v.expires_at))+'</td><td>'+badge(v.status)+'<div class="small text-muted mt-1">'+escapeHtml(v.cleanup_status||'—')+'</div></td><td><div class="d-flex gap-1"><button class="btn btn-outline-warning btn-sm" data-username="'+enc(v.username)+'" onclick="window.kickHotspotVoucher(this.dataset.username)">Kick</button><button class="btn btn-outline-danger btn-sm" data-username="'+enc(v.username)+'" onclick="window.deleteHotspotVoucher(this.dataset.username)">Delete</button></div></td></tr>';}).join('')||'<tr><td colspan="8" class="text-center py-5 text-muted">No voucher records found.</td></tr>';
+                if(mobile)mobile.innerHTML=rows.map(function(v){return '<article class="hotspot-voucher-card"><div class="hotspot-voucher-row1"><div class="hotspot-voucher-user">🔑 '+escapeHtml(v.username||'—')+'</div><div class="hotspot-voucher-profile">'+escapeHtml(v.profile||'—')+'</div>'+badge(v.status)+'</div><div class="hotspot-voucher-row2"><div>📅 Valid: <strong>'+escapeHtml(v.validity||'—')+'</strong><div class="small text-muted mt-1">First: '+escapeHtml(fmt(v.first_login_at))+'</div></div><div class="hotspot-voucher-expiry">Exp: <strong>'+escapeHtml(fmt(v.expires_at))+'</strong><div class="small text-muted mt-1">Password: <span class="font-monospace">'+escapeHtml(v.password||'—')+'</span></div></div><div class="hotspot-voucher-actions"><button class="btn btn-outline-warning btn-sm" data-username="'+enc(v.username)+'" onclick="window.kickHotspotVoucher(this.dataset.username)">Kick</button><button class="btn btn-outline-danger btn-sm" data-username="'+enc(v.username)+'" onclick="window.deleteHotspotVoucher(this.dataset.username)">Delete</button></div></div></article>';}).join('')||'<div class="text-center py-5 text-muted">No voucher records found.</div>';
+                safeSetText('hsVoucherRecordsNote','Showing '+rows.length+' records · Expired vouchers are retained for 7 days; payment history is archived before credential cleanup.');
+            }catch(error){
+                const body=document.getElementById('hsVoucherRecordsBody'),mobile=document.getElementById('hsVoucherMobileList');
+                if(body)body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">'+escapeHtml(error.message||'Could not load voucher records')+'</td></tr>';
+                if(mobile)mobile.innerHTML='<div class="text-center text-danger py-4">'+escapeHtml(error.message||'Could not load voucher records')+'</div>';
+            }
             return false;
         };
-        window.loadHotspotVoucherSales = async function(){
+        window.kickHotspotVoucher = async function(encodedUsername){
+            const username=decodeURIComponent(String(encodedUsername||''));
+            try{await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await window.loadHotspotVoucherRecords('all','Voucher Management');}
+            catch(error){alert(error.message||'Unable to kick Hotspot session.');}
+        };
+        window.deleteHotspotVoucher = async function(encodedUsername){
+            const username=decodeURIComponent(String(encodedUsername||''));
+            if(!username||!confirm('Remove Hotspot credentials for '+username+' from MikroTik?'))return;
+            try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await window.loadHotspotVoucherRecords('all','Voucher Management');}
+            catch(error){alert(error.message||'Unable to remove Hotspot credentials.');}
+        };
+        window.loadHotspotVoucherSales = async function(){        window.loadHotspotVoucherSales = async function(){
             const container=document.getElementById('dynamicPageContent');
             if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
             if(!container)return false;container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
@@ -2215,6 +2252,17 @@
             document.querySelectorAll('.hotspot-dynamic-view').forEach(function(view){ view.remove(); });
         }
 
+        function hotspotSubnavMarkup() {
+            return '<nav class="hotspot-subnav" aria-label="Hotspot sections">'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotDashboard()">▦ Dashboard</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher Management\')">▤ Vouchers</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'active\',\'active_user\')">◉ Active Sessions</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotProfiles(\'hotspot_profile\')">⚙ Profiles</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadVoucherGeneratorSection()">＋ Generate Vouchers</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherSales()">৳ Sales History</button>'+
+            '</nav>';
+        }
+
         function appendHotspotView(html) {
             purgeStuckBackdrops();
             hideAdminViews();
@@ -2225,6 +2273,7 @@
             if (!dynamic) return;
             dynamic.style.display = 'block';
             dynamic.innerHTML = html;
+            if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
             const view = dynamic.querySelector('.hotspot-dynamic-view');
             if (view) view.style.display = 'block';
             if(window.innerWidth<=768) {
@@ -2385,10 +2434,10 @@
             '<button type="button" class="dashboard-round-button dashboard-round-collection" onclick="window.loadHotspotVoucherSales()" title="Open Hotspot voucher sales history"><span class="dashboard-round-icon"><i class="bi bi-cash-coin"></i></span><strong id="hsRoundTodayRevenue" class="dashboard-round-amount">৳0.00</strong><span class="dashboard-round-label">Today\'s Collection</span><span class="dashboard-round-hint">Voucher sales</span></button>'+
             '<button type="button" class="dashboard-round-button dashboard-round-router" onclick="window.loadDevices()" title="Open MikroTik devices"><span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><strong>Open</strong><span class="dashboard-round-label">MikroTik</span><span class="dashboard-round-hint">Device management</span></button>'+
             '</div><div class="row g-3 mb-4">'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Hotspot Users</div><span id="hsTotalUsers" class="fs-3 fw-bold mt-1 d-block">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active / Online Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Offline Users</div><span id="hsOfflineUsers" class="fs-3 fw-bold mt-1 d-block text-secondary">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Revenue</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div></div></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Vouchers Sold Today</div><span id="hsVouchersSoldToday" class="fs-3 fw-bold mt-1 d-block">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Hotspot Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expired Today</div><span id="hsExpiredToday" class="fs-3 fw-bold mt-1 d-block text-danger">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Revenue</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div></div></div></div></div>'+
             '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 mt-2"><div><h5 class="mb-1 fw-bold">Voucher Inventory</h5><div class="small text-muted">Counts from PostgreSQL voucher records</div></div><button type="button" class="btn btn-outline-success btn-sm" onclick="window.refreshHotspotVoucherStats()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>'+
             '<div class="row g-3 mb-4">'+
             '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Vouchers</div><span id="hsVoucherTotal" class="fs-3 fw-bold d-block mt-1">—</span></div></div></div>'+
@@ -2435,7 +2484,9 @@
                 safeSetText('hsTotalUsers',Number(d.totalUsers||0));
                 safeSetText('hsActiveUsers',Number(d.activeUsers||0));
                 safeSetText('hsOfflineUsers',Number(d.offlineUsers||0));
-                safeSetText('hsTodayRevenue',Number(d.todayRevenue||0).toFixed(2));
+                safeSetText('hsTodayRevenue',Number(d.activeRevenue??d.todayRevenue??0).toFixed(2));
+                safeSetText('hsVouchersSoldToday',Number(d.vouchersSoldToday||0).toLocaleString());
+                safeSetText('hsExpiredToday',Number(d.expiredToday||0).toLocaleString());
                 safeSetText('hsRoundTotalUsers',Number(d.totalUsers||0).toLocaleString());
                 safeSetText('hsRoundActiveUsers',Number(d.activeUsers||0).toLocaleString());
                 safeSetText('hsRoundOfflineUsers',Number(d.offlineUsers||0).toLocaleString());

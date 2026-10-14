@@ -189,6 +189,17 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_attempts INTEGER N
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_error TEXT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS router_removed_at TIMESTAMPTZ;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+CREATE TABLE IF NOT EXISTS hotspot_voucher_sales_archive (
+  transaction_id BIGINT PRIMARY KEY,
+  channel VARCHAR(40),
+  trx_id VARCHAR(150),
+  sender_phone VARCHAR(40),
+  amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status VARCHAR(30) NOT NULL,
+  matched_username VARCHAR(100),
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_hotspot_voucher_sales_archive_created_at ON hotspot_voucher_sales_archive(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_cleanup ON hotspot_vouchers(status,cleanup_status,id);
 
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_created_at ON hotspot_vouchers(created_at DESC);
