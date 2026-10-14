@@ -6537,14 +6537,12 @@ async function deletePlan(id,name){
               <div class="row g-3">
                 <div class="col-12 col-md-6"><label class="form-label" for="routerDeviceName">Router name *</label><input class="form-control" id="routerDeviceName" name="router_name" maxlength="120" required autocomplete="off" placeholder="e.g. Main RB4011"></div>
                 <div class="col-12 col-md-6"><label class="form-label" for="routerDeviceHost">Host IP / hostname *</label><input class="form-control font-monospace" id="routerDeviceHost" name="host" maxlength="253" required autocomplete="off" placeholder="10.20.0.1 or router.example.net"><div class="form-text">Enter IPv4 or DNS hostname only. Do not include protocol or port.</div></div>
-                <div class="col-12 col-md-6"><label class="form-label" for="routerDeviceApiType">API protocol *</label><select class="form-select" id="routerDeviceApiType" name="api_type"><option value="native_api">Native RouterOS API</option><option value="rest_api">REST API (HTTPS)</option></select></div>
-                <div class="col-6 col-md-3"><label class="form-label" for="routerDevicePort">API port *</label><select class="form-select" id="routerDevicePort" name="api_port" required><option value="8728">8728 — API</option><option value="8729">8729 — API-SSL</option><option value="443">443 — REST HTTPS</option></select></div>
-                <div class="col-6 col-md-3 d-flex align-items-end"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="routerDeviceSsl" name="use_ssl"><label class="form-check-label" for="routerDeviceSsl">API-SSL</label></div></div>
+                <div class="col-12 col-md-6"><label class="form-label" for="routerDevicePort">Forwarded port *</label><input class="form-control font-monospace" id="routerDevicePort" name="api_port" type="number" min="1" max="65535" step="1" inputmode="numeric" required placeholder="Enter forwarded port"></div>
                 <div class="col-12 col-md-6"><label class="form-label" for="routerDeviceUsername">Username *</label><input class="form-control" id="routerDeviceUsername" name="username" maxlength="160" required autocomplete="username" placeholder="RouterOS API user"></div>
                 <div class="col-12 col-md-6"><label class="form-label" for="routerDevicePassword">Password *</label><div class="input-group"><input class="form-control" id="routerDevicePassword" name="password" type="password" maxlength="1024" required autocomplete="new-password"><button class="btn btn-outline-secondary" type="button" id="routerDeviceTogglePassword" aria-label="Show password"><i class="bi bi-eye"></i></button></div></div>
                 <div class="col-12 col-md-6"><label class="form-label" for="routerDeviceTimeout">Handshake timeout</label><select class="form-select" id="routerDeviceTimeout" name="timeout"><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="8000" selected>8 seconds</option><option value="15000">15 seconds</option><option value="30000">30 seconds</option></select></div>
                 <div class="col-12"><div id="routerDeviceTestResult" class="alert alert-secondary mb-0 py-2" role="status" aria-live="polite"><i class="bi bi-info-circle me-1"></i>Enter the connection details, then test the connection before saving.</div></div>
-                <div class="col-12 d-none" id="routerDeviceTestDetails"><div class="row g-2 small"><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Latency</div><strong id="routerDeviceLatency">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Board model</div><strong id="routerDeviceBoard">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">RouterOS</div><strong id="routerDeviceVersion">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">CPU load</div><strong id="routerDeviceCpu">—</strong></div></div></div></div>
+                <div class="col-12 d-none" id="routerDeviceTestDetails"><div class="row g-2 small"><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Latency</div><strong id="routerDeviceLatency">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Board model</div><strong id="routerDeviceBoard">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">RouterOS</div><strong id="routerDeviceVersion">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">CPU load</div><strong id="routerDeviceCpu">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Architecture</div><strong id="routerDeviceArchitecture">—</strong></div></div><div class="col-6 col-md-3"><div class="border rounded p-2 h-100"><div class="text-muted">Uptime</div><strong id="routerDeviceUptime">—</strong></div></div></div></div>
               </div>
             </div>
             <div class="modal-footer d-flex flex-wrap justify-content-between gap-2">
@@ -6562,30 +6560,25 @@ async function deletePlan(id,name){
       form.dataset.initialized='1';
       const $=id=>document.getElementById(id);
       let testedFingerprint='';
-      const fields=['routerDeviceName','routerDeviceHost','routerDeviceApiType','routerDevicePort','routerDeviceSsl','routerDeviceUsername','routerDevicePassword','routerDeviceTimeout'];
+      const fields=['routerDeviceName','routerDeviceHost','routerDevicePort','routerDeviceUsername','routerDevicePassword','routerDeviceTimeout'];
       function fingerprint(){return fields.map(id=>$(id).type==='checkbox'?String($(id).checked):String($(id).value||'')).join('|');}
       function invalidateTest(){testedFingerprint='';$('routerDeviceSaveBtn').disabled=true;$('routerDeviceTestDetails').classList.add('d-none');}
       function result(message,kind,icon){const el=$('routerDeviceTestResult');el.className='alert alert-'+kind+' mb-0 py-2';el.textContent='';const i=document.createElement('i');i.className='bi '+icon+' me-1';el.appendChild(i);el.appendChild(document.createTextNode(message));}
-      function syncProtocol(){const rest=$('routerDeviceApiType').value==='rest_api';$('routerDeviceSsl').checked=rest||$('routerDeviceSsl').checked;$('routerDeviceSsl').disabled=rest;$('routerDevicePort').value=rest?'443':($('routerDeviceSsl').checked?'8729':'8728');invalidateTest();}
-      $('routerDeviceApiType').addEventListener('change',syncProtocol);
-      $('routerDeviceSsl').addEventListener('change',()=>{if($('routerDeviceApiType').value==='native_api')$('routerDevicePort').value=$('routerDeviceSsl').checked?'8729':'8728';invalidateTest();});
       fields.forEach(id=>$(id).addEventListener('input',invalidateTest));
       $('routerDeviceTogglePassword').addEventListener('click',()=>{const p=$('routerDevicePassword'),show=p.type==='password';p.type=show?'text':'password';$('routerDeviceTogglePassword').innerHTML='<i class="bi '+(show?'bi-eye-slash':'bi-eye')+'"></i>';$('routerDeviceTogglePassword').setAttribute('aria-label',show?'Hide password':'Show password');});
       function validHost(value){const h=String(value||'').trim();if(!h||/[\s/@?#]/.test(h)||h.includes('://'))return false;const ipv4=/^(?:\d{1,3}\.){3}\d{1,3}$/.test(h);if(ipv4)return h.split('.').every(x=>Number(x)<=255);return /^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(?:\.(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?))*\.?$/.test(h);}
-      function payload(){return {router_name:$('routerDeviceName').value.trim(),host:$('routerDeviceHost').value.trim(),api_type:$('routerDeviceApiType').value,api_port:Number($('routerDevicePort').value),username:$('routerDeviceUsername').value.trim(),password:$('routerDevicePassword').value,use_ssl:$('routerDeviceSsl').checked,timeout:Number($('routerDeviceTimeout').value)};}
+      function payload(){return {router_name:$('routerDeviceName').value.trim(),host:$('routerDeviceHost').value.trim(),api_port:Number($('routerDevicePort').value),username:$('routerDeviceUsername').value.trim(),password:$('routerDevicePassword').value,timeout:Math.min(Number($('routerDeviceTimeout').value)||5000,5000)};}
       $('routerDeviceTestBtn').addEventListener('click',async()=>{
         invalidateTest();
         const data=payload();
         if(!data.router_name||!validHost(data.host)||!data.username||!data.password){result('Enter a router name, valid IPv4/hostname, username and password.','warning','bi-exclamation-triangle');return;}
         if(!Number.isInteger(data.api_port)||data.api_port<1||data.api_port>65535){result('API port must be between 1 and 65535.','warning','bi-exclamation-triangle');return;}
-        if(data.api_type==='native_api'&&![8728,8729].includes(data.api_port)){result('Native API uses port 8728 or 8729.','warning','bi-exclamation-triangle');return;}
-        if(data.api_type==='rest_api'&&(!data.use_ssl||data.api_port!==443&&data.api_port<1)){result('REST API requires HTTPS.','warning','bi-exclamation-triangle');return;}
         const button=$('routerDeviceTestBtn');button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Testing…';result('Connecting to RouterOS and reading identity/resources…','info','bi-arrow-repeat');
         try{
           const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(data)});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
           if(!response.ok||!body.success){const message=body.message||'Connection failed.';result((body.code==='CONNECTION_REFUSED'?'Connection Refused: ':body.code==='AUTH_FAILED'?'Auth Failed: ':'')+message,body.status==='auth_failed'?'danger':'warning',body.status==='auth_failed'?'bi-shield-x':'bi-exclamation-triangle');return;}
-          testedFingerprint=fingerprint();$('routerDeviceLatency').textContent=body.latency_ms+' ms';$('routerDeviceBoard').textContent=body.board_model||'Unknown';$('routerDeviceVersion').textContent=body.ros_version||'Unknown';$('routerDeviceCpu').textContent=body.cpu_load===null?'N/A':body.cpu_load+'%';$('routerDeviceTestDetails').classList.remove('d-none');$('routerDeviceSaveBtn').disabled=false;result('Connected to '+(body.identity||'MikroTik')+' successfully. Save is enabled.','success','bi-check-circle-fill');
+          testedFingerprint=fingerprint();$('routerDeviceLatency').textContent=body.latency_ms+' ms';$('routerDeviceBoard').textContent=body.board_model||'Unknown';$('routerDeviceVersion').textContent=body.ros_version||'Unknown';$('routerDeviceCpu').textContent=body.cpu_load===null?'N/A':body.cpu_load+'%';$('routerDeviceArchitecture').textContent=body.architecture||'Unknown';$('routerDeviceUptime').textContent=body.uptime||'Unknown';$('routerDeviceTestDetails').classList.remove('d-none');$('routerDeviceSaveBtn').disabled=false;result('Connected to '+(body.identity||'MikroTik')+' successfully. Save is enabled.','success','bi-check-circle-fill');
         }catch(error){result(error.message||'Could not reach the server.','danger','bi-x-circle');}
         finally{button.disabled=false;button.innerHTML='<i class="bi bi-plug me-1"></i>Test Connection';}
       });
@@ -6599,13 +6592,13 @@ async function deletePlan(id,name){
           if(!response.ok||!body.success)throw new Error(body.message||'Router could not be saved.');
           result('Router saved successfully.','success','bi-check-circle-fill');
           const modal=bootstrap.Modal.getInstance($('mikrotikAddRouterModal'));if(modal)modal.hide();
-          form.reset();$('routerDevicePort').value='8728';$('routerDeviceSsl').disabled=false;invalidateTest();
+          form.reset();invalidateTest();
           if(typeof window.loadDevices==='function')await window.loadDevices();
           else window.location.reload();
         }catch(error){result(error.message||'Router could not be saved.','danger','bi-x-circle');}
         finally{button.innerHTML='<i class="bi bi-check2-circle me-1"></i>Save Router';button.disabled=true;}
       });
-      $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{form.reset();$('routerDevicePort').value='8728';$('routerDeviceSsl').disabled=false;invalidateTest();result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');});
+      $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{form.reset();invalidateTest();result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');});
     })();
     </script>
 
