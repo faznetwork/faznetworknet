@@ -32,6 +32,28 @@ function profileIdentifierMatches(profileName,metadata,requested){
 }
 function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
 function addDays(v,days){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;d.setUTCDate(d.getUTCDate()+Number(days));return d.toISOString().slice(0,10);}
+function calculateHotspotExpiryDate(validityConfig){
+ const amount=Number(validityConfig?.value);
+ const rawUnit=String(validityConfig?.unit||"").trim().toLowerCase();
+ const unit=({s:"second",sec:"second",seconds:"second",m:"minute",min:"minute",mins:"minute",minutes:"minute",h:"hour",hr:"hour",hrs:"hour",hours:"hour",d:"day",days:"day",w:"week",weeks:"week",mo:"month",months:"month",y:"year",years:"year"})[rawUnit]||rawUnit.replace(/s$/,"");
+ if(!Number.isFinite(amount)||amount<=0)throw new Error("The selected Hotspot package has an invalid validity duration.");
+ // Use Dhaka wall-clock time so the stored date matches the ISP's billing timezone.
+ const expiry=new Date(Date.now()+6*60*60*1000);
+ const factors={second:1000,minute:60*1000,hour:60*60*1000,day:24*60*60*1000,week:7*24*60*60*1000};
+ if(unit==="month"||unit==="year"){
+  const day=expiry.getUTCDate();
+  expiry.setUTCDate(1);
+  if(unit==="month")expiry.setUTCMonth(expiry.getUTCMonth()+amount);
+  else expiry.setUTCFullYear(expiry.getUTCFullYear()+amount);
+  const lastDay=new Date(Date.UTC(expiry.getUTCFullYear(),expiry.getUTCMonth()+1,0)).getUTCDate();
+  expiry.setUTCDate(Math.min(day,lastDay));
+ }else if(factors[unit]){
+  expiry.setTime(expiry.getTime()+amount*factors[unit]);
+ }else{
+  throw new Error("Unsupported Hotspot package validity unit: "+rawUnit);
+ }
+ return expiry.toISOString().slice(0,10);
+}
 function endOfBillingMonth(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Math.max(1,Number(months)||1),0)).toISOString().slice(0,10);}
 async function renewalExpirationDate(durationMonths,query=db.query){
  const result=await query("SELECT value FROM app_settings WHERE key='billing_cycle_type' LIMIT 1");
@@ -230,13 +252,13 @@ async function verifyTrx(req,res){
   const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1 WHERE id=$2 AND UPPER(TRIM(trx_id))=$3 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[phone,tx.id,cleanTrx]);
   if(!claim.rows.length){const latest=await db.query("SELECT status FROM transactions WHERE id=$1",[tx.id]);const ls=String(latest.rows[0]?.status||"").toLowerCase();return fail(409,ls==="processing"?"TRANSACTION_IN_PROCESS":"TRANSACTION_ALREADY_USED","Another request has claimed this TrxID. No RouterOS provisioning was attempted.");}
   claimedTransactionId=tx.id;
-  const safeProfile=String(profile.name||"").replace(/[|]/g,"").slice(0,80),comment="FAZ|EXP=0|PROF="+safeProfile+"|INIT=1|PROFILE="+safeProfile+"|VALIDITY="+(validity||"0")+"|CHANNEL=PORTAL|TRX="+cleanTrx;
+  const expiryDate=calculateHotspotExpiryDate(validityConfig),comment="Exp: "+expiryDate;
   const oldLogin=String(profile?.raw?.["on-login"]||""),loginScript=buildHotspotOnLoginScript({name:profile.name,sharedUsers:Number(profile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"}),preserved=oldLogin.trim()&&!oldLogin.includes("FAZ|PROFILE=")?" ; "+oldLogin.trim():"";
   await mikrotikService.updateHotspotProfile({name:profile.name,rateLimit:profile.rateLimit,sharedUsers:Number(profile.sharedUsers)||1,sessionTimeout:validity||"",clearSessionTimeout:false,keepaliveTimeout:profile.keepaliveTimeout,onLogin:loginScript+preserved});
   await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:profile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment});routerSucceeded=true;
   if(validity){const voucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$1,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[phone,phone,profile.name,validity,amount,comment]);if(!voucher.rows.length)await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server) VALUES($1,$2,$3,$4,$5,'unused',$6,$1,'all')",[phone,phone,profile.name,validity,amount,comment]);}
   await db.withTransaction(async client=>{const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);if(!finalized.rows.length)throw new Error("Hotspot provisioning succeeded but transaction finalization failed.");});
-  claimedTransactionId=null;return res.json({success:true,message:"সফল হয়েছে!",username:phone,password:phone,profile:profile.name,profile_id:requestedProfile,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
+  claimedTransactionId=null;return res.json({success:true,message:"সফল হয়েছে!",username:phone,password:phone,profile:profile.name,profile_id:requestedProfile,validity,expiration:expiryDate,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}}
   else if(claimedTransactionId!==null&&routerSucceeded){try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'hotspot',$2,$3::jsonb)",[claimedTransactionId,String(body.username||body.phone||""),JSON.stringify({flow:"hotspot",transactionId:claimedTransactionId,error:e?.message||String(e),recordedAt:new Date().toISOString()})]);}catch(auditError){console.error("[CRITICAL] Durable reconciliation audit failed",claimedTransactionId,auditError?.message||auditError);}return fail(500,"RECONCILIATION_REQUIRED","Payment is secured but finalization needs administrator reconciliation. Do not retry this TrxID.");}
