@@ -33,7 +33,7 @@ function validateConfig(input) {
   if (!password || password.length > 1024) throw Object.assign(new Error('RouterOS password is required and must be at most 1024 characters.'), { statusCode: 400 });
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Object.assign(new Error('API port must be between 1 and 65535.'), { statusCode: 400 });
   if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 30000) throw Object.assign(new Error('Timeout must be between 1000 and 30000 ms.'), { statusCode: 400 });
-  if (apiType === 'native_api' && ![8728, 8729].includes(port)) throw Object.assign(new Error('Native API uses port 8728 or 8729.'), { statusCode: 400 });
+  if (apiType === 'native_api' && ![8728, 8729].includes(port)) throw Object.assign(new Error('Native API uses port 8728 or 8729.'), { statusCode: 400 });\n  if (apiType === 'native_api' && ((port === 8729 && !useSsl) || (port === 8728 && useSsl))) throw Object.assign(new Error('Enable API-SSL for port 8729, or disable API-SSL for port 8728.'), { statusCode: 400 });
   if (apiType === 'rest_api' && !useSsl) throw Object.assign(new Error('RouterOS REST API must use HTTPS.'), { statusCode: 400 });
   return { host, apiType, port, username, password, timeout, useSsl };
 }
