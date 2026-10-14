@@ -384,9 +384,11 @@ async function sendInvitationEmail(invitation, rawToken) {
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
   const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
-
-  // Prefer the existing Google Apps Script mailer for invitation links. SMTP is
-  // retained as a fallback when the Apps Script mailer is not configured.
+  const selfServiceSignup = invitation.self_service_signup === true;
+  const greeting = selfServiceSignup ? 'Hello,' : 'Hello ' + String(invitation.username || '') + ',';
+  const instructions = selfServiceSignup
+    ? 'You have been invited to join FAZ NETWORK as Sub-Staff. Open this secure link to choose your own username and create your password.'
+    : 'You have been invited to join FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your password.';
   const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
   const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
   if (mailerUrl || mailerToken) {
@@ -405,8 +407,8 @@ async function sendInvitationEmail(invitation, rawToken) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           type: 'invitation', token: mailerToken, to: invitation.email,
-          username: String(invitation.username || '').slice(0, 60),
-          role: roleLabel, link
+          username: selfServiceSignup ? 'Choose your own username' : String(invitation.username || '').slice(0, 60),
+          selfServiceSignup, role: roleLabel, link
         }),
         signal: AbortSignal.timeout(20000),
         redirect: 'follow'
@@ -422,55 +424,57 @@ async function sendInvitationEmail(invitation, rawToken) {
     }
     return;
   }
-
   const transporter = createMailer();
   const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+  const expiryText = 'This invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.';
   await transporter.sendMail({
     from, to: invitation.email,
     subject: 'FAZ NETWORK — invitation to join as ' + roleLabel,
-    text: 'Hello ' + invitation.username + ',\\n\\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\\n\\n' + link + '\\n\\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
-    html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>Hello ' + escapeHtml(invitation.username) + ',</p><p>You have been invited to join FAZ NETWORK as <b>' + escapeHtml(roleLabel) + '</b>.</p><p>Open the secure invitation link below. We will send a one-time verification code to this email before you can set your password.</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in <b>24 hours</b> and can be cancelled by the administrator. If you were not expecting this, ignore this email.</p></div>'
+    text: greeting + '\n\n' + instructions + '\n\n' + link + '\n\n' + expiryText,
+    html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>' + escapeHtml(greeting) + '</p><p>' + escapeHtml(instructions) + '</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>' + escapeHtml(expiryText) + '</p></div>'
   });
 }
-
 async function createUser(req, res) {
-  const username = String(req.body?.username || '').trim();
+  const requestedUsername = String(req.body?.username || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = normalizeRole(req.body?.role);
-  if (!/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3-60 characters (letters, numbers, dot, underscore or hyphen).' });
+  const selfServiceSignup = req.body?.selfServiceSignup === true && role === 'staff';
+  const username = selfServiceSignup ? null : requestedUsername;
+  if (!selfServiceSignup && !/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3-60 characters (letters, numbers, dot, underscore or hyphen).' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
   if (!['staff','admin','super_admin'].includes(role)) return res.status(400).json({ success: false, message: 'Select a valid role.' });
   if (req.auth?.role === 'admin' && role !== 'staff') return res.status(403).json({ success: false, message: 'Admins may invite staff accounts only.' });
   if (req.auth?.role !== 'super_admin' && role === 'super_admin') return res.status(403).json({ success: false, message: 'Only the owner may invite a Super Admin.' });
   try {
-    const existing = await db.query(
-      "SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) UNION ALL SELECT 1 FROM admin_invitations WHERE status='pending' AND (lower(username)=lower($1) OR lower(email)=lower($2)) LIMIT 1",
-      [username, email]
-    );
-    if (existing.rows.length) return res.status(409).json({ success: false, message: 'Username or email is already registered or has a pending invitation.' });
+    const existing = selfServiceSignup
+      ? await db.query("SELECT 1 FROM admin_users WHERE lower(email)=lower($1) UNION ALL SELECT 1 FROM admin_invitations WHERE status='pending' AND lower(email)=lower($1) LIMIT 1", [email])
+      : await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) UNION ALL SELECT 1 FROM admin_invitations WHERE status='pending' AND (lower(username)=lower($1) OR lower(email)=lower($2)) LIMIT 1", [username, email]);
+    if (existing.rows.length) return res.status(409).json({ success: false, message: selfServiceSignup ? 'This email is already registered or has a pending invitation.' : 'Username or email is already registered or has a pending invitation.' });
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const created = await db.query(
-      "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
-      [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
+      "INSERT INTO admin_invitations (username,email,role,self_service_signup,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,self_service_signup,status,created_at,expires_at",
+      [username,email,role,selfServiceSignup,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
     );
     try {
       await sendInvitationEmail(created.rows[0], rawToken);
     } catch (mailError) {
       await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(()=>{});
       console.error('[RBAC invitation] Email delivery failed:', mailError.message);
-      return res.status(503).json({ success: false, message: 'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render, then create the invitation again.' });
+      return res.status(503).json({ success: false, message: 'Invitation email was NOT sent. Configure the existing invitation mailer in Render, then create the invitation again.' });
     }
-    await writeAudit(req, 'admin_invitation_created', null, { username, email, role, invitationId: created.rows[0].id });
-    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation link sent to ' + email + '. The account will be created only after email OTP verification and password setup.' });
+    await writeAudit(req, 'admin_invitation_created', null, { username, email, role, selfServiceSignup, invitationId: created.rows[0].id });
+    const message = selfServiceSignup
+      ? 'Invitation link sent to ' + email + '. The invitee will choose their username and password; no email OTP is required.'
+      : 'Invitation link sent to ' + email + '. The account will be created only after email OTP verification and password setup.';
+    return res.status(201).json({ success: true, invitation: created.rows[0], message });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] Invitation creation failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
   }
 }
-
 async function resendInvitation(req,res) {
   const id=Number(req.params.id);
   if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({success:false,message:'Invalid account ID.'});
@@ -503,8 +507,8 @@ async function resendInvitation(req,res) {
 async function listInvitations(req, res) {
   try {
     const result = req.auth?.role === 'super_admin'
-      ? await db.query("SELECT id,username,email,role,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') ORDER BY created_at DESC")
-      : await db.query("SELECT id,username,email,role,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') AND role='staff' AND lower(created_by)=lower($1) ORDER BY created_at DESC", [String(req.session.adminUser || '')]);
+      ? await db.query("SELECT id,username,email,role,self_service_signup,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') ORDER BY created_at DESC")
+      : await db.query("SELECT id,username,email,role,self_service_signup,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') AND role='staff' AND lower(created_by)=lower($1) ORDER BY created_at DESC", [String(req.session.adminUser || '')]);
     return res.json({ success: true, invitations: result.rows });
   } catch (error) {
     console.error('[RBAC] Listing invitations failed:', error.message);
@@ -533,7 +537,7 @@ async function showInvitation(req, res) {
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).render('accept-invitation', { invitation:null, token:'', error:'This invitation link is invalid.' });
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const result = await db.query("SELECT id,username,email,role,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
+    const result = await db.query("SELECT id,username,email,role,self_service_signup,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
     const invitation = result.rows[0];
     if (!invitation || new Date(invitation.expires_at).getTime() <= Date.now()) return res.status(410).render('accept-invitation', { invitation:null, token:'', error:'This invitation has expired or was cancelled.' });
     return res.set('Cache-Control','no-store').render('accept-invitation',{invitation,token,error:null});
@@ -548,9 +552,10 @@ async function sendInvitationOtp(req, res) {
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).json({success:false,message:'Invalid invitation link.'});
   try {
     const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-    const result=await db.query("SELECT id,username,email,role,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
+    const result=await db.query("SELECT id,username,email,role,self_service_signup,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
     const invite=result.rows[0];
     if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).json({success:false,message:'Invitation expired or cancelled.'});
+    if(invite.self_service_signup===true) return res.status(400).json({success:false,message:'Email OTP is not required for this invitation.'});
     const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
     const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
     const otpExpires=new Date(Date.now()+OTP_TTL_MS);
@@ -573,21 +578,27 @@ async function acceptInvitation(req, res) {
   const code=String(req.body?.otp||'').trim();
   const password=String(req.body?.password||'');
   const confirmPassword=String(req.body?.confirmPassword||'');
+  const requestedUsername=String(req.body?.username||'').trim();
   if(!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).render('accept-invitation',{invitation:null,token:'',error:'Invalid invitation link.'});
-  if(!/^\d{6}$/.test(code)) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Enter the 6-digit OTP sent to your email.'});
-  if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Password must be 12–128 characters.'});
-  if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Passwords do not match.'});
+  if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:null,token,error:'Password must be 12–128 characters.'});
+  if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:null,token,error:'Passwords do not match.'});
   try {
     const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
     const found=await db.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
     const invite=found.rows[0];
     if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
-    if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'OTP expired or locked. Request a new code.'});
-    const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
-    const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
-    if(!safeEqualHex(invite.otp_code_hash,otpHash)) {
-      await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
-      return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
+    const selfServiceSignup=invite.self_service_signup===true;
+    const acceptedUsername=selfServiceSignup?requestedUsername:String(invite.username||'').trim();
+    if(!/^[a-zA-Z0-9._-]{3,60}$/.test(acceptedUsername)) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Username must be 3–60 characters (letters, numbers, dot, underscore or hyphen).'});
+    if(!selfServiceSignup) {
+      if(!/^\d{6}$/.test(code)) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Enter the 6-digit OTP sent to your email.'});
+      if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'OTP expired or locked. Request a new code.'});
+      const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
+      const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
+      if(!safeEqualHex(invite.otp_code_hash,otpHash)) {
+        await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
+        return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
+      }
     }
     const passwordHash=await bcrypt.hash(password,12);
     let created;
@@ -595,23 +606,20 @@ async function acceptInvitation(req, res) {
       created=await db.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
       if(!created.rows.length)return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
     } else {
-      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
-      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
-      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[acceptedUsername,invite.email]);
+      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Choose another username or contact the administrator.'});
+      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[acceptedUsername,invite.email,passwordHash,invite.role,invite.created_by]);
     }
     const consumed=await db.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
-    if(!consumed.rows.length) {
-      return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
-    }
-    await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:invite.username,role:invite.role});
-    return res.render('accept-invitation-success',{username:invite.username});
+    if(!consumed.rows.length) return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
+    await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:acceptedUsername,role:invite.role,selfServiceSignup});
+    return res.render('accept-invitation-success',{username:acceptedUsername});
   } catch(error) {
     if(error.code==='23505') return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'Username or email has already been registered.'});
     console.error('[RBAC invitation] Acceptance failed:',error.message);
     return res.status(503).render('accept-invitation',{invitation:null,token:'',error:'Unable to complete invitation. Please retry or contact the administrator.'});
   }
 }
-
 async function updateUserStatus(req, res) {
   const id = Number(req.params.id);
   const status = String(req.body?.status || '').toLowerCase();
