@@ -7,6 +7,66 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <style>
 body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.hero{background:linear-gradient(135deg,#0a3d2e,#0d4d3a);color:#fff}.card{box-shadow:0 .125rem .25rem rgba(0,0,0,.075)}.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.metric{font-size:1.45rem;font-weight:700}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.live-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8}.live-dot.online{background:#34d399;animation:pulse 1.7s infinite}@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}.sticky{position:sticky;top:0;z-index:1020;background:rgba(248,250,252,.95);backdrop-filter:blur(8px)}.topology-chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.8rem}.topology-node{position:relative;min-width:0;min-height:118px;border:1px solid #dbe5e1;border-radius:14px;padding:14px;background:linear-gradient(160deg,#fff,#f6fbf8);overflow-wrap:anywhere}.topology-node:not(:last-child):after{content:"➜";position:absolute;right:-1.45rem;top:42%;font-size:1.2rem;font-weight:800;color:#10b981}.topology-step{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0d6b50}.topology-value{font-weight:700;margin-top:8px;color:#0f172a}.topology-detail{font-size:.78rem;color:#64748b;margin-top:5px}.topology-health{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:.72rem;font-weight:700;background:#e2e8f0;color:#334155}.topology-health.good{background:#d1fae5;color:#065f46}.topology-health.warning{background:#fef3c7;color:#92400e}.topology-health.bad{background:#fee2e2;color:#991b1b}@media(max-width:1199px){.topology-chain{grid-template-columns:repeat(3,minmax(0,1fr))}.topology-node:not(:last-child):after{display:none}}@media(max-width:767px){.sticky .container-fluid{flex-direction:column;align-items:stretch;gap:.65rem}.sticky .container-fluid>a{align-self:flex-start;white-space:normal}.sticky .container-fluid>span{display:block;white-space:normal;line-height:1.35;font-size:.875rem!important}.topology-chain{grid-template-columns:minmax(0,1fr);gap:.75rem}.topology-node{min-height:auto;padding:16px}.topology-node .topology-value{font-size:1rem;line-height:1.4}.topology-node .topology-detail{overflow-wrap:anywhere}.hero .d-flex.gap-2.flex-wrap{gap:.5rem!important}.hero button{max-width:100%;white-space:normal}}
+
+/* Active Customer 360 page: mobile-only compact management dock and topology strip. */
+@media (max-width: 767.98px) {
+  #app { padding-left: .65rem !important; padding-right: .65rem !important; }
+  .hero { padding: .8rem !important; border-radius: 12px !important; }
+  .hero #name { font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .hero > .d-flex { gap: .65rem !important; }
+  .hero .small.mt-2 { gap: .4rem .75rem !important; font-size: .78rem; }
+  .hero #liveIp { overflow-wrap: anywhere; word-break: break-word; }
+  .customer360-action-dock {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem !important;
+    width: 100%;
+  }
+  .customer360-action-dock .btn {
+    min-width: 0;
+    min-height: 44px;
+    padding: .45rem .3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .25rem;
+    font-size: .72rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    touch-action: manipulation;
+  }
+  .topology-chain {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: .55rem !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: .2rem .1rem .65rem;
+    margin: 0 -.15rem;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .topology-chain::-webkit-scrollbar { display: none; }
+  .topology-node {
+    flex: 0 0 148px;
+    width: 148px;
+    min-height: 82px !important;
+    padding: .6rem !important;
+    border-radius: 10px !important;
+    scroll-snap-align: start;
+  }
+  .topology-node:not(:last-child):after { display: block !important; right: -.52rem; top: 42%; font-size: .7rem; z-index: 1; }
+  .topology-step { font-size: .61rem; letter-spacing: .035em; line-height: 1.3; }
+  .topology-value { margin-top: .35rem; font-size: .82rem; line-height: 1.3; overflow-wrap: anywhere; word-break: break-word; }
+  .topology-detail { margin-top: .25rem; font-size: .68rem; line-height: 1.25; overflow-wrap: anywhere; }
+  main#app > section.card { margin-bottom: .65rem !important; }
+  main#app > section.card > .card-body { padding: .8rem; }
+  .metric { font-size: 1.15rem; }
+  .mono, code, [id="liveIp"] { overflow-wrap: anywhere; word-break: break-word; }
+}
 </style><script src="/js/date-format.js"></script>
 </head>
 <body>
@@ -14,7 +74,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <main id="app" class="container-fluid px-3 px-lg-4 pb-5" data-id="<%= customerId %>">
 <section class="hero rounded-3 p-3 p-lg-4 mb-3"><div class="d-flex flex-column flex-xl-row justify-content-between gap-3 align-items-xl-center">
 <div><div class="d-flex gap-2 align-items-center flex-wrap"><h2 id="name" class="mb-0">Loading…</h2><span id="status" class="badge bg-secondary">Loading billing</span><span id="routerStatus" class="badge bg-secondary"><span class="live-dot me-1"></span>Checking router</span></div><div class="small mt-2 d-flex gap-3 flex-wrap"><span><i class="bi bi-telephone me-1"></i><span id="phone">—</span></span><span class="mono"><i class="bi bi-person-badge me-1"></i><span id="username">—</span></span><span id="liveIp" class="mono">IP — · MAC —</span></div></div>
-<div class="d-flex gap-2 flex-wrap"><button id="syncMikrotik" class="btn btn-light text-success fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>Sync to MikroTik</button><button id="usageRecord" class="btn btn-outline-info"><i class="bi bi-bar-chart-line me-1"></i>Usage Record</button><button id="kick" class="btn btn-outline-warning"><i class="bi bi-lightning-charge me-1"></i>Kick / Restart Session</button><button id="renew" class="btn btn-success"><i class="bi bi-credit-card me-1"></i>Add Payment / Renew</button><button id="edit" class="btn btn-outline-primary"><i class="bi bi-pencil-square me-1"></i>Edit Info</button><button id="suspend" class="btn btn-outline-danger"><i class="bi bi-slash-circle me-1"></i>Suspend Line</button></div>
+<div class="customer360-action-dock d-flex gap-2 flex-wrap"><button id="syncMikrotik" class="btn btn-light text-success fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>Sync to MikroTik</button><button id="usageRecord" class="btn btn-outline-info"><i class="bi bi-bar-chart-line me-1"></i>Usage Record</button><button id="kick" class="btn btn-outline-warning"><i class="bi bi-lightning-charge me-1"></i>Kick / Restart Session</button><button id="renew" class="btn btn-success"><i class="bi bi-credit-card me-1"></i>Add Payment / Renew</button><button id="edit" class="btn btn-outline-primary"><i class="bi bi-pencil-square me-1"></i>Edit Info</button><button id="suspend" class="btn btn-outline-danger"><i class="bi bi-slash-circle me-1"></i>Suspend Line</button></div>
 </div></section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2 text-success"></i>Network Topology Bridge</h5><div class="small text-muted">Customer-to-OLT connection path · live values appear only when verified</div></div><span id="topologyOverall" class="topology-health">Awaiting telemetry</span></div>
