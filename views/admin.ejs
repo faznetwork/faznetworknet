@@ -2071,41 +2071,8 @@
             return false;
         };
 
-        window.loadHotspotSection = async function(filterType, titleKey) {
-            purgeStuckBackdrops();
-            currentHotspotMode=filterType || 'all';
-            currentHotspotTitleKey=titleKey || (filterType==='active'?'active_user':'all_user');
-            setHotspotTitle(currentHotspotTitleKey);
-            if(typeof closeSidebarMobile==='function') closeSidebarMobile();
-
-            const container=document.getElementById('dynamicPageContent');
-            if(!container) return false;
-            const isActive=currentHotspotMode==='active';
-            container.style.display='block';
-            if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
-
-            const loadingTitle=isActive?'Live Active Sessions':'Hotspot Users Database';
-            const icon=isActive?'bi-broadcast-pin':'bi-database';
-            container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3"><div><div class="d-flex align-items-center gap-2"><span class="'+(isActive?'hotspot-live-dot':'text-success')+'"><i class="bi '+icon+'"></i></span><h5 class="mb-0 fw-bold">'+loadingTitle+'</h5><span id="hotspotSectionCount" class="badge rounded-pill bg-success">0</span></div><div class="small text-muted mt-1">'+(isActive?'Real-time clients connected to MikroTik Hotspot':'All configured customer accounts from MikroTik Hotspot')+'</div></div><div class="d-flex flex-wrap gap-2 ms-lg-auto">'+
-                (isActive?'<button type="button" class="btn btn-outline-success btn-sm" onclick="window.loadHotspotSection(\'active\',\'active_user\')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>':'<div class="input-group input-group-sm hotspot-enterprise-search"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="hotspotAllSearch" class="form-control" placeholder="Search phone / name..." oninput="filterHotspotRows(this.value)"></div><button type="button" class="btn btn-theme btn-sm" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill me-1"></i>+ Add User</button><button type="button" class="btn btn-outline-success btn-sm" onclick="window.loadHotspotSection(\'all\',\'all_user\')"><i class="bi bi-arrow-repeat me-1"></i>Sync</button>')+
-                '</div></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-enterprise-table"><thead class="table-light">'+
-                (isActive?'<tr><th>#</th><th>Username / Phone</th><th>IP Address</th><th>MAC Address</th><th>Current Uptime</th><th>Data Usage</th><th class="text-end">Action</th></tr>':'<tr><th>#</th><th>User / Phone</th><th>Profile / Plan</th><th>Uptime Used</th><th>Status</th><th>Comment</th><th class="text-end">Actions</th></tr>')+
-                '</thead><tbody id="hotspotUserBody"><tr><td colspan="'+(isActive?7:7)+'" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-success me-2"></div>Loading from MikroTik...</td></tr></tbody></table></div></div></section>';
-
-            try {
-                if(isActive) {
-                    const data=await jsonFetch('/api/hotspot/active');
-                    renderActiveHotspotUsers(data.users||[]);
-                } else {
-                    const results=await Promise.all([jsonFetch('/api/hotspot/users?filter=all'),jsonFetch('/api/hotspot/active')]);
-                    renderAllHotspotUsers(results[0].users||[],results[1].users||[]);
-                }
-            } catch(error) {
-                const tbody=document.getElementById('hotspotUserBody');
-                if(tbody) tbody.innerHTML='<tr><td colspan="7" class="text-center py-5 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>'+escapeHtml(error.message||'Failed to fetch data from MikroTik.')+'</td></tr>';
-            }
-            return false;
-        };
+        // Bind navigation to the current All Hotspot Users renderer; do not override it with the legacy table loader.
+        window.loadHotspotSection = loadHotspotSection;
 
         function formatHotspotDuration(value) {
             const raw=String(value||'').trim();
