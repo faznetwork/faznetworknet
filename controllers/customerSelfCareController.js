@@ -82,11 +82,10 @@ async function renew(req,res){
   let packageFallback=null;if(!c&&u?.profile){const pr=await db.query("SELECT price,duration_months,plan_name,profile_name FROM packages WHERE LOWER(profile_name)=LOWER($1) OR LOWER(plan_name)=LOWER($1) ORDER BY id ASC LIMIT 1",[u.profile]);packageFallback=pr.rows[0]||null;}const expected=Number(c?.monthly_bill??c?.linked_price??packageFallback?.price??0);if(!(expected>0))return res.status(400).json({success:false,message:"Your billing amount is not configured. Contact support."});
   const txResult=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trx]);const tx=txResult.rows[0];
   if(!tx)return res.status(404).json({success:false,message:"Transaction not found. Please wait for payment SMS verification."});
-  if(String(tx.customer_type||"").trim().toLowerCase()==="hotspot")return res.status(409).json({success:false,message:"This TrxID belongs to a Hotspot payment and cannot renew a PPPoE account."});
   if(tx.used||String(tx.status||"").trim().toLowerCase()!=="unmatched")return res.status(409).json({success:false,message:"This transaction has already been used or cannot be verified."});
   const registeredPhone=phone(c?.phone||u?.phone||s.phone);const transactionUsername=String(tx.matched_username||"").trim().toLowerCase();if(transactionUsername&&transactionUsername!==s.sub.toLowerCase()&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This TrxID is linked to another account."});if(!transactionUsername&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This payment could not be linked to your registered account. Contact support for manual verification."});
   if(Math.round(Number(tx.amount)*100)!==Math.round(expected*100))return res.status(400).json({success:false,message:"Payment amount does not match your bill of ৳"+expected.toFixed(2)+".",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1,customer_type='PPPoE' WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' AND (customer_type IS NULL OR LOWER(TRIM(customer_type))='pppoe') RETURNING id",[s.sub,tx.id]);
+  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[s.sub,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,message:"This transaction has already been claimed."});claimed=tx.id;
   const months=Math.max(1,Number(c?.duration_months||1)),now=new Date(),today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(now),current=String(c?.expiration_date||u?.expiry_date||"").slice(0,10),base=current&&current>=today?current:today;
   const [yy,mm,dd]=base.split("-").map(Number),target=new Date(Date.UTC(yy,mm-1+months,1)),last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();target.setUTCDate(Math.min(dd,last));const expiry=target.toISOString().slice(0,10);
@@ -99,7 +98,7 @@ async function renew(req,res){
   await db.withTransaction(async client=>{
    if(c)await client.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',paid_until=$1,monthly_bill=$2,updated_at=NOW() WHERE id=$3",[expiry,expected,c.id]);
    await client.query("UPDATE pppoe_users SET profile=$1,disabled=false,status='active',expiry_date=$2,billing_status='paid',paid_until=$2,comment=$3,updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[profile,expiry,comment,s.sub]);
-   const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,customer_type='PPPoE' WHERE id=$2 AND status='processing' AND used=true AND customer_type='PPPoE' RETURNING id",[s.sub,claimed]);
+   const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[s.sub,claimed]);
    if(!finalized.rows.length)throw new Error("PPPoE renewal completed but payment finalization did not update the claimed transaction.");
   });
   claimed=null;
