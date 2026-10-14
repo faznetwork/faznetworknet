@@ -177,6 +177,29 @@ BEGIN
   END IF;
 END $$;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS used BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(100);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS claim_flow VARCHAR(20);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS needs_reconciliation BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_transactions_processing_claimed_at
+  ON transactions(claimed_at) WHERE status='processing';
+CREATE INDEX IF NOT EXISTS idx_transactions_reconciliation
+  ON transactions(needs_reconciliation, claimed_at) WHERE needs_reconciliation=true;
+CREATE TABLE IF NOT EXISTS payment_reconciliation_audit (
+  id BIGSERIAL PRIMARY KEY,
+  transaction_id BIGINT NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  flow VARCHAR(20) NOT NULL CHECK (flow IN ('hotspot','pppoe','webhook','recovery')),
+  account_identifier VARCHAR(100),
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_audit_transaction
+  ON payment_reconciliation_audit(transaction_id, created_at DESC);
+-- A stale claim is flagged for reconciliation, never automatically released: RouterOS may already have provisioned service.
+UPDATE transactions
+SET needs_reconciliation=true
+WHERE status='processing' AND used=true AND claimed_at < NOW() - INTERVAL '5 minutes'
+  AND needs_reconciliation=false;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS phone VARCHAR(40);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS server VARCHAR(100) DEFAULT 'all';
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS time_limit VARCHAR(50);
