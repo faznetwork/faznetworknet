@@ -51,7 +51,7 @@ exports.traffic = async (req, res) => {
     if (role !== "wan" && role !== "lan") {
       const key = interfaceName.toLowerCase();
       if (/(pppoe|wireguard|eoip|l2tp|sstp|ovpn|openvpn|gre|ipip|ipsec|lte|starlink|wan|uplink|external|internet|isp|provider|tunnel)/i.test(key)) role = "wan";
-      else if (/(bridge|lan|subscriber|onu|distribution|access|switch|ether|sfp|vlan|bonding)/i.test(key)) role = "lan";
+      else if (/(bridge|lan|subscriber|onu|distribution|access|switch|bonding)/i.test(key)) role = "lan";
       else return res.status(400).json({ error: "Interface role is ambiguous; choose a WAN or LAN interface from the dashboard." });
     }
 

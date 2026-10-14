@@ -1495,7 +1495,7 @@
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="dashboardTrafficStatus" class="badge rounded-pill bg-secondary">Connecting…</span><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
               <div class="noc-kpi-grid mb-4">
                 <article class="noc-kpi"><div class="noc-kpi-top">SUBSCRIBER STATUS</div><div class="noc-kpi-value" id="nocSubscriberValue">— Online / — Total</div><div class="noc-kpi-sub"><span class="noc-live-dot"></span><span id="nocAvailability">Availability pending</span></div><div class="noc-kpi-actions"><button onclick="loadCustomerSection('online','online_customer')">View online</button><button onclick="loadCustomerSection('offline','offline_customer')">View offline</button></div></article>
-                <article class="noc-kpi noc-purple"><div class="noc-kpi-top">LIVE INTERFACE THROUGHPUT</div><div class="noc-kpi-value noc-throughput"><span>↓ <b id="dashboardTrafficRx">—</b> Mbps</span><span>↑ <b id="dashboardTrafficTx">—</b> Mbps</span></div><div class="noc-kpi-sub"><span class="noc-interface-pill" id="nocInterfacePill">Interface: loading</span></div></article>
+                <article class="noc-kpi noc-purple"><div class="noc-kpi-top">LIVE INTERFACE THROUGHPUT</div><div class="noc-kpi-value noc-throughput"><span>↓ Download <b id="dashboardTrafficRx">—</b> Mbps</span><span>↑ Upload <b id="dashboardTrafficTx">—</b> Mbps</span></div><div class="noc-kpi-sub"><span class="noc-interface-pill" id="nocInterfacePill">Interface: loading</span></div></article>
                 <article class="noc-kpi noc-blue"><div class="noc-kpi-top">TODAY'S BILLING</div><div class="noc-kpi-value" id="nocBillingToday">৳0.00</div><div class="noc-kpi-sub" id="nocBillingSub">0 Transactions Today</div><div class="noc-kpi-actions"><button onclick="loadPaymentsSection('all','all_payments')">Open collections</button><span id="nocBillingMtd">MTD ৳0.00</span></div></article>
                 <article class="noc-kpi noc-amber"><div class="noc-kpi-top">OPTICAL / FIBER HEALTH</div><div class="noc-kpi-value" id="nocFiberValue">— Online / — Warning</div><div class="noc-kpi-sub"><i class="bi bi-exclamation-triangle-fill"></i><span id="nocFiberSub">Waiting for OLT telemetry</span></div><div class="noc-kpi-actions"><span id="nocPonSummary">PON ports —</span><button onclick="window.loadOltManagement('overview')">Open OLT</button></div></article>
               </div>
@@ -5759,7 +5759,7 @@ async function deletePlan(id,name){
         function trafficInterfaceRole(item) {
             const signature = [item && item.name, item && item.type, item && item.comment].filter(Boolean).join(' ').toLowerCase();
             if (/(pppoe|wireguard|eoip|l2tp|sstp|ovpn|openvpn|gre|ipip|ipsec|lte|starlink|wan|uplink|external|internet|isp|provider|tunnel)/i.test(signature)) return 'wan';
-            if (/(bridge|lan|subscriber|onu|distribution|access|switch|ether|sfp|vlan|bonding)/i.test(signature)) return 'lan';
+            if (/(bridge|lan|subscriber|onu|distribution|access|switch|bonding)/i.test(signature)) return 'lan';
             return '';
         }
 
