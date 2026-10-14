@@ -592,8 +592,14 @@ async function acceptInvitation(req, res) {
     const invite=found.rows[0];
     if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
     const selfServiceSignup=invite.self_service_signup===true;
+    // Self-service links are strictly for Sub-Staff; never allow an invitation
+    // flag or stale DB row to turn this public registration route into an
+    // Admin/Super Admin account-creation path.
+    if(selfServiceSignup && String(invite.role||'').toLowerCase()!=='staff') {
+      return res.status(403).render('accept-invitation',{invitation:null,token:'',error:'This self-service invitation is not valid for the requested role. Contact the administrator.'});
+    }
     if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Password must be 12–128 characters.'});
-    if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Passwords do not match.'});
+    if(!confirmPassword || password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Passwords do not match. Enter the same password in both fields.'});
     const acceptedUsername=selfServiceSignup?requestedUsername:String(invite.username||'').trim();
     if(!/^[a-zA-Z0-9._-]{3,60}$/.test(acceptedUsername)) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Username must be 3–60 characters (letters, numbers, dot, underscore or hyphen).'});
     if(!selfServiceSignup) {
