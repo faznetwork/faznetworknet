@@ -442,7 +442,7 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_ticket
 -- Email invitations are separate from accounts until OTP verification and password setup succeed.
 CREATE TABLE IF NOT EXISTS admin_invitations (
   id BIGSERIAL PRIMARY KEY,
-  username VARCHAR(60) NOT NULL,
+  username VARCHAR(60),
   email VARCHAR(254) NOT NULL,
   role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin','admin','staff')),
   target_user_id BIGINT REFERENCES admin_users(id) ON DELETE CASCADE,
@@ -456,6 +456,8 @@ CREATE TABLE IF NOT EXISTS admin_invitations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE admin_invitations ALTER COLUMN username DROP NOT NULL;
+ALTER TABLE admin_invitations ADD COLUMN IF NOT EXISTS self_service_signup BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_admin_invitations_status_created ON admin_invitations(status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_username_ci ON admin_invitations(lower(username)) WHERE status='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_email_ci ON admin_invitations(lower(email)) WHERE status='pending';

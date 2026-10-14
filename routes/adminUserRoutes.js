@@ -6,6 +6,7 @@ const controller = require('../controllers/rbacAuthController');
 
 router.use(requireRole(['super_admin', 'admin']));
 router.get('/', controller.listUsers);
+router.post('/sub-staff-invitations', controller.createSubStaffInvitation);
 router.post('/', controller.createUser);
 router.get('/invitations', controller.listInvitations);
 router.post('/:id/resend-invitation', controller.resendInvitation);

@@ -1,9 +1,18 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta http-equiv="Cache-Control" content="no-store"><title>Accept Invitation | FAZ NETWORK</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#052e2b;font-family:Arial,sans-serif;color:#0f172a}.card{width:min(100%,520px);box-sizing:border-box;background:#fff;border-radius:20px;padding:30px;box-shadow:0 20px 60px #0003}h1{text-align:center;font-size:28px}h1 span{color:#059669}.muted{color:#64748b;line-height:1.6}.alert{padding:12px;border-radius:10px;background:#fef2f2;color:#b91c1c;margin:18px 0}label{display:block;font-weight:700;margin:16px 0 7px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px}button{padding:12px 16px;border:0;border-radius:9px;background:#047857;color:white;font-weight:700;cursor:pointer}.wide{width:100%;margin-top:20px}.line{display:flex;gap:8px;align-items:end}.line input{flex:1}.info{padding:14px;background:#ecfdf5;border-radius:10px;color:#065f46;line-height:1.7}</style></head>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#052e2b;font-family:Arial,sans-serif;color:#0f172a}.card{width:min(100%,520px);box-sizing:border-box;background:#fff;border-radius:20px;padding:30px;box-shadow:0 20px 60px #0003}h1{text-align:center;font-size:28px}h1 span{color:#059669}.muted{color:#64748b;line-height:1.6}.alert{padding:12px;border-radius:10px;background:#fef2f2;color:#b91c1c;margin:18px 0}label{display:block;font-weight:700;margin:16px 0 7px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px}button{padding:12px 16px;border:0;border-radius:9px;background:#047857;color:white;font-weight:700;cursor:pointer}.wide{width:100%;margin-top:20px}.info{padding:14px;background:#ecfdf5;border-radius:10px;color:#065f46;line-height:1.7}</style></head>
 <body><main class="card"><h1>FAZ <span>NETWORK</span></h1>
 <% if (error) { %><div class="alert" role="alert"><%= error %></div><% } %>
 <% if (invitation && token) { %>
+<% if (invitation.self_service_signup) { %>
+<p class="muted">You have been invited to join FAZ NETWORK as Sub-Staff. Choose your own username and password below. Email OTP is not required for this invitation.</p>
+<div class="info"><b>Email:</b> <%= invitation.email || '' %><br><b>Role:</b> Sub-Staff</div>
+<form method="post" action="/invite/<%= encodeURIComponent(token) %>/accept" autocomplete="on">
+<label for="username">Choose username</label><input id="username" name="username" minlength="3" maxlength="60" pattern="[A-Za-z0-9._-]{3,60}" autocomplete="username" required>
+<label for="password">Create password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+<label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+<p class="muted">Username may contain letters, numbers, dot, underscore or hyphen. Password must be 12–128 characters. Your account is created after this invitation link is validated.</p><button class="wide" type="submit">Create account</button></form>
+<% } else { %>
 <p class="muted">You have been invited to join FAZ NETWORK. Verify this email with a one-time code, then set your password.</p>
 <div class="info"><b>Username:</b> <%= invitation.username || '' %><br><b>Email:</b> <%= invitation.email || '' %><br><b>Role:</b> <%= invitation.role || '' %></div>
 <button class="wide" type="button" id="sendOtp">Send OTP to this email</button><p id="otpResult" class="muted" aria-live="polite"></p>
@@ -13,5 +22,6 @@
 <label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
 <p class="muted">Password must be 12–128 characters. The account will not be created until the OTP and password are accepted.</p><button class="wide" type="submit">Verify and create account</button></form>
 <script>document.getElementById('sendOtp').addEventListener('click',async function(){const b=this,r=document.getElementById('otpResult');b.disabled=true;r.textContent='Sending OTP…';try{const x=await fetch('/invite/<%= encodeURIComponent(token) %>/send-otp',{method:'POST',headers:{Accept:'application/json'},credentials:'same-origin'});const d=await x.json();if(!x.ok||!d.success)throw new Error(d.message||'Could not send OTP');r.textContent=d.message;}catch(e){r.textContent=e.message;}finally{b.disabled=false;}});</script>
+<% } %>
 <% } else { %><p class="muted">This invitation link is not available.</p><% } %>
 </main></body></html>
