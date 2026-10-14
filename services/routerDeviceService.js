@@ -28,7 +28,7 @@ function validateConfig(input) {
   const username = String(input.username || '').trim();
   const password = String(input.password ?? '');
   const port = Number(input.api_port ?? input.port);
-  const timeout = Math.min(Number(input.timeout || DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
+  const timeout = Number(input.timeout || DEFAULT_TIMEOUT_MS);
   if (!String(input.router_name || '').trim()) throw inputError('Router name is required.');
   if (!username || username.length > 160) throw inputError('RouterOS username is required.');
   if (!password || password.length > 1024) throw inputError('RouterOS password is required and must be at most 1024 characters.');
