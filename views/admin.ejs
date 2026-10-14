@@ -1968,11 +1968,8 @@
         window.updateLanguage = window.updateLanguage || function(){};
         // Defensive UI reset: a stale Bootstrap backdrop must never own the click layer.
         try {
-            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop:not(#sidebarBackdrop)').forEach(el => el.remove());
-            // Preserve the real mobile-sidebar backdrop element; clear stale state instead.
-            const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
-            document.body.classList.remove('modal-open', 'offcanvas-open', 'sidebar-open');
+            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop').forEach(el => el.remove());
+            document.body.classList.remove('modal-open');
             document.body.style.removeProperty('overflow');
             document.body.style.removeProperty('padding-right');
         } catch (error) {
@@ -1981,12 +1978,12 @@
 
         // Guaranteed Global Fetch Helper
         window.jsonFetch = async function(url, options = {}) {
-            const timeoutMs = Number(options.timeout) > 0 ? Number(options.timeout) : 8000;
+            const timeoutMs = options.timeout || 8000;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
             try {
-                const { timeout: _ignoredTimeout, signal: _ignoredSignal, ...fetchOptions } = options;
+                const { timeout: _ignoredTimeout, ...fetchOptions } = options;
                 const res = await fetch(url, {
                     credentials: 'include',
                     headers: {
@@ -1995,8 +1992,10 @@
                         ...(fetchOptions.headers || {})
                     },
                     ...fetchOptions,
-                    signal: controller.signal
+                    signal: fetchOptions.signal || controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (res.status === 401) {
                     window.location.href = '/login';
@@ -2011,14 +2010,12 @@
                 const text = await res.text();
                 return { success: res.ok, data: text };
             } catch (err) {
+                clearTimeout(timeoutId);
                 console.error('[jsonFetch Failed]:', url, err.name === 'AbortError' ? 'Request Timed Out' : err.message);
                 return {
                     success: false,
                     message: err.name === 'AbortError' ? 'Request Timed Out' : err.message
                 };
-            } finally {
-                // Keep the deadline active through response-body parsing, not just headers.
-                clearTimeout(timeoutId);
             }
         };
         // Alias for backward compatibility
@@ -2462,12 +2459,14 @@
         async function refreshHotspotDashboardMetrics(){
             const body=document.getElementById('hotspotDashboardSessions'); if(!body)return;
             try{
-                const [d,activeData]=await Promise.all([
-                    jsonFetch('/api/hotspot/dashboard-metrics', {timeout:8000}),
-                    jsonFetch('/api/hotspot/active', {timeout:8000})
+                const [metricsResponse,activeResponse]=await Promise.all([
+                    fetch('/api/hotspot/dashboard-metrics'),
+                    fetch('/api/hotspot/active')
                 ]);
-                if(d.success===false) throw new Error(d.message||'Unable to load Hotspot dashboard metrics.');
-                if(activeData.success===false) throw new Error(activeData.message||'Unable to load active Hotspot users.');
+                if(!metricsResponse.ok) throw new Error('Unable to load Hotspot dashboard metrics.');
+                if(!activeResponse.ok) throw new Error('Unable to load active Hotspot users.');
+                const d=await metricsResponse.json();
+                const activeData=await activeResponse.json();
                 safeSetText('hsTotalUsers',Number(d.totalUsers||0));
                 safeSetText('hsActiveUsers',Number(d.activeUsers||0));
                 safeSetText('hsOfflineUsers',Number(d.offlineUsers||0));
@@ -2747,35 +2746,12 @@
         // Heal stale invisible Bootstrap backdrops that can intercept sidebar clicks.
         // Only clean overlays when no modal/offcanvas is actually open.
         function recoverStaleNavigationOverlay() {
-            // Bootstrap may leave .show on a modal that is already hidden after an
-            // interrupted transition. Class-only checks treat that stale modal as live
-            // and leave its full-screen backdrop blocking every admin click.
-            const visibleOverlay = Array.from(document.querySelectorAll(
-                '.modal.show, .offcanvas.show, .offcanvas.showing'
-            )).some(function (el) {
-                const style = window.getComputedStyle(el);
-                return style.display !== 'none' &&
-                    style.visibility !== 'hidden' &&
-                    el.getClientRects().length > 0;
-            });
-            const sidebar = document.getElementById('sidebar');
-            const sidebarIsActuallyOpen = Boolean(
-                window.innerWidth < 768 && sidebar &&
-                sidebar.classList.contains('show') &&
-                sidebar.getClientRects().length > 0
-            );
-            if (visibleOverlay) return;
-
-            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop');
-            stale.forEach(function (el) {
-                // Do not remove the canonical sidebar backdrop; just reset its stale
-                // state. It is reused by the mobile drawer.
-                if (el.id === 'sidebarBackdrop') el.classList.remove('show');
-                else el.remove();
-            });
+            if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing')) return;
+            const stale = document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop');
+            if (!stale.length) return;
+            stale.forEach(function (el) { el.remove(); });
             if (document.body) {
                 document.body.classList.remove('modal-open', 'offcanvas-open');
-                if (!sidebarIsActuallyOpen) document.body.classList.remove('sidebar-open');
                 document.body.style.removeProperty('overflow');
                 document.body.style.removeProperty('padding-right');
                 document.body.style.pointerEvents = 'auto';
@@ -2818,34 +2794,10 @@
         // left behind by interrupted modal transitions, without polling RouterOS or APIs.
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
-            // Watch only direct children of <body>. Observing every descendant made
-            // each table/card DOM mutation trigger a full-document overlay scan.
-            const overlayObserver = new MutationObserver(function (records) {
-                const backdropChanged = records.some(function (record) {
-                    return [...record.addedNodes, ...record.removedNodes].some(function (node) {
-                        return node.nodeType === Node.ELEMENT_NODE &&
-                            (node.matches?.('.modal-backdrop, .offcanvas-backdrop') ||
-                             node.querySelector?.('.modal-backdrop, .offcanvas-backdrop'));
-                    });
-                });
-                if (backdropChanged) recoverStaleNavigationOverlay();
+            const overlayObserver = new MutationObserver(function () {
+                recoverStaleNavigationOverlay();
             });
-            overlayObserver.observe(document.body, { childList: true });
-
-            // Last-resort recovery: when an orphan backdrop is already present it
-            // intercepts clicks, so no sidebar handler can run. Capture that first
-            // click, remove only a backdrop with no visibly open modal, then the next
-            // click works normally. This never closes a genuinely visible modal.
-            document.addEventListener('pointerdown', function (event) {
-                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop')) {
-                    recoverStaleNavigationOverlay();
-                }
-            }, true);
-            document.addEventListener('click', function (event) {
-                if (event.target?.matches?.('.modal-backdrop, .offcanvas-backdrop')) {
-                    recoverStaleNavigationOverlay();
-                }
-            }, true);
+            overlayObserver.observe(document.body, { childList: true, subtree: true });
             document.addEventListener('hidden.bs.modal', function () {
                 window.setTimeout(recoverStaleNavigationOverlay, 80);
             }, true);
@@ -4938,7 +4890,7 @@ async function deletePlan(id,name){
                   '<div class="mc-row mc-head"><span class="mc-avatar">' + escapeHtml(initials) + '</span><div class="mc-identity"><a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link mc-name fw-bold text-decoration-none" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a><a class="mc-call mc-call-inline" href="tel:' + escapeHtml(metadata.displayPhone || '') + '" aria-label="Call ' + escapeHtml(metadata.displayName || 'customer') + '"><i class="bi bi-telephone-fill"></i></a><a class="mc-phone" href="tel:' + escapeHtml(metadata.displayPhone || '') + '"><i class="bi bi-telephone-fill"></i> ' + escapeHtml(metadata.displayPhone || '-') + '</a></div><div class="mc-dock"><span class="mc-live ' + (networkStatus.online ? 'online' : 'offline') + '"><i></i>' + escapeHtml(networkStatus.online ? (user.session_uptime || 'Online') : statusLabel) + '</span><span class="mc-package">⚡ ' + escapeHtml(user.package_name || user.profile || 'N/A') + '</span></div></div>' +
                   '<div class="mc-telemetry-grid"><div class="mc-telemetry-item"><span>🔑 PPPoE</span><code>' + escapeHtml(user.username || '-') + '</code></div><div class="mc-telemetry-item"><span>🌐 IP</span><code>' + escapeHtml(ip || 'Dynamic') + '</code></div><div class="mc-telemetry-item mc-mac"><span>MAC</span><code>' + escapeHtml(user.mac || user.router_mac || user.routerMac || caller || '--') + '</code><span class="mc-session-status ' + (networkStatus.online ? 'is-online' : 'is-offline') + '"><i></i>' + escapeHtml(networkStatus.online ? 'ONLINE' : statusLabel.toUpperCase()) + '</span></div></div>' +
                   '<div class="mc-row mc-foot"><div class="mc-validity"><span>📅 Exp: ' + escapeHtml(validityLabel || '—') + '</span>' + (daysLabel ? '<small class="' + daysClass + '">' + escapeHtml(daysLabel) + '</small>' : '') + '</div><div class="mc-actions">' +
-                    '<button type="button" class="btn mc-pay" data-id="' + escapeHtml(customerId) + '" data-name="' + escapeHtml(metadata.displayName || user.username || '') + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-expiry="' + escapeHtml(expiryRaw) + '" title="Renew for 1 Month" aria-label="Renew customer for one month" onclick="event.preventDefault();event.stopPropagation();if(window.handleOpenRenewConfirm){window.handleOpenRenewConfirm({id:this.dataset.id,name:this.dataset.name,username:this.dataset.username,price:Number(this.dataset.price||0),expiry:this.dataset.expiry},this)}else{console.error('Renew confirmation handler is unavailable');alert('Renew is temporarily unavailable. Please reload the page.');}"><i class="bi bi-check2"></i></button>' +
+                    '<button type="button" class="btn mc-pay" data-id="' + escapeHtml(customerId) + '" data-name="' + escapeHtml(metadata.displayName || user.username || '') + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-expiry="' + escapeHtml(expiryRaw) + '" title="Renew for 1 Month" aria-label="Renew customer for one month" onclick="event.preventDefault();event.stopPropagation();window.handleOpenRenewConfirm&&window.handleOpenRenewConfirm({id:this.dataset.id,name:this.dataset.name,username:this.dataset.username,price:Number(this.dataset.price||0),expiry:this.dataset.expiry},this)"><i class="bi bi-check2"></i></button>' +
                     '<button type="button" class="btn mc-sync" title="Open All Customer sync control" aria-label="Sync customer" onclick="document.getElementById(\'customerPushSyncBtn\')?.scrollIntoView({behavior:\'smooth\',block:\'center\'}); document.getElementById(\'customerPushSyncBtn\')?.focus();"><i class="bi bi-arrow-repeat"></i></button>' +
                     '<button type="button" class="btn mc-view action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Customer 360" aria-label="View customer"><i class="bi bi-eye"></i></button>' +
                     '<button type="button" class="btn mc-edit action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit customer" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
@@ -5919,18 +5871,20 @@ async function deletePlan(id,name){
             document.documentElement.dataset.customerDateGuardBound = '1';
             document.addEventListener('show.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
             document.addEventListener('shown.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
-            // Date fields are normalized at startup and when their Bootstrap modal opens.
-            // Only observe type changes; watching every inserted DOM node caused repeated
-            // scans while large customer/payment tables were rendered.
             const observer = new MutationObserver(records => {
                 records.forEach(record => {
+                    // Catch scripts that change an existing date field back to type="date".
                     if (record.type === 'attributes' && record.target instanceof HTMLInputElement) {
                         enforceCustomerDateDisplay(record.target);
+                        return;
                     }
+                    record.addedNodes?.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) enforceCustomerDateDisplay(node);
+                    });
                 });
             });
             observer.observe(document.documentElement, {
-                subtree: true, attributes: true, attributeFilter: ['type']
+                childList: true, subtree: true, attributes: true, attributeFilter: ['type']
             });
         }
 
