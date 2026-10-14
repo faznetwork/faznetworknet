@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FAZ NETWORK Hotspot Login</title>
+  <style>
+    :root{color-scheme:dark;--green:#0a3d2e;--accent:#10b981;--gold:#f59e0b}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at top,#0b4b38,#041812 68%);font-family:system-ui,sans-serif;color:#f0fdf4}
+    main{width:min(100%,420px);padding:26px;border:1px solid #10b98166;border-radius:20px;background:#09251eeF;box-shadow:0 20px 60px #0008}
+    h1{text-align:center;margin:0;color:white;font-size:25px}p{color:#a7f3d0;text-align:center;font-size:13px;line-height:1.6}
+    label{display:block;font-size:13px;margin:18px 0 6px}input{width:100%;padding:13px;border-radius:10px;border:1px solid #ffffff30;background:#041812;color:white;font-size:16px}
+    button,.pay{display:block;width:100%;margin-top:16px;padding:13px;border:0;border-radius:10px;background:linear-gradient(135deg,#10b981,#047857);color:white;font-weight:800;font-size:15px;text-align:center;text-decoration:none;cursor:pointer}
+    .status{display:none;margin-top:12px;padding:10px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:13px}
+    small{display:block;text-align:center;color:#94a3b8;margin-top:16px}
+  </style>
+</head>
+<body>
+<main>
+  <h1>FAZ NETWORK</h1>
+  <p>ইন্টারনেট চালু করতে আপনার নিবন্ধিত ১১ ডিজিটের মোবাইল নম্বর দিন। ডিভাইসের MAC Address স্বয়ংক্রিয়ভাবে ব্যবহার হবে।</p>
+  <form id="hotspot-login" name="login" action="$(link-login-only)" method="post">
+    <input type="hidden" name="dst" value="$(link-orig)">
+    <input type="hidden" name="popup" value="true">
+    <input type="hidden" name="chap-id" value="$(chap-id)">
+    <input type="hidden" name="chap-challenge" value="$(chap-challenge)">
+    <input type="hidden" id="router-mac" value="$(mac)">
+    <input type="hidden" name="username" id="router-username" value="$(mac)">
+    <input type="hidden" name="password" id="router-password">
+    <label for="customer-phone">গ্রাহকের মোবাইল নম্বর (Password)</label>
+    <input id="customer-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" placeholder="017xxxxxxxx" required>
+    <div id="status" class="status" role="alert"></div>
+    <button type="submit">ইন্টারনেট চালু করুন</button>
+  </form>
+  <a class="pay" href="https://faznetwork-web.onrender.com/portal?mac=$(mac)">নতুন প্যাকেজ কিনুন / রিচার্জ</a>
+  <small>Username = Device MAC Address · Password = Customer Phone</small>
+</main>
+<script src="md5.js"></script>
+<script>
+(function(){
+  const form=document.getElementById("hotspot-login");
+  const phoneInput=document.getElementById("customer-phone");
+  const status=document.getElementById("status");
+  function normalizeMac(value){
+    const compact=String(value||"").trim().replace(/[:-]/g,"");
+    return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";
+  }
+  function normalizePhone(value){
+    const digits=String(value||"").replace(/[^0-9]/g,"");
+    return /^01[0-9]{9}$/.test(digits)?digits:"";
+  }
+  form.addEventListener("submit",function(event){
+    event.preventDefault();
+    const mac=normalizeMac(document.getElementById("router-mac").value);
+    const phone=normalizePhone(phoneInput.value);
+    const chapId=form.elements.namedItem("chap-id").value||"";
+    const challenge=form.elements.namedItem("chap-challenge").value||"";
+    if(!mac){status.style.display="block";status.textContent="RouterOS থেকে ডিভাইসের MAC Address পাওয়া যায়নি।";return;}
+    if(!phone){status.style.display="block";status.textContent="সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।";return;}
+    document.getElementById("router-username").value=mac;
+    const password=document.getElementById("router-password");
+    // Recompute from the raw phone on every attempt; never hash an already-hashed value.
+    if(chapId&&challenge){
+      if(typeof hexMD5!=="function"){status.style.display="block";status.textContent="RouterOS CHAP helper md5.js লোড হয়নি।";return;}
+      password.value=hexMD5(chapId+phone+challenge);
+    }else{
+      password.value=phone;
+    }
+    form.submit();
+  });
+})();
+</script>
+</body>
+</html>
