@@ -54,22 +54,24 @@ function parseValidityMs(value) {
 
 function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
-  const managed = /FAZ\|PROFILE=/i.test(comment);
-  if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
-  const expValue = comment.match(/(?:^|\|)EXP(?::|=)\s*([^|]+)/i)?.[1]?.trim();
+  const username = String(user?.username || "");
+  const schedulerName = "faz-exp-" + username;
+  const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
+  const managed = /FAZ\\|PROFILE=/i.test(comment);
+  if (/FAZ\\|EXPIRED(?:\\||$)/i.test(comment)) return true;
+  const expValue = comment.match(/(?:^|\\|)EXP(?::|=)\\s*([^|]+)/i)?.[1]?.trim();
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
-    const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
-    const dhakaMatch = expValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
-    const dateOnly = expValue.match(/^(\d{4}-\d{2}-\d{2})$/);
+    const epoch = /^\\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
+    const dhakaMatch = expValue.match(/^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}:\\d{2}:\\d{2})$/);
+    const dateOnly = expValue.match(/^(\\d{4}-\\d{2}-\\d{2})$/);
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
       : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
-    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
+    // When a first-login scheduler exists, its exact duration-based deadline
+    // takes precedence over the date-only purchase comment.
+    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now() && !hasExpiryScheduler) return true;
   }
   if (!managed) return false;
-
-  const schedulerName = "faz-exp-" + String(user.username || "");
-  const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
   if (user.disabled && !hasExpiryScheduler) return true;
 
   const byteLimit = Math.max(0, Number(user.limitBytesTotal) || 0);
