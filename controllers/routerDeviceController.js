@@ -7,6 +7,7 @@ const routerDeviceService = require('../services/routerDeviceService');
 function clean(value, max = 120) { return String(value ?? '').trim().slice(0, max); }
 function publicError(res, error) {
   console.error('[Router Device API]', error?.message || error);
+  if (error?.code === '23505') return res.status(409).json({ success: false, code: 'ROUTER_DUPLICATE', message: 'A router with this name or host already exists.' });
   return res.status(error?.statusCode || 500).json({
     success: false,
     code: error?.errorCode || 'ROUTER_DEVICE_ERROR',
@@ -40,6 +41,11 @@ exports.addDevice = async (req, res) => {
   try {
     const input = inputFrom(req.body || {});
     if (!input.router_name) return res.status(400).json({ success: false, code: 'VALIDATION_ERROR', message: 'Router name is required.' });
+    const duplicate = await db.query(
+      "SELECT id, router_name FROM router_devices WHERE lower(router_name)=lower($1) OR (lower(host)=lower($2) AND api_type=$3) LIMIT 1",
+      [input.router_name, input.host, input.api_type || 'native_api']
+    );
+    if (duplicate.rowCount) return res.status(409).json({ success: false, code: 'ROUTER_DUPLICATE', message: 'A router with this name or the same host and API type already exists.' });
     // Never trust the browser's test badge: perform a fresh handshake server-side before persisting.
     const handshake = await routerDeviceService.testConnection(input);
     const encryptedPassword = credentials.encrypt(input.password);
