@@ -782,6 +782,25 @@ class MikroTikService {
       return { username, updated: true };
     });
   }
+  async updateHotspotUser(usernameValue, profileValue, commentValue) {
+    const username=this._str(usernameValue).trim();
+    const profile=this._str(profileValue).trim();
+    const comment=this._str(commentValue).slice(0,500);
+    if(!username||username.length>100) throw new Error("A valid Hotspot username is required.");
+    if(!profile||profile.length>100) throw new Error("A valid Hotspot profile is required.");
+    return this._withConnection("Hotspot user update", async (connection) => {
+      const [userRows, profileRows]=await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/user/profile/print")
+      ]);
+      const user=(Array.isArray(userRows)?userRows:[]).find(row=>this._str(row.name).trim().toLowerCase()===username.toLowerCase()&&row[".id"]);
+      if(!user) throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");
+      const profiles=(Array.isArray(profileRows)?profileRows:[]).map(row=>this._str(row.name));
+      if(!profiles.includes(profile)) throw new Error("Selected Hotspot profile does not exist on MikroTik.");
+      await connection.write("/ip/hotspot/user/set",["=.id="+user[".id"],"=profile="+profile,"=comment="+comment]);
+      return {username,profile,comment,updated:true};
+    });
+  }
   async getHotspotUser(usernameValue) {
     const username=this._str(usernameValue).trim();
     if(!username||username.length>100) throw new Error("A valid Hotspot username is required.");
