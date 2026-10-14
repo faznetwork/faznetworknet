@@ -2,6 +2,7 @@ const express=require("express");const controller=require("../controllers/hotspo
 router.get("/",controller.page);
 router.get("/users",controller.list);
 router.post("/users",controller.createUser);
+router.post("/users/update",controller.updateUser);
 router.post("/users/create",controller.createUser);
 router.get("/dashboard-metrics",controller.dashboardMetrics);
 router.get("/voucher-stats",controller.voucherStats);
