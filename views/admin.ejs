@@ -1198,6 +1198,24 @@
 }
 @media(max-width:380px){#view-customer-filter .mc-actions{gap:6px}#view-customer-filter .mc-actions .btn{width:40px;height:42px;min-width:40px;min-height:42px;flex-basis:40px}}
 </style>
+<style id="mobile-customer-card-alignment-v3">
+@media(max-width:767.98px){
+#view-customer-filter .mc-actions{width:100%;flex:1 1 100%;justify-content:center!important;align-items:center;gap:9px!important;margin-inline:auto}
+#view-customer-filter .mc-actions .btn{width:46px;height:46px;min-width:46px;min-height:46px;flex:0 0 46px;font-size:18px}
+#view-customer-filter .mc-actions .mc-pay{width:48px;height:48px;min-width:48px;min-height:48px;flex:0 0 48px;background:#059669!important;color:#fff!important;border-color:#047857!important}
+#view-customer-filter .mc-mac{display:block!important}
+#view-customer-filter .mc-mac code{display:inline-block!important;max-width:100%;vertical-align:middle;margin-right:8px}
+#view-customer-filter .mc-mac .mc-session-status{display:inline-flex!important;vertical-align:middle;margin:4px 0!important;white-space:nowrap}
+#view-customer-filter .mc-mac .mc-session-status i{flex:0 0 7px}
+#view-customer-filter .mc-validity{flex:1 1 100%;width:100%}
+#view-customer-filter .mc-foot{display:flex;align-items:center;justify-content:center!important}
+}
+@media(max-width:390px){
+#view-customer-filter .mc-actions{gap:6px!important}
+#view-customer-filter .mc-actions .btn{width:42px;height:44px;min-width:42px;min-height:44px;flex-basis:42px}
+#view-customer-filter .mc-actions .mc-pay{width:44px;height:46px;min-width:44px;min-height:46px;flex-basis:44px}
+}
+</style>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
