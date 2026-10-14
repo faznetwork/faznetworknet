@@ -60,9 +60,10 @@ function routerUserExpired(user, schedulerNames) {
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
     const epoch = /^\d+$/.test(expValue) ? Number(expValue) * 1000 : NaN;
     const dhakaMatch = expValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
+    const dateOnly = expValue.match(/^(\\d{4}-\\d{2}-\\d{2})$/);
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
-      : new Date(expValue);
+      : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
     if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
   if (!managed) return false;
@@ -172,12 +173,17 @@ function createHotspotExpirationCleanup(deps = {}) {
         const databaseExpiryReached = ["active", "unused"].includes(effectiveStatus) &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
+        const commentExpiry = parseCommentExpiry(voucher.comment);
+        // The one-shot RouterOS scheduler may remove the router account before this poll.
+        // Reconcile the retained voucher row after its persisted Exp date passes.
+        const commentExpiryReached = !user && ["active", "unused"].includes(effectiveStatus) &&
+          commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
         const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
-        if (!databaseExpiryReached && !routerExpiryReached) continue;
+        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, databaseExpiryReached ? expiryAt : currentTime, voucher.id]
+          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
         );
         expired++;
         try {
