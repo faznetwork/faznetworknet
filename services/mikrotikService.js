@@ -853,14 +853,16 @@ class MikroTikService {
     });
   }
 
+  _hotspotExpiryComment(data) {
+    const supplied=this._str(data?.comment).trim();
+    if(/^Exp: \d{4}-\d{2}-\d{2}$/.test(supplied))return supplied;
+    const date=this._str(data?.expiryDate).trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(date)?"Exp: "+date:"";
+  }
   async createHotspotUser(data) {
     const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
-    const suppliedComment=this._str(data.comment);
-    const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const commentIsManaged=/^FAZ\|EXP(?::|=)[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
-    const validity=suppliedComment.match(/(?:^|\|)VALIDITY=([^|]+)/i)?.[1]||"";
-    const comment=commentIsManaged?suppliedComment:"FAZ|EXP: PENDING|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"");
+    const comment=this._hotspotExpiryComment(data);
     return this._withConnection("Hotspot user creation", async (connection) => {
       const params=this._writeParams({
         name: username,
@@ -892,10 +894,7 @@ class MikroTikService {
     const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
     if(!username||!password||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires username, password, profile, and time validity or a data quota.");
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
-    const suppliedComment=this._str(data.comment);
-    const safeProfile=profile.replace(/[|]/g,"").slice(0,80);
-    const commentIsManaged=/^FAZ\|EXP=[^|]*\|PROF=[^|]*\|INIT=1(?:\||$)/i.test(suppliedComment);
-    const comment=commentIsManaged?suppliedComment:"FAZ|EXP=0|PROF="+safeProfile+"|INIT=1"+(validity?"|VALIDITY="+validity:"")+(suppliedComment?"|NOTE="+suppliedComment.replace(/[|]/g,"/").slice(0,300):"");
+    const comment=this._hotspotExpiryComment(data);
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
       const matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
