@@ -81,7 +81,7 @@ function extractAmount(text) {
   for (const re of patterns) { const m = t.match(re); if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; } }
   return NaN;
 }
-function extractSenderPhone(text) {
+function extractRecipientPhone(text) {\n  const m = String(text || "").match(/\\bto\\s*((?:\\+?880[\\s-]*|0)1(?:[\\s-]*\\d){9})/i);\n  const value = m ? normalizePhone(m[1]) : "";\n  return /^01\\d{9}$/.test(value) ? value : "";\n}\nfunction extractSenderPhone(text) {
   const matches = String(text || "").match(/(?:\+?880[\s-]*|0)1(?:[\s-]*\d){9}/g) || [];
   const normalized = matches.map(normalizePhone).filter(v => /^01\d{9}$/.test(v));
   return normalized[0] || "";
@@ -99,7 +99,7 @@ function parseSms(body, query = {}, headers = {}, options = {}) {
     const error = new Error("Could not parse transaction ID or amount from SMS.");
     error.code = "INVALID_SMS_PAYLOAD"; error.statusCode = 400; throw error;
   }
-  const recipient = normalizePhone(payload.recipient);
+  const recipient = normalizePhone(payload.recipient || extractRecipientPhone(payload.text));
   if (payload.recipient) {
     const configured = normalizePhone(options.recipientNumbers?.[channel] || "");
     if (!configured || !recipient || recipient !== configured) {
@@ -109,4 +109,4 @@ function parseSms(body, query = {}, headers = {}, options = {}) {
   }
   return { channel, trxId: normalizeTrxId(trxId), amount, senderPhone: extractSenderPhone(payload.text), recipientPhone: recipient, customerRef: extractReference(payload.text), rawSms: payload.text, sourceSender: payload.sender };
 }
-module.exports = { extractWebhookPayload, extractTransactionId, extractAmount, parseSms, normalizePhone, normalizeTrxId, channelFrom, OFFICIAL_SENDERS };
+module.exports = { extractWebhookPayload, extractTransactionId, extractAmount, parseSms, normalizePhone, normalizeTrxId, channelFrom, extractRecipientPhone, OFFICIAL_SENDERS };
