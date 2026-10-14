@@ -39,19 +39,22 @@ exports.interfaces = async (req, res) => {
 };
 
 exports.traffic = async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
   try {
     const interfaceName = String(req.query.interface || "").trim();
-    if (!interfaceName) {
-      return res.status(400).json({
-        success: false,
-        error: "Query parameter 'interface' is required."
-      });
+    if (!interfaceName || interfaceName.length > 100 || /[\\r\\n\\0]/.test(interfaceName)) {
+      return res.status(400).json({ error: "A valid interface query parameter is required." });
     }
-
     const traffic = await mikrotikService.getInterfaceTraffic(interfaceName);
-    res.json({ success: true, traffic });
+    // RouterOS reports bits/sec; expose only bytes/sec plus a numeric epoch timestamp.
+    return res.json({
+      rx: Math.max(0, Number(traffic.rxBitsPerSecond) || 0) / 8,
+      tx: Math.max(0, Number(traffic.txBitsPerSecond) || 0) / 8,
+      timestamp: Date.now()
+    });
   } catch (error) {
-    sendFallback(res, "traffic query", error, { traffic: { rxMbps: 0, txMbps: 0, rxBps: 0, txBps: 0 } });
+    console.warn("[Router API] live traffic unavailable:", error.message || error);
+    return res.status(503).json({ error: "Live traffic is temporarily unavailable.", timestamp: Date.now() });
   }
 };
 
