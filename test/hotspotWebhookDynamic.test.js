@@ -28,7 +28,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
       if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
       if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
-      if(sql.includes("SET status='processing',used=true"))return {rows:[{id:params[1]}]};
+      if(sql.includes("SET status='processing',used=true")){claimSql=sql;return {rows:[{id:params[1]}]};}
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -83,7 +83,7 @@ test("dynamicWebhook catches a custom full-URL path from app_settings",async()=>
 
 test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensitive lookup",async()=>{
   const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser,originalUpdateProfile=mikrotik.updateHotspotProfile;
-  let lookupSql="",lookupValue="",rechargePayload=null;
+  let lookupSql="",claimSql="",lookupValue="",rechargePayload=null;
   try{
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
     db.query=async(sql,params=[])=>{
@@ -109,7 +109,7 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     assert.equal(res.body.username,"01712345678");
     assert.equal(lookupValue,"ABC-123");
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
-    assert.match(lookupSql,/status='unmatched' AND \(used=false OR used IS NULL\)/i);
+    assert.match(claimSql,/status='unmatched' AND \(used=false OR used IS NULL\)/i);
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
     assert.equal(rechargePayload.username,"01712345678");
   }finally{
