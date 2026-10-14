@@ -1227,6 +1227,26 @@
 #view-customer-filter .mc-actions .mc-pay{background:#059669!important;color:#fff!important;border-color:#047857!important}
 }
 </style>
+<style id="customer360-drawer-filter-polish">
+.customer-filter-pills{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px}
+.customer-filter-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid transparent;border-radius:10px;background:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
+.customer-filter-pill b{display:inline-flex;min-width:22px;height:22px;align-items:center;justify-content:center;border-radius:7px;background:#f1f5f9;font-size:11px}
+.customer-filter-pill.filter-all{border-color:#cbd5e1;color:#475569}.customer-filter-pill.filter-all.active{background:#334155;color:#fff;border-color:#334155}
+.customer-filter-pill.filter-paid{border-color:#a7f3d0;color:#047857}.customer-filter-pill.filter-paid.active{background:#047857;color:#fff;border-color:#047857}
+.customer-filter-pill.filter-active{border-color:#bfdbfe;color:#1d4ed8}.customer-filter-pill.filter-active.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+.customer-filter-pill.filter-due{border-color:#fed7aa;color:#c2410c}.customer-filter-pill.filter-due.active{background:#c2410c;color:#fff;border-color:#c2410c}
+.customer-filter-pill.filter-expired{border-color:#fecaca;color:#b91c1c}.customer-filter-pill.filter-expired.active{background:#b91c1c;color:#fff;border-color:#b91c1c}
+.customer-filter-pill.filter-unexpired{border-color:#a5f3fc;color:#0e7490}.customer-filter-pill.filter-unexpired.active{background:#0e7490;color:#fff;border-color:#0e7490}
+.customer-filter-pill.active b{background:rgba(255,255,255,.18);color:#fff}
+.customer360-drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.36);z-index:1090;opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s}
+.customer360-drawer{position:fixed;z-index:1091;inset:0 0 0 auto;width:min(720px,56vw);min-width:520px;background:#f8fafc;box-shadow:-18px 0 48px rgba(15,23,42,.18);transform:translateX(102%);transition:transform .24s ease;display:flex;flex-direction:column}
+.customer360-drawer.open{transform:translateX(0)}.customer360-drawer-backdrop.open{opacity:1;visibility:visible}
+.customer360-drawer-head{height:54px;flex:0 0 54px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#fff;border-bottom:1px solid #e2e8f0;font-weight:800;color:#0f172a}
+.customer360-drawer iframe{border:0;width:100%;height:100%;background:#fff;flex:1;min-height:0}
+body.customer360-drawer-open{overflow:hidden}
+@media(max-width:767.98px){.customer360-drawer{width:100%;min-width:0;inset:0}.customer360-drawer-head{height:56px;flex-basis:56px}}
+@media(prefers-reduced-motion:reduce){.customer360-drawer,.customer360-drawer-backdrop{transition:none}}
+</style>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
@@ -1836,7 +1856,7 @@
             <!-- VIEW 3: ALL CUSTOMER -->
             <section id="view-all-customer" class="admin-view" style="display:none">
                 <div class="card card-custom">
-                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerRestoreBtn" class="btn btn-outline-primary btn-sm ms-auto" onclick="restoreMissingRouterCustomer(this)" title="Restore a MikroTik PPPoE secret that is missing from All Customers"><i class="bi bi-person-check me-1"></i> Restore Missing User</button><button id="customerPushSyncBtn" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
+                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerPushSyncBtn" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
                 </div>
             </section>
@@ -4501,15 +4521,14 @@ async function deletePlan(id,name){
         }
 
         function filterCustomerRows(query) {
-            const q = String(query || '').trim().toLowerCase();
-            // Keep the selected billing filter applied when the search box changes.
-            const activeTab = document.querySelector('#customerBillingTabs button[data-billing-filter].active');
-            const wanted = String(activeTab?.getAttribute('data-billing-filter') || 'all').toLowerCase();
-            document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
-                const rowStatus = String(row.getAttribute('data-billing-status') || 'unpaid').toLowerCase();
-                const matchesStatus = wanted === 'all' || rowStatus === wanted;
-                const matchesSearch = !q || row.innerText.toLowerCase().includes(q);
-                row.style.display = matchesStatus && matchesSearch ? '' : 'none';
+            const q=String(query||'').trim().toLowerCase();
+            const activeTab=document.querySelector('#customerBillingTabs button[data-billing-filter].active');
+            const wanted=String(activeTab?.getAttribute('data-billing-filter')||'all').toLowerCase();
+            document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row=>{
+                const billing=String(row.getAttribute('data-billing-status')||'').toLowerCase();
+                const expiry=String(row.getAttribute('data-expiry-state')||'unknown');
+                const match=wanted==='all'||(wanted==='paid'&&billing==='paid')||(wanted==='active'&&expiry!=='expired')||(wanted==='due'&&expiry==='due')||(wanted==='expired'&&expiry==='expired')||(wanted==='unexpired'&&expiry==='unexpired');
+                row.style.display=match&&(!q||row.innerText.toLowerCase().includes(q))?'':'none';
             });
         }
 
@@ -4757,11 +4776,22 @@ async function deletePlan(id,name){
         }
 
         function customerBillingCounts(users) {
-            return (users || []).reduce(function(counts, user) {
-                const status = String(user?.billing_status || 'unpaid').toLowerCase();
-                if (status === 'paid') counts.paid++; else if (status === 'due') counts.due++; else counts.unpaid++;
-                counts.all++; return counts;
-            }, {all:0,paid:0,due:0,unpaid:0});
+            const counts = {all:0,paid:0,active:0,due:0,expired:0,unexpired:0};
+            const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+            (users||[]).forEach(function(user){
+                counts.all++;
+                const status=String(user?.billing_status||'').toLowerCase();
+                const exp=String(user?.expiry_date||user?.expiration_date||'').slice(0,10);
+                const valid=/^\\d{4}-\\d{2}-\\d{2}$/.test(exp);
+                const days=valid?Math.floor((Date.parse(exp+'T00:00:00+06:00')-Date.parse(today+'T00:00:00+06:00'))/86400000):null;
+                const expired=status==='expired'||(days!==null&&days<0);
+                if(status==='paid')counts.paid++;
+                if(!expired)counts.active++;
+                if(!expired&&days!==null&&days<=7)counts.due++;
+                if(expired)counts.expired++;
+                if(days!==null&&days>=0)counts.unexpired++;
+            });
+            return counts;
         }
 
         function setCustomerBillingFilter(status, button) {
@@ -4805,16 +4835,18 @@ async function deletePlan(id,name){
                                     <input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)">
                                 </div>
                             </div>
-                            ${currentCustomerFilter === 'all' ? '<button class="btn btn-outline-primary btn-sm mt-2 mt-md-0" onclick="restoreMissingRouterCustomer(this)" title="Restore an existing MikroTik PPPoE secret into this Billing Panel"><i class="bi bi-person-check me-1"></i> Restore Missing User</button>' : ''}
+                            
                             <button class="btn btn-success btn-sm mt-2 mt-md-0" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button>
                             <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshCustomerSection()"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
-                        <div id="customerBillingTabs" class="px-3 pt-3 d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary active" data-billing-filter="all" onclick="setCustomerBillingFilter('all',this)">All Customers (<span>${counts.all}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-success" data-billing-filter="paid" onclick="setCustomerBillingFilter('paid',this)">Paid / Active (<span>${counts.paid}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-warning" data-billing-filter="due" onclick="setCustomerBillingFilter('due',this)">Due Soon (<span>${counts.due}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-billing-filter="unpaid" onclick="setCustomerBillingFilter('unpaid',this)">Unpaid / Expired (<span>${counts.unpaid}</span>)</button>
-                        </div>
+                        <div id="customerBillingTabs" class="customer-filter-pills" role="group" aria-label="Customer filters">
+<button type="button" class="customer-filter-pill filter-all active" data-billing-filter="all" aria-pressed="true" onclick="setCustomerBillingFilter('all',this)">All Customers <b>${counts.all}</b></button>
+<button type="button" class="customer-filter-pill filter-paid" data-billing-filter="paid" aria-pressed="false" onclick="setCustomerBillingFilter('paid',this)">Paid <b>${counts.paid}</b></button>
+<button type="button" class="customer-filter-pill filter-active" data-billing-filter="active" aria-pressed="false" onclick="setCustomerBillingFilter('active',this)">Active <b>${counts.active}</b></button>
+<button type="button" class="customer-filter-pill filter-due" data-billing-filter="due" aria-pressed="false" onclick="setCustomerBillingFilter('due',this)">Due Soon <b>${counts.due}</b></button>
+<button type="button" class="customer-filter-pill filter-expired" data-billing-filter="expired" aria-pressed="false" onclick="setCustomerBillingFilter('expired',this)">Expired <b>${counts.expired}</b></button>
+<button type="button" class="customer-filter-pill filter-unexpired" data-billing-filter="unexpired" aria-pressed="false" onclick="setCustomerBillingFilter('unexpired',this)">Unexpired <b>${counts.unexpired}</b></button>
+</div>
                         <div class="card-body p-0 mt-2 table-responsive">
                             <table class="table table-hover mb-0 customer-live-table">
                                 <thead class="table-light">
@@ -4869,7 +4901,9 @@ async function deletePlan(id,name){
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
-            return '<tr data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
+            const expiryDays=expiryDateMatch?Math.ceil((new Date(expiryRaw+'T23:59:59+06:00').getTime()-new Date(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())+'T00:00:00+06:00').getTime())/86400000):null;
+            const expiryState=isExpired||(expiryDays!==null&&expiryDays<0)?'expired':(expiryDays!==null&&expiryDays<=7?'due':(expiryDays!==null?'unexpired':'unknown'));
+            return '<tr data-customer-row data-expiry-state="' + expiryState + '" data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
                 '<td class="ps-3"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
                 '<td class="customer-identity-cell"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
                     '<a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link fw-semibold text-decoration-none d-inline-flex align-items-center" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a>' +
@@ -6775,7 +6809,15 @@ async function deletePlan(id,name){
       });
       $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{form.reset();invalidateTest();result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');});
     })();
-    </script>
+    (function installCustomer360Drawer(){
+if(window.__customer360DrawerInstalled)return;window.__customer360DrawerInstalled=true;
+function closeDrawer(){const b=document.getElementById('customer360DrawerBackdrop'),d=document.getElementById('customer360Drawer');if(!b||!d)return;b.classList.remove('open');d.classList.remove('open');d.setAttribute('aria-hidden','true');document.body.classList.remove('customer360-drawer-open');document.removeEventListener('keydown',escapeClose);}
+function escapeClose(e){if(e.key==='Escape')closeDrawer();}
+function openDrawer(username){const key=String(username||'').trim();if(!key)return;let b=document.getElementById('customer360DrawerBackdrop'),d=document.getElementById('customer360Drawer');if(!b){b=document.createElement('div');b.id='customer360DrawerBackdrop';b.className='customer360-drawer-backdrop';b.addEventListener('click',closeDrawer);document.body.appendChild(b);}if(!d){d=document.createElement('aside');d.id='customer360Drawer';d.className='customer360-drawer';d.setAttribute('aria-label','Customer 360 details');d.setAttribute('aria-hidden','true');d.innerHTML='<div class="customer360-drawer-head"><span><i class="bi bi-person-vcard me-2 text-success"></i>Customer 360</span><button type="button" class="btn btn-sm btn-light border" id="customer360DrawerClose"><i class="bi bi-x-lg"></i> Close</button></div><iframe id="customer360DrawerFrame" title="Customer 360 details"></iframe>';document.body.appendChild(d);d.querySelector('#customer360DrawerClose').addEventListener('click',closeDrawer);}d.querySelector('iframe').src='/admin/customers/'+encodeURIComponent(key)+'?drawer=1';b.classList.add('open');d.classList.add('open');d.setAttribute('aria-hidden','false');document.body.classList.add('customer360-drawer-open');document.addEventListener('keydown',escapeClose);}
+document.addEventListener('click',function(e){const link=e.target.closest('.customer-profile-link');const view=e.target.closest('.action-view-btn');if(!link&&!view)return;const username=(link||view).dataset.username;if(!username)return;e.preventDefault();e.stopPropagation();openDrawer(username);},true);
+window.openCustomer360Drawer=openDrawer;window.closeCustomer360Drawer=closeDrawer;
+})();
+</script>
 
     <!-- Mobile All Customer payment modal (kept in the live admin DOM, not the print-slip template). -->
 <div class="modal fade" id="mobileCustomerRenewalModal" tabindex="-1" aria-labelledby="mobileCustomerRenewalTitle" aria-hidden="true">
