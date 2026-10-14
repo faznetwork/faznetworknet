@@ -264,11 +264,22 @@ async function verifyTrx(req,res){
   const expiryDate=validity?calculateHotspotExpiryDate(validityConfig):null;
   const comment=expiryDate?"Exp: "+expiryDate:"";
   const oldLogin=String(profile?.raw?.["on-login"]||"");
-  const loginScript=buildHotspotOnLoginScript({name:profile.name,sharedUsers:Number(profile.sharedUsers)||1,validityValue:Number(metadata.validityValue||validityConfig.value||1),validityUnit:metadata.validityUnit||validityConfig.unit||"days"});
-  // Replace the legacy FAZ comment-mutating script; preserve unrelated custom hooks.
-  const hasLegacyExpiryScript=/FAZ\|(?:EXP|PROFILE|INIT)=/i.test(oldLogin);
-  const preserved=oldLogin.trim()&&!hasLegacyExpiryScript?" ; "+oldLogin.trim():"";
-  await mikrotikService.updateHotspotProfile({name:profile.name,rateLimit:profile.rateLimit,sharedUsers:Number(profile.sharedUsers)||1,sessionTimeout:validity||"",clearSessionTimeout:false,keepaliveTimeout:profile.keepaliveTimeout,onLogin:loginScript+preserved});
+  const loginScript=buildHotspotOnLoginScript({sharedUsers:Number(profile.sharedUsers)||1});
+  // Keep unrelated custom hooks, but never re-install the old duplicate FAZ expiry
+  // script or append a second copy of our managed hook on each payment.
+  const customMarker='FAZ_CUSTOM_ON_LOGIN_HOOK_START';
+  let customHook="";
+  const markerAt=oldLogin.indexOf(customMarker);
+  if(markerAt>=0){
+   const markerEnd=oldLogin.indexOf(";",markerAt);
+   customHook=markerEnd>=0?oldLogin.slice(markerEnd+1).trim():"";
+  }else if(oldLogin.trim()&&!/FAZ_HOTSPOT_EXPIRY_V2|FAZ\\|(?:EXP|PROFILE|INIT)=|FIRST_LOGIN=/i.test(oldLogin)){
+   customHook=oldLogin.trim();
+  }
+  const preserved=customHook?'; :local fazCustomHookMarker "'+customMarker+'"; '+customHook:"";
+  // Only set on-login: session-timeout, rate-limit, shared-users and keepalive
+  // are shared profile properties and must not be changed for an individual purchase.
+  await mikrotikService.updateHotspotProfile({name:profile.name,onLogin:loginScript+preserved});
   await mikrotikService.rechargeHotspotUser({username:mac,password:phone,profile:profile.name,validity,limitBytesTotal:quota,comment});
   routerSucceeded=true;
   const voucher=await db.query("UPDATE hotspot_vouchers SET password=$2,profile=$3,validity=$4,price=$5,status='unused',comment=$6,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,phone=$7,updated_at=NOW() WHERE LOWER(username)=LOWER($1) RETURNING id",[mac,phone,profile.name,validity,amount,comment,phone]);
