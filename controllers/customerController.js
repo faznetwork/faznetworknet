@@ -877,25 +877,48 @@ async function markPaid(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
-    const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
-    const customer=customerResult.rows[0]||null,routerUser=pppoeResult.rows[0]||null;
-    if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
-    const currentExp=normalizeDate(customer?.expiration_date||routerUser?.expiry_date);
-    const paidUntil=nextBillingExpiryDate(currentExp,customer?.billing_cycle,customer?.billing_duration_days);
-    const packageResult=customer?.package_name
-      ? await db.query("SELECT profile_name FROM packages WHERE LOWER(plan_name)=LOWER($1) LIMIT 1",[customer.package_name])
-      : {rows:[]};
-    const activeProfile=clean(packageResult.rows[0]?.profile_name||customer?.profile||routerUser?.profile||"",100);
-    if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED"||activeProfile.toUpperCase()==="EXPIRED-PROFILE")throw new Error("Customer package profile is missing or invalid.");
-    const comment=buildExpirationComment(customer?.full_name||"",customer?.phone||routerUser?.phone||"",paidUntil,clean(customer?.remarks||routerUser?.comment||"",1000));
-    await mikrotikService.updateSecret(username,{password:customer?.password||routerUser?.password||"",profile:activeProfile,comment,disabled:false});
-    await mikrotikService.kickActiveUser(username);
-    await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[paidUntil,username]);
-    await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,paidUntil,comment,username]);
-    const paidCustomer=customer||{id:null,package_name:routerUser?.profile||activeProfile};
-    if(paidCustomer.id)await logAuditAction({customerId:paidCustomer.id,adminId:getAdminId(req),action:"RENEW",details:{message:"Bill marked as paid; restored package profile and reset active session",paidUntil,package:paidCustomer.package_name,profile:activeProfile},ipAddress:getIpAddress(req)});
-    return res.json({success:true,username,paidUntil,profile:activeProfile,message:`Bill marked as paid. Package profile restored until ${paidUntil}; active session reset.`});
+    // "Mark as Paid" is a billing-status action only. It must not renew/extend
+    // expiry, re-enable a suspended secret, change a profile, or kick a session.
+    const result=await db.withTransaction(async client=>{
+      const customerResult=await client.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+      const pppoeResult=await client.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+      const customer=customerResult.rows[0]||null,routerUser=pppoeResult.rows[0]||null;
+      if(!customer&&!routerUser)return null;
+      const currentExpiry=normalizeDate(customer?.expiration_date||routerUser?.expiry_date);
+      if(customer){
+        await client.query(
+          "UPDATE customers SET billing_status='paid',last_paid_at=NOW(),paid_until=COALESCE($1::date,expiration_date,paid_until),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
+          [currentExpiry,username]
+        );
+      }
+      if(routerUser){
+        await client.query(
+          "UPDATE pppoe_users SET billing_status='paid',last_paid_at=NOW(),paid_until=COALESCE($1::date,expiry_date,paid_until),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
+          [currentExpiry,username]
+        );
+      }
+      return {customer,routerUser,currentExpiry};
+    });
+    if(!result)return res.status(404).json({success:false,message:"Customer not found."});
+    if(result.customer?.id){
+      await logAuditAction({
+        customerId:result.customer.id,
+        adminId:getAdminId(req),
+        action:"MARK_PAID",
+        details:{
+          message:"Billing status marked as paid; expiry date and MikroTik configuration were not changed.",
+          paidUntil:result.currentExpiry,
+          package:result.customer.package_name||result.customer.profile||null
+        },
+        ipAddress:getIpAddress(req)
+      });
+    }
+    return res.json({
+      success:true,
+      username,
+      paidUntil:result.currentExpiry,
+      message:"Billing status marked as paid. Expiry date and MikroTik settings were not changed."
+    });
   }catch(error){return errorResponse(res,error);}
 }
 async function renew(req,res){
