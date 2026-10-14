@@ -2217,7 +2217,7 @@
             try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await window.loadHotspotVoucherRecords('all','Voucher Management');}
             catch(error){alert(error.message||'Unable to remove Hotspot credentials.');}
         };
-        window.loadHotspotVoucherSales = async function(){        window.loadHotspotVoucherSales = async function(){
+        window.loadHotspotVoucherSales = async function(){
             const container=document.getElementById('dynamicPageContent');
             if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
             if(!container)return false;container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
