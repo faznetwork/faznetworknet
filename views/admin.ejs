@@ -4065,7 +4065,7 @@ async function deletePlan(id,name){
                         if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending…'; }
                         if (result) { result.className = 'small'; result.textContent = ''; }
                         try {
-                            await window.jsonFetch(currentStaffMode === 'sub-staff' ? '/api/admin/users/sub-staff-invitations' : '/api/admin/users', {method:'POST',body:JSON.stringify(payload)});
+                            await window.jsonFetch('/api/admin/users/self-service-invitations', {method:'POST',body:JSON.stringify(payload)});
                             if (result) { result.className = 'small text-success'; result.textContent = 'Invitation link sent. The invitee will choose their own username and password.'; }
                             form.reset();
                             if (roleSelect) roleSelect.value = 'staff';
