@@ -21,7 +21,7 @@ test('Staff pages are admin-only and use the existing invitation/account APIs', 
   assert.ok(routes.includes("router.post('/', controller.createUser)"));
   assert.ok(routes.includes("router.get('/invitations', controller.listInvitations)"));
   assert.ok(routes.includes("router.patch('/:id/status', controller.updateUserStatus)"));
-  assert.ok(adminView.includes("currentStaffMode === 'sub-staff' ? '/api/admin/users/sub-staff-invitations' : '/api/admin/users'"));
+  assert.ok(adminView.includes("if (currentStaffMode === 'sub-staff') invitations = invitations.filter(item => item.role === 'staff');"));
   assert.ok(routes.includes("router.post('/sub-staff-invitations', controller.createSubStaffInvitation)"));
   assert.ok(routes.includes("router.post('/', controller.createUser)"));
   assert.ok(adminView.includes("window.jsonFetch('/api/admin/users/invitations')"));
