@@ -1,6 +1,7 @@
 const express=require("express");
 const controller=require("../controllers/settingsController");
 const router=express.Router();
+router.use(require("./notificationTemplateRoutes"));
 router.get("/general",controller.generalSettings);
 router.post("/general",controller.saveGeneralSettings);
 router.post("/mikrotik/test",controller.testMikrotik);
