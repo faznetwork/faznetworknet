@@ -321,6 +321,8 @@ async function createCustomer(req, res) {
       );
     }
 
+    if(provisioning==="provisioned"&&customer.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"welcome",to:customer.phone,username:customer.username,message:"Welcome to FAZ NETWORK, "+(customer.fullName||customer.username)+". Your PPPoE service is ready.",variables:{name:customer.fullName||customer.username,username:customer.username,profile:customer.effectiveProfile,expiry_date:customer.expirationDate}});}
+
     return res.status(201).json({
       success: true,
       message: provisioning === "provisioned"
