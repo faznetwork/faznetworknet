@@ -57,8 +57,8 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     assert.equal(rechargePayload.profile,"Weekend");
     assert.equal(rechargePayload.validity,"2d");
     assert.deepEqual(Object.keys(profileUpdatePayload).sort(),["name","onLogin"],"a purchase must not mutate shared session-timeout, rate-limit, or other profile settings");
-    assert.match(profileUpdatePayload.onLogin,/FAZ_HOTSPOT_EXPIRY_V2/);
-    assert.match(profileUpdatePayload.onLogin,/interval=2d/);
+    assert.match(profileUpdatePayload.onLogin,/FAZ_HOTSPOT_EXPIRY_V3/);
+    assert.match(profileUpdatePayload.onLogin,/get .*uid comment/); assert.match(profileUpdatePayload.onLogin,/start-time=23:59:59/); assert.doesNotMatch(profileUpdatePayload.onLogin,/interval=2d/);
     assert.doesNotMatch(profileUpdatePayload.onLogin,/FAZ\\|EXP=|FIRST_LOGIN=|session-timeout|hotspot user disable/);
 
     // The old Tk 10 amount must stop matching immediately after the profile price is changed.
