@@ -69,6 +69,7 @@ async function parseResponse(response){
  const text=await response.text().catch(()=> "");
  let data={};try{data=text?JSON.parse(text):{};}catch(_){data={response:text.slice(0,500)};}
  if(!response.ok)throw new Error("SMS provider returned HTTP "+response.status+(data?.message?": "+String(data.message).slice(0,180):"."));
+ if(data&&typeof data==="object"&&(data.success===false||String(data.status||"").toLowerCase()==="error"||(data.error!==undefined&&Number(data.error)!==0)))throw new Error("SMS provider rejected the request"+(data.msg||data.message?": "+String(data.msg||data.message).slice(0,180):"."));
  return {httpStatus:response.status,data};
 }
 function presetConfig(settings){
