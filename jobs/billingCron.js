@@ -13,7 +13,7 @@ async function runExpiryWarnings(){
     const dueDateSql="(NOW() AT TIME ZONE 'Asia/Dhaka')::date + 2";
     const [pppoe,hotspot]=await Promise.all([
       db.query("SELECT username,full_name,monthly_bill AS amount,phone,expiration_date FROM customers WHERE expiration_date="+dueDateSql+" AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"),
-      db.query("SELECT username,phone,price AS amount,expires_at::date AS expiration_date FROM hotspot_vouchers WHERE expires_at IS NOT NULL AND expires_at::date="+dueDateSql+" AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) IN ('active','unused','pending_claim') ORDER BY expires_at,username")
+      db.query("SELECT username,phone,price AS amount,(expires_at AT TIME ZONE 'Asia/Dhaka')::date AS expiration_date FROM hotspot_vouchers WHERE expires_at IS NOT NULL AND (expires_at AT TIME ZONE 'Asia/Dhaka')::date="+dueDateSql+" AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) IN ('active','unused','pending_claim') ORDER BY expires_at,username")
     ]);
     let checked=0,sent=0;
     const dispatch=require("../services/notificationDispatcher").dispatchNow;
