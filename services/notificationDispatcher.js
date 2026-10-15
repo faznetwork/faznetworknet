@@ -1,9 +1,28 @@
 "use strict";
 const settingsService=require("./appSettings");
+const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function customTemplateEvents(type,rawEvent,eventName){
+ const raw=String(rawEvent||"").toLowerCase();
+ if(raw==="welcome"||raw==="welcome_message"||eventName==="welcome")return ["welcome_message"];
+ if(type==="pppoe"){
+  if(eventName==="expiry_warning"||raw==="pppoe_expiry_warning")return ["pppoe_expiry_warning"];
+  if(["payment","renewal","recharge"].includes(eventName))return raw==="pppoe_payment"||eventName==="payment"?["pppoe_payment","pppoe_renewal"]:["pppoe_renewal","pppoe_payment"];
+ }
+ if(type==="hotspot"){
+  if(eventName==="expiry_warning"||raw==="hotspot_expiry_warning")return ["hotspot_expiry_warning"];
+  if(["payment","renewal","recharge"].includes(eventName))return raw==="hotspot_purchase"||eventName==="payment"?["hotspot_purchase","hotspot_renewal"]:["hotspot_renewal","hotspot_purchase"];
+ }
+ return [];
+}
+async function getCustomTemplate(type,rawEvent,eventName,channel){
+ const candidates=customTemplateEvents(type,rawEvent,eventName);if(!candidates.length)return null;
+ try{const result=await db.query("SELECT template_body FROM notification_templates WHERE event_key=ANY($1::varchar[]) AND channel=$2 AND is_active=TRUE ORDER BY array_position($1::varchar[],event_key) LIMIT 1",[candidates,channel]);return result.rows?.[0]?.template_body||null;}
+ catch(error){console.warn("[Notification Hub] Custom template lookup skipped:",error.message);return null;}
+}
 function renewalRuleEvents(type,eventName){
  if(type!=="pppoe"||!["payment","renewal","recharge"].includes(eventName))return [eventName];
  // These legacy names are all used by PPPoE renewal/payment entry points. Treat an
@@ -42,13 +61,13 @@ async function sendMessenger(settings,recipientId,message){
  if(!response.ok||data.error)throw new Error("Messenger delivery failed"+(data.error?.message?": "+String(data.error.message).slice(0,160):"."));
  return {success:true,messageId:data.message_id||null};
 }
-function formatMessage(settings,event,variables,message){
+function formatMessage(settings,event,variables,message,customTemplate){
  const templateKey={payment:"sms_template_payment_receipt",payment_receipt:"sms_template_payment_receipt",recharge:"sms_template_payment_receipt",renewal:"sms_template_payment_receipt",welcome:"sms_template_welcome",expiry_warning:"sms_template_expiry_warning",expired:"sms_template_line_block",line_expiry:"sms_template_line_block"}[event];
- const source=templateKey&&settings[templateKey]?settings[templateKey]:message||"";
+ const source=customTemplate!==null&&customTemplate!==undefined?customTemplate:(templateKey&&settings[templateKey]?settings[templateKey]:message||"");
  return smsService.renderTemplate(source,{company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...variables});
 }
 async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
- const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),eventName=eventKey(event);
+ const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to;
  const recipientPhone=normalizePhone(rawPhone);
  const validWhatsAppPhone=isValidBdWhatsAppPhone(recipientPhone);
@@ -58,7 +77,8 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
   if(validWhatsAppPhone)console.info("[Dispatcher] Triggering PPPoE renewal notification for "+customerUsername+" ("+recipientPhone+").");
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
- const context={username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,...variables};
+ const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
+ const textFor=async channel=>formatMessage(settings,eventName,context,message,await getCustomTemplate(type,rawEvent,eventName,channel));
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
@@ -75,10 +95,10 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
  if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",()=>smsService.sendNotification({to:recipientPhone,message:text,event:smsEvent(eventName),variables:context})]);
- if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipientPhone,message:text})]);
- if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",()=>sendTelegram(settings,text)]);
- if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,text)]);
+ if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendSms({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings})]);
+ if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
+ if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",async()=>sendTelegram(settings,await textFor("telegram"))]);
+ if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",async()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,await textFor("messenger"))]);
  const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
  return {success:results.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:results.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}))};
 }
