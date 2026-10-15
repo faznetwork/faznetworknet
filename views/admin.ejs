@@ -7076,14 +7076,22 @@ async function loadDashboardKpiTarget(card){
   if(!card)return;
   const button=document.querySelector('[data-kpi-id="'+card.id+'"]');if(button){button.classList.add('is-navigating');button.setAttribute('aria-busy','true');}
   try{
-    if(card.id==='total-users'||card.id==='active-users'||card.id==='expired-users'){
-      const status=card.id==='active-users'?'active':card.id==='expired-users'?'expired':'all';
-      if(typeof window.openHotspotKpiUsers!=='function')throw new Error('Hotspot KPI navigation is unavailable.');
-      await window.openHotspotKpiUsers(status);
+    if(card.id==='total-users'){
+      if(typeof window.loadHotspotSection==='function') await window.loadHotspotSection('all','all_user');
+      else if(typeof window.openHotspotKpiUsers==='function') await window.openHotspotKpiUsers('all');
+    }else if(card.id==='active-users'){
+      if(typeof window.loadHotspotSection==='function') await window.loadHotspotSection('active','active_user');
+      else if(typeof window.openHotspotKpiUsers==='function') await window.openHotspotKpiUsers('active');
+    }else if(card.id==='expired-users'){
+      if(typeof window.loadHotspotVoucherRecords==='function') await window.loadHotspotVoucherRecords('cleanup','Expired & Cleanup');
+      else if(typeof window.openHotspotKpiUsers==='function') await window.openHotspotKpiUsers('expired');
     }else if(card.id.startsWith('recharge-')){
       await loadDashboardRechargeFilter(card.period,card.apiEndpoint);
     }
-  }catch(error){console.error('[Dashboard KPI navigation]',error);alert(error.message||'Unable to open the selected dashboard details.');}
+  }catch(error){
+    // Navigation failures must not block the panel with a placeholder alert.
+    console.error('[Dashboard KPI navigation]',error);
+  }
   finally{if(button){button.classList.remove('is-navigating');button.setAttribute('aria-busy','false');}}
 }
 function bindDashboardKpiEvents(){
