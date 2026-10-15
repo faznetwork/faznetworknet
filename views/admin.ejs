@@ -5501,6 +5501,75 @@ async function deletePlan(id,name){
                   '</div></div></td>' +
             '</tr>';
         }
+        async function refreshCustomer360LiveStatus(username){
+            const modalEl=document.getElementById('editCustomerModal');
+            const key=String(username||'').trim();
+            if(!modalEl||!key)return;
+            const ensureNotice=()=>{
+                const body=modalEl.querySelector('.modal-body');
+                if(!body)return null;
+                let notice=body.querySelector('#customerLiveStatusNotice');
+                if(!notice){
+                    notice=document.createElement('div');
+                    notice.id='customerLiveStatusNotice';
+                    notice.className='alert alert-warning mx-3 mt-3 mb-0 d-none';
+                    notice.setAttribute('role','status');
+                    body.prepend(notice);
+                }
+                return notice;
+            };
+            const showUnavailable=()=>{
+                const notice=ensureNotice();
+                if(notice){
+                    notice.textContent='Live router status temporarily unavailable; showing saved customer records. The customer details and edit form remain available.';
+                    notice.classList.remove('d-none');
+                }
+            };
+            try{
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(key)+'/live-session',{timeout:4500});
+                if(!modalEl.isConnected||String(modalEl.dataset.username||'').trim().toLowerCase()!==key.toLowerCase())return;
+                const live=data?.live;
+                if(!live||typeof live!=='object')throw new Error('Live status response is unavailable.');
+                const unavailable=['timeout','unavailable','busy'].includes(String(live.live_sync||'').toLowerCase())||live.stale===true;
+                const statusText=unavailable?'Status unavailable':live.online?'Online':'Offline';
+                const statusClass=live.online?'bg-success':unavailable?'bg-secondary':'bg-secondary';
+                const pill=modalEl.querySelector('#modalCustomerLivePill');
+                if(pill){
+                    pill.className='badge '+statusClass+' rounded-pill px-3 py-2';
+                    pill.textContent=live.online?'● Online'+(live.uptime?' · Uptime: '+String(live.uptime):''):unavailable?'○ Status unavailable':'○ Offline';
+                }
+                const status=modalEl.querySelector('#cpLiveStatus');
+                if(status){status.textContent=statusText;status.className='badge '+statusClass;}
+                const assignedIp=modalEl.querySelector('#cpAssignedIp');
+                const liveIp=modalEl.querySelector('#cpLiveIp');
+                const caller=modalEl.querySelector('#cpCallerId');
+                const uptime=modalEl.querySelector('#cpUptime');
+                if(assignedIp&&live.ip)assignedIp.textContent=String(live.ip);
+                if(liveIp&&live.ip)liveIp.textContent=String(live.ip);
+                if(caller&&live.mac)caller.textContent=String(live.mac);
+                if(uptime)uptime.textContent=live.uptime|| (unavailable?'Unavailable':'—');
+                const bytes=value=>{
+                    const n=Number(value||0);
+                    if(!Number.isFinite(n)||n<=0)return '0 B';
+                    const units=['B','KB','MB','GB','TB'];
+                    const index=Math.min(Math.floor(Math.log(n)/Math.log(1024)),units.length-1);
+                    return (n/Math.pow(1024,index)).toFixed(index>=3?1:index?1:0)+' '+units[index];
+                };
+                const rx=modalEl.querySelector('#cpRx'),tx=modalEl.querySelector('#cpTx');
+                if(rx&&live.bytesIn!==undefined)rx.textContent=bytes(live.bytesIn);
+                if(tx&&live.bytesOut!==undefined)tx.textContent=bytes(live.bytesOut);
+                const notice=ensureNotice();
+                if(notice){
+                    notice.classList.toggle('d-none',!unavailable);
+                    if(unavailable)notice.textContent='Live router status temporarily unavailable; showing saved customer records. The customer details and edit form remain available.';
+                }
+            }catch(error){
+                if(!modalEl.isConnected||String(modalEl.dataset.username||'').trim().toLowerCase()!==key.toLowerCase())return;
+                showUnavailable();
+                console.warn('[Customer 360] Live status refresh failed; keeping database profile usable:',error?.message||error);
+            }
+        }
+
         async function openCustomerProfile(username,prefetchedData){
             const name=String(username||'').trim();
             const modalEl=document.getElementById('editCustomerModal');
@@ -5562,14 +5631,16 @@ async function deletePlan(id,name){
                 const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
                 const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
-                const statusText=live.online?'Online':'Offline';
-                const statusClass=live.online?'bg-success':'bg-secondary';
+                const livePending=String(live.live_sync||'')==='pending';
+                const liveUnavailable=['timeout','unavailable','busy'].includes(String(live.live_sync||'').toLowerCase())||live.stale===true;
+                const statusText=livePending?'Checking status…':liveUnavailable?'Status unavailable':live.online?'Online':'Offline';
+                const statusClass=live.online?'bg-success':livePending?'bg-info text-dark':'bg-secondary';
                 const uptime=String(live.uptime||'');
                 const bytes=(v)=>{const n=Number(v||0);if(!Number.isFinite(n)||n<=0)return '0 B';const u=['B','KB','MB','GB','TB'];const i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return (n/Math.pow(1024,i)).toFixed(i>=3?1:i?1:0)+' '+u[i];};
                 const remaining=days===null?'—':days<0?'Expired '+Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' ago':days===0?'Expires today':'Remaining: '+days+' day'+(days===1?'':'s');
                 const selectedPlan=plans.find(p=>String(p.profileName||'').toLowerCase()===String(customer.profile||'').toLowerCase())||plans.find(p=>String(p.name||'').toLowerCase()===String(customer.package_name||'').toLowerCase());
                 setText('modalCustomerTitle',(customer.fullName||customer.full_name||name)+' · '+(customer.username||name));
-                const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.innerHTML=(live.online?'● Online':'○ Offline')+(live.online&&uptime?' · Uptime: '+escapeHtml(uptime):'');}
+                const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.textContent=live.online?'● Online'+(uptime?' · Uptime: '+uptime:''):livePending?'◌ Checking status…':liveUnavailable?'○ Status unavailable':'○ Offline';}
                 setText('cpLiveStatus',statusText);const liveBadge=modalEl.querySelector('#cpLiveStatus');if(liveBadge)liveBadge.className='badge '+statusClass;
                 setText('cpAssignedIp',live.ip||customer.remote_address||'—');setText('cpCallerId',live.mac||customer.caller_id||'—');setText('cpUptime',uptime||'—');setText('cpRx',bytes(live.bytesIn));setText('cpTx',bytes(live.bytesOut));
                 setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',live.ip||'—');
@@ -5608,6 +5679,9 @@ async function deletePlan(id,name){
                 modalEl.dataset.customerId=customer.id||'';
                 modalEl.dataset.loaded='1';
                 if(loading)loading.classList.add('d-none');
+                // Customer details render from PostgreSQL first; RouterOS status is
+                // a separate best-effort request and can never block editing.
+                void refreshCustomer360LiveStatus(customer.username||name);
             }catch(error){
                 console.error('[Customer Hub] Profile load failed:',error);
                 // Keep the hub open even if the profile API or optional data is unavailable.
