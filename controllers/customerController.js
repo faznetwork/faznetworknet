@@ -1139,7 +1139,12 @@ async function updateCustomer(req,res){
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
     const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
     const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100);
-    const remoteAddress=clean(body.remoteAddress||body.remote_address||row.remote_address,100);
+    const remoteAddressInput=String(body.remoteAddress??body.remote_address??"").trim();
+    if((hasOwn("remoteAddress")||hasOwn("remote_address"))&&remoteAddressInput){
+      const octets=remoteAddressInput.split(".");
+      if(octets.length!==4||!octets.every(part=>/^\d{1,3}$/.test(part)&&Number(part)<=255))return res.status(400).json({success:false,message:"Static IP must be a valid IPv4 address."});
+    }
+    const remoteAddress=clean(remoteAddressInput||row.remote_address,100);
     const onuSerial=clean(body.onuSerial||body.onu_serial||row.onu_serial,150),fiberDropCore=clean(body.fiberDropCore||body.fiber_drop_core||row.fiber_drop_core,80),remarks=clean(body.remarks||body.note||row.remarks,1000);
     const usernameChanged=String(row.username).toLowerCase()!==username.toLowerCase(),packageChanged=String(row.profile||"").toLowerCase()!==profileName.toLowerCase();
     const duplicate=await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1",[row.id,username,phone]);
