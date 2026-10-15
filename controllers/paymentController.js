@@ -268,7 +268,7 @@ async function verifyTrx(req,res){
    const boundMac=boundMacs[0]||null,live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
    if(live.length>1)throw Object.assign(new Error("Multiple live Hotspot packages are linked to this phone. Contact support before purchasing again."),{statusCode:409,code:"MULTIPLE_LIVE_PACKAGES"});
    const target=(boundMac?rows.find(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===boundMac):null)||live[0]||rows[0]||null;
-   const username=boundMac||("PENDING-"+phone);
+   const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+phone);
    const params=[username,phone,profile.name,validity,amount,pendingComment,phone,validity||null,quota?String(quota):null,profileId,boundMac];
    let row;
    if(target){
