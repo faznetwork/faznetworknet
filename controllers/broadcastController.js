@@ -159,7 +159,7 @@ async function progress(req,res){
   const result=await db.query("SELECT id,title,channel,audience,total_recipients,success_count,failed_count,status,created_at,started_at,completed_at FROM broadcast_logs WHERE id=$1",[id]);
   const job=result.rows?.[0];if(!job)return fail(res,new Error("Broadcast not found."),404);
   const recipients=await db.query("SELECT id,recipient_name,username,phone,status,results,error,updated_at FROM broadcast_recipients WHERE broadcast_id=$1 ORDER BY id DESC LIMIT 30",[id]);
-  return res.set("Cache-Control","no-store").json({success:true,broadcast:{...job,sent_count:Number(job.success_count||0)+Number(job.failed_count||0),progress:job.total_recipients?Math.round((Number(job.success_count||0)+Number(job.failed_count||0))*100/Number(job.total_recipients)):100},recipients:recipients.rows||[]});
+  return res.set("Cache-Control","no-store").json({success:true,broadcast:{...job,sent_count:Number(job.success_count||0),progress:job.total_recipients?Math.round((Number(job.success_count||0)+Number(job.failed_count||0))*100/Number(job.total_recipients)):100},recipients:recipients.rows||[]});
  }catch(error){return fail(res,error,400);}
 }
 async function history(req,res){
