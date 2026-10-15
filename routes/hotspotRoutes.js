@@ -13,6 +13,7 @@ router.post("/profiles/script-preview",controller.previewProfileScript);
 router.get("/servers",controller.servers);
 router.post("/profiles/create",controller.createProfile);
 router.post("/profiles/update",controller.updateProfile);
+router.put("/profiles/:id",controller.updateProfile);
 router.post("/profiles/delete",controller.deleteProfile);
 router.post("/profiles/sync",controller.syncProfiles);
 router.get("/vouchers",controller.list);
