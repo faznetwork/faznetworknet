@@ -223,7 +223,7 @@ async function createUser(req,res){
     const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0),comment="FAZ|PENDING|PROFILE="+profile;
     const saved=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
-      const result=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'88'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
+      const result=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
       const rows=result.rows||[],macs=[...new Set(rows.map(row=>normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username)).filter(Boolean))];
       if(macs.length>1)throw hotspotError("ACCOUNT_MAC_CONFLICT",409,"This phone has conflicting MAC bindings; an administrator must reconcile the account.");
       const now=Date.now(),live=rows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","unused","active"].includes(status))return false;if(row.expires_at&&new Date(row.expires_at).getTime()<=now)return false;return true;});

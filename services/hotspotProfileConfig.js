@@ -94,7 +94,7 @@ function buildHotspotOnLoginScript(config = {}) {
     ':local maxDay 31',
     ':if (($expMonth = 4) || ($expMonth = 6) || ($expMonth = 9) || ($expMonth = 11)) do={ :set maxDay 30; }',
     ':if ($expMonth = 2) do={ :set maxDay 28; :if ((($expYear % 4) = 0) && ((($expYear % 100) != 0) || (($expYear % 400) = 0))) do={ :set maxDay 29; } }',
-    ':if (([:typeof $expYear] = "num") && ([:typeof $expMonth] = "num") && ([:typeof $expDay] = "num") && ([:typeof $expHour] = "num") && ([:typeof $expMinute] = "num") && ([:typeof $expSecond] = "num") && ($expYear >= 2000) && ($expMonth >= 1) && ($expMonth <= 12) && ($expMonth <= 12) && ($expDay >= 1) && ($expDay <= $maxDay) && ($expHour >= 0) && ($expHour <= 23) && ($expMinute >= 0) && ($expMinute <= 59) && ($expSecond >= 0) && ($expSecond <= 59)) do={',
+    ':if (([:typeof $expYear] = "num") && ([:typeof $expMonth] = "num") && ([:typeof $expDay] = "num") && ([:typeof $expHour] = "num") && ([:typeof $expMinute] = "num") && ([:typeof $expSecond] = "num") && ($expYear >= 2000) && ($expMonth >= 1) && ($expMonth <= 12) && ($expDay >= 1) && ($expDay <= $maxDay) && ($expHour >= 0) && ($expHour <= 23) && ($expMinute >= 0) && ($expMinute <= 59) && ($expSecond >= 0) && ($expSecond <= 59)) do={',
     ':local currentDate [/system clock get date]',
     ':local currentMonth [:pick $currentDate 0 3]',
     ':local currentDay [:tonum [:pick $currentDate 4 6]]',
