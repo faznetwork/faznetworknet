@@ -1,4 +1,23 @@
 (() => {
+  // Enforce exclusive visibility for the two dashboard sections. The admin
+  // router handles other pages; this helper prevents dashboard overlap.
+  window.switchDashboardView = function (targetViewId) {
+    document.querySelectorAll(".dashboard-view").forEach((view) => {
+      view.classList.add("hidden");
+      view.style.display = "none";
+      view.setAttribute("aria-hidden", "true");
+    });
+
+    const target = targetViewId ? document.getElementById(targetViewId) : null;
+    if (target && target.classList.contains("dashboard-view")) {
+      target.classList.remove("hidden");
+      target.style.display = "block";
+      target.setAttribute("aria-hidden", "false");
+      return true;
+    }
+    return false;
+  };
+
   const clock = document.getElementById("current-time");
   const statusBadge = document.getElementById("router-status");
   const interfaceSelect = document.getElementById("interface-select");
