@@ -139,6 +139,7 @@
             background-color: rgba(0, 0, 0, 0.15);
         }
         
+        .dashboard-view.hidden { display: none !important; }
         .main-content {
             margin-left: var(--sidebar-width);
             transition: all 0.3s ease;
@@ -1707,7 +1708,7 @@
 
         <ul class="sidebar-menu">
             <li class="menu-item">
-                <a href="javascript:void(0)" class="active" onclick="switchView('dashboard')"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
+                <a href="javascript:void(0)" class="active" data-view-target="view-main-dashboard" onclick="event.preventDefault(); switchView('dashboard'); return false;"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
             </li>
             <li class="menu-item">
                 <a href="javascript:void(0)" class="traffic-sidebar-link" onclick="switchView('dashboard'); window.setTimeout(function(){ document.getElementById('dashboardTrafficCard')?.scrollIntoView({behavior:'smooth',block:'start'}); }, 80);"><i class="bi bi-activity"></i><span>Live Traffic Monitor</span><span class="ms-auto badge rounded-pill text-bg-success">LIVE</span></a>
@@ -1766,7 +1767,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotDashboard(); return false;"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
+                    <li><a href="javascript:void(0)" data-view-target="view-hotspot-dashboard" onclick="event.preventDefault(); window.loadHotspotDashboard(); return false;"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadAddHotspotUserView(); return false;"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
@@ -1928,9 +1929,27 @@
         
         <div id="dynamicPageContent">
             <!-- VIEW 1: DASHBOARD — Enterprise NOC -->
-            <section id="view-dashboard" class="admin-view">
+            <section id="view-main-dashboard" class="admin-view dashboard-view">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="dashboardTrafficStatus" class="badge rounded-pill bg-secondary">Connecting…</span><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
               
+              <div class="noc-kpi-grid mb-4">
+                <article class="noc-kpi"><div class="noc-kpi-top">SUBSCRIBER STATUS</div><div class="noc-kpi-value noc-subscriber-value" id="nocSubscriberValue">— / — Online</div><div class="noc-kpi-sub"><span class="noc-live-dot"></span><span id="nocAvailability">Availability pending</span></div><div class="noc-kpi-actions"><button onclick="loadCustomerSection('online','online_customer')">View online</button><button onclick="loadCustomerSection('offline','offline_customer')">View offline</button></div></article>
+                <article class="noc-kpi noc-purple"><div class="noc-kpi-top">LIVE INTERFACE THROUGHPUT</div><div class="noc-kpi-value noc-throughput"><span class="traffic-download" aria-label="Download"><span aria-hidden="true">↓</span> <b id="dashboardTrafficRx">—</b> Mbps</span><span class="traffic-upload" aria-label="Upload"><span aria-hidden="true">↑</span> <b id="dashboardTrafficTx">—</b> Mbps</span></div><div class="noc-kpi-sub"><span class="noc-interface-pill" id="nocInterfacePill">Interface: loading</span></div></article>
+                <article class="noc-kpi noc-blue"><div class="noc-kpi-top">TODAY'S BILLING</div><div class="noc-kpi-value noc-billing-value" id="nocBillingToday">৳ 0.00</div><div class="noc-kpi-sub noc-billing-sub" id="nocBillingSub">0 Transactions Today • MTD ৳3,330.00</div><button class="noc-kpi-action-link" onclick="loadPaymentsSection('all','all_payments')">Open collections</button></article>
+                <article class="noc-kpi noc-amber"><div class="noc-kpi-top">OPTICAL / FIBER HEALTH</div><div class="noc-kpi-value noc-fiber-value" id="nocFiberValue">— Online • — Alert</div><div class="noc-kpi-sub noc-fiber-sub"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span id="nocFiberSub">Waiting for OLT telemetry</span></div><div class="noc-fiber-meta"><span id="nocPonSummary">PON —/—</span><button class="noc-kpi-action-link" onclick="window.loadOltManagement('overview')">Open OLT</button></div></article>
+              </div>
+              <div class="noc-main-grid mb-4">
+                <section class="card card-custom noc-panel"><div class="card-custom-header"><div><i class="bi bi-activity text-success me-2"></i>Live Traffic Monitor</div><select id="dashboardInterface" aria-label="Select MikroTik interface" class="form-select form-select-sm noc-interface-select"><option value="aggregate">aggregate</option></select></div><div class="card-body p-3"><div class="noc-chart-legend"><span>● Download</span><span>● Upload</span></div><div class="noc-chart-wrap"><svg id="nocTrafficChart" viewBox="0 0 900 260" role="img" aria-label="Live throughput area chart" preserveAspectRatio="none"><defs><linearGradient id="nocRxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity=".15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient><linearGradient id="nocTxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6366f1" stop-opacity=".15"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs><g class="noc-chart-grid"><path d="M48 30H884 M48 80H884 M48 130H884 M48 180H884 M48 230H884"/></g><path id="nocRxArea" d="" fill="url(#nocRxFill)"/><path id="nocTxArea" d="" fill="url(#nocTxFill)"/><path id="nocRxLine" d="" fill="none" stroke="#10b981" stroke-width="3"/><path id="nocTxLine" d="" fill="none" stroke="#6366f1" stroke-width="3"/></svg><div id="nocChartEmpty" class="noc-chart-empty">Collecting live samples…</div></div><div class="noc-traffic-stats"><div><span>PEAK DOWNLOAD</span><strong id="nocPeakRx">— Mbps</strong></div><div><span>AVERAGE DOWNLOAD</span><strong id="nocAvgRx">— Mbps</strong></div><div><span>TRANSFERRED TODAY</span><strong id="nocTransferred">Not available</strong></div></div></div></section>
+                <div class="noc-hardware-stack"><section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-router text-success me-2"></i>MikroTik Core Health</span><span id="dashboardRouterStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocRouterModel">RouterOS device</strong><div id="nocRouterUptime" class="small text-muted">Uptime pending</div><div class="noc-progress-row"><div><span>CPU LOAD</span><strong id="metricCpu">—</strong></div><div class="progress"><div id="cpuBar" class="progress-bar bg-success" style="width:0%"></div></div></div><div class="noc-progress-row"><div><span>RAM USED</span><strong id="metricRam">—</strong></div><div class="progress"><div id="ramBar" class="progress-bar bg-info" style="width:0%"></div></div></div></div></section>
+                <section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-hdd-network text-primary me-2"></i>OLT Status</span><span id="nocOltStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocOltName">V-SOL V1600D4</strong><div id="nocOltAddress" class="small text-muted">IP not reported by telemetry</div><div class="noc-olt-stats"><div><strong id="nocOnuTotal">—</strong><span>Registered ONUs</span></div><div><strong id="nocPonActive">—</strong><span>Active PON ports</span></div></div><div id="nocOltSeen" class="small text-muted mt-2">Telemetry freshness pending</div></div></section></div>
+              </div>
+              <div class="noc-operations-grid mb-4"><section class="card card-custom noc-panel"><div class="card-custom-header">Urgent Optical &amp; Fiber Health <span id="nocUrgentCount" class="badge bg-warning-subtle text-warning-emphasis ms-auto">0 alerts</span></div><div class="table-responsive noc-table-wrap"><table class="table table-hover align-middle mb-0 noc-table"><thead><tr><th>Customer / PPPoE ID</th><th>PON / ONU</th><th>Live RX</th><th>Action</th></tr></thead><tbody id="nocUrgentBody"><tr><td colspan="4" class="noc-empty">Loading optical telemetry…</td></tr></tbody></table></div></section>
+              <section class="card card-custom noc-panel"><div class="card-custom-header">Renewals Due · Next 48 Hours <span id="nocExpiringCount" class="badge bg-primary-subtle text-primary ms-auto">0 due</span></div><div class="table-responsive noc-table-wrap"><table class="table table-hover align-middle mb-0 noc-table"><thead><tr><th>Subscriber / Phone</th><th>Package</th><th>Time left</th><th>Action</th></tr></thead><tbody id="nocExpiringBody"><tr><td colspan="4" class="noc-empty">Loading expiring subscribers…</td></tr></tbody></table></div></section></div>
+              <section class="card card-custom noc-panel mb-4"><div class="card-custom-header">Recent Payments <button class="btn btn-sm btn-outline-success ms-auto" onclick="loadPaymentsSection('all','all_payments')">View ledger</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>TrxID</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments…</td></tr></tbody></table></div></section>
+            </section>
+
+            <!-- VIEW: HOTSPOT DASHBOARD (kept separate from the Main Dashboard) -->
+            <section id="view-hotspot-dashboard" class="admin-view dashboard-view hidden" style="display:none" aria-labelledby="dashboardOverviewTitle">
               <section class="dashboard-overview mb-4" aria-labelledby="dashboardOverviewTitle">
                 <div class="dashboard-overview-heading">
                   <div><div class="dashboard-overview-eyebrow">FAZ NETWORK · Billing Snapshot</div><h2 id="dashboardOverviewTitle" class="h5 fw-bold mb-1 mt-1">Overview Statistics</h2><p class="small text-muted mb-0">Interactive Hotspot accounts and recharge totals · BDT (৳)</p></div>
@@ -1949,20 +1968,6 @@
                   </section>
                 </div>
               </section>
-              <div class="noc-kpi-grid mb-4">
-                <article class="noc-kpi"><div class="noc-kpi-top">SUBSCRIBER STATUS</div><div class="noc-kpi-value noc-subscriber-value" id="nocSubscriberValue">— / — Online</div><div class="noc-kpi-sub"><span class="noc-live-dot"></span><span id="nocAvailability">Availability pending</span></div><div class="noc-kpi-actions"><button onclick="loadCustomerSection('online','online_customer')">View online</button><button onclick="loadCustomerSection('offline','offline_customer')">View offline</button></div></article>
-                <article class="noc-kpi noc-purple"><div class="noc-kpi-top">LIVE INTERFACE THROUGHPUT</div><div class="noc-kpi-value noc-throughput"><span class="traffic-download" aria-label="Download"><span aria-hidden="true">↓</span> <b id="dashboardTrafficRx">—</b> Mbps</span><span class="traffic-upload" aria-label="Upload"><span aria-hidden="true">↑</span> <b id="dashboardTrafficTx">—</b> Mbps</span></div><div class="noc-kpi-sub"><span class="noc-interface-pill" id="nocInterfacePill">Interface: loading</span></div></article>
-                <article class="noc-kpi noc-blue"><div class="noc-kpi-top">TODAY'S BILLING</div><div class="noc-kpi-value noc-billing-value" id="nocBillingToday">৳ 0.00</div><div class="noc-kpi-sub noc-billing-sub" id="nocBillingSub">0 Transactions Today • MTD ৳3,330.00</div><button class="noc-kpi-action-link" onclick="loadPaymentsSection('all','all_payments')">Open collections</button></article>
-                <article class="noc-kpi noc-amber"><div class="noc-kpi-top">OPTICAL / FIBER HEALTH</div><div class="noc-kpi-value noc-fiber-value" id="nocFiberValue">— Online • — Alert</div><div class="noc-kpi-sub noc-fiber-sub"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span id="nocFiberSub">Waiting for OLT telemetry</span></div><div class="noc-fiber-meta"><span id="nocPonSummary">PON —/—</span><button class="noc-kpi-action-link" onclick="window.loadOltManagement('overview')">Open OLT</button></div></article>
-              </div>
-              <div class="noc-main-grid mb-4">
-                <section class="card card-custom noc-panel"><div class="card-custom-header"><div><i class="bi bi-activity text-success me-2"></i>Live Traffic Monitor</div><select id="dashboardInterface" aria-label="Select MikroTik interface" class="form-select form-select-sm noc-interface-select"><option value="aggregate">aggregate</option></select></div><div class="card-body p-3"><div class="noc-chart-legend"><span>● Download</span><span>● Upload</span></div><div class="noc-chart-wrap"><svg id="nocTrafficChart" viewBox="0 0 900 260" role="img" aria-label="Live throughput area chart" preserveAspectRatio="none"><defs><linearGradient id="nocRxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity=".15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient><linearGradient id="nocTxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6366f1" stop-opacity=".15"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs><g class="noc-chart-grid"><path d="M48 30H884 M48 80H884 M48 130H884 M48 180H884 M48 230H884"/></g><path id="nocRxArea" d="" fill="url(#nocRxFill)"/><path id="nocTxArea" d="" fill="url(#nocTxFill)"/><path id="nocRxLine" d="" fill="none" stroke="#10b981" stroke-width="3"/><path id="nocTxLine" d="" fill="none" stroke="#6366f1" stroke-width="3"/></svg><div id="nocChartEmpty" class="noc-chart-empty">Collecting live samples…</div></div><div class="noc-traffic-stats"><div><span>PEAK DOWNLOAD</span><strong id="nocPeakRx">— Mbps</strong></div><div><span>AVERAGE DOWNLOAD</span><strong id="nocAvgRx">— Mbps</strong></div><div><span>TRANSFERRED TODAY</span><strong id="nocTransferred">Not available</strong></div></div></div></section>
-                <div class="noc-hardware-stack"><section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-router text-success me-2"></i>MikroTik Core Health</span><span id="dashboardRouterStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocRouterModel">RouterOS device</strong><div id="nocRouterUptime" class="small text-muted">Uptime pending</div><div class="noc-progress-row"><div><span>CPU LOAD</span><strong id="metricCpu">—</strong></div><div class="progress"><div id="cpuBar" class="progress-bar bg-success" style="width:0%"></div></div></div><div class="noc-progress-row"><div><span>RAM USED</span><strong id="metricRam">—</strong></div><div class="progress"><div id="ramBar" class="progress-bar bg-info" style="width:0%"></div></div></div></div></section>
-                <section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-hdd-network text-primary me-2"></i>OLT Status</span><span id="nocOltStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocOltName">V-SOL V1600D4</strong><div id="nocOltAddress" class="small text-muted">IP not reported by telemetry</div><div class="noc-olt-stats"><div><strong id="nocOnuTotal">—</strong><span>Registered ONUs</span></div><div><strong id="nocPonActive">—</strong><span>Active PON ports</span></div></div><div id="nocOltSeen" class="small text-muted mt-2">Telemetry freshness pending</div></div></section></div>
-              </div>
-              <div class="noc-operations-grid mb-4"><section class="card card-custom noc-panel"><div class="card-custom-header">Urgent Optical &amp; Fiber Health <span id="nocUrgentCount" class="badge bg-warning-subtle text-warning-emphasis ms-auto">0 alerts</span></div><div class="table-responsive noc-table-wrap"><table class="table table-hover align-middle mb-0 noc-table"><thead><tr><th>Customer / PPPoE ID</th><th>PON / ONU</th><th>Live RX</th><th>Action</th></tr></thead><tbody id="nocUrgentBody"><tr><td colspan="4" class="noc-empty">Loading optical telemetry…</td></tr></tbody></table></div></section>
-              <section class="card card-custom noc-panel"><div class="card-custom-header">Renewals Due · Next 48 Hours <span id="nocExpiringCount" class="badge bg-primary-subtle text-primary ms-auto">0 due</span></div><div class="table-responsive noc-table-wrap"><table class="table table-hover align-middle mb-0 noc-table"><thead><tr><th>Subscriber / Phone</th><th>Package</th><th>Time left</th><th>Action</th></tr></thead><tbody id="nocExpiringBody"><tr><td colspan="4" class="noc-empty">Loading expiring subscribers…</td></tr></tbody></table></div></section></div>
-              <section class="card card-custom noc-panel mb-4"><div class="card-custom-header">Recent Payments <button class="btn btn-sm btn-outline-success ms-auto" onclick="loadPaymentsSection('all','all_payments')">View ledger</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>TrxID</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments…</td></tr></tbody></table></div></section>
             </section>
 
             <!-- VIEW: SUPPORT TICKETS -->
@@ -2470,7 +2475,7 @@
         window.loadHotspotDashboard = function() {
             // The Hotspot Dashboard menu now opens the canonical nine-card overview.
             // Do not rebuild the legacy circular dashboard in dynamicPageContent.
-            if (typeof window.switchView === 'function') window.switchView('dashboard');
+            if (typeof window.switchView === 'function') window.switchView('hotspot-dashboard');
             if (typeof window.startNocPolling === 'function') window.startNocPolling();
             return false;
         };
@@ -2555,7 +2560,7 @@
 
         window.loadHotspotVoucherRecords = async function(filter,title){
             const container=document.getElementById('dynamicPageContent');
-            if(document.getElementById('view-dashboard'))document.getElementById('view-dashboard').style.display='none';
+            if(document.getElementById('view-main-dashboard'))document.getElementById('view-main-dashboard').style.display='none';
             if(!container)return false;
             container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
             safeSetText('pageTitle',title||'Voucher Management');
@@ -2590,7 +2595,7 @@
         };
         window.loadHotspotVoucherSales = async function(){
             const container=document.getElementById('dynamicPageContent');
-            if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
+            if(document.getElementById('view-main-dashboard')) document.getElementById('view-main-dashboard').style.display='none';
             if(!container)return false;container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
             safeSetText('pageTitle','Voucher Sales History');
             container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-receipt-cutoff text-success me-2"></i><strong>Voucher Sales History</strong></div><div class="card-body"><div class="alert alert-light border small">Only processed transactions matched to a known Hotspot voucher are counted as collected payments. Voucher list price alone is not treated as revenue.</div><div class="row g-3 mb-3"><div class="col-6 col-lg-3"><div class="card card-body"><div class="small text-muted">Matched Payments</div><strong class="fs-4" id="hsSalesCount">—</strong></div></div><div class="col-6 col-lg-3"><div class="card card-body"><div class="small text-muted">Collected</div><strong class="fs-4 text-success">৳ <span id="hsSalesAmount">—</span></strong></div></div></div><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date</th><th>Voucher</th><th>Channel</th><th>Transaction ID</th><th>Sender</th><th>Amount</th><th>Status</th></tr></thead><tbody id="hsVoucherSalesBody"><tr><td colspan="7" class="text-center py-4">Loading matched payment history...</td></tr></tbody></table></div></div></div></section>';
@@ -2639,7 +2644,7 @@
             purgeStuckBackdrops();
             hideAdminViews();
             removeHotspotView();
-            const dashboardView = document.getElementById('view-dashboard');
+            const dashboardView = document.getElementById('view-main-dashboard');
             if (dashboardView) dashboardView.style.display = 'none';
             const dynamic = document.getElementById('dynamicPageContent');
             if (!dynamic) return;
@@ -3213,7 +3218,7 @@
         async function loadHotspotDashboard(){
             // Compatibility alias for any existing internal callers. Always use the
             // canonical dashboard so the retired circular layout cannot be restored.
-            if (typeof window.switchView === 'function') window.switchView('dashboard');
+            if (typeof window.switchView === 'function') window.switchView('hotspot-dashboard');
             if (typeof window.startNocPolling === 'function') window.startNocPolling();
             return false;
         }
@@ -3756,7 +3761,8 @@
         window.addEventListener('resize',function(){if(window.innerWidth>=768){closeSidebarMobile();purgeStuckBackdrops();}else{syncMobileSidebarState();}});
 
         const viewTitles = {
-            dashboard: 'Dashboard',
+            dashboard: 'Main Dashboard',
+        'hotspot-dashboard': 'Hotspot Dashboard',
             'add-customer': 'Add New Customer',
             'all-customer': 'All Customer (PPPoE)',
             payments: 'All Payments',
@@ -4420,11 +4426,28 @@ async function deletePlan(id,name){
             purgeStuckBackdrops();
             currentCustomerTitleKey = '';
             currentPaymentTitleKey = '';
-            const target = document.getElementById('view-' + viewName) ? viewName : 'dashboard';
-            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            document.getElementById('view-' + target).style.display = 'block';
+            const target = viewName === 'dashboard' ? 'view-main-dashboard' :
+                (viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard' :
+                (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard'));
+            document.querySelectorAll('.admin-view').forEach(view => {
+                view.classList.add('hidden');
+                view.style.display = 'none';
+            });
+            if (typeof window.switchDashboardView === 'function') {
+                window.switchDashboardView(target);
+            }
+            const targetElement = document.getElementById(target);
+            if (targetElement) {
+                targetElement.classList.remove('hidden');
+                targetElement.style.display = 'block';
+            }
+            document.querySelectorAll('.sidebar-menu [data-view-target]').forEach(link => {
+                link.classList.toggle('active', link.dataset.viewTarget === target);
+            });
 
-            setPageTitleSafe(viewTitles[target] || 'Dashboard');
+            const titleKey = target === 'view-main-dashboard' ? 'dashboard' :
+                (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
+            setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
             currentPaymentChannel = channel || '';
             if (target === 'dashboard') {
                 void refreshDashboard();
@@ -6790,7 +6813,7 @@ async function deletePlan(id,name){
         }
 
         async function loadRouterMetrics() {
-            const dashboard = document.getElementById('view-dashboard');
+            const dashboard = document.getElementById('view-main-dashboard');
             if (!dashboard || dashboard.style.display === 'none') return;
             try {
                 const data = await jsonFetch('/api/router/resources');
@@ -6880,7 +6903,7 @@ async function deletePlan(id,name){
 
         async function pollTraffic() {
             if (trafficPollInFlight) return;
-            const dashboard = document.getElementById('view-dashboard');
+            const dashboard = document.getElementById('view-main-dashboard');
             if (!dashboard || dashboard.style.display === 'none') return;
             const select = document.getElementById('dashboardInterface');
             if (!select || !select.value) return;
@@ -7003,7 +7026,7 @@ function renderDashboardRecentRecharges(rows){
 }
 async function pollHotspotOverview(){
   if(dashboardOverviewBusy||document.hidden)return;
-  const view=document.getElementById('view-dashboard');if(!view||view.style.display==='none')return;
+  const view=document.getElementById('view-hotspot-dashboard');if(!view||view.style.display==='none'||view.classList.contains('hidden'))return;
   dashboardOverviewBusy=true;
   try{
     const data=await jsonFetch('/api/dashboard/hotspot-overview',{cache:'no-store',timeout:10000});
@@ -7071,7 +7094,7 @@ function bindDashboardKpiEvents(){
 renderDashboardKpiCards();
 bindDashboardKpiEvents();
 
-async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};safeSetText('nocSubscriberValue',Number(s.online||0)+' / '+Number(s.total||0)+' Online');safeSetText('nocAvailability',Number(s.availability||0).toFixed(1)+'% Network Availability');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge '+(f.oltOnline?'bg-success':'bg-warning text-dark');ob.textContent=f.oltOnline?'Online':'Stale / Offline';}safeSetText('nocOltName',f.oltName||f.oltId||'V-SOL V1600D4');safeSetText('nocOltAddress',f.oltAddress||'IP not reported by telemetry');safeSetText('nocOnuTotal',Number(f.total||0));safeSetText('nocPonActive',Number(f.activePonPorts||0)+' / '+Number(f.totalPonPorts||0));safeSetText('nocOltSeen',f.lastSeen?'Last telemetry '+new Date(f.lastSeen).toLocaleString():'No recent OLT telemetry');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
+async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};safeSetText('nocSubscriberValue',Number(s.online||0)+' / '+Number(s.total||0)+' Online');safeSetText('nocAvailability',Number(s.availability||0).toFixed(1)+'% Network Availability');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge '+(f.oltOnline?'bg-success':'bg-warning text-dark');ob.textContent=f.oltOnline?'Online':'Stale / Offline';}safeSetText('nocOltName',f.oltName||f.oltId||'V-SOL V1600D4');safeSetText('nocOltAddress',f.oltAddress||'IP not reported by telemetry');safeSetText('nocOnuTotal',Number(f.total||0));safeSetText('nocPonActive',Number(f.activePonPorts||0)+' / '+Number(f.totalPonPorts||0));safeSetText('nocOltSeen',f.lastSeen?'Last telemetry '+new Date(f.lastSeen).toLocaleString():'No recent OLT telemetry');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
 function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStatsTimer);if(window.hotspotOverviewTimer)clearInterval(window.hotspotOverviewTimer);void pollNocStats();void pollHotspotOverview();window.nocStatsTimer=setInterval(()=>void pollNocStats(),5000);window.hotspotOverviewTimer=setInterval(()=>void pollHotspotOverview(),30000);}document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollNocStats();});
 
         async function safeAdminBootStep(label, task) {
@@ -7820,7 +7843,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     metricsPollInFlight = true;
                     (async () => {
                         try {
-                            if (document.getElementById('view-dashboard')?.style.display !== 'none') {
+                            if (document.getElementById('view-main-dashboard')?.style.display !== 'none') {
                                 // refreshDashboard also updates router metrics; call it once per cycle.
                                 await safeAdminBootStep('dashboard refresh', () => refreshDashboard());
                             }
