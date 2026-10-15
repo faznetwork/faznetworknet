@@ -926,6 +926,7 @@ async function renew(req,res){
     const trxId="CASH-"+Date.now()+"-"+(customer?.id||username);
     await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES('cash',$1,$2,'PAID',$3,$4,TRUE)",[trxId,paidAmount,username,phone]);
     await logAuditAction({customerId:customer?.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${paidAmount.toFixed(2)} via cash (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount:paidAmount,method:"cash",trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",to:phone,username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+newExpDate+".",variables:{name:fullName||username,username,amount:paidAmount,gateway:"cash",trx_id:trxId,new_expiry_date:newExpDate}});
     return res.json({success:true,username,newExpDate,message:`User ${username} renewed until ${newExpDate}`});
   }catch(error){return errorResponse(res,error);}
 }
