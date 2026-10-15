@@ -257,7 +257,9 @@ class MikroTikService {
           connectionTimeoutMs,
           "MikroTik configuration lookup"
         );
-        connection = await this._getPersistentConnection(config, connectionTimeoutMs);
+        connection = connectionTimeoutMs === CONNECTION_TIMEOUT_MS
+          ? await this._getPersistentConnection(config)
+          : await this._getPersistentConnection(config, connectionTimeoutMs);
         return await this._executeWithTimeout(
           Promise.resolve().then(() => operation(connection)),
           operationTimeoutMs,
