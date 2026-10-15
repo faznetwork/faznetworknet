@@ -130,7 +130,7 @@ async function syncHotspotProfileScripts(deps = {}) {
   }
   logger.log("[HOTSPOT SERVER AUTH SYNC] Completed.", authResult);
 
-  const result = { checked, updated, skipped, failed };
+  const result = { checked, updated, skipped, failed, serverAuth: authResult };
   logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
   return result;
 }
