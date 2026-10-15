@@ -93,7 +93,7 @@ function createHotspotExpirationCleanup(deps = {}) {
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
     try {
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
@@ -174,7 +174,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         // covers missed RouterOS scheduler events and users already absent from
         // the router, without ever expiring an unused voucher by creation date.
         const currentTime = now();
-        const databaseExpiryReached = ["active", "unused"].includes(effectiveStatus) &&
+        const databaseExpiryReached = ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
         const commentExpiry = parseCommentExpiry(voucher.comment);
@@ -183,8 +183,8 @@ function createHotspotExpirationCleanup(deps = {}) {
         // Do not infer absence while RouterOS itself is unreachable.
         const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
         const missingMacUser = snapshotAvailable && !user && macNamedVoucher &&
-          ["active", "unused"].includes(effectiveStatus);
-        const commentExpiryReached = !user && ["active", "unused"].includes(effectiveStatus) &&
+          ["active", "unused", "pending_claim"].includes(effectiveStatus);
+        const commentExpiryReached = !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
         const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
         if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
