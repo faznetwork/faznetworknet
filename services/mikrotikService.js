@@ -892,6 +892,8 @@ class MikroTikService {
       const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
       if(!item||!item[".id"]) throw new Error("Hotspot profile \""+name+"\" was not found on MikroTik.");
       const params=this._writeParams({".id":item[".id"],"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.clearSessionTimeout?undefined:data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
+      // Empty rate-limit must be sent explicitly on update to remove any old throttle.
+      if(data.rateLimit !== undefined && (data.rateLimit === null || String(data.rateLimit).trim() === "")) params.push("=rate-limit=");
       if(data.clearSessionTimeout)params.push("=session-timeout=");
       await connection.write("/ip/hotspot/user/profile/set",params); return {name,id:this._str(item[".id"])};
     });
