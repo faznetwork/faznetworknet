@@ -123,8 +123,7 @@ async function webhook(req,res){
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
     });
     claimedTransactionId=null;
-    // SMS delivery is best-effort and must never delay or roll back a verified payment.
-    Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",event:"payment_receipt",variables:{name:customer.full_name||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}})).catch(error=>console.warn("[SMS] Payment receipt notification failed:",error.message));
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",to:customer.phone,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}});
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
@@ -206,6 +205,7 @@ async function manualMatch(req,res){
    if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
   });
   claimedTransactionId=null;
+  require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",to:customer.phone,username:user.rows[0].username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+String(renewal.expiration||"")+".",variables:{name:customer.full_name||customer.name||user.rows[0].username,username:user.rows[0].username,amount:tx.amount,gateway:tx.channel,trx_id:tx.trx_id,new_expiry_date:renewal.expiration}});
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
@@ -283,6 +283,7 @@ async function verifyTrx(req,res){
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
   });
   claimedTransactionId=null;
+  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"payment",to:phone,username:phone,message:"Your FAZ NETWORK Hotspot package payment is verified. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id}});
   return res.json({success:true,pending_activation:true,message:"Payment verified. Connect to the FAZ NETWORK Wi-Fi captive login page and enter this same 11-digit phone number. Your device MAC will bind on first login, when package validity starts.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:null,username:null,password:null});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
