@@ -38,7 +38,7 @@ async function login(req,res){
    const now=Date.now(),account=(q.rows||[]).find(row=>["pending_claim","active","unused"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=now));
    if(!account||!(await passwordMatches(p,account.password)))return res.status(401).json({success:false,message:"No pending or active Hotspot account matches this phone number."});
    // Use phone as the stable self-care subject because RouterOS username becomes the MAC on first login.
-   subject=p;name=p;mobile=p;}
+   subject=p;name=p;mobile=p;
   }else{
    const p=phone(identifier),q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') IN ($2, '880'||substring($2 from 2)) LIMIT 1",[identifier,p]),c=q.rows[0]||null,username=c?.username||identifier;
    const ures=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),u=ures.rows[0]||null;

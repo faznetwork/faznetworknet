@@ -242,6 +242,75 @@ async function createUser(req,res){
     return res.status(201).json({success:true,pending_activation:true,message:"Pending Hotspot account saved. The device MAC will bind on the customer's first captive-portal login.",user:{phone,profile:saved.row.profile,profile_id:saved.row.profile_id,status:saved.row.status,mac_address:saved.row.mac_address||null}});
   }catch(e){return errorResponse(res,e);}
 }
+async function dashboardMetrics(req,res){
+  try{
+    const [allUsers,activeSessions,voucherRows,salesRows,expiredRows,expiringRows,cleanupRows]=await Promise.all([
+      mikrotikService.getHotspotUsers(),
+      mikrotikService.getActiveHotspotSessions(),
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers"),
+      db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(t.amount),0)::numeric(12,2) AS total_amount FROM transactions t WHERE t.status='processed' AND EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE LOWER(v.username)=LOWER(t.matched_username)) AND t.created_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='expired' AND expired_at >= (((NOW() AT TIME ZONE 'Asia/Dhaka')::date)::timestamp AT TIME ZONE 'Asia/Dhaka') AND expired_at < ((((NOW() AT TIME ZONE 'Asia/Dhaka')::date + 1)::timestamp) AT TIME ZONE 'Asia/Dhaka')"),
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '1 hour'"),
+      db.query("SELECT COUNT(*) FILTER (WHERE status='expired' AND cleanup_status IN ('pending','failed'))::int AS cleanup_pending, COUNT(*) FILTER (WHERE status='expired' AND expired_at >= date_trunc('day',NOW()))::int AS evicted_today FROM hotspot_vouchers")
+    ]);
+    const customerUsers=(Array.isArray(allUsers)?allUsers:[]).filter(user=>{
+      const username=String(user?.username||"").trim().toLowerCase();
+      return username&&username!=="default-trial";
+    });
+    const activeRes=Array.isArray(activeSessions)?activeSessions:[];
+    const totalUsers=customerUsers.length;
+    const activeUsers=activeRes.filter(session=>{
+      const username=String(session?.username||"").trim().toLowerCase();
+      return username&&username!=="default-trial";
+    }).length;
+    const voucherCommentCount=customerUsers.filter(user=>String(user?.comment||"").toLowerCase().includes("voucher")).length;
+    const totalVouchers=Math.max(voucherCommentCount,Number(voucherRows?.rows?.[0]?.count||0));
+    const vouchersSoldToday=Number(salesRows?.rows?.[0]?.count||0);
+    const activeRevenue=Number(salesRows?.rows?.[0]?.total_amount||0);
+    const expiredToday=Number(expiredRows?.rows?.[0]?.count||0);
+    const expiringWithinHour=Number(expiringRows?.rows?.[0]?.count||0);
+    const cleanupPending=Number(cleanupRows?.rows?.[0]?.cleanup_pending||0);
+    const evictedToday=Number(cleanupRows?.rows?.[0]?.evicted_today||0);
+    return res.json({success:true,totalUsers,activeUsers,onlineClients:activeUsers,offlineUsers:Math.max(0,totalUsers-activeUsers),totalVouchers,vouchersSoldToday,activeRevenue,todayRevenue:activeRevenue,expiredToday,expiringWithinHour,cleanupPending,evictedToday});
+  }catch(e){return errorResponse(res,e);}
+}
+async function voucherStats(req,res){
+ try{
+  const result=await db.query(
+   "SELECT COUNT(*)::int AS total_vouchers, COUNT(*) FILTER (WHERE status='unused')::int AS unused_vouchers, COUNT(*) FILTER (WHERE status='active')::int AS active_vouchers, COUNT(*) FILTER (WHERE status='expired')::int AS expired_vouchers, COUNT(*) FILTER (WHERE status IN ('active','expired'))::int AS used_vouchers, COUNT(*) FILTER (WHERE status='expired' AND cleanup_status IN ('pending','failed'))::int AS cleanup_pending FROM hotspot_vouchers"
+  );
+  const row=result.rows?.[0]||{};
+  return res.json({success:true,totalVouchers:Number(row.total_vouchers||0),unusedVouchers:Number(row.unused_vouchers||0),usedVouchers:Number(row.used_vouchers||0),activeVouchers:Number(row.active_vouchers||0),expiredVouchers:Number(row.expired_vouchers||0),cleanupPending:Number(row.cleanup_pending||0)});
+ }catch(e){return errorResponse(res,e);}
+}
+async function voucherRecords(req,res){
+ try{
+  const allowed=new Set(["all","unused","active","expired","cleanup"]);
+  const filter=String(req.query.status||"all").trim().toLowerCase();
+  if(!allowed.has(filter))return res.status(400).json({success:false,message:"Invalid voucher status filter."});
+  const params=[];let where="";
+  if(filter==="unused"||filter==="active"||filter==="expired"){params.push(filter);where="WHERE status=$1";}
+  else if(filter==="cleanup"){where="WHERE status='expired' AND cleanup_status IN ('pending','failed')";}
+  const result=await db.query(
+   "SELECT id,username,password,profile,validity,price,status,phone,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,created_at,updated_at FROM hotspot_vouchers "+where+" ORDER BY created_at DESC,id DESC LIMIT 500",
+   params
+  );
+  const rows=result.rows||[];
+  return res.json({success:true,filter,count:rows.length,vouchers:rows.map(v=>({...v,price:Number(v.price||0)}))});
+ }catch(e){return errorResponse(res,e);}
+}
+async function voucherSales(req,res){
+ try{
+  const salesCte="WITH sales AS (SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status='processed' UNION SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at FROM hotspot_voucher_sales_archive a WHERE a.status='processed')";
+  const [summary,rows]=await Promise.all([
+   db.query(salesCte+" SELECT COUNT(*)::int AS count,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount FROM sales"),
+   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales ORDER BY created_at DESC,transaction_id DESC LIMIT 500")
+  ]);
+  const s=summary.rows?.[0]||{};
+  return res.json({success:true,count:Number(s.count||0),totalAmount:Number(s.total_amount||0),transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
+ }catch(e){return errorResponse(res,e);}
+}
+async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function updateUser(req,res){try{const username=clean(req.body.username,100),profile=clean(req.body.profile,100),comment=clean(req.body.comment,500),password=String(req.body.password??"").slice(0,128);if(!username)return res.status(400).json({success:false,message:"Username is required."});if(!profile)return res.status(400).json({success:false,message:"Profile is required."});const result=await mikrotikService.updateHotspotUser(username,profile,comment,password);hotspotListCache.expiresAt=0;return res.json({success:true,message:"Hotspot user updated on MikroTik.",...result});}catch(e){return errorResponse(res,e);}}
 async function remove(req,res){try{const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,message:"Username is required."});await mikrotikService.cleanupExpiredHotspotUser(username);await db.query("DELETE FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1)",[username]);hotspotListCache.expiresAt=0;return res.json({success:true,username,deleted:true});}catch(e){return errorResponse(res,e);}}
 module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser};
