@@ -1,4 +1,15 @@
 (() => {
+  // Shared dashboard KPI destination handler. Total and active counts use the
+  // complete MikroTik-backed Hotspot user list/session view, not the voucher ledger.
+  window.openHotspotKpiUsers = async function (status) {
+    if (status === 'all' || status === 'active') {
+      if (typeof window.loadHotspotSection !== 'function') throw new Error('Hotspot User Management view is unavailable.');
+      return window.loadHotspotSection(status, status === 'active' ? 'active_user' : 'all_user');
+    }
+    if (typeof window.loadHotspotVoucherRecords !== 'function') throw new Error('Expired & Cleanup view is unavailable.');
+    return window.loadHotspotVoucherRecords('expired', 'Expired Hotspot Users');
+  };
+
   // Enforce exclusive visibility for the two dashboard sections. The admin
   // router handles other pages; this helper prevents dashboard overlap.
   window.switchDashboardView = function (targetViewId) {
