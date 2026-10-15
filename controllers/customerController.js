@@ -897,7 +897,7 @@ async function markPaid(req,res){
     await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,paidUntil,comment,username]);
     const paidCustomer=customer||{id:null,package_name:routerUser?.profile||activeProfile};
     if(paidCustomer.id)await logAuditAction({customerId:paidCustomer.id,adminId:getAdminId(req),action:"RENEW",details:{message:"Bill marked as paid; restored package profile and reset active session",paidUntil,package:paidCustomer.package_name,profile:activeProfile},ipAddress:getIpAddress(req)});
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",to:paidCustomer.phone||routerUser?.phone,username,message:"Your FAZ NETWORK bill is marked paid. Service active until "+paidUntil+".",variables:{name:paidCustomer.full_name||username,username,amount:paidCustomer.monthly_bill,gateway:"manual collection",new_expiry_date:paidUntil}});
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",customer:customer||routerUser,to:paidCustomer.phone||routerUser?.phone||paidCustomer.mobile||paidCustomer.account_phone||paidCustomer.mobile_number||paidCustomer.contact_no,username,message:"Your FAZ NETWORK bill is marked paid. Service active until "+paidUntil+".",variables:{name:paidCustomer.full_name||paidCustomer.fullName||username,username,amount:paidCustomer.monthly_bill,gateway:"manual collection",new_expiry_date:paidUntil}});
     return res.json({success:true,username,paidUntil,profile:activeProfile,message:`Bill marked as paid. Package profile restored until ${paidUntil}; active session reset.`});
   }catch(error){return errorResponse(res,error);}
 }
@@ -926,7 +926,7 @@ async function renew(req,res){
     const trxId="CASH-"+Date.now()+"-"+(customer?.id||username);
     await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES('cash',$1,$2,'PAID',$3,$4,TRUE)",[trxId,paidAmount,username,phone]);
     await logAuditAction({customerId:customer?.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${paidAmount.toFixed(2)} via cash (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount:paidAmount,method:"cash",trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",to:phone,username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+newExpDate+".",variables:{name:fullName||username,username,amount:paidAmount,gateway:"cash",trx_id:trxId,new_expiry_date:newExpDate}});
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",customer:customer||routerUser,to:phone||customer?.mobile||customer?.account_phone||customer?.mobile_number||customer?.contact_no||routerUser?.mobile||routerUser?.account_phone||routerUser?.mobile_number||routerUser?.contact_no,username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+newExpDate+".",variables:{name:fullName||username,username,amount:paidAmount,gateway:"cash",trx_id:trxId,new_expiry_date:newExpDate}});
     return res.json({success:true,username,newExpDate,message:`User ${username} renewed until ${newExpDate}`});
   }catch(error){return errorResponse(res,error);}
 }
@@ -1404,7 +1404,8 @@ async function renewCustomerById(req,res){try{const payload=await resolveCustome
     require("../services/notificationDispatcher").dispatchNotification({
       userType:"pppoe",
       event:"renewal",
-      to:payload.customer.phone,
+      customer:payload.customer,
+      to:payload.customer.phone||payload.customer.mobile||payload.customer.account_phone||payload.customer.mobile_number||payload.customer.contact_no,
       username:payload.customer.username,
       message:"আপনার FAZ NETWORK সংযোগ নবায়ন সম্পন্ন হয়েছে। নতুন মেয়াদ: "+newExpDate+"। ধন্যবাদ।",
       variables:{name:notificationName,username:payload.customer.username,package:packageName,package_name:packageName,amount,gateway:method,trx_id:trxId,new_expiry_date:newExpDate,expiry_date:newExpDate}
