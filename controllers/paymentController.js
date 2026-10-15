@@ -268,6 +268,7 @@ async function verifyTrx(req,res){
    const boundMac=boundMacs[0]||null,live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
    if(live.length>1)throw Object.assign(new Error("Multiple live Hotspot packages are linked to this phone. Contact support before purchasing again."),{statusCode:409,code:"MULTIPLE_LIVE_PACKAGES"});
    const target=(boundMac?rows.find(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===boundMac):null)||live[0]||rows[0]||null;
+    wasRecharge=live.length>0;
    const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+phone);
    const params=[username,phone,profile.name,validity,amount,pendingComment,phone,validity||null,quota?String(quota):null,profileId,boundMac];
    let row;
@@ -283,7 +284,7 @@ async function verifyTrx(req,res){
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
   });
   claimedTransactionId=null;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"payment",to:phone,username:phone,message:"Your FAZ NETWORK Hotspot package payment is verified. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id}});
+  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:wasRecharge?"recharge":"payment",to:phone,username:phone,message:"Your FAZ NETWORK Hotspot package payment is verified. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id}});
   return res.json({success:true,pending_activation:true,message:"Payment verified. Connect to the FAZ NETWORK Wi-Fi captive login page and enter this same 11-digit phone number. Your device MAC will bind on first login, when package validity starts.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:null,username:null,password:null});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
