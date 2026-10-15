@@ -41,6 +41,11 @@ class MikroTikService {
     this._configCache = null;
     this._configCacheUntil = 0;
     this._ipPoolCache = null;
+    this._activeSessionsCache = null;
+    this._activeSessionsCacheAt = 0;
+    this._activeSessionsCacheUntil = 0;
+    this._activeSessionsFailures = 0;
+    this._activeSessionsCircuitUntil = 0;
   }
 
   async _getConfig(override) {
@@ -640,7 +645,34 @@ class MikroTikService {
     return this._withConnection("active PPPoE session query", async (connection) => {
       const rows = await connection.write("/ppp/active/print");
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
-    });
+    }, undefined, 3500);
+  }
+
+  async getActiveSessionsSafe() {
+    const now = Date.now();
+    if (this._activeSessionsCache && now < this._activeSessionsCacheUntil) {
+      return { sessions: this._activeSessionsCache, live_sync: "cached", checkedAt: new Date(this._activeSessionsCacheAt).toISOString() };
+    }
+    if (now < this._activeSessionsCircuitUntil) {
+      return { sessions: [], live_sync: "timeout", checkedAt: new Date().toISOString() };
+    }
+    try {
+      const sessions = await this.getActiveSessions();
+      this._activeSessionsCache = sessions;
+      this._activeSessionsCacheAt = Date.now();
+      this._activeSessionsCacheUntil = Date.now() + 4000;
+      this._activeSessionsFailures = 0;
+      this._activeSessionsCircuitUntil = 0;
+      return { sessions, live_sync: "ok", checkedAt: new Date(this._activeSessionsCacheAt).toISOString() };
+    } catch (error) {
+      this._activeSessionsFailures += 1;
+      if (this._activeSessionsFailures >= 3) {
+        this._activeSessionsCircuitUntil = Date.now() + 5000;
+        this._activeSessionsFailures = 0;
+      }
+      const timedOut = /timeout|timed out|ETIMEDOUT/i.test(String(error?.message || error || ""));
+      return { sessions: [], live_sync: timedOut ? "timeout" : "unavailable", checkedAt: new Date().toISOString() };
+    }
   }
   async getVpnInventory() {
     return this._withConnection("VPN inventory query", async (connection) => {
