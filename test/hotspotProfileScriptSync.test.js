@@ -66,7 +66,7 @@ test("startup sync enforces auth settings on active Hotspot server profiles", as
   };
   const result = await syncHotspotProfileScripts(deps);
   assert.deepEqual(checked, ["hsprof1", "guest-profile"], "each active server profile is synced once");
-  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, failed: 0 });
+  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, failed: 0, serverAuth: { checked: 0, updated: 0, skipped: 0, failed: 0 } });
 });
 
 test("RouterOS server-profile auth writes and verifies MAC/PAP/CHAP with MAC-as-username", async () => {
