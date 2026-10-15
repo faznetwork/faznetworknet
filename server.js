@@ -146,7 +146,7 @@ app.post("/api/olt/sync-telemetry",require("./controllers/oltTelemetryController
 app.get("/pppoe",requireRole(["super_admin","admin"]),(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireRole(["super_admin","admin"]),(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireRole(["super_admin","admin"]),(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
-initializeDatabase().then(()=>{startBillingCron();startUsageCollector();startNetworkDiscovery();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotExpirationCleanup();startHotspotRetentionCleanup();}).catch(e=>{
+initializeDatabase().then(()=>{startBillingCron();startUsageCollector();startNetworkDiscovery();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotExpirationCleanup();startHotspotRetentionCleanup();require("./services/whatsappService").restoreSession().catch(e=>console.warn("[WhatsApp] Startup restore skipped:",e.message));}).catch(e=>{
   console.error("[Database] Startup initialization failed:",e.message);
   startBillingCron();
   startUsageCollector();
