@@ -854,7 +854,7 @@ class MikroTikService {
     return this._withConnection("Hotspot server profile authentication sync", async (connection) => {
       const rows = await connection.write("/ip/hotspot/profile/print");
       const item = (Array.isArray(rows) ? rows : []).find(row => this._str(row.name) === name);
-      if (!item || !item[".id"]) throw new Error("Hotspot server profile \\"" + name + "\\" was not found on MikroTik.");
+      if (!item || !item[".id"]) throw new Error("Hotspot server profile \"" + name + "\" was not found on MikroTik.");
       const expected = expectedLoginBy.slice().sort().join(",");
       let updated = false;
       if (normalizeLoginBy(item["login-by"]) !== expected) {
@@ -863,7 +863,7 @@ class MikroTikService {
       }
       const verifiedRows = await connection.write("/ip/hotspot/profile/print");
       const verified = (Array.isArray(verifiedRows) ? verifiedRows : []).find(row => this._str(row.name) === name);
-      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain login-by=mac,http-pap,http-chap for HotSpot server profile \\"" + name + "\\".");
+      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain login-by=mac,http-pap,http-chap for HotSpot server profile \"" + name + "\".");
       return { name, updated, loginBy: this._str(verified["login-by"]) };
     });
   }
