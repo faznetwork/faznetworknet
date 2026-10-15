@@ -123,7 +123,7 @@ async function webhook(req,res){
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
     });
     claimedTransactionId=null;
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",to:customer.phone,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}});
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",customer,to:customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.fullName||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}});
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
