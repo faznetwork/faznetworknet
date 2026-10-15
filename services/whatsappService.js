@@ -12,7 +12,7 @@ let reconnectTimer = null;
 let reconnectAttempt = 0;
 let authConfigured = false;
 let reconnectAllowed = true;
-let tableReadyPromise = null;
+const tableReadyByDatabase = new WeakMap();
 
 function getBaileys() {
   return require("@whiskeysockets/baileys");
@@ -30,19 +30,21 @@ function normalizePhone(value) {
 }
 
 async function ensureSessionTable(database = db) {
-  if (!tableReadyPromise) {
-    tableReadyPromise = database.query(
+  let ready = tableReadyByDatabase.get(database);
+  if (!ready) {
+    ready = database.query(
       `CREATE TABLE IF NOT EXISTS whatsapp_sessions (
         key VARCHAR(255) PRIMARY KEY,
         value JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`
     ).catch(error => {
-      tableReadyPromise = null;
+      tableReadyByDatabase.delete(database);
       throw error;
     });
+    tableReadyByDatabase.set(database, ready);
   }
-  return tableReadyPromise;
+  return ready;
 }
 
 function deserialize(value, BufferJSON) {
