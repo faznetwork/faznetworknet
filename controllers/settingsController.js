@@ -110,13 +110,18 @@ const SETTINGS_RULES={
  billing_cycle_type:{oneOf:["monthly_1st","rolling_30"]},grace_period_days:{numberMin:0,numberMax:7},expiry_action:{oneOf:["quarantine","disable_secret"]},
  personal_payment_webhook_url:{pathOrUrl:true,max:500},personal_payment_webhook_enabled:{bool:true},personal_payment_webhook_secret:{secret:true,max:300},
  mfs_bkash_number:{phone:true,max:24},mfs_nagad_number:{phone:true,max:24},mfs_rocket_number:{phone:true,max:24},mfs_upay_number:{phone:true,max:24},
- sms_gateway_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_provider_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST"]},
- sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},
- sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true},
- sms_template_expiry_warning:{max:1200},sms_template_payment_receipt:{max:1200},sms_template_line_block:{max:1200}
+ sms_gateway_mode:{oneOf:["bulk_sms","personal_device","provider_preset","custom_http","disabled"]},sms_provider_mode:{oneOf:["bulk_sms","personal_device","provider_preset","custom_http","disabled"]},
+ sms_provider_preset:{oneOf:["greenweb","alpha_sms","elitbuzz","custom"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},
+ sms_http_param_mapping:{json:true,max:4000},sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},sms_device_http_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},sms_device_param_mapping:{json:true,max:4000},
+ notification_channel_sms_enabled:{bool:true},notification_channel_whatsapp_enabled:{bool:true},notification_channel_telegram_enabled:{bool:true},notification_channel_messenger_enabled:{bool:true},whatsapp_enabled:{bool:true},
+ telegram_bot_token:{secret:true,max:500},telegram_default_chat_id:{max:150},messenger_page_access_token:{secret:true,max:2000},messenger_page_id:{max:150},
+ sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true},sms_event_welcome:{bool:true},
+ sms_template_expiry_warning:{max:1200},sms_template_payment_receipt:{max:1200},sms_template_line_block:{max:1200},sms_template_welcome:{max:1200}
 };
+for(const type of ["hotspot","pppoe"])for(const event of ["payment","recharge","renewal","welcome","expiry_warning","expired"])for(const channel of ["sms","whatsapp","telegram","messenger"])SETTINGS_RULES["notification_rule_"+type+"_"+event+"_"+channel+"_enabled"]={bool:true};
 function validateSettingValue(key,value,rule){
  if(rule.bool)return parseBool(value)?"true":"false";
+ if(rule.json){let parsed=value;if(typeof value==="string"){try{parsed=JSON.parse(value||"{}");}catch(_){throw new Error(key+" must be valid JSON.");}}if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw new Error(key+" must be a JSON object.");if(Object.keys(parsed).length>40)throw new Error(key+" has too many parameters.");return JSON.stringify(parsed);}
  if(rule.oneOf&&!rule.oneOf.includes(String(value)))throw new Error("Invalid value for "+key+".");
  if(rule.numberMin!==undefined){const n=Number(value);if(!Number.isInteger(n)||n<rule.numberMin||n>rule.numberMax)throw new Error(key+" must be between "+rule.numberMin+" and "+rule.numberMax+".");return String(n);}
  let out=String(value??"").trim();
@@ -130,10 +135,10 @@ async function getAllSettings(req,res){
  try{
   const map=await appSettingsService.getAllSettings();
   const out={...map};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","mikrotik_password"])delete out[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","mikrotik_password"])delete out[key];
   out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);
   out.sms_api_key_configured=Boolean(map.sms_api_key);
-  out.sms_device_token_configured=Boolean(map.sms_device_token);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);
   return res.set("Cache-Control","no-store").json({success:true,settings:out});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -152,10 +157,10 @@ async function updateSettings(req,res){
   appSettingsService.invalidate();
   const all=await appSettingsService.getAllSettings();
   const safe={...all};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","mikrotik_password"])delete safe[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","mikrotik_password"])delete safe[key];
   safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);
   safe.sms_api_key_configured=Boolean(all.sms_api_key);
-  safe.sms_device_token_configured=Boolean(all.sms_device_token);
+  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);
   return res.set("Cache-Control","no-store").json({success:true,message:"System settings saved. Cached branding/settings refreshed.",settings:safe,updatedKeys:updates.map(([key])=>key)});
  }catch(error){return errorResponse(res,error,400);}
 }
@@ -167,4 +172,16 @@ async function publicSettings(req,res){
  }catch(error){return res.status(503).json({success:false,message:"Public settings temporarily unavailable."});}
 }
 
-module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+
+async function testNotification(req,res){
+ try{
+  const channel=String(req.body?.channel||"sms").toLowerCase(),to=String(req.body?.to||"").trim(),message=String(req.body?.message||"FAZ NETWORK test notification").trim();
+  if(channel==="sms"||channel==="whatsapp"){if(!to)throw new Error("A recipient mobile number is required.");}
+  const result=await require("../services/notificationDispatcher").testChannel(channel,{to,message,messengerRecipientId:req.body?.messengerRecipientId});
+  return res.set("Cache-Control","no-store").json({success:true,message:"Test notification request completed.",result});
+ }catch(error){return errorResponse(res,error,502);}
+}
+async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
+async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect()});}catch(error){return errorResponse(res,error,502);}}
+async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
+\nmodule.exports={testNotification,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
