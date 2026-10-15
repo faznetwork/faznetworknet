@@ -75,8 +75,8 @@ function presetConfig(settings){
  const preset=String(settings.sms_provider_preset||"custom").toLowerCase();
  const known={
   greenweb:{endpoint:"https://api.greenweb.com.bd/api.php",method:"POST_FORM",mapping:{token:"{token}",to:"{to}",message:"{message}",senderid:"{sender_id}"}},
-  alpha_sms:{endpoint:"",method:"POST_JSON",mapping:{api_key:"{token}",to:"{to}",message:"{message}",sender_id:"{sender_id}"}},
-  elitbuzz:{endpoint:"",method:"POST_JSON",mapping:{api_key:"{token}",to:"{to}",message:"{message}",sender_id:"{sender_id}"}}
+  alpha_sms:{endpoint:"https://api.sms.net.bd/sendsms",method:"POST_FORM",mapping:{api_key:"{token}",to:"{to}",msg:"{message}",sender_id:"{sender_id}"}},
+  elitbuzz:{endpoint:"https://msg.elitbuzz-bd.com/smsapi",method:"POST_FORM",mapping:{api_key:"{token}",type:"text",contacts:"{to}",msg:"{message}",senderid:"{sender_id}"}}
  };
  return known[preset]||{endpoint:"",method:"POST_JSON",mapping:DEFAULT_MAPPING};
 }
