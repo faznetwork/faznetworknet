@@ -728,13 +728,7 @@ class MikroTikService {
       const rows = await connection.write("/ppp/active/print");
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
     });
-  }  async getActiveSessions() {
-    return this._withConnection("active PPPoE session query", async (connection) => {
-      const rows = await connection.write("/ppp/active/print");
-      return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
-    });
-  }
-  async getVpnInventory() {
+  }  async getVpnInventory() {
     return this._withConnection("VPN inventory query", async (connection) => {
       const sections = {};
       const warnings = [];
