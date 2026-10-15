@@ -72,6 +72,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  const whatsappChannelEnabled=channelEnabled("whatsapp");
  const whatsappRuleEnabled=ruleEnabled("whatsapp");
  if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
+ if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",()=>smsService.sendNotification({to:recipientPhone,message:text,event:smsEvent(eventName),variables:context})]);
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipientPhone,message:text})]);
