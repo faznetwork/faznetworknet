@@ -5983,8 +5983,10 @@ async function deletePlan(id,name){
                 });
             }
             instance.show();
+            const quickViewRequestId = (window.__customerQuickViewRequestId = (window.__customerQuickViewRequestId || 0) + 1);
             try {
                 const response = await jsonFetch('/api/customers/profile?username=' + encodeURIComponent(username), {timeout:6000});
+                if (quickViewRequestId !== window.__customerQuickViewRequestId) return;
                 const customer = response.customer || {};
                 const liveData = response.live || {};
                 const isOnline = Boolean(liveData.online);
@@ -5999,6 +6001,7 @@ async function deletePlan(id,name){
                 setQuick('quickViewExpiry', formatQuickDate(customer.expirationDate || customer.expiration_date || expiryRaw));
                 setQuick('quickViewLoadNote', !liveAvailable ? 'Live status is temporarily unavailable; saved customer details remain available.' : (isOnline ? 'Live session updated just now.' : 'Customer record loaded. No active PPPoE session detected.'));
             } catch (error) {
+                if (quickViewRequestId !== window.__customerQuickViewRequestId) return;
                 const note = modalEl.querySelector('#quickViewLoadNote');
                 if (note) note.textContent = 'Live status is temporarily unavailable; saved customer details are shown.';
             }
