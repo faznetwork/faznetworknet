@@ -1344,7 +1344,90 @@
 .hotspot-voucher-desktop-wrap th,.hotspot-voucher-desktop-wrap td{vertical-align:middle;white-space:nowrap}
 .hotspot-voucher-desktop-wrap td:first-child{white-space:normal;max-width:180px;overflow-wrap:anywhere}
 @media(max-width:767.98px){.hotspot-subnav{margin-left:-.2rem;margin-right:-.2rem;border-radius:10px}.hotspot-subnav .hotspot-subnav-link{font-size:.76rem;padding:.5rem .68rem}.hotspot-voucher-row1{grid-template-columns:minmax(0,1fr) minmax(0,.7fr) auto}.hotspot-voucher-card{padding:.62rem}.hotspot-voucher-actions .btn{min-height:34px}.hotspot-dynamic-view .card-custom-header{gap:.5rem}.hotspot-dynamic-view .card-body{padding:.7rem}}
-</style></head>
+<style id="all-customers-desktop-typography">
+/* Desktop-only readability pass: keep mobile card layout unchanged and preserve table alignment. */
+@media (min-width: 992px) {
+  #view-customer-filter .customer-live-table { min-width: 1180px; table-layout: auto; }
+  #view-customer-filter .customer-live-table thead th {
+    font-size: 13.5px !important; line-height: 1.35 !important; font-weight: 800 !important;
+    letter-spacing: .08em !important; color: #334155 !important; text-transform: uppercase;
+    padding: 15px 14px !important; white-space: nowrap;
+  }
+  #view-customer-filter .customer-live-table tbody tr[data-customer-row] > td {
+    font-size: 15px !important; line-height: 1.45 !important; padding: 16px 14px !important;
+    min-height: 68px; vertical-align: middle;
+  }
+  #view-customer-filter .customer-serial {
+    display: inline-block; color: #334155 !important;
+    font: 800 16px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    white-space: nowrap;
+  }
+  #view-customer-filter .customer-avatar {
+    width: 44px !important; height: 44px !important; flex-basis: 44px !important;
+    font-size: 16px !important; line-height: 1 !important; font-weight: 800 !important;
+  }
+  #view-customer-filter .customer-profile-link {
+    color: #0f172a !important; font-size: 16.5px !important; line-height: 1.4 !important;
+    font-weight: 800 !important; letter-spacing: -.01em;
+  }
+  #view-customer-filter .customer-phone {
+    margin-top: 5px !important; color: #475569 !important;
+    font-size: 14.5px !important; line-height: 1.45 !important; font-weight: 600 !important;
+  }
+  #view-customer-filter .customer-username {
+    max-width: 220px; padding: 7px 14px !important; border-radius: 8px !important;
+    font-size: 15px !important; line-height: 1.35 !important; font-weight: 800 !important;
+    color: #1e293b !important; overflow-wrap: anywhere;
+  }
+  #view-customer-filter .customer-package {
+    padding: 8px 16px !important; border: 1px solid #c7d2fe !important;
+    border-radius: 9px !important; background: #eef2ff !important; color: #3730a3 !important;
+    font-size: 15px !important; line-height: 1.35 !important; font-weight: 800 !important;
+    white-space: normal; max-width: 230px;
+  }
+  #view-customer-filter .customer-connection-value {
+    color: #0f172a !important; font-size: 15.5px !important; line-height: 1.45 !important;
+    font-weight: 800 !important; overflow-wrap: anywhere;
+  }
+  #view-customer-filter .customer-connection-meta {
+    margin-top: 4px !important; color: #475569 !important;
+    font: 600 13.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    overflow-wrap: anywhere;
+  }
+  #view-customer-filter .customer-status-badge {
+    padding: 7px 14px !important; gap: 7px !important; border-radius: 999px !important;
+    font-size: 14px !important; line-height: 1.35 !important; font-weight: 800 !important;
+    white-space: nowrap;
+  }
+  #view-customer-filter .customer-live-table .customer-session {
+    margin-top: 6px !important; color: #047857 !important;
+    font-size: 13px !important; line-height: 1.45 !important; font-weight: 700 !important;
+  }
+  #view-customer-filter .customer-validity-date {
+    color: #0f172a !important; font-size: 15.5px !important; line-height: 1.4 !important;
+    font-weight: 800 !important; white-space: nowrap;
+  }
+  #view-customer-filter .customer-validity-date .bi-calendar3 { font-size: 18px !important; }
+  #view-customer-filter .customer-days-pill {
+    margin-top: 6px !important; padding: 5px 9px !important;
+    font-size: 13px !important; line-height: 1.35 !important; font-weight: 800 !important;
+  }
+  #view-customer-filter .customer-action-group { gap: 6px !important; padding: 5px !important; }
+  #view-customer-filter .customer-action-group .btn {
+    width: 38px !important; min-width: 38px !important; height: 38px !important;
+    font-size: 15px !important;
+  }
+  #view-customer-filter .customer-enterprise-header .customer-toolbar-actions { gap: 9px; }
+  #view-customer-filter .customer-enterprise-header .customer-toolbar-actions .btn {
+    min-height: 42px; padding: 9px 14px; font-size: 14px; line-height: 1.35; font-weight: 700;
+  }
+  #view-customer-filter .customer-enterprise-header .customer-toolbar-actions .btn-add-customer {
+    min-height: 44px; padding: 10px 17px; font-size: 15px; font-weight: 800;
+    box-shadow: 0 3px 9px rgba(16,185,129,.18);
+  }
+}
+</style>
+</head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
@@ -5410,6 +5493,45 @@ async function deletePlan(id,name){
             // One combined filtering path prevents search from revealing rows excluded by the tab.
             filterCustomerRows(document.getElementById('customerLiveSearch')?.value || '');
         }
+        function exportAllCustomersCsv() {
+            const users = Array.isArray(window.cachedCustomers) ? window.cachedCustomers : currentCustomerUsers;
+            if (!Array.isArray(users) || !users.length) {
+                alert('There are no customer records to export.');
+                return;
+            }
+            const columns = [
+                ['Customer Name', user => parseCustomerMetadata(user).displayName || user.full_name || user.name || ''],
+                ['Phone', user => parseCustomerMetadata(user).displayPhone || user.phone || ''],
+                ['PPPoE Username', user => user.username || ''],
+                ['Package / Profile', user => user.package_name || user.profile || ''],
+                ['IP Address', user => user.session_ip || user.remote_address || user.remoteAddress || ''],
+                ['MAC / Caller ID', user => user.session_caller_id || user.caller_id || user.mac || user.router_mac || ''],
+                ['Status', user => String(user.billing_status || 'unpaid')],
+                ['Validity Date', user => user.expiry_date || user.expiration_date || '']
+            ];
+            const csvCell = value => '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
+            const csv = [columns.map(column => csvCell(column[0])).join(',')].concat(
+                users.map(user => columns.map(column => csvCell(column[1](user))).join(','))
+            ).join('\r\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'faz-network-customers-' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function handleCustomerImportSelection(input) {
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            // Keep customer imports non-destructive until a dedicated, validated bulk-import API exists.
+            alert('CSV selected: ' + file.name + '\nBulk import is not enabled in the current backend, so no customer records were changed. Please use Add Customer for individual records.');
+            input.value = '';
+        }
+
         function renderCustomerTable(users) {
             const sourceUsers = Array.isArray(users) ? users : [];
             const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
@@ -5442,8 +5564,12 @@ async function deletePlan(id,name){
                                 </div>
                             </div>
                             <div class="customer-toolbar-actions">
-                                <button class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync to MikroTik</button>
-                                <button class="btn btn-outline-success btn-sm" onclick="refreshCustomerSection()" title="Refresh customer records" aria-label="Refresh customer records"><i class="bi bi-arrow-clockwise"></i></button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('customerImportFile').click()" title="Choose a customer CSV file"><i class="bi bi-upload me-1"></i>Import</button>
+                                <input id="customerImportFile" type="file" accept=".csv,text/csv" hidden onchange="handleCustomerImportSelection(this)">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportAllCustomersCsv()" title="Export customer records to CSV"><i class="bi bi-download me-1"></i>Export</button>
+                                <button type="button" class="btn btn-success btn-add-customer" onclick="showAddCustomerForm()"><i class="bi bi-plus-lg me-1"></i>Add Customer</button>
+                                <button type="button" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync to MikroTik</button>
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="refreshCustomerSection()" title="Refresh customer records" aria-label="Refresh customer records"><i class="bi bi-arrow-clockwise"></i></button>
                             </div>
                         </div>
                         <div id="customerBillingTabs" class="px-3 pt-3 d-flex flex-wrap gap-2">
