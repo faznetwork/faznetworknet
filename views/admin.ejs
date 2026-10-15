@@ -5524,7 +5524,13 @@ async function deletePlan(id,name){
                     notice.textContent='Live router status temporarily unavailable; showing saved customer records. The customer details and edit form remain available.';
                     notice.classList.remove('d-none');
                 }
+                const pill=modalEl.querySelector('#modalCustomerLivePill');
+                if(pill){pill.className='badge bg-secondary rounded-pill px-3 py-2';pill.textContent='○ Status unavailable';}
+                const status=modalEl.querySelector('#cpLiveStatus');
+                if(status){status.className='badge bg-secondary';status.textContent='Status unavailable';}
             };
+            const existingNotice=ensureNotice();
+            if(existingNotice)existingNotice.classList.add('d-none');
             try{
                 const data=await jsonFetch('/api/customers/'+encodeURIComponent(key)+'/live-session',{timeout:4500});
                 if(!modalEl.isConnected||String(modalEl.dataset.username||'').trim().toLowerCase()!==key.toLowerCase())return;
@@ -5556,8 +5562,8 @@ async function deletePlan(id,name){
                     return (n/Math.pow(1024,index)).toFixed(index>=3?1:index?1:0)+' '+units[index];
                 };
                 const rx=modalEl.querySelector('#cpRx'),tx=modalEl.querySelector('#cpTx');
-                if(rx&&live.bytesIn!==undefined)rx.textContent=bytes(live.bytesIn);
-                if(tx&&live.bytesOut!==undefined)tx.textContent=bytes(live.bytesOut);
+                if(!unavailable&&rx&&live.bytesIn!==undefined)rx.textContent=bytes(live.bytesIn);
+                if(!unavailable&&tx&&live.bytesOut!==undefined)tx.textContent=bytes(live.bytesOut);
                 const notice=ensureNotice();
                 if(notice){
                     notice.classList.toggle('d-none',!unavailable);
