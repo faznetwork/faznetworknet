@@ -6984,9 +6984,9 @@ function nocExpiring(rows){const b=document.getElementById('nocExpiringBody');if
 /* Read-only Hotspot billing snapshot. It uses PostgreSQL-backed voucher/payment records
    and intentionally does not call RouterOS or mutate subscriber/payment records. */
 const dashboardKpiConfig = [
-  {id:'total-users',title:'Total Users',gradientClass:'kpi-gradient-violet',icon:'bi-people-fill',apiEndpoint:'/api/dashboard/hotspot-overview',targetRoute:'hotspot-vouchers:all',subtitle:'Saved Hotspot accounts'},
-  {id:'active-users',title:'Active Users',gradientClass:'kpi-gradient-cyan',icon:'bi-wifi',apiEndpoint:'/api/dashboard/hotspot-overview',targetRoute:'hotspot-vouchers:active',subtitle:'Active billing records'},
-  {id:'expired-users',title:'Expired Users',gradientClass:'kpi-gradient-crimson',icon:'bi-person-x-fill',apiEndpoint:'/api/dashboard/hotspot-overview',targetRoute:'hotspot-vouchers:expired',subtitle:'Expired accounts'},
+  {id:'total-users',title:'Total Users',gradientClass:'kpi-gradient-violet',icon:'bi-people-fill',apiEndpoint:'/api/hotspot/voucher-records?status=all',targetRoute:'/users',subtitle:'Saved Hotspot accounts'},
+  {id:'active-users',title:'Active Users',gradientClass:'kpi-gradient-cyan',icon:'bi-wifi',apiEndpoint:'/api/hotspot/voucher-records?status=active',targetRoute:'/users?status=active',subtitle:'Active billing records'},
+  {id:'expired-users',title:'Expired Users',gradientClass:'kpi-gradient-crimson',icon:'bi-person-x-fill',apiEndpoint:'/api/hotspot/voucher-records?status=expired',targetRoute:'/users?status=expired',subtitle:'Expired accounts'},
   {id:'recharge-today',title:'Today Recharge',gradientClass:'kpi-gradient-amber',icon:'bi-lightning-charge-fill',apiEndpoint:'/api/dashboard/hotspot-overview?filter=today',targetRoute:'recharges:today',period:'today',subtitle:'Successful Hotspot recharges'},
   {id:'recharge-yesterday',title:'Yesterday Recharge',gradientClass:'kpi-gradient-pink',icon:'bi-calendar-minus-fill',apiEndpoint:'/api/dashboard/hotspot-overview?filter=yesterday',targetRoute:'recharges:yesterday',period:'yesterday',subtitle:'Successful Hotspot recharges'},
   {id:'recharge-last7days',title:'Last 7 Days Recharge',gradientClass:'kpi-gradient-emerald',icon:'bi-calendar-week-fill',apiEndpoint:'/api/dashboard/hotspot-overview?filter=last7days',targetRoute:'recharges:last7days',period:'last7days',subtitle:'Rolling 7-day total'},
@@ -7104,12 +7104,12 @@ async function loadDashboardKpiTarget(card){
   const button=document.querySelector('[data-kpi-id="'+card.id+'"]');if(button){button.classList.add('is-navigating');button.setAttribute('aria-busy','true');}
   try{
     const target=String(card.targetRoute||'');
-    if(target==='hotspot-vouchers:all'||target==='hotspot-vouchers:active'||target==='hotspot-vouchers:expired'){
-      const status=target.split(':')[1];
+    if(card.id==='total-users'||card.id==='active-users'||card.id==='expired-users'){
+      const status=card.id==='active-users'?'active':card.id==='expired-users'?'expired':'all';
       if(typeof window.loadHotspotVoucherRecords!=='function')throw new Error('Hotspot voucher view is unavailable.');
       await window.loadHotspotVoucherRecords(status,status==='all'?'All Hotspot Users':status==='active'?'Active Hotspot Users':'Expired Hotspot Users');
-    }else if(target.startsWith('recharges:')){
-      await loadDashboardRechargeFilter(target.split(':')[1],card.apiEndpoint);
+    }else if(card.id.startsWith('recharge-')){
+      await loadDashboardRechargeFilter(card.period,card.apiEndpoint);
     }
   }catch(error){console.error('[Dashboard KPI navigation]',error);alert(error.message||'Unable to open the selected dashboard details.');}
   finally{if(button){button.classList.remove('is-navigating');button.setAttribute('aria-busy','false');}}
