@@ -4570,7 +4570,7 @@ async function deletePlan(id,name){
           if(card)card.style.display='block';
           const percent=Number(job.progress||0);if(bar){bar.style.width=percent+'%';bar.textContent=percent+'%';bar.setAttribute('aria-valuenow',String(percent));bar.classList.toggle('progress-bar-animated',['queued','running'].includes(job.status));}
           if(pill){pill.textContent=String(job.status||'queued').toUpperCase();pill.className='badge '+(job.status==='completed'?'text-bg-success':job.status==='failed'?'text-bg-danger':'text-bg-primary');}
-          if(summary)summary.textContent='Sent: '+Number(job.sent_count||0)+' / '+Number(job.total_recipients||0)+' (successful: '+Number(job.success_count||0)+')';
+          if(summary)summary.textContent='Sent: '+Number(job.sent_count||0)+' / '+Number(job.total_recipients||0);
           if(failed)failed.textContent='Failed: '+Number(job.failed_count||0);
           if(log){const rows=data.recipients||[];log.innerHTML=rows.length?rows.map(row=>{const errors=Object.values(row.results||{}).filter(v=>v&&v.success===false).map(v=>v.error).join('; ')||row.error||'—';return '<tr><td>'+broadcastEscape(row.recipient_name||row.username||'—')+'</td><td>'+broadcastEscape(row.phone)+'</td><td>'+broadcastEscape(row.status)+'</td><td class="small text-break">'+broadcastEscape(errors)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="text-muted small">Waiting for the first delivery result…</td></tr>';}
         }
