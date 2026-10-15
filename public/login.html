@@ -38,26 +38,31 @@
   const form=document.getElementById("hotspot-login");
   const phoneInput=document.getElementById("customer-phone");
   const status=document.getElementById("status");
-  function normalizeMac(value){
-    const compact=String(value||"").trim().replace(/[:-]/g,"");
-    return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";
-  }
-  function normalizePhone(value){
-    const digits=String(value||"").replace(/[^0-9]/g,"");
-    return /^01[0-9]{9}$/.test(digits)?digits:"";
-  }
-  form.addEventListener("submit",function(event){
+  const button=form.querySelector('button[type="submit"]');
+  function digits(value){const bn="০১২৩৪৫৬৭৮৯";return String(value||"").replace(/[০-৯]/g,ch=>String(bn.indexOf(ch))).replace(/\D/g,"");}
+  function normalizeMac(value){const compact=String(value||"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
+  function normalizePhone(value){let d=digits(value);if(d.startsWith("880")&&d.length===13)d="0"+d.slice(3);return /^01[0-9]{9}$/.test(d)?d:"";}
+  function showError(message){status.style.display="block";status.textContent=message;}
+  form.addEventListener("submit",async function(event){
     event.preventDefault();
-    const mac=normalizeMac(document.getElementById("router-mac").value);
-    const phone=normalizePhone(phoneInput.value);
-    if(!mac){status.style.display="block";status.textContent="RouterOS থেকে ডিভাইসের MAC Address পাওয়া যায়নি।";return;}
-    if(!phone){status.style.display="block";status.textContent="সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।";return;}
-    document.getElementById("router-username").value=mac;
-    // This form deliberately uses HTTP-PAP: send the raw phone once and never hash it twice.
-    document.getElementById("router-password").value=phone;
-    form.submit();
+    const mac=normalizeMac(document.getElementById("router-mac").value),phone=normalizePhone(phoneInput.value);
+    if(!mac){showError("RouterOS থেকে ডিভাইসের MAC Address পাওয়া যায়নি।");return;}
+    if(!phone){showError("সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।");return;}
+    status.style.display="none";button.disabled=true;button.textContent="যাচাই হচ্ছে…";
+    try{
+      const response=await fetch("https://faznetwork-web.onrender.com/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({mac,phone})});
+      const data=await response.json();
+      if(!response.ok||!data.success){
+        const messages={NO_ELIGIBLE_PACKAGE:"এই নম্বরে কোনো pending বা active প্যাকেজ পাওয়া যায়নি। আগে প্যাকেজ কিনুন।",PACKAGE_EXPIRED:"আপনার প্যাকেজের মেয়াদ শেষ। নতুন প্যাকেজ কিনুন।",MAC_MISMATCH:"এই নম্বরটি আগে অন্য ডিভাইসে bind হয়েছে। Support-এর সঙ্গে যোগাযোগ করুন।",MAC_ALREADY_BOUND:"এই ডিভাইস অন্য একটি ফোন নম্বরে bind করা আছে। Support-এর সঙ্গে যোগাযোগ করুন.",PROFILE_NOT_FOUND:"প্যাকেজের profile পাওয়া যায়নি। Support-এর সঙ্গে যোগাযোগ করুন.",EXPIRY_NOT_RECORDED:"এই account-এর expiry যাচাই করা যাচ্ছে না। Support-এর সঙ্গে যোগাযোগ করুন."};
+        throw new Error(messages[data.code]||data.message||"Login যাচাই করা যায়নি।");
+      }
+      document.getElementById("router-username").value=data.username;
+      document.getElementById("router-password").value=data.password;
+      // Submit to RouterOS only after PostgreSQL MAC locking and provisioning succeed.
+      form.submit();
+    }catch(error){showError(error.message||"এখন login করা যাচ্ছে না। একই ডিভাইস থেকে আবার চেষ্টা করুন।");button.disabled=false;button.textContent="ইন্টারনেট চালু করুন";}
   });
 })();
-</script>
+
 </body>
 </html>
