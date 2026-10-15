@@ -88,7 +88,7 @@ function buildHotspotOnLoginScript(config = {}) {
     ':local maxDay 31',
     ':if (($expMonth = 4) || ($expMonth = 6) || ($expMonth = 9) || ($expMonth = 11)) do={ :set maxDay 30; }',
     ':if ($expMonth = 2) do={ :set maxDay 28; :if ((($expYear % 4) = 0) && ((($expYear % 100) != 0) || (($expYear % 400) = 0))) do={ :set maxDay 29; } }',
-    ':if (($expYear >= 2000) && ($expMonth >= 1) && ($expMonth <= 12) && ($expDay >= 1) && ($expDay <= $maxDay)) do={',
+    ':if (([:typeof $expYear] = "num") && ([:typeof $expMonth] = "num") && ([:typeof $expDay] = "num") && ($expYear >= 2000) && ($expMonth >= 1) && ($expMonth <= 12) && ($expDay >= 1) && ($expDay <= $maxDay)) do={',
     ':local currentDate [/system clock get date]',
     ':local currentMonth [:pick $currentDate 0 3]',
     ':local currentDay [:tonum [:pick $currentDate 4 6]]',
@@ -101,7 +101,7 @@ function buildHotspotOnLoginScript(config = {}) {
     ':local startDate (($months->$monthIndex) . "/" . [:pick $expIso 8 10] . "/" . [:tostr $expYear])',
     '/system scheduler add name=$sched start-date=$startDate start-time=23:59:59 on-event=' + schedulerEvent,
     '}; } else={ :log warning ("FAZ HotSpot expiry comment invalid for user " . $uName . "; expected Exp: YYYY-MM-DD"); }'
-  ].join('; ');
+  ].join('\n');
 
   return prefix + ' ' + expiryScript + ';';
 }
