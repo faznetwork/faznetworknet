@@ -771,9 +771,9 @@ class MikroTikService {
         item[".id"] && (lower(item.user) === lower(username) || knownMacs.has(lower(item["mac-address"]))));
       const hostMatches = (Array.isArray(hostRows) ? hostRows : []).filter(item =>
         item[".id"] && (knownMacs.has(lower(item["mac-address"])) || knownIps.has(lower(item.address))));
-      const schedulerName = ("faz-exp-" + username).toLowerCase();
+      const schedulerNames = new Set([("faz-exp-" + username).toLowerCase(), ("EXP_" + username).toLowerCase()]);
       const schedulerMatches = (Array.isArray(schedulerRows) ? schedulerRows : []).filter(item =>
-        lower(item.name) === schedulerName && item[".id"]);
+        schedulerNames.has(lower(item.name)) && item[".id"]);
 
       for (const session of activeMatches) await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
       for (const cookie of cookieMatches) await connection.write("/ip/hotspot/cookie/remove", ["=.id=" + cookie[".id"]]);
