@@ -11,7 +11,7 @@ const EVENT_CONFIG={
  expired:{enabled:"sms_event_line_expiry",template:"sms_template_line_block"}
 };
 const MODES=new Set(["disabled","personal_device","bulk_sms","custom_http","provider_preset"]);
-const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);
+const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);\nfunction normalizeMethod(value){const method=String(value||"POST_JSON").toUpperCase();return method==="POST"?"POST_JSON":method;}
 const DEFAULT_MAPPING={to:"{to}",message:"{message}",token:"{token}",sender_id:"{sender_id}"};
 function withTimeout(promise,ms=8000){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("SMS provider request timed out.")),ms);})]).finally(()=>clearTimeout(timer));}
 function safeText(value,max=1200){return String(value??"").trim().slice(0,max);}
@@ -90,12 +90,12 @@ async function sendSms({to,phone,message,event="manual",variables={},token:overr
  let endpoint,method,mapping;
  if(mode==="personal_device"){
   endpoint=safeText(settings.sms_device_webhook_url||settings.sms_device_url,1000);
-  method=String(settings.sms_device_http_method||"POST_JSON");
+  method=normalizeMethod(settings.sms_device_http_method||"POST_JSON");
   mapping=parseMapping(settings.sms_device_param_mapping,DEFAULT_MAPPING);
  }else{
   const preset=mode==="provider_preset"?presetConfig(settings):null;
   endpoint=safeText(settings.sms_api_url||preset?.endpoint,1000);
-  method=String(settings.sms_api_method||preset?.method||"POST_JSON").toUpperCase();
+  method=normalizeMethod(settings.sms_api_method||preset?.method||"POST_JSON");
   mapping=parseMapping(settings.sms_http_param_mapping,preset?.mapping||DEFAULT_MAPPING);
  }
  if(!HTTP_METHODS.has(method))throw new Error("Unsupported SMS HTTP method. Choose GET, POST_JSON or POST_FORM.");
