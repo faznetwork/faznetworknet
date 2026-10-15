@@ -2427,55 +2427,438 @@
 </body></html>`);
             w.document.close();
         }
-        async function loadAddHotspotUserView(){
-          purgeStuckBackdrops(); currentHotspotMode='add-user'; setHotspotTitle('add_hotspot_user');
-          appendHotspotView(`<section class="hotspot-dynamic-view admin-view">
-          <div class="card border-0 shadow-sm overflow-hidden" style="border-radius:20px">
-            <div class="card-header p-3 p-md-4 border-bottom" style="background:linear-gradient(120deg,#effaf4,#fff)">
-              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                <div class="d-flex align-items-center gap-3"><span class="rounded-4 bg-success-subtle text-success d-inline-flex align-items-center justify-content-center" style="width:54px;height:54px"><i class="bi bi-person-plus-fill fs-3"></i></span><div><h4 class="fw-bold mb-1">Add Hotspot User</h4><div class="text-muted">Save a pending package; MAC binding happens on first captive login.</div></div></div>
-                <button type="button" class="btn btn-outline-success" onclick="window.loadHotspotSection('all','all_user')"><i class="bi bi-list-ul me-2"></i>View All Users</button>
-              </div>
-            </div>
-            <div class="card-body p-3 p-md-4"><div class="row g-4">
-              <div class="col-12 col-xl-7"><form id="addHotspotUserForm" novalidate>
-                <div class="d-flex gap-3 mb-4"><span class="rounded-circle bg-success text-white fw-bold d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:38px;height:38px">1</span><div class="flex-grow-1"><label class="form-label fw-bold" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label><div class="small text-muted mb-2">Use the 11-digit Bangladesh phone number. The MAC is captured on first captive login.</div><div class="input-group input-group-lg"><span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span><input id="hsUsername" name="phone" type="tel" class="form-control" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01XXXXXXXXX</div></div></div>
-                <div class="d-flex gap-3 mb-4"><span class="rounded-circle bg-success text-white fw-bold d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:38px;height:38px">2</span><div class="flex-grow-1"><label class="form-label fw-bold" for="hsProfile">Package / Profile <span class="text-danger">*</span></label><div class="input-group input-group-lg"><span class="input-group-text bg-light"><i class="bi bi-layers"></i></span><select id="hsProfile" name="profile" class="form-select" required><option value="">Loading profiles…</option></select><button type="button" id="hsRefreshProfiles" class="btn btn-outline-secondary" aria-label="Refresh profiles"><i class="bi bi-arrow-clockwise"></i></button></div></div></div>
-                <div class="d-flex gap-3 mb-4"><span class="rounded-circle bg-success text-white fw-bold d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:38px;height:38px">3</span><div class="flex-grow-1"><label class="form-label fw-bold">Account Validity</label><div class="rounded-3 border bg-light p-3 d-flex align-items-center gap-3"><i class="bi bi-clock-history fs-3 text-success"></i><div><div class="small text-muted">Selected profile validity</div><div id="hsValidityLabel" class="fw-bold text-success">Select a profile</div><div class="small text-muted">Starts at first successful login.</div></div></div></div></div>
-                <div class="d-flex gap-3 mb-4"><span class="rounded-circle bg-success text-white fw-bold d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:38px;height:38px">4</span><div class="flex-grow-1"><label class="form-label fw-bold" for="hsServer">Hotspot Server (Optional)</label><select id="hsServer" name="server" class="form-select form-select-lg"><option value="all">All Hotspot servers (default)</option></select><div id="hsServerHelp" class="form-text">Optional; MAC binding occurs at first login.</div></div></div>
-                <div class="d-flex flex-column flex-sm-row justify-content-between gap-2"><button type="button" id="hsClearForm" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-2"></i>Reset</button><button type="submit" id="hsSaveButton" class="btn btn-success btn-lg px-4" disabled><i class="bi bi-person-check me-2"></i>Save Pending Account <i class="bi bi-arrow-right ms-2"></i></button></div>
-              </form><div id="hotspotCreateResult" class="mt-3" aria-live="polite"></div></div>
-              <div class="col-12 col-xl-5"><div class="card h-100 border rounded-4"><div class="card-header bg-white p-3"><h5 class="fw-bold mb-1"><i class="bi bi-eye text-success me-2"></i>Preview &amp; Details</h5><div class="small text-muted">Credentials and expiry information</div></div><div class="card-body p-3">
-                <div class="rounded-3 border border-success-subtle p-3">
-                  <div class="d-flex justify-content-between py-2 border-bottom"><span class="text-muted">RouterOS Username</span><strong id="hsPreviewUsername">Assigned at first login</strong></div>
-                  <div class="d-flex justify-content-between py-2 border-bottom"><span class="text-muted">RouterOS Password</span><strong>Customer phone number</strong></div>
-                  <div class="d-flex justify-content-between py-2 border-bottom"><span class="text-muted">Profile</span><strong id="hsPreviewProfile">—</strong></div>
-                  <div class="d-flex justify-content-between py-2 border-bottom"><span class="text-muted">Validity</span><strong id="hsPreviewValidity">—</strong></div>
-                  <div class="d-flex justify-content-between py-2 border-bottom"><span class="text-muted">Hotspot Server</span><strong id="hsPreviewServer">Detecting…</strong></div>
-                  <div class="d-flex justify-content-between py-2"><span class="text-muted">Expiry Date</span><strong id="hsPreviewExpiry">At first login</strong></div>
-                  <div class="rounded-3 bg-success-subtle p-3 mt-2"><div class="small fw-bold text-success mb-2">MikroTik Comment (Auto)</div><code id="hsPreviewComment">EXP: PENDING</code></div>
+        async function loadAddHotspotUserView() {
+            purgeStuckBackdrops();
+            currentHotspotMode = 'add-user';
+            setHotspotTitle('add_hotspot_user');
+
+            appendHotspotView(`
+            <section class="hotspot-dynamic-view admin-view hs-create-root">
+              <style>
+                .hs-create-root{width:100%;max-width:100%;min-width:0;overflow-x:clip;color:#0f172a}
+                .hs-create-root *{box-sizing:border-box;min-width:0}
+                .hs-create-shell{width:100%;max-width:1440px;margin-inline:auto}
+                .hs-create-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:1.25rem 1.25rem 1.1rem;background:linear-gradient(120deg,#effaf4,#fff);border:1px solid #e2e8f0;border-radius:18px;margin-bottom:1.25rem}
+                .hs-create-head-main{display:flex;align-items:center;gap:.9rem;min-width:0}
+                .hs-create-head-icon{height:48px;width:48px;flex:0 0 48px;display:flex;align-items:center;justify-content:center;border-radius:14px;background:#d1fae5;color:#047857;font-size:1.35rem}
+                .hs-create-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:start}
+                .hs-create-form-card,.hs-create-preview-card{min-width:0;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 8px 28px rgba(15,23,42,.055);overflow:hidden}
+                .hs-create-card-head{padding:1rem 1.15rem;border-bottom:1px solid #edf2f7;background:#fff}
+                .hs-create-card-body{padding:1.15rem}
+                .hs-create-step{display:grid;grid-template-columns:38px minmax(0,1fr);gap:.85rem;align-items:start;margin-bottom:1.4rem}
+                .hs-create-step-number{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 38px;background:#0a3d2e;color:#fff;font-weight:800;font-size:1rem;box-shadow:0 3px 8px rgba(10,61,46,.16)}
+                .hs-create-step-content{min-width:0}
+                .hs-create-label{display:block;margin:0 0 .4rem;font-size:.9rem;font-weight:800;color:#1e293b}
+                .hs-create-help{margin:0 0 .7rem;color:#64748b;font-size:.78rem;line-height:1.55}
+                .hs-create-input-shell{position:relative;width:100%;min-width:0}
+                .hs-create-input-icon{position:absolute;left:.95rem;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none;z-index:2}
+                .hs-create-input{display:block;width:100%;max-width:100%;min-height:48px;padding:.7rem 2.8rem .7rem 2.75rem;border:1px solid #cbd5e1;border-radius:11px;background:#fff;color:#0f172a;font-size:1rem;outline:none}
+                .hs-create-input:focus,.hs-create-select:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.13)}
+                .hs-create-input.hs-phone-valid{border-color:#10b981;padding-right:2.8rem}
+                .hs-create-input.hs-phone-invalid{border-color:#ef4444}
+                .hs-create-valid-mark{display:none;position:absolute;right:.95rem;top:50%;transform:translateY(-50%);color:#059669;font-size:1.1rem;font-weight:900}
+                .hs-create-valid-mark.is-visible{display:block}
+                .hs-create-feedback{font-size:.76rem;color:#64748b;margin-top:.45rem;line-height:1.4}
+                .hs-create-feedback.is-valid{color:#047857;font-weight:700}
+                .hs-create-feedback.is-invalid{color:#b91c1c}
+                .hs-create-profile-row{display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:.55rem;align-items:stretch}
+                .hs-create-select{display:block;width:100%;max-width:100%;min-height:48px;padding:.65rem 2.1rem .65rem .85rem;border:1px solid #cbd5e1;border-radius:11px;background-color:#fff;color:#0f172a;font-size:.92rem}
+                .hs-create-refresh{display:flex;align-items:center;justify-content:center;border:1px solid #bbf7d0;border-radius:11px;background:#f0fdf4;color:#047857;font-size:1.1rem}
+                .hs-create-refresh:hover{background:#dcfce7}
+                .hs-create-validity-card{display:flex;align-items:flex-start;gap:.85rem;padding:1rem;border:1px solid #d1fae5;border-radius:13px;background:#f0fdf4}
+                .hs-create-validity-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:0 0 40px;border-radius:12px;background:#d1fae5;color:#047857;font-size:1.2rem}
+                .hs-create-actions{display:flex;gap:.7rem;margin-top:.2rem}
+                .hs-create-actions .btn{min-height:46px;font-weight:800;border-radius:11px}
+                .hs-create-reset{flex:0 0 auto}
+                .hs-create-save{flex:1 1 auto}
+                .hs-create-preview-card{overflow:hidden}
+                .hs-create-preview-title{display:flex;align-items:center;gap:.55rem;margin:0;font-size:1rem;font-weight:850;color:#0f172a}
+                .hs-create-preview-subtitle{margin:.3rem 0 0;color:#64748b;font-size:.78rem}
+                .hs-create-credential-list{border:1px solid #e2e8f0;border-radius:13px;padding:.2rem .85rem}
+                .hs-create-credential-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:.8rem;align-items:start;padding:.8rem 0;border-bottom:1px solid #edf2f7}
+                .hs-create-credential-row:last-child{border-bottom:0}
+                .hs-create-credential-label{font-size:.78rem;color:#64748b;line-height:1.45}
+                .hs-create-credential-value{font-size:.82rem;font-weight:800;color:#1e293b;text-align:right;overflow-wrap:anywhere;line-height:1.45}
+                .hs-create-pending-badge{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .6rem;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:.7rem;font-weight:900;letter-spacing:.04em}
+                .hs-create-comment{display:block;max-width:100%;padding:.8rem;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#166534;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;white-space:normal;overflow-wrap:anywhere}
+                .hs-create-info{display:flex;align-items:flex-start;gap:.65rem;margin-top:1rem;padding:.9rem;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e40af;font-size:.78rem;line-height:1.55}
+                .hs-create-info i{margin-top:.1rem;flex:0 0 auto}
+                #hotspotCreateResult{overflow-wrap:anywhere}
+                @media(min-width:1024px){.hs-create-grid{grid-template-columns:minmax(0,1.62fr) minmax(300px,1fr);gap:1.25rem}.hs-create-preview{position:sticky;top:1rem}.hs-create-card-body{padding:1.35rem}}
+                @media(max-width:575.98px){.hs-create-head{padding:1rem}.hs-create-head-icon{width:42px;height:42px;flex-basis:42px}.hs-create-head-main{gap:.7rem}.hs-create-card-body{padding:1rem}.hs-create-step{grid-template-columns:34px minmax(0,1fr);gap:.65rem}.hs-create-step-number{width:34px;height:34px}.hs-create-actions{flex-direction:column-reverse}.hs-create-actions .btn{width:100%}.hs-create-credential-row{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:.45rem}.hs-create-view-users{width:100%}}
+              </style>
+
+              <div class="hs-create-shell">
+                <header class="hs-create-head">
+                  <div class="hs-create-head-main">
+                    <span class="hs-create-head-icon" aria-hidden="true"><i class="bi bi-person-plus-fill"></i></span>
+                    <div>
+                      <h4 class="fw-bold mb-1">Add Hotspot User</h4>
+                      <p class="text-muted mb-0 small">Save a pending package; device MAC binding happens on first captive login.</p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-outline-success hs-create-view-users" onclick="window.loadHotspotSection('all','all_user')">
+                    <i class="bi bi-list-ul me-2" aria-hidden="true"></i>View All Users
+                  </button>
+                </header>
+
+                <div class="hs-create-grid">
+                  <div class="hs-create-form-card">
+                    <div class="hs-create-card-head">
+                      <h5 class="fw-bold mb-1">Customer &amp; Package</h5>
+                      <p class="small text-muted mb-0">Complete the four steps to create a pending account.</p>
+                    </div>
+                    <div class="hs-create-card-body">
+                      <form id="addHotspotUserForm" novalidate>
+                        <div class="hs-create-step">
+                          <span class="hs-create-step-number" aria-hidden="true">1</span>
+                          <div class="hs-create-step-content">
+                            <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
+                            <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX). Device MAC is automatically bound upon first login.</p>
+                            <div class="hs-create-input-shell">
+                              <i class="bi bi-telephone hs-create-input-icon" aria-hidden="true"></i>
+                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
+                              <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
+                            </div>
+                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div>
+                          </div>
+                        </div>
+
+                        <div class="hs-create-step">
+                          <span class="hs-create-step-number" aria-hidden="true">2</span>
+                          <div class="hs-create-step-content">
+                            <label class="hs-create-label" for="hsProfile">Package / Profile <span class="text-danger">*</span></label>
+                            <p class="hs-create-help">Choose the configured Hotspot profile, validity, and price.</p>
+                            <div class="hs-create-profile-row">
+                              <select id="hsProfile" name="profile" class="hs-create-select" required>
+                                <option value="">Loading packages…</option>
+                              </select>
+                              <button type="button" id="hsRefreshProfiles" class="hs-create-refresh" aria-label="Reload packages and profiles" title="Reload packages">
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="hs-create-step">
+                          <span class="hs-create-step-number" aria-hidden="true">3</span>
+                          <div class="hs-create-step-content">
+                            <div class="hs-create-label">Account Validity Preview</div>
+                            <div class="hs-create-validity-card">
+                              <span class="hs-create-validity-icon" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+                              <div>
+                                <div class="small text-muted mb-1">Selected profile validity</div>
+                                <div id="hsValidityLabel" class="fw-bold text-success">Select a profile</div>
+                                <div class="small text-muted mt-1">Starts at first captive login; continuous clock thereafter.</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="hs-create-step">
+                          <span class="hs-create-step-number" aria-hidden="true">4</span>
+                          <div class="hs-create-step-content">
+                            <label class="hs-create-label" for="hsServer">Hotspot Server <span class="text-muted fw-normal">(Optional)</span></label>
+                            <select id="hsServer" name="server" class="hs-create-select">
+                              <option value="all">All Hotspot servers (default)</option>
+                            </select>
+                            <p class="hs-create-help mt-2 mb-0">Choose a specific server only when required; otherwise keep the default.</p>
+                          </div>
+                        </div>
+
+                        <div class="hs-create-actions">
+                          <button type="button" id="hsClearForm" class="btn btn-outline-secondary hs-create-reset">
+                            <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Reset
+                          </button>
+                          <button type="submit" id="hsSaveButton" class="btn btn-success hs-create-save" disabled>
+                            <i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Pending Account
+                          </button>
+                        </div>
+                        <div id="hotspotCreateResult" class="mt-3" role="status" aria-live="polite"></div>
+                      </form>
+                    </div>
+                  </div>
+
+                  <aside class="hs-create-preview" aria-label="Live Hotspot account preview">
+                    <div class="hs-create-preview-card">
+                      <div class="hs-create-card-head">
+                        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                          <h5 class="hs-create-preview-title"><i class="bi bi-eye text-success" aria-hidden="true"></i>Preview &amp; Details</h5>
+                          <span class="hs-create-pending-badge"><i class="bi bi-hourglass-split" aria-hidden="true"></i>PENDING</span>
+                        </div>
+                        <p class="hs-create-preview-subtitle">Credentials and package details update as you complete the form.</p>
+                      </div>
+                      <div class="hs-create-card-body">
+                        <div class="hs-create-credential-list">
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">RouterOS Username</span>
+                            <strong id="hsPreviewUsername" class="hs-create-credential-value">Assigned at first login (Device MAC)</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">RouterOS Password</span>
+                            <strong id="hsPreviewPassword" class="hs-create-credential-value">Customer phone number</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">Profile</span>
+                            <strong id="hsPreviewProfile" class="hs-create-credential-value">—</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">Package Price</span>
+                            <strong id="hsPreviewPrice" class="hs-create-credential-value">—</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">Validity</span>
+                            <strong id="hsPreviewValidity" class="hs-create-credential-value">—</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">Hotspot Server</span>
+                            <strong id="hsPreviewServer" class="hs-create-credential-value">All Hotspot servers (default)</strong>
+                          </div>
+                          <div class="hs-create-credential-row">
+                            <span class="hs-create-credential-label">Expiry Date</span>
+                            <strong id="hsPreviewExpiry" class="hs-create-credential-value">Starts at first login (Continuous clock)</strong>
+                          </div>
+                        </div>
+
+                        <div class="mt-3">
+                          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <span class="small fw-bold text-success">MikroTik Comment</span>
+                            <span class="small text-muted">Auto</span>
+                          </div>
+                          <code id="hsPreviewComment" class="hs-create-comment">FAZ | PENDING | —</code>
+                        </div>
+
+                        <div class="hs-create-info">
+                          <i class="bi bi-shield-check fs-5" aria-hidden="true"></i>
+                          <span>No manual MAC entry needed. The customer's device MAC will be locked to this phone number upon first captive portal connection.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </aside>
                 </div>
-                <div class="rounded-3 p-3 mt-3" style="background:#fff3fb;border:1px solid #f5c5e8;color:#a21caf"><div class="fw-bold mb-2">Automatic Expiry &amp; Cleanup</div><ol class="small ps-3 mb-0"><li>Validity starts at first login.</li><li>Comment becomes <code>EXP: YYYY-MM-DD HH:mm:ss</code>.</li><li>Expired user is removed from MikroTik automatically.</li><li>Expired record stays in panel for 3 days; sales history remains.</li></ol></div>
-              </div></div></div>
-            </div></div>
-          </div></section>`);
-          const form=document.getElementById('addHotspotUserForm'),phone=document.getElementById('hsUsername'),profile=document.getElementById('hsProfile'),server=document.getElementById('hsServer'),button=document.getElementById('hsSaveButton');
-          const validityLabel=document.getElementById('hsValidityLabel'); if(!form||!phone||!profile||!server||!button)return;
-          let profileRecords=[],profileReady=false,serverReady=false;
-          const validityText=p=>{if(!p)return 'Select a profile';if(p.validityLabel)return String(p.validityLabel);if(p.validityValue&&p.validityUnit)return String(p.validityValue)+({minutes:'m',hours:'h',days:'d',gb:' GB'}[String(p.validityUnit).toLowerCase()]||p.validityUnit);return p.sessionTimeout||'Validity not configured';};
-          const preview=()=>{const p=profileRecords.find(x=>String(x.profile_id||x.name)===profile.value),v=validityText(p);if(validityLabel)validityLabel.textContent=v;const put=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val;};put('hsPreviewUsername','Assigned at first login');put('hsPreviewProfile',p?.name||'—');put('hsPreviewValidity',p?v:'—');put('hsPreviewServer',server.value||'all (default)');put('hsPreviewComment','FAZ|PENDING|PROFILE='+(p?.name||'—'));put('hsPreviewExpiry','At first login');};
-          const updateButton=()=>{button.disabled=!(/^01[0-9]{9}$/.test(phone.value.trim())&&profile.value&&profileReady);};
-          const toast=message=>{let host=document.getElementById('hotspotProvisionToastHost');if(!host){host=document.createElement('div');host.id='hotspotProvisionToastHost';host.className='position-fixed top-0 end-0 p-3';host.style.zIndex='20000';document.body.appendChild(host);}const item=document.createElement('div');item.className='alert alert-success shadow border-0 mb-0';item.setAttribute('role','status');item.textContent=message;host.appendChild(item);window.setTimeout(()=>{item.remove();if(!host.children.length)host.remove();},5000);};
-          phone.addEventListener('input',()=>{preview();updateButton();});profile.addEventListener('change',()=>{preview();updateButton();});server.addEventListener('change',()=>{preview();updateButton();});
-          const loadOptions=async()=>{profileReady=false;button.disabled=true;profile.innerHTML='<option value="">Loading packages…</option>';
-            try{const d=await jsonFetch('/api/hotspot/profiles');profileRecords=(Array.isArray(d.profiles)?d.profiles:[]).filter(p=>p.name&&String(p.name).toLowerCase()!=='default');profile.innerHTML=profileRecords.length?'<option value="">Select a package…</option>'+profileRecords.map(p=>'<option value="'+escapeHtml(p.profile_id||p.name)+'">'+escapeHtml(p.name)+' — '+escapeHtml(validityText(p))+'</option>').join(''):'<option value="">No saved packages found</option>';profileReady=profileRecords.length>0;}catch(e){profile.innerHTML='<option value="">Package list unavailable</option>';}
-            server.innerHTML='<option value="all">All Hotspot servers (default)</option>';
-            try{const d=await jsonFetch('/api/hotspot/servers'),servers=Array.isArray(d.servers)?d.servers:[];if(servers.length)server.innerHTML='<option value="all">All Hotspot servers (default)</option>'+servers.map(s=>'<option value="'+escapeHtml(s.name)+'">'+escapeHtml(s.name)+'</option>').join('');}catch(_){}
-            preview();updateButton();};
-          const refresh=document.getElementById('hsRefreshProfiles');if(refresh)refresh.onclick=loadOptions;
-          const reset=document.getElementById('hsClearForm');if(reset)reset.onclick=()=>{form.reset();preview();updateButton();const out=document.getElementById('hotspotCreateResult');if(out)out.innerHTML='';};
-          form.onsubmit=async e=>{e.preventDefault();if(!form.reportValidity())return;const value=phone.value.trim(),p=profileRecords.find(x=>String(x.profile_id||x.name)===profile.value);if(!p){const out=document.getElementById('hotspotCreateResult');if(out)out.innerHTML='<div class="alert alert-danger">Choose a valid package/profile.</div>';return;}button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving pending account…';try{const r=await jsonFetch('/api/hotspot/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:value,profile_id:p.profile_id||p.name,server:server.value||'all'})});if(!r||r.success!==true)throw new Error(r?.message||'The pending package was not saved.');toast('Pending Hotspot package saved. MAC will bind at first login.');const out=document.getElementById('hotspotCreateResult');if(out)out.innerHTML='<div class="alert alert-success mb-0">Pending account saved for '+escapeHtml(value)+'. The customer must enter this phone on the Wi-Fi captive login page.</div>';if(typeof window.loadHotspotSection==='function')await window.loadHotspotSection('all','all_user');}catch(err){const out=document.getElementById('hotspotCreateResult');if(out)out.innerHTML='<div class="alert alert-danger mb-0">'+escapeHtml(err.message||'Unable to save pending account.')+'</div>';}finally{button.innerHTML='<i class="bi bi-person-check me-2"></i>Save Pending Account <i class="bi bi-arrow-right ms-2"></i>';updateButton();}};
-          await loadOptions();
+              </div>
+            </section>`);
+
+            const form = document.getElementById('addHotspotUserForm');
+            const phone = document.getElementById('hsUsername');
+            const phoneValidMark = document.getElementById('hsPhoneValid');
+            const phoneFeedback = document.getElementById('hsPhoneFeedback');
+            const profile = document.getElementById('hsProfile');
+            const server = document.getElementById('hsServer');
+            const button = document.getElementById('hsSaveButton');
+            const result = document.getElementById('hotspotCreateResult');
+            const validityLabel = document.getElementById('hsValidityLabel');
+            if (!form || !phone || !profile || !server || !button) return;
+
+            let profileRecords = [];
+            let profileReady = false;
+
+            const asciiDigits = value => String(value || '')
+                .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
+                .replace(/[^0-9]/g, '')
+                .slice(0, 11);
+
+            const validityText = p => {
+                if (!p) return 'Select a profile';
+                if (p.validityLabel) return String(p.validityLabel);
+                const value = Number(p.validityValue);
+                const unit = String(p.validityUnit || '').trim().toLowerCase();
+                if (Number.isFinite(value) && value > 0) {
+                    if (unit === 'gb' || unit === 'gib') return value + ' GB';
+                    const labels = { second:'Second', seconds:'Seconds', minute:'Minute', minutes:'Minutes', hour:'Hour', hours:'Hours', day:'Day', days:'Days', week:'Week', weeks:'Weeks', month:'Month', months:'Months', year:'Year', years:'Years' };
+                    const label = labels[unit] || unit;
+                    return value + ' ' + label;
+                }
+                if (p.sessionTimeout && String(p.sessionTimeout).toLowerCase() !== 'none') return String(p.sessionTimeout);
+                if (p.validity) return String(p.validity);
+                if (Number(p.limitBytesTotal) > 0) return (Number(p.limitBytesTotal) / 1073741824).toFixed(0) + ' GB data limit';
+                return 'Validity not configured';
+            };
+
+            const priceText = p => {
+                if (!p || p.price === undefined || p.price === null || p.price === '') return 'Price not set';
+                const amount = Number(p.price);
+                return Number.isFinite(amount) ? '৳' + amount.toLocaleString('en-BD', { maximumFractionDigits: 2 }) : 'Price not set';
+            };
+
+            const selectedProfile = () => profileRecords.find(p => String(p.profile_id || p.name) === String(profile.value));
+            const putText = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            };
+
+            const updatePhoneFeedback = () => {
+                const normalized = asciiDigits(phone.value);
+                if (phone.value !== normalized) phone.value = normalized;
+                const valid = /^01[0-9]{9}$/.test(normalized);
+                phone.classList.toggle('hs-phone-valid', valid);
+                phone.classList.toggle('hs-phone-invalid', normalized.length > 0 && !valid);
+                if (phoneValidMark) phoneValidMark.classList.toggle('is-visible', valid);
+                if (phoneFeedback) {
+                    phoneFeedback.textContent = valid
+                        ? '✓ Valid Bangladesh mobile number.'
+                        : (normalized.length ? 'Enter a valid 11-digit number beginning with 01.' : 'Enter a valid 11-digit Bangladeshi mobile number.');
+                    phoneFeedback.classList.toggle('is-valid', valid);
+                    phoneFeedback.classList.toggle('is-invalid', normalized.length > 0 && !valid);
+                }
+                return valid;
+            };
+
+            const updatePreview = () => {
+                const p = selectedProfile();
+                const validity = validityText(p);
+                const selectedServer = server.value || 'all';
+                if (validityLabel) validityLabel.textContent = p ? validity + ' — starts at first captive login' : 'Select a profile';
+                putText('hsPreviewUsername', 'Assigned at first login (Device MAC)');
+                putText('hsPreviewPassword', phone.value.trim() || 'Customer phone number');
+                putText('hsPreviewProfile', p ? String(p.name || '—') : '—');
+                putText('hsPreviewPrice', p ? priceText(p) : '—');
+                putText('hsPreviewValidity', p ? validity : '—');
+                putText('hsPreviewServer', selectedServer === 'all' ? 'All Hotspot servers (default)' : selectedServer);
+                putText('hsPreviewExpiry', 'Starts at first login (Continuous clock)');
+                putText('hsPreviewComment', 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
+            };
+
+            const updateButton = () => {
+                const validPhone = updatePhoneFeedback();
+                button.disabled = !(validPhone && profile.value && profileReady);
+            };
+
+            const toast = message => {
+                let host = document.getElementById('hotspotProvisionToastHost');
+                if (!host) {
+                    host = document.createElement('div');
+                    host.id = 'hotspotProvisionToastHost';
+                    host.className = 'position-fixed top-0 end-0 p-3';
+                    host.style.zIndex = '20000';
+                    document.body.appendChild(host);
+                }
+                const item = document.createElement('div');
+                item.className = 'alert alert-success shadow border-0 mb-0';
+                item.setAttribute('role', 'status');
+                item.textContent = message;
+                host.appendChild(item);
+                window.setTimeout(() => {
+                    item.remove();
+                    if (!host.children.length) host.remove();
+                }, 4500);
+            };
+
+            phone.addEventListener('input', () => { updatePreview(); updateButton(); });
+            profile.addEventListener('change', () => { updatePreview(); updateButton(); });
+            server.addEventListener('change', updatePreview);
+
+            const loadOptions = async () => {
+                const previousProfile = profile.value;
+                profileReady = false;
+                button.disabled = true;
+                profile.innerHTML = '<option value="">Loading packages…</option>';
+                try {
+                    const data = await jsonFetch('/api/hotspot/profiles');
+                    profileRecords = (Array.isArray(data.profiles) ? data.profiles : [])
+                        .filter(p => p && p.name && String(p.name).toLowerCase() !== 'default');
+                    if (profileRecords.length) {
+                        profile.innerHTML = '<option value="">Select a package / profile…</option>' +
+                            profileRecords.map(p => '<option value="' + escapeHtml(p.profile_id || p.name) + '">' +
+                                escapeHtml(p.name) + ' — ' + escapeHtml(validityText(p)) + ' — ' + escapeHtml(priceText(p)) +
+                                '</option>').join('');
+                        profileReady = true;
+                        if (profileRecords.some(p => String(p.profile_id || p.name) === previousProfile)) profile.value = previousProfile;
+                    } else {
+                        profile.innerHTML = '<option value="">No saved packages found</option>';
+                    }
+                } catch (error) {
+                    profileRecords = [];
+                    profile.innerHTML = '<option value="">Package list unavailable — try reload</option>';
+                }
+
+                server.innerHTML = '<option value="all">All Hotspot servers (default)</option>';
+                try {
+                    const data = await jsonFetch('/api/hotspot/servers');
+                    const servers = Array.isArray(data.servers) ? data.servers.filter(s => s && s.name) : [];
+                    if (servers.length) {
+                        server.innerHTML += servers.map(item => '<option value="' + escapeHtml(item.name) + '">' +
+                            escapeHtml(item.name) + '</option>').join('');
+                        const previousServer = server.dataset.selected || 'all';
+                        if ([...server.options].some(option => option.value === previousServer)) server.value = previousServer;
+                    }
+                } catch (_) {
+                    /* The "all servers" default remains usable if server discovery is unavailable. */
+                }
+                server.dataset.selected = server.value || 'all';
+                updatePreview();
+                updateButton();
+            };
+
+            const refreshButton = document.getElementById('hsRefreshProfiles');
+            if (refreshButton) {
+                refreshButton.addEventListener('click', async () => {
+                    const oldHtml = refreshButton.innerHTML;
+                    refreshButton.disabled = true;
+                    refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>';
+                    try { await loadOptions(); }
+                    finally { refreshButton.disabled = false; refreshButton.innerHTML = oldHtml; }
+                });
+            }
+
+            const resetButton = document.getElementById('hsClearForm');
+            if (resetButton) {
+                resetButton.addEventListener('click', () => {
+                    form.reset();
+                    profile.value = '';
+                    server.value = 'all';
+                    server.dataset.selected = 'all';
+                    if (result) result.innerHTML = '';
+                    updatePreview();
+                    updateButton();
+                    phone.focus();
+                });
+            }
+
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!updatePhoneFeedback()) {
+                    phone.focus();
+                    updateButton();
+                    return;
+                }
+                if (!form.reportValidity()) return;
+                const value = phone.value.trim();
+                const chosen = selectedProfile();
+                if (!chosen) {
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';
+                    return;
+                }
+
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving pending account…';
+                if (result) result.innerHTML = '';
+                try {
+                    const response = await jsonFetch('/api/hotspot/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: value,
+                            profile_id: chosen.profile_id || chosen.name,
+                            server: server.value || 'all'
+                        })
+                    });
+                    if (!response || response.success !== true) throw new Error(response?.message || 'The pending account was not saved.');
+                    const successMessage = 'Pending Hotspot package saved for ' + value + '. The MAC will bind when this customer first logs in through the captive portal.';
+                    toast(successMessage);
+                    if (result) result.innerHTML = '<div class="alert alert-success mb-0">' + escapeHtml(successMessage) + '</div>';
+                    if (typeof window.refreshHotspotVoucherStats === 'function') {
+                        Promise.resolve(window.refreshHotspotVoucherStats()).catch(() => {});
+                    }
+                } catch (error) {
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error?.message || 'Unable to save pending account.') + '</div>';
+                } finally {
+                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Pending Account';
+                    updateButton();
+                }
+            });
+
+            await loadOptions();
         }
         async function loadHotspotDashboard(){
             purgeStuckBackdrops();
