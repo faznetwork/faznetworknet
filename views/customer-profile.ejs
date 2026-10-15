@@ -290,7 +290,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <section class="row g-3 mb-3">
 <div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Package & Bandwidth</div><div id="pkg" class="metric mt-1">—</div><div id="rate" class="text-muted mt-2">Bandwidth —</div><div class="small mt-2">IP Pool: <strong id="pool">—</strong></div><button id="changePkg" class="btn btn-sm btn-outline-primary mt-3">Change Package</button></div></div></div>
 <div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Billing Status & Expiry</div><div id="days" class="metric mt-1">—</div><div class="text-muted mt-2">Expiry: <strong id="expiry">—</strong></div><div class="small mt-2">Billing cycle: <strong id="cycle">1 month</strong></div></div></div></div>
-<div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Real-time Session</div><div id="uptime" class="metric mt-1">Offline</div><div class="small text-muted mt-2">Download rate <strong id="rx" title="Live receive rate">—</strong> · Upload rate <strong id="tx" title="Live transmit rate">—</strong></div><div class="small text-muted mt-1" id="trafficStatus">Checking live traffic…</div><div class="small mt-2">Last disconnect: <span id="reason">—</span></div></div></div></div>
+<div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Real-time Session</div><div id="uptime" class="metric mt-1">Offline</div><div class="small text-muted mt-2">Download rate <strong id="rx" title="Live receive rate">—</strong> · Upload rate <strong id="tx" title="Live transmit rate">—</strong></div><div class="small text-muted mt-1" id="trafficStatus">Checking live traffic…</div><div id="liveStatusBanner" class="alert alert-warning py-2 px-3 mt-2 mb-0 small d-none" role="status" aria-live="polite">Live router status temporarily unavailable; saved customer records remain available.</div><div class="small mt-2">Last disconnect: <span id="reason">—</span></div></div></div></div>
 </section>
 <section class="customer-info-accordion-shell card border-0 rounded-3 mb-3"><div class="card-body"><div class="customer-info-accordions">
 <details class="customer-info-accordion" open><summary><span class="customer-info-heading"><svg class="customer-info-heading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Personal &amp; Compliance</span></span><i class="bi bi-chevron-down customer-info-chevron" aria-hidden="true"></i></summary><div class="customer-info-accordion-body"><div class="customer-info-content"><div class="customer-info-kv-grid"><div class="customer-info-kv"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="customer-info-kv"><div class="label">Phone</div><div id="phone2">—</div></div><div class="customer-info-kv"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="customer-info-kv"><div class="label">NID Number</div><div id="nid">—</div></div><div class="customer-info-kv customer-info-kv-wide"><div class="label">Installation Address</div><div id="address">—</div></div><div class="customer-info-kv"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="customer-info-kv"><div class="label">Connection Date</div><div id="connection">—</div></div></div></div></div></details>
@@ -418,19 +418,32 @@ async function loadLiveSession(){
  if(livePollBusy)return;livePollBusy=true;
  try{
   const d=await api('/api/customers/'+encodeURIComponent(id)+'/live-session');
-  const incoming=d.live||{},previous=state.live||{},online=Boolean(incoming.online);
+  const incoming=d.live||{},previous=state.live||{};
+  const unavailable=d.liveStatusAvailable===false||incoming.live_sync==='timeout'||incoming.live_sync==='unavailable';
+  const banner=$('liveStatusBanner');
+  if(banner){
+   banner.classList.toggle('d-none',!unavailable);
+   if(unavailable)banner.textContent='Live router status temporarily unavailable; saved customer records remain available. Retrying automatically.';
+  }
+  if(unavailable){
+   $('trafficStatus').textContent='Live traffic unavailable · retrying';
+   console.warn('[Customer live traffic] '+(incoming.live_sync||'unavailable'));
+   return;
+  }
+  const online=Boolean(incoming.online);
   state.live={...previous,...incoming,mac:hasValue(incoming.mac)?incoming.mac:(previous.mac||''),ip:hasValue(incoming.ip)?incoming.ip:(previous.ip||''),poolName:hasValue(incoming.poolName)?incoming.poolName:(previous.poolName||''),isLive:online};
   const l=state.live;
   $('uptime').textContent=online?(l.uptime||'Connected'):'Offline';
   $('rx').textContent=online?(l.download||'0 bps'):'Offline';
   $('tx').textContent=online?(l.upload||'0 bps'):'Offline';
-  $('trafficStatus').textContent=online?'Live · '+(l.ip||'IP unavailable')+(l.interface?' · '+l.interface:''):'Offline · no active PPPoE session';
+  $('trafficStatus').textContent=(l.live_sync==='cached'?'Cached session sample · ':'Live · ')+(online?(l.ip||'IP unavailable'):'Offline · no active PPPoE session');
   renderRouterIdentity();
   $('routerStatus').innerHTML='<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');
   $('routerStatus').className='badge '+(online?'bg-success':'bg-secondary');
  }catch(error){
-  // Keep the last good sample on brief router/API failures; the next poll retries.
-  $('trafficStatus').textContent='Live traffic temporarily unavailable · retrying';
+  const banner=$('liveStatusBanner');
+  if(banner){banner.classList.remove('d-none');banner.textContent='Live router status temporarily unavailable; saved customer records remain available. Retrying automatically.';}
+  $('trafficStatus').textContent='Live traffic unavailable · retrying';
   console.warn('[Customer live traffic]',error.message);
  }finally{livePollBusy=false;}
 }
