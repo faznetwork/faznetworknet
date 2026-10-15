@@ -254,7 +254,7 @@ async function createCustomer(req, res) {
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
         billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
         email, whatsapp_phone, telegram_link, facebook_link, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
