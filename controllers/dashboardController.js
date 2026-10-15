@@ -28,20 +28,37 @@ exports.hotspotOverview=async(req,res)=>{
     thisyear:"s.created_at >= (date_trunc('year',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today + 1)::timestamp AT TIME ZONE 'Asia/Dhaka')"
   };
   try{
-    const [countsResult,totalsResult,customersResult,rechargesResult]=await Promise.all([
-      db.query("SELECT COUNT(*)::int AS total_users,COUNT(*) FILTER (WHERE status='active' AND (expires_at IS NULL OR expires_at>NOW()))::int AS active_users,COUNT(*) FILTER (WHERE status='expired' OR (status='active' AND expires_at IS NOT NULL AND expires_at<=NOW()))::int AS expired_users FROM hotspot_vouchers"),
+    const [countsResult,totalsResult,customersResult,rechargesResult,routerUsersResult,activeSessionsResult]=await Promise.all([
+      db.query("SELECT username,status,expires_at FROM hotspot_vouchers WHERE NULLIF(BTRIM(username),'') IS NOT NULL"),
       db.query("WITH clock AS (SELECT (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today),sales AS (SELECT t.id AS transaction_id,t.amount,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE LOWER(t.status) IN ('processed','paid','success') UNION SELECT a.transaction_id,a.amount,a.created_at FROM hotspot_voucher_sales_archive a WHERE LOWER(a.status) IN ('processed','paid','success') AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id=a.transaction_id)) SELECT COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= (c.today::timestamp AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS today,COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= ((c.today-1)::timestamp AT TIME ZONE 'Asia/Dhaka') AND s.created_at < (c.today::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS yesterday,COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= ((c.today-6)::timestamp AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS last7days,COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= (date_trunc('month',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS thismonth,COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= ((c.today-29)::timestamp AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS last30days,COALESCE(SUM(s.amount) FILTER (WHERE s.created_at >= (date_trunc('year',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka') AND s.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(12,2) AS thisyear FROM sales s CROSS JOIN clock c"),
       db.query("SELECT username,phone,profile,status,created_at FROM hotspot_vouchers ORDER BY created_at DESC,id DESC LIMIT 8"),
       filter
         ? db.query("WITH clock AS (SELECT (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today),sales AS (SELECT t.id AS transaction_id,t.matched_username,v.profile,t.amount,t.channel,t.trx_id,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE LOWER(t.status) IN ('processed','paid','success') UNION ALL SELECT a.transaction_id,a.matched_username,COALESCE(v.profile,'Archived voucher') AS profile,a.amount,a.channel,a.trx_id,a.created_at FROM hotspot_voucher_sales_archive a LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(a.matched_username) WHERE LOWER(a.status) IN ('processed','paid','success') AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id=a.transaction_id)) SELECT s.matched_username,s.profile,s.amount,s.channel,s.trx_id,s.created_at FROM sales s CROSS JOIN clock c WHERE "+periodSql[filter]+" ORDER BY s.created_at DESC,s.transaction_id DESC LIMIT 200")
-        : db.query("WITH sales AS (SELECT t.id AS transaction_id,t.matched_username,v.profile,t.amount,t.channel,t.trx_id,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE LOWER(t.status) IN ('processed','paid','success') UNION ALL SELECT a.transaction_id,a.matched_username,COALESCE(v.profile,'Archived voucher') AS profile,a.amount,a.channel,a.trx_id,a.created_at FROM hotspot_voucher_sales_archive a LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(a.matched_username) WHERE LOWER(a.status) IN ('processed','paid','success') AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id=a.transaction_id)) SELECT matched_username,profile,amount,channel,trx_id,created_at FROM sales ORDER BY created_at DESC,transaction_id DESC LIMIT 8")
+        : db.query("WITH sales AS (SELECT t.id AS transaction_id,t.matched_username,v.profile,t.amount,t.channel,t.trx_id,t.created_at FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE LOWER(t.status) IN ('processed','paid','success') UNION ALL SELECT a.transaction_id,a.matched_username,COALESCE(v.profile,'Archived voucher') AS profile,a.amount,a.channel,a.trx_id,a.created_at FROM hotspot_voucher_sales_archive a LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(a.matched_username) WHERE LOWER(a.status) IN ('processed','paid','success') AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id=a.transaction_id)) SELECT matched_username,profile,amount,channel,trx_id,created_at FROM sales ORDER BY created_at DESC,transaction_id DESC LIMIT 8"),
+      safe(()=>mikrotik.getHotspotUsers(),[]),
+      safe(()=>mikrotik.getActiveHotspotSessions(),[])
     ]);
-    const count=countsResult.rows?.[0]||{},totals=totalsResult.rows?.[0]||{};
+    const totals=totalsResult.rows?.[0]||{};
+    const voucherUsers=countsResult.rows||[];
+    const routerUsers=Array.isArray(routerUsersResult)?routerUsersResult:[];
+    const activeSessions=Array.isArray(activeSessionsResult)?activeSessionsResult:[];
+    const usernames=new Set();
+    for(const user of [...voucherUsers,...routerUsers]){
+      const username=String(user?.username||'').trim().toLowerCase();
+      if(username&&username!=='default-trial')usernames.add(username);
+    }
+    const activeNames=new Set(activeSessions.map(session=>String(session?.username||'').trim().toLowerCase()).filter(username=>username&&username!=='default-trial'));
+    const now=Date.now();
+    const expiredNames=new Set(voucherUsers.filter(user=>{
+      const status=String(user.status||'').toLowerCase();
+      const expiry=user.expires_at?new Date(user.expires_at).getTime():null;
+      return status==='expired'||(status==='active'&&expiry!==null&&Number.isFinite(expiry)&&expiry<=now);
+    }).map(user=>String(user.username||'').trim().toLowerCase()).filter(Boolean));
     const recentCustomers=customersResult.rows||[],filteredRecharges=rechargesResult.rows||[];
     return res.json({
       success:true,
       generatedAt:new Date().toISOString(),
-      counts:{totalUsers:Number(count.total_users||0),activeUsers:Number(count.active_users||0),expiredUsers:Number(count.expired_users||0)},
+      counts:{totalUsers:usernames.size,activeUsers:activeNames.size,expiredUsers:expiredNames.size},
       rechargeTotals:{today:Number(totals.today||0),yesterday:Number(totals.yesterday||0),last7days:Number(totals.last7days||0),thismonth:Number(totals.thismonth||0),last30days:Number(totals.last30days||0),thisyear:Number(totals.thisyear||0)},
       recentCustomers,
       recentRecharges:filter?[]:filteredRecharges,
