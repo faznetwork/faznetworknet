@@ -58,7 +58,7 @@ function dispatchNotification(payload={}){
 }
 async function testChannel(channel,{to,message="FAZ NETWORK test notification",messengerRecipientId}={}){
  const settings=await settingsService.getAllSettings();
- if(channel==="sms")return smsService.sendSms({to,message,event:"manual",settings});
+ if(channel==="sms"){if(String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")==="disabled")throw new Error("SMS engine is disabled. Select a provider mode and save settings first.");return smsService.sendSms({to,message,event:"manual",settings});}
  if(channel==="whatsapp")return whatsappService.sendMessage({to,message});
  if(channel==="telegram")return sendTelegram(settings,message);
  if(channel==="messenger")return sendMessenger(settings,messengerRecipientId,message);
