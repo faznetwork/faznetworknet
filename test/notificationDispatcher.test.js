@@ -4,6 +4,7 @@ const assert=require("node:assert/strict");
 const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow}=require("../services/notificationDispatcher");
 const settingsService=require("../services/appSettings");
 const whatsappService=require("../services/whatsappService");
+const db=require("../db");
 test("notification dispatcher normalizes Bangladeshi mobile numbers for channel gateways",()=>{
  assert.equal(normalizePhone("01712345678"),"8801712345678");
  assert.equal(normalizePhone("+8801712345678"),"8801712345678");
@@ -30,6 +31,7 @@ test("customer phone extraction supports legacy database field names",()=>{
 test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normalized fallback phone",async()=>{
  const originalGetAllSettings=settingsService.getAllSettings;
  const originalSendMessage=whatsappService.sendMessage;
+ const originalDbQuery=db.query;
  const sent=[];
  settingsService.getAllSettings=async()=>({
   notification_channel_whatsapp_enabled:"true",
@@ -41,6 +43,7 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
   notification_rule_pppoe_recharge_whatsapp_enabled:"false"
  });
  whatsappService.sendMessage=async payload=>{sent.push(payload);return {success:true};};
+ db.query=async()=>({rows:[]});
  try{
   const result=await dispatchNow({
    userType:"pppoe",
@@ -56,5 +59,22 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
+  db.query=originalDbQuery;
  }
+});
+test("custom PPPoE renewal template replaces runtime variables for WhatsApp",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalSendMessage=whatsappService.sendMessage,originalDbQuery=db.query;
+ const sent=[];
+ settingsService.getAllSettings=async()=>({
+  company_name:"FAZ NETWORK",notification_channel_whatsapp_enabled:"true",notification_channel_sms_enabled:"false",
+  notification_channel_telegram_enabled:"false",notification_channel_messenger_enabled:"false",
+  notification_rule_pppoe_renewal_whatsapp_enabled:"true"
+ });
+ db.query=async(sql,params)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"Hi {name}, {username} renews until {expiry_date} at {company_name}."}]}:{rows:[]};
+ whatsappService.sendMessage=async payload=>{sent.push(payload);return {success:true};};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"pppoe_renewal",customer:{username:"alice",full_name:"Alice",phone:"01712345678"},username:"alice",message:"Default",variables:{new_expiry_date:"2026-11-16"}});
+  assert.equal(result.success,true);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK."}]);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;whatsappService.sendMessage=originalSendMessage;db.query=originalDbQuery;}
 });
