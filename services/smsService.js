@@ -14,6 +14,7 @@ const MODES=new Set(["disabled","personal_device","bulk_sms","custom_http","prov
 const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);
 function normalizeMethod(value){const method=String(value||"POST_JSON").toUpperCase();return method==="POST"?"POST_JSON":method;}
 const DEFAULT_MAPPING={to:"{to}",message:"{message}",token:"{token}",sender_id:"{sender_id}"};
+const LEGACY_BULK_MAPPING={phone:"{to}",to:"{to}",message:"{message}",sender_id:"{sender_id}",senderid:"{sender_id}",token:"{token}"};
 function withTimeout(promise,ms=8000){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("SMS provider request timed out.")),ms);})]).finally(()=>clearTimeout(timer));}
 function safeText(value,max=1200){return String(value??"").trim().slice(0,max);}
 function renderTemplate(template,variables={}){
@@ -99,6 +100,7 @@ async function sendSms({to,phone,message,event="manual",variables={},token:overr
   endpoint=safeText(settings.sms_api_url||preset?.endpoint,1000);
   method=normalizeMethod(settings.sms_api_method||preset?.method||"POST_JSON");
   mapping=parseMapping(settings.sms_http_param_mapping,preset?.mapping||DEFAULT_MAPPING);
+  if(mode==="bulk_sms"&&JSON.stringify(mapping)===JSON.stringify(DEFAULT_MAPPING))mapping=LEGACY_BULK_MAPPING;
  }
  if(!HTTP_METHODS.has(method))throw new Error("Unsupported SMS HTTP method. Choose GET, POST_JSON or POST_FORM.");
  if(!endpoint)throw new Error("Configure the SMS provider endpoint URL before sending.");
