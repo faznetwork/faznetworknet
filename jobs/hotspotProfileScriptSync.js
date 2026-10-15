@@ -102,6 +102,34 @@ async function syncHotspotProfileScripts(deps = {}) {
     }
   }
 
+  // A Hotspot Server Profile is separate from the User Profile above.
+  // Normalize auth only on profiles referenced by enabled Hotspot servers.
+  const authResult = { checked: 0, updated: 0, skipped: 0, failed: 0 };
+  if (typeof router.getHotspotServers === "function" &&
+      typeof router.ensureHotspotServerProfileAuth === "function") {
+    try {
+      const servers = await router.getHotspotServers();
+      const profileNames = [...new Set((servers || []).map(server => String(server?.profile || "").trim()).filter(Boolean))];
+      for (const profileName of profileNames) {
+        authResult.checked++;
+        try {
+          const outcome = await router.ensureHotspotServerProfileAuth(profileName);
+          if (outcome?.updated) authResult.updated++;
+          else authResult.skipped++;
+        } catch (error) {
+          authResult.failed++;
+          failed++;
+          logger.warn("[HOTSPOT SERVER AUTH SYNC] Could not normalize " + profileName + ": " + (error?.message || error));
+        }
+      }
+    } catch (error) {
+      authResult.failed++;
+      failed++;
+      logger.warn("[HOTSPOT SERVER AUTH SYNC] Could not inspect active Hotspot servers: " + (error?.message || error));
+    }
+  }
+  logger.log("[HOTSPOT SERVER AUTH SYNC] Completed.", authResult);
+
   const result = { checked, updated, skipped, failed };
   logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
   return result;

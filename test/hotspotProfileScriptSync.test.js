@@ -2,6 +2,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
+const mikrotikService=require("../services/mikrotikService");
 
 test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks safely",async()=>{
   const updates=[];
@@ -38,5 +39,62 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
   for(const update of updates){
     assert.equal(Object.keys(update).includes("sessionTimeout"),false);
     assert.equal(Object.keys(update).includes("rateLimit"),false);
+  }
+});
+
+test("startup sync enforces auth settings on active Hotspot server profiles", async () => {
+  const checked = [];
+  const deps = {
+    db: { query: async () => ({ rows: [{ value: "{}" }] }) },
+    mikrotikService: {
+      getHotspotProfiles: async () => [],
+      getHotspotServers: async () => [
+        { name: "hotspot1", profile: "hsprof1" },
+        { name: "hotspot2", profile: "hsprof1" },
+        { name: "hotspot3", profile: "guest-profile" }
+      ],
+      ensureHotspotServerProfileAuth: async name => {
+        checked.push(name);
+        return { name, updated: name === "hsprof1" };
+      }
+    },
+    logger: { log() {}, warn(...args) { throw new Error(args.join(" ")); } }
+  };
+  const result = await syncHotspotProfileScripts(deps);
+  assert.deepEqual(checked, ["hsprof1", "guest-profile"], "each active server profile is synced once");
+  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, failed: 0 });
+});
+
+test("RouterOS server-profile auth writes and verifies MAC/PAP/CHAP with MAC-as-username", async () => {
+  const originalWithConnection = mikrotikService._withConnection;
+  const state = { ".id": "*1", name: "hsprof1", "login-by": "http-chap", "mac-as-username": "no" };
+  const calls = [];
+  mikrotikService._withConnection = async (_label, callback) => callback({
+    async write(command, params) {
+      calls.push({ command, params });
+      if (command === "/ip/hotspot/profile/print") return [{ ...state }];
+      if (command === "/ip/hotspot/profile/set") {
+        for (const param of params) {
+          if (param.startsWith("=login-by=")) state["login-by"] = param.slice("=login-by=".length);
+          if (param.startsWith("=mac-as-username=")) state["mac-as-username"] = param.slice("=mac-as-username=".length);
+        }
+        return [];
+      }
+      throw new Error("Unexpected RouterOS command: " + command);
+    }
+  });
+  try {
+    const result = await mikrotikService.ensureHotspotServerProfileAuth("hsprof1");
+    assert.equal(result.updated, true);
+    assert.equal(result.loginBy, "mac,http-pap,http-chap");
+    assert.equal(result.macAsUsername, true);
+    const setCall = calls.find(call => call.command === "/ip/hotspot/profile/set");
+    assert.ok(setCall);
+    assert.ok(setCall.params.includes("=login-by=mac,http-pap,http-chap"));
+    assert.ok(setCall.params.includes("=mac-as-username=yes"));
+    assert.equal(calls.filter(call => call.command === "/ip/hotspot/profile/print").length, 2,
+      "the RouterOS settings must be read back after the write");
+  } finally {
+    mikrotikService._withConnection = originalWithConnection;
   }
 });

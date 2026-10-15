@@ -835,6 +835,50 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).map(item => ({id:this._str(item[".id"]),name:this._str(item.name),interface:this._str(item.interface),profile:this._str(item.profile),disabled:this._bool(item.disabled),raw:item})).filter(item=>item.name&&!item.disabled);
     });
   }
+  async getHotspotServerProfiles() {
+    return this._withConnection("Hotspot server profile query", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/profile/print");
+      return (Array.isArray(rows) ? rows : []).map(item => ({
+        id: this._str(item[".id"]),
+        name: this._str(item.name),
+        loginBy: this._str(item["login-by"]),
+        macAsUsername: this._str(item["mac-as-username"]).toLowerCase(),
+        raw: item
+      })).filter(item => item.name);
+    });
+  }
+
+  async ensureHotspotServerProfileAuth(nameValue) {
+    const name = this._str(nameValue).trim();
+    if (!name) throw new Error("Hotspot server profile name is required.");
+    const expectedLoginBy = ["mac", "http-pap", "http-chap"];
+    const normalizeLoginBy = value => this._str(value).split(",").map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(",");
+    return this._withConnection("Hotspot server profile authentication sync", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/profile/print");
+      const item = (Array.isArray(rows) ? rows : []).find(row => this._str(row.name) === name);
+      if (!item || !item[".id"]) throw new Error("Hotspot server profile \"" + name + "\" was not found on MikroTik.");
+      const expected = expectedLoginBy.slice().sort().join(",");
+      const current = normalizeLoginBy(item["login-by"]);
+      const macAsUsername = ["yes", "true"].includes(this._str(item["mac-as-username"]).trim().toLowerCase());
+      let updated = false;
+      if (current !== expected || !macAsUsername) {
+        await connection.write("/ip/hotspot/profile/set", [
+          "=.id=" + item[".id"],
+          "=login-by=" + expectedLoginBy.join(","),
+          "=mac-as-username=yes"
+        ]);
+        updated = true;
+      }
+      const verifiedRows = await connection.write("/ip/hotspot/profile/print");
+      const verified = (Array.isArray(verifiedRows) ? verifiedRows : []).find(row => this._str(row.name) === name);
+      const verifiedMac = ["yes", "true"].includes(this._str(verified?.["mac-as-username"]).trim().toLowerCase());
+      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected || !verifiedMac) {
+        throw new Error("RouterOS did not retain the required login-by/mac-as-username settings for Hotspot server profile \"" + name + "\".");
+      }
+      return { name, updated, loginBy: this._str(verified["login-by"]), macAsUsername: verifiedMac };
+    });
+  }
+
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
