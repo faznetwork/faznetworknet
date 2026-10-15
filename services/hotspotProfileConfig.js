@@ -70,7 +70,7 @@ function buildHotspotOnLoginScript(config = {}) {
     '\\\"]; /ip hotspot cookie remove [find where mac-address=\\\"' + '" . $uMac . "' +
     '\\\"]; /ip hotspot user remove [find where name=\\\"' + '" . $uName . "' +
     '\\\"]; /ip hotspot host remove [find where mac-address=\\\"' + '" . $uMac . "' +
-    '\\\"]; /system scheduler remove [find where name=\\\"faz-exp-' + '" . $uName . "' +
+    '\\\"]; /system scheduler remove [find where name=\\\"EXP_' + '" . $uName . "' +
     '\\\"];")';
 
   const timingScript = [
@@ -92,7 +92,7 @@ function buildHotspotOnLoginScript(config = {}) {
   ].join('; ');
 
   return prefix +
-    ' :local sched ("faz-exp-" . $uName);' +
+    ' :local sched ("EXP_" . $uName);' +
     ' ' + timingScript + ';' +
     ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' +
     validity.validity +

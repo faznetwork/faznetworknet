@@ -856,24 +856,15 @@ class MikroTikService {
       const item = (Array.isArray(rows) ? rows : []).find(row => this._str(row.name) === name);
       if (!item || !item[".id"]) throw new Error("Hotspot server profile \"" + name + "\" was not found on MikroTik.");
       const expected = expectedLoginBy.slice().sort().join(",");
-      const current = normalizeLoginBy(item["login-by"]);
-      const macAuthMode = this._str(item["mac-auth-mode"]).trim().toLowerCase();
       let updated = false;
-      if (current !== expected || macAuthMode !== "mac-as-username") {
-        await connection.write("/ip/hotspot/profile/set", [
-          "=.id=" + item[".id"],
-          "=login-by=" + expectedLoginBy.join(","),
-          "=mac-auth-mode=mac-as-username"
-        ]);
+      if (normalizeLoginBy(item["login-by"]) !== expected) {
+        await connection.write("/ip/hotspot/profile/set", ["=.id=" + item[".id"], "=login-by=" + expectedLoginBy.join(",")]);
         updated = true;
       }
       const verifiedRows = await connection.write("/ip/hotspot/profile/print");
       const verified = (Array.isArray(verifiedRows) ? verifiedRows : []).find(row => this._str(row.name) === name);
-      const verifiedMacAuthMode = this._str(verified?.["mac-auth-mode"]).trim().toLowerCase();
-      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected || verifiedMacAuthMode !== "mac-as-username") {
-        throw new Error("RouterOS did not retain the required login-by/mac-auth-mode settings for Hotspot server profile \"" + name + "\".");
-      }
-      return { name, updated, loginBy: this._str(verified["login-by"]), macAuthMode: verifiedMacAuthMode };
+      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain login-by=mac,http-pap,http-chap for HotSpot server profile \"" + name + "\".");
+      return { name, updated, loginBy: this._str(verified["login-by"]) };
     });
   }
 
