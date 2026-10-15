@@ -23,6 +23,9 @@ if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyRe
 
 const CONNECTION_TIMEOUT_MS = 10000;
 const OPERATION_TIMEOUT_MS = 10000;
+const CUSTOMER_LIVE_TIMEOUT_MS = 2500;
+const CUSTOMER_LIVE_CACHE_TTL_MS = 5000;
+const CUSTOMER_LIVE_CIRCUIT_MS = 15000;
 const DEFAULT_PORT = 8728;
 
 // IPv4 pool matching helpers: RouterOS ranges, CIDR and single IPs.
@@ -41,6 +44,13 @@ class MikroTikService {
     this._configCache = null;
     this._configCacheUntil = 0;
     this._ipPoolCache = null;
+    // Live status is best-effort and must never queue behind a long provisioning
+    // or bulk-sync operation. Cache only very recent direct reads; do not treat
+    // old collector snapshots as authoritative online status.
+    this._operationPendingCount = 0;
+    this._customerLiveCache = new Map();
+    this._customerLiveCircuitOpenUntil = 0;
+    this._customerLiveInFlight = false;
   }
 
   async _getConfig(override) {
@@ -203,7 +213,7 @@ class MikroTikService {
     this._safeClose(connection);
   }
 
-  async _getPersistentConnection(config) {
+  async _getPersistentConnection(config, handshakeTimeoutMs = CONNECTION_TIMEOUT_MS) {
     const key = JSON.stringify({host:config.host,port:config.port,user:config.user,password:config.password});
     if (this._connection && this._connectionKey !== key) {
       this._resetPersistentConnection(this._connection, "router configuration changed");
@@ -221,7 +231,7 @@ class MikroTikService {
       this._disableSocketInactivityTimeout(connection, "initial connect");
       await this._executeWithTimeout(
         connectPromise,
-        CONNECTION_TIMEOUT_MS,
+        handshakeTimeoutMs,
         "MikroTik connection handshake"
       );
       this._disableSocketInactivityTimeout(connection, "after handshake");
@@ -236,7 +246,7 @@ class MikroTikService {
     }
   }
 
-  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS) {
+  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS, connectionTimeoutMs = CONNECTION_TIMEOUT_MS) {
     const execute = async () => {
       let connection = null;
       try {
@@ -244,10 +254,12 @@ class MikroTikService {
         // RouterOS command. Configuration changes are picked up within 5s.
         const config = await this._executeWithTimeout(
           this._getConfig(configOverride),
-          CONNECTION_TIMEOUT_MS,
+          connectionTimeoutMs,
           "MikroTik configuration lookup"
         );
-        connection = await this._getPersistentConnection(config);
+        connection = connectionTimeoutMs === CONNECTION_TIMEOUT_MS
+          ? await this._getPersistentConnection(config)
+          : await this._getPersistentConnection(config, connectionTimeoutMs);
         return await this._executeWithTimeout(
           Promise.resolve().then(() => operation(connection)),
           operationTimeoutMs,
@@ -266,11 +278,14 @@ class MikroTikService {
         wrapped.code=error&&error.code?error.code:"MIKROTIK_ERROR";
         wrapped.operation=operationName;
         throw wrapped;
+      } finally {
+        this._operationPendingCount = Math.max(0, this._operationPendingCount - 1);
       }
     };
 
     // Promise-chain queue is process-safe in Node's single event loop. Each
     // complete operation owns the connection until its RouterOS commands finish.
+    this._operationPendingCount += 1;
     const result = this._operationQueue.then(execute, execute);
     this._operationQueue = result.catch(() => {});
     return result;
@@ -636,13 +651,86 @@ class MikroTikService {
         .filter((item) => item.name && ["pppoe", "any"].includes(item.service.trim().toLowerCase()));
     });
   }
+  async getCustomerLiveStatus(usernameValue, storedMac = "") {
+    const username = this._str(usernameValue).trim();
+    const key = username.toLowerCase();
+    const now = Date.now();
+    const fallback = (liveSync, reason) => ({
+      status: "offline", isLive: false, online: false, ip: "",
+      mac: this._str(storedMac), uptime: "", bytesIn: "0", bytesOut: "0",
+      traffic: { bytesIn: 0, bytesOut: 0 }, stale: liveSync !== "ok",
+      live_sync: liveSync, source: "mikrotik-active-list",
+      checkedAt: new Date().toISOString(),
+      ...(reason ? { diagnostic: String(reason).slice(0, 180) } : {})
+    });
+
+    if (!username || username.length > 100 || /[\r\n\0]/.test(username)) {
+      return fallback("unavailable", "A valid PPPoE username is required.");
+    }
+
+    const cached = this._customerLiveCache.get(key);
+    if (cached && now - cached.at <= CUSTOMER_LIVE_CACHE_TTL_MS) {
+      return { ...cached.value, live_sync: "cached", cacheAgeMs: now - cached.at };
+    }
+    if (now < this._customerLiveCircuitOpenUntil) {
+      return fallback("timeout", "Live RouterOS circuit breaker is open.");
+    }
+    // Never enqueue a live-status request behind a bulk sync, write, or another
+    // active RouterOS operation. Return immediately and let the next poll retry.
+    if (this._operationPendingCount > 0 || this._customerLiveInFlight) {
+      return fallback("timeout", "RouterOS command queue is busy.");
+    }
+
+    this._customerLiveInFlight = true;
+    try {
+      const session = await this._withConnection(
+        "Customer 360 live status",
+        async (connection) => {
+          // Target the requested account instead of downloading every active
+          // session on every Customer 360 view.
+          const rows = await connection.write("/ppp/active/print", ["?name=" + username]);
+          return (Array.isArray(rows) ? rows : []).find((row) =>
+            this._str(row.name).trim().toLowerCase() === key &&
+            this._str(row.service).trim().toLowerCase() === "pppoe"
+          ) || null;
+        },
+        undefined,
+        CUSTOMER_LIVE_TIMEOUT_MS,
+        CUSTOMER_LIVE_TIMEOUT_MS
+      );
+
+      const value = session ? {
+        status: "online", isLive: true, online: true,
+        ip: this._str(session.address), mac: this._str(session["caller-id"] || storedMac),
+        uptime: this._str(session.uptime), bytesIn: this._str(session["bytes-in"] || "0"),
+        bytesOut: this._str(session["bytes-out"] || "0"),
+        traffic: {
+          bytesIn: this._number(session["bytes-in"]),
+          bytesOut: this._number(session["bytes-out"])
+        },
+        service: this._str(session.service), stale: false, live_sync: "ok",
+        source: "mikrotik-active-list", checkedAt: new Date().toISOString()
+      } : fallback("ok", "");
+      this._customerLiveCircuitOpenUntil = 0;
+      this._customerLiveCache.set(key, { at: Date.now(), value });
+      return value;
+    } catch (error) {
+      this._customerLiveCircuitOpenUntil = Date.now() + CUSTOMER_LIVE_CIRCUIT_MS;
+      console.warn("[Customer 360 live status] RouterOS unavailable; returning safe fallback:", {
+        username, message: error?.message || String(error)
+      });
+      return fallback("timeout", error?.message || "RouterOS live status unavailable.");
+    } finally {
+      this._customerLiveInFlight = false;
+    }
+  }
+
   async getActiveSessions() {
     return this._withConnection("active PPPoE session query", async (connection) => {
       const rows = await connection.write("/ppp/active/print");
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
     });
-  }
-  async getVpnInventory() {
+  }  async getVpnInventory() {
     return this._withConnection("VPN inventory query", async (connection) => {
       const sections = {};
       const warnings = [];
