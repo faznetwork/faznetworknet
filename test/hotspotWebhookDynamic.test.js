@@ -128,6 +128,8 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*\$1/i);
     assert.equal(rechargePayload.username,"AA:BB:CC:DD:EE:FF");
     assert.equal(rechargePayload.password,"01712345678");
+    assert.match(rechargePayload.comment,/^Exp: \d{4}-\d{2}-\d{2}$/,"RouterOS user comment must contain only the expiry date");
+    assert.doesNotMatch(rechargePayload.comment,/FAZ\||PROFILE=|VALIDITY=|MAC=|AUTH=/,"legacy metadata must never be written to the RouterOS user comment");
   }finally{
     db.query=originalQuery;
     db.withTransaction=originalWithTransaction;
