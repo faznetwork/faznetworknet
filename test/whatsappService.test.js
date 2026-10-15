@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createDatabaseAuthState, normalizePhone } = require("../services/whatsappService");
+const { createDatabaseAuthState, normalizePhone, extractConnectedAccount } = require("../services/whatsappService");
 
 function fakeBaileys() {
   return {
@@ -79,4 +79,19 @@ test("WhatsApp phone normalization remains Bangladesh-specific", () => {
   assert.equal(normalizePhone("01712345678"), "8801712345678");
   assert.equal(normalizePhone("+8801712345678"), "8801712345678");
   assert.throws(() => normalizePhone("12345"), /valid Bangladesh mobile number/);
+});
+
+
+test("extracts the linked WhatsApp phone, push name, and link timestamp", () => {
+  const linkedSince = "2026-10-16T08:00:00.000Z";
+  assert.deepEqual(
+    extractConnectedAccount({ id: "8801712345678:12@s.whatsapp.net", name: "FAZ Admin" }, linkedSince),
+    { phone: "+8801712345678", name: "FAZ Admin", linkedSince }
+  );
+});
+
+test("does not invent a phone number when the connected JID is not a BD mobile", () => {
+  const account = extractConnectedAccount({ id: "123456789:4@s.whatsapp.net", name: "Device" }, "2026-10-16T08:00:00.000Z");
+  assert.equal(account.phone, null);
+  assert.equal(account.name, "Device");
 });
