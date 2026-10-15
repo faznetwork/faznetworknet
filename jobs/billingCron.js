@@ -6,45 +6,42 @@ const EXPIRED_PROFILE="EXPIRED-PROFILE";
 
 
 async function runExpiryWarnings(){
+  const db= require("../db");
+  const appSettings=require("../services/appSettings");
   try{
-    const settings=await require("../services/appSettings").getAllSettings();
-    if(!["bulk_sms","personal_device"].includes(String(settings.sms_gateway_mode||"disabled"))||
-       !require("../services/appSettings").bool(settings.sms_event_expiry_warning))return {checked:0,sent:0};
-    const due=await db.query(
-      "SELECT username,full_name,monthly_bill,phone,expiration_date FROM customers WHERE expiration_date=(NOW() AT TIME ZONE 'Asia/Dhaka')::date+3 AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"
-    );
-    let sent=0;
-    for(const customer of due.rows||[]){
-      const eventKey="expiry_warning:"+String(customer.username).toLowerCase()+":"+String(customer.expiration_date).slice(0,10);
-      const claim=await db.query(
-        "INSERT INTO sms_notification_log(event_key,event_type,username,phone,status) VALUES($1,'expiry_warning',$2,$3,'pending') ON CONFLICT(event_key) DO NOTHING RETURNING event_key",
-        [eventKey,customer.username,customer.phone]
-      );
-      if(!claim.rows.length)continue;
-      try{
-        const result=await require("../services/smsService").sendNotification({
-          to:customer.phone,
-          message:"Reminder from FAZ NETWORK: your internet bill expires in 3 days. Please renew on time to avoid service interruption.",
-          event:"expiry_warning",variables:{name:customer.full_name||customer.username,username:customer.username,amount:customer.monthly_bill,expiry_date:String(customer.expiration_date).slice(0,10)}
-        });
-        if(result.skipped){
-          await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]);
-        }else{
-          await db.query("UPDATE sms_notification_log SET status='sent',sent_at=NOW() WHERE event_key=$1",[eventKey]);
-          sent++;
+    const settings=await appSettings.getAllSettings();
+    const dueDateSql="(NOW() AT TIME ZONE 'Asia/Dhaka')::date + 2";
+    const [pppoe,hotspot]=await Promise.all([
+      db.query("SELECT username,full_name,monthly_bill AS amount,phone,expiration_date FROM customers WHERE expiration_date="+dueDateSql+" AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"),
+      db.query("SELECT username,phone,price AS amount,expires_at::date AS expiration_date FROM hotspot_vouchers WHERE expires_at IS NOT NULL AND expires_at::date="+dueDateSql+" AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) IN ('active','unused','pending_claim') ORDER BY expires_at,username")
+    ]);
+    let checked=0,sent=0;
+    const dispatch=require("../services/notificationDispatcher").dispatchNow;
+    for(const [userType,rows] of [["pppoe",pppoe.rows||[]],["hotspot",hotspot.rows||[]]]){
+      for(const customer of rows){
+        checked++;
+        const username=String(customer.username||"").trim();if(!username||!customer.phone)continue;
+        const expiry=String(customer.expiration_date||"").slice(0,10);
+        const eventKey="expiry_warning:"+userType+":"+username.toLowerCase()+":"+expiry;
+        const claim=await db.query("INSERT INTO sms_notification_log(event_key,event_type,username,phone,status) VALUES($1,'expiry_warning',$2,$3,'pending') ON CONFLICT(event_key) DO NOTHING RETURNING event_key",[eventKey,username,customer.phone]);
+        if(!claim.rows.length)continue;
+        try{
+          const result=await dispatch({userType,event:"expiry_warning",to:customer.phone,username,message:"Reminder from FAZ NETWORK: your internet service expires in 2 days. Please renew on time to avoid service interruption.",variables:{name:customer.full_name||username,username,amount:customer.amount,expiry_date:expiry}});
+          const delivered=Boolean(result.success&&result.results?.some(item=>item.status==="fulfilled"&&!item.result?.skipped));
+          if(delivered){await db.query("UPDATE sms_notification_log SET status='sent',sent_at=NOW() WHERE event_key=$1",[eventKey]);sent++;}
+          else await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]);
+        }catch(error){
+          await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]).catch(()=>{});
+          console.warn("[Notification Hub] Expiry warning failed for "+username+":",error.message);
         }
-      }catch(error){
-        await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]).catch(()=>{});
-        console.warn("[SMS] Expiry warning failed for "+customer.username+":",error.message);
       }
     }
-    return {checked:(due.rows||[]).length,sent};
+    return {checked,sent};
   }catch(error){
-    console.warn("[SMS] Expiry warning scan skipped:",error.message);
+    console.warn("[Notification Hub] Expiry warning scan skipped:",error.message);
     return {checked:0,sent:0};
   }
 }
-
 async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
@@ -114,7 +111,7 @@ async function runBillingExpiration(){
         }
 
         if(!overridden&&customer.phone){
-          Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",event:"line_expiry",variables:{name:customer.full_name||customer.username,username:customer.username}})).catch(error=>console.warn("[SMS] Expiry notice failed for "+customer.username+":",error.message));
+          require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"expired",to:customer.phone,username:customer.username,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",variables:{name:customer.full_name||customer.username,username:customer.username,expiry_date:String(customer.expiration_date||"").slice(0,10)}});
         }
 
         await logAuditAction({
