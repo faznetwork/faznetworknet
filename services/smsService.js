@@ -11,7 +11,8 @@ const EVENT_CONFIG={
  expired:{enabled:"sms_event_line_expiry",template:"sms_template_line_block"}
 };
 const MODES=new Set(["disabled","personal_device","bulk_sms","custom_http","provider_preset"]);
-const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);\nfunction normalizeMethod(value){const method=String(value||"POST_JSON").toUpperCase();return method==="POST"?"POST_JSON":method;}
+const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);
+function normalizeMethod(value){const method=String(value||"POST_JSON").toUpperCase();return method==="POST"?"POST_JSON":method;}
 const DEFAULT_MAPPING={to:"{to}",message:"{message}",token:"{token}",sender_id:"{sender_id}"};
 function withTimeout(promise,ms=8000){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("SMS provider request timed out.")),ms);})]).finally(()=>clearTimeout(timer));}
 function safeText(value,max=1200){return String(value??"").trim().slice(0,max);}
