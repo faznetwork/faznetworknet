@@ -47,8 +47,7 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
    event:"pppoe_renewal",
    customer:{username:"test-user",phone:"",mobile:"",account_phone:"01712345678"},
    username:"test-user",
-   message:"Renewal test",
-   channels:["whatsapp"]
+   message:"Renewal test"
   });
   assert.equal(result.success,true);
   assert.equal(result.results.length,1);
