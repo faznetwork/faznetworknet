@@ -31,12 +31,12 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
   const manual=updates.find(x=>x.name==="Manual-1h").onLogin;
-  assert.match(thirty,/interval=30d/);
-  assert.match(hour,/interval=1h/);
+  assert.match(thirty,/get .*uid comment/); assert.match(thirty,/start-time=23:59:59/); assert.doesNotMatch(thirty,/interval=30d/);
+  assert.match(hour,/get .*uid comment/); assert.match(hour,/start-time=23:59:59/); assert.doesNotMatch(hour,/interval=1h/);
   assert.doesNotMatch(thirty,/FAZ\\|PROFILE=|comment=/);
   assert.doesNotMatch(hour,/FAZ\\|EXP=|FIRST_LOGIN=|comment=/);
-  assert.match(custom,/interval=7d/);
-  assert.match(manual,/interval=1h/);
+  assert.match(custom,/get .*uid comment/); assert.match(custom,/start-time=23:59:59/); assert.doesNotMatch(custom,/interval=7d/);
+  assert.match(manual,/get .*uid comment/); assert.match(manual,/start-time=23:59:59/); assert.doesNotMatch(manual,/interval=1h/);
   assert.match(manual,/CUSTOM_PROFILE_HOOK/);
   assert.match(custom,/FAZ_CUSTOM_ON_LOGIN_HOOK_START/);
   assert.match(custom,/CUSTOM_PROFILE_HOOK/);
