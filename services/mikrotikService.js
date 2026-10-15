@@ -662,7 +662,7 @@ class MikroTikService {
       ...(reason ? { diagnostic: String(reason).slice(0, 180) } : {})
     });
 
-    if (!username || username.length > 100 || /[\\r\\n\\0]/.test(username)) {
+    if (!username || username.length > 100 || /[\r\n\0]/.test(username)) {
       return fallback("unavailable", "A valid PPPoE username is required.");
     }
 
