@@ -52,7 +52,7 @@ test("Admin creates a phone + package pending account without MAC or RouterOS pr
     assert.equal(res.body.pending_activation,true);
     assert.equal(res.body.user.status,"pending_claim");
     assert.equal(res.body.user.phone,"01712345678");
-    assert.match(insertedSql,/status='pending_claim'/);
+    assert.match(insertedSql,/VALUES\(\$1,\$2,\$3,\$4,\$5,'pending_claim'/);
     assert.equal(insertedParams[1],"01712345678","pending database password field stores the phone for verification");
     assert.equal(insertedParams[6],"01712345678","phone is stored as the stable customer lookup key");
     assert.equal(insertedParams[10],"pkg-1-hour");
@@ -82,8 +82,8 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
         stageCount++;
         assert.match(sql,/pending_claim/);
         assert.equal(params[1],"01712345678");
-        assert.equal(params[10],"pkg-1-hour");
-        assert.equal(params[11],null);
+        assert.equal(params[9],"pkg-1-hour");
+        assert.equal(params[10],null);
         return {rows:[{id:41,username:params[0],phone:params[6],status:"pending_claim"}]};
       }
       if(sql.startsWith("UPDATE transactions SET status='processed'"))return {rows:[{id:5}]};
@@ -95,7 +95,7 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
     mikrotik.updateHotspotProfile=async()=>{routerWrites++;return {};};
     const res=responseRecorder();
     await paymentController.verifyTrx({ip:"payment-stage-test",body:{phone:"01712345678",trxId:"TXN-TEST-5",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
-    assert.equal(res.statusCode,200);
+    assert.equal(res.statusCode,200,JSON.stringify(res.body));
     assert.equal(res.body.success,true);
     assert.equal(res.body.pending_activation,true);
     assert.equal(res.body.username,null);
