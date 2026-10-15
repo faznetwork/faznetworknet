@@ -1280,18 +1280,15 @@ async function resolveCustomer360(idValue){
 }
 async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
 async function getCustomerLiveSession(req,res){
-  const offlineLive=(mac="",reason="")=>({
+  const offlineLive=(mac="",reason="",sync="offline")=>({
     status:"offline",isLive:false,online:false,ip:"",mac:clean(mac,100),uptime:"",
     bytesIn:"0",bytesOut:"0",traffic:{bytesIn:0,bytesOut:0},stale:false,
-    source:"mikrotik-active-list",checkedAt:new Date().toISOString(),
+    source:"mikrotik-active-list",checkedAt:new Date().toISOString(),live_sync:sync,
     ...(reason?{diagnostic:reason}: {})
   });
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query(
-      "SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
-      [key]
-    );
+    const result=await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
 
@@ -1299,49 +1296,38 @@ async function getCustomerLiveSession(req,res){
     try{
       const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
       storedMac=clean(q.rows?.[0]?.caller_id,100);
-    }catch(error){
-      console.warn("[Customer 360 live status] Stored caller-id lookup failed:",error.message);
-    }
+    }catch(error){console.warn("[Customer 360 live status] Stored caller-id lookup failed:",error.message);}
 
-    // RouterOS /ppp/active/print is the only source of truth for Online status.
-    // Do not let a stale collector snapshot keep the customer Online when the
-    // router loses power or the live active-list request fails.
-    try{
-      const sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),3500);
-      if(!Array.isArray(sessions))throw new Error("Invalid response from MikroTik active-session list.");
-      const target=String(customer.username||"").trim().toLowerCase();
-      const session=sessions.find(item=>
-        String(item?.username||item?.name||"").trim().toLowerCase()===target
-      );
-      if(!session)return res.json({success:true,live:offlineLive(storedMac),statusSource:"mikrotik-active-list"});
-      const liveIp=clean(session.address,100);let livePoolName=null;
-      try{livePoolName=await mikrotikService.getPoolNameForIp(liveIp);}catch(poolError){console.warn('[Customer 360] Live IP pool resolution failed:',poolError.message);}
-      const bytesIn=String(session.bytesIn??session.bytes_in??0);
-      const bytesOut=String(session.bytesOut??session.bytes_out??0);
-      return res.json({
-        success:true,
-        live:{
-          status:"online",isLive:true,online:true,
-          ip:liveIp,
-          mac:clean(session.callerId||session.caller_id||storedMac,100),
-          poolName:livePoolName,
-          uptime:clean(session.uptime,100),
-          bytesIn,bytesOut,
-          traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},
-          service:clean(session.service,50),
-          receivedAt:new Date().toISOString(),checkedAt:new Date().toISOString(),
-          stale:false,source:"mikrotik-active-list"
-        },
-        statusSource:"mikrotik-active-list"
-      });
-    }catch(liveError){
-      console.warn("[Customer 360 live status] MikroTik active-list request failed; status forced Offline:",liveError.message);
-      return res.json({
-        success:true,
-        live:offlineLive(storedMac,liveError.message||"MikroTik active-session list unavailable."),
-        statusSource:"mikrotik-active-list-unavailable"
-      });
+    const liveResult=await mikrotikService.getActiveSessionsSafe();
+    if(liveResult.live_sync==="timeout"||liveResult.live_sync==="unavailable"){
+      return res.json({success:true,live:offlineLive(storedMac,"Live router status temporarily unavailable.",liveResult.live_sync),liveStatusAvailable:false,statusSource:"mikrotik-active-list-unavailable"});
     }
+    const sessions=liveResult.sessions;
+    if(!Array.isArray(sessions)){
+      return res.json({success:true,live:offlineLive(storedMac,"Invalid active-session response.","unavailable"),liveStatusAvailable:false,statusSource:"mikrotik-active-list-unavailable"});
+    }
+    const target=String(customer.username||"").trim().toLowerCase();
+    const session=sessions.find(item=>String(item?.username||item?.name||"").trim().toLowerCase()===target);
+    if(!session){
+      return res.json({success:true,live:{...offlineLive(storedMac),live_sync:liveResult.live_sync},liveStatusAvailable:true,statusSource:"mikrotik-active-list"});
+    }
+    const liveIp=clean(session.address,100);
+    let livePoolName=null;
+    try{livePoolName=await mikrotikService.getPoolNameForIp(liveIp);}catch(poolError){console.warn("[Customer 360] Live IP pool resolution failed:",poolError.message);}
+    const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
+    return res.json({
+      success:true,
+      live:{
+        status:"online",isLive:true,online:true,ip:liveIp,
+        mac:clean(session.callerId||session.caller_id||storedMac,100),poolName:livePoolName,
+        uptime:clean(session.uptime,100),bytesIn,bytesOut,
+        traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},
+        service:clean(session.service,50),receivedAt:new Date().toISOString(),
+        checkedAt:liveResult.checkedAt||new Date().toISOString(),
+        stale:liveResult.live_sync==="cached",live_sync:liveResult.live_sync,source:"mikrotik-active-list"
+      },
+      liveStatusAvailable:true,statusSource:"mikrotik-active-list"
+    });
   }catch(error){
     console.error("[Customer 360 live status] Handler error:",error.message);
     return res.status(500).json({success:false,message:"Unable to determine live customer status.",code:"CUSTOMER_LIVE_STATUS_ERROR"});
