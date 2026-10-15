@@ -49,15 +49,15 @@ function formatMessage(settings,event,variables,message){
 async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to;
- const normalizedPhone=normalizePhone(rawPhone);
- const recipient=isValidBdWhatsAppPhone(normalizedPhone)?normalizedPhone:"";
+ const recipientPhone=normalizePhone(rawPhone);
+ const validWhatsAppPhone=isValidBdWhatsAppPhone(recipientPhone);
  const customerUsername=String(customer?.username||username||"unknown").trim()||"unknown";
  const isPppoeRenewal=type==="pppoe"&&["payment","renewal","recharge"].includes(eventName);
  if(isPppoeRenewal){
-  if(recipient)console.info(`[Dispatcher] Triggering PPPoE renewal notification for ${customerUsername} (${recipient}).`);
-  else console.warn(`[Notification] No valid phone found for customer: ${customerUsername}.`);
+  if(validWhatsAppPhone)console.info("[Dispatcher] Triggering PPPoE renewal notification for "+customerUsername+" ("+recipientPhone+").");
+  else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
- const context={username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipient,...variables};
+ const context={username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,...variables};
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
@@ -71,10 +71,10 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  };
  const whatsappChannelEnabled=channelEnabled("whatsapp");
  const whatsappRuleEnabled=ruleEnabled("whatsapp");
- if(isPppoeRenewal&&whatsappChannelEnabled&&recipient&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
- if(isPppoeRenewal&&whatsappChannelEnabled&&!recipient)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&ruleEnabled("sms")&&recipient)jobs.push(["sms",()=>smsService.sendNotification({to:recipient,message:text,event:smsEvent(eventName),variables:context})]);
- if(whatsappChannelEnabled&&whatsappRuleEnabled&&recipient)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipient,message:text})]);
+ if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
+ if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
+ if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",()=>smsService.sendNotification({to:recipientPhone,message:text,event:smsEvent(eventName),variables:context})]);
+ if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipientPhone,message:text})]);
  if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",()=>sendTelegram(settings,text)]);
  if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,text)]);
  const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
