@@ -16,4 +16,8 @@ router.get("/hotspot-profile-settings",controller.getHotspotProfileSettings);
 router.post("/hotspot-profile-settings",controller.saveHotspotProfileSettings);
 router.get("/all",controller.getAllSettings);
 router.post("/update",controller.updateSettings);
+router.post("/notifications/test",controller.testNotification);
+router.get("/notifications/whatsapp/status",controller.whatsappStatus);
+router.post("/notifications/whatsapp/connect",controller.whatsappConnect);
+router.post("/notifications/whatsapp/unlink",controller.whatsappUnlink);
 module.exports=router;

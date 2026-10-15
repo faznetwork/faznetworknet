@@ -194,6 +194,9 @@ function createHotspotExpirationCleanup(deps = {}) {
           [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
         );
         expired++;
+        const contactResult=await database.query("SELECT phone,price FROM hotspot_vouchers WHERE id=$1 LIMIT 1",[voucher.id]).catch(()=>({rows:[]}));
+        const contact=contactResult.rows?.[0]||{};
+        if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"expired",to:contact.phone,username,message:"Your FAZ NETWORK Hotspot package has expired. Recharge to continue using the service.",variables:{name:contact.phone,username,amount:contact.price,expiry_date:expiryAt instanceof Date?expiryAt.toISOString().slice(0,10):""}});}
         try {
           await router.cleanupExpiredHotspotUser(username);
           await database.query(
