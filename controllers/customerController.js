@@ -1131,7 +1131,7 @@ async function updateCustomer(req,res){
     const packageDefinition=await resolvePackageDefinition(requestedProfile,packageName);
     if(!packageDefinition)return res.status(400).json({success:false,message:"Selected package/profile is not configured in the billing package table."});
     const profileName=packageDefinition.profileName||requestedProfile,password=clean(body.password||row.password,255);
-    const requestedAccountStatus=String(body.accountStatus||body.status||"").trim().toLowerCase();
+    const requestedAccountStatus=String(body.accountStatus||"").trim().toLowerCase();
     if(requestedAccountStatus&&!["active","suspended","expired"].includes(requestedAccountStatus))return res.status(400).json({success:false,message:"Account status must be Active, Suspended, or Expired."});
     if(requestedAccountStatus==="expired"&&dateStatus(expirationDate)!=="expired")return res.status(400).json({success:false,message:"An account can be marked Expired only when its expiry date is before today."});
     if(requestedAccountStatus==="active"&&dateStatus(expirationDate)==="expired")return res.status(409).json({success:false,message:"This expiry date is in the past. Update the expiry date before reactivating the account."});
