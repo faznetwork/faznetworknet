@@ -967,7 +967,7 @@ class MikroTikService {
         const item=matches[0];
         await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],password,profile,disabled:false,...limits,comment}));
         const schedulers=await connection.write("/system/scheduler/print");
-        for(const scheduler of (Array.isArray(schedulers)?schedulers:[]).filter(s=>this._str(s.name).toLowerCase()===("faz-exp-"+username).toLowerCase()&&s[".id"]))await connection.write("/system/scheduler/remove",["=.id="+scheduler[".id"]]);
+        for(const scheduler of (Array.isArray(schedulers)?schedulers:[]).filter(s=>s[".id"]&&[("EXP_"+username).toLowerCase(),("faz-exp-"+username).toLowerCase()].includes(this._str(s.name).toLowerCase())))await connection.write("/system/scheduler/remove",["=.id="+scheduler[".id"]]);
         await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
         const activeRows=await connection.write("/ip/hotspot/active/print");
         for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(s=>this._str(s.user)===username&&s[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
