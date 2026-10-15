@@ -26,7 +26,7 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
   const result=await syncHotspotProfileScripts(deps);
   assert.deepEqual(result,{checked:4,updated:4,skipped:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
   assert.equal(updates.length,4);
-  assert.deepEqual(updates.map(x=>Object.keys(x).sort()),[["name","onLogin"],["name","onLogin"],["name","onLogin"]]);
+  assert.deepEqual(updates.map(x=>Object.keys(x).sort()),[["name","onLogin"],["name","onLogin"],["name","onLogin"],["name","onLogin"]]);
   const thirty=updates.find(x=>x.name==="30-Day").onLogin;
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
