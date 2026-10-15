@@ -2624,7 +2624,7 @@
                     return '<tr><td><div class="d-flex align-items-center gap-2"><span class="hotspot-profile-avatar"><i class="bi bi-wifi"></i></span><div><div class="fw-semibold">'+escapeHtml(p.name)+'</div><div class="small text-muted">MikroTik user profile</div></div></div></td><td><span class="badge bg-primary-subtle text-primary border">'+escapeHtml(p.rateLimit||'Not set')+'</span></td><td><strong class="text-success">৳ '+price.toFixed(2)+'</strong></td><td><span class="badge bg-light text-dark border">'+escapeHtml(p.validityLabel||p.sessionTimeout||'Not set')+'</span></td><td>'+escapeHtml(p.sharedUsers||'1')+'</td><td class="text-end"><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" data-profile-name="'+escapeHtml(p.name)+'" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square me-1"></i>Edit</button><button class="btn btn-outline-danger" data-profile-name="'+escapeHtml(p.name)+'" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3 me-1"></i>Delete</button></div></td></tr>';
                 }).join('');
                 const body=rows||'<tr><td colspan="6" class="text-center py-5 text-muted"><i class="bi bi-wifi fs-2 d-block mb-2"></i>No Hotspot profiles found.</td></tr>';
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-md-row align-items-md-center gap-3"><div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">Hotspot Profiles</h5><span class="badge rounded-pill bg-success">'+currentHotspotProfiles.length+'</span></div><div class="small text-muted mt-1">Live RouterOS profiles, package prices and validity</div></div><button type="button" class="btn btn-theme ms-md-auto" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Profile</button></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-profile-table"><thead class="table-light"><tr><th>Profile Name</th><th>Rate Limit (Rx/Tx)</th><th>Price (BDT)</th><th>Validity / Quota</th><th>Shared Users</th><th class="text-end">Actions</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>');
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-md-row align-items-md-center gap-3"><div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">Hotspot Profiles</h5><span class="badge rounded-pill bg-success">'+currentHotspotProfiles.length+'</span></div><div class="small text-muted mt-1">Live RouterOS profiles, package prices and validity</div></div><div class="d-flex flex-wrap gap-2 ms-md-auto"><button type="button" class="btn btn-outline-success" onclick="syncHotspotProfiles(this)"><i class="bi bi-arrow-repeat me-1"></i>Sync All Profiles</button><button type="button" class="btn btn-theme" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Profile</button></div></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-profile-table"><thead class="table-light"><tr><th>Profile Name</th><th>Rate Limit (Rx/Tx)</th><th>Price (BDT)</th><th>Validity / Quota</th><th>Shared Users</th><th class="text-end">Actions</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>');
                 updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
             } catch(error) {
                 appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message||'Unable to load profiles')+'</div></section>');
@@ -2677,6 +2677,24 @@
             document.querySelectorAll('.modal-backdrop').forEach(function(el){el.remove();});document.body.classList.remove('modal-open');
             bootstrap.Modal.getOrCreateInstance(modal,{backdrop:'static',keyboard:true}).show();
         }
+        async function syncHotspotProfiles(button){
+            if(!button||button.disabled)return;
+            const previous=button.innerHTML;
+            button.disabled=true;
+            button.innerHTML='<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Syncing…';
+            try{
+                const data=await jsonFetch('/api/hotspot/profiles/sync',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({})});
+                const sync=data.sync||{},auth=sync.serverAuth||{};
+                const summary='Hotspot User Profiles: '+Number(sync.updated||0)+' updated, '+Number(sync.skipped||0)+' skipped, '+Number(sync.failed||0)+' failed. MAC authentication: '+Number(auth.updated||0)+' server profile(s) updated, '+Number(auth.skipped||0)+' already correct, '+Number(auth.failed||0)+' failed.';
+                await loadHotspotProfiles('hotspot_profile');
+                alert(summary);
+            }catch(error){alert(error.message||'Hotspot profile sync failed.');}
+            finally{
+                const current=document.querySelector('.hotspot-dynamic-view button[onclick="syncHotspotProfiles(this)"]');
+                if(current){current.disabled=false;current.innerHTML=previous;}
+            }
+        }
+        window.syncHotspotProfiles = syncHotspotProfiles;
         window.loadHotspotProfiles = loadHotspotProfiles;
         function editHotspotProfile(name){ if(!name)return; openHotspotProfileModal(name); }
         async function deleteHotspotProfile(name){

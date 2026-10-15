@@ -13,6 +13,7 @@ router.get("/servers",controller.servers);
 router.post("/profiles/create",controller.createProfile);
 router.post("/profiles/update",controller.updateProfile);
 router.post("/profiles/delete",controller.deleteProfile);
+router.post("/profiles/sync",controller.syncProfiles);
 router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
 router.post("/active/disconnect",controller.disconnectActive);

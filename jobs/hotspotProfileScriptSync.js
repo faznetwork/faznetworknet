@@ -76,9 +76,11 @@ async function syncHotspotProfileScripts(deps = {}) {
     const configured = metadata[name] && typeof metadata[name] === "object";
     const legacy = LEGACY_HOTSPOT_HOOK.test(oldLogin);
     const alreadyManaged = MANAGED_HOTSPOT_HOOK.test(oldLogin);
-    // Do not rewrite unrelated manually-created profiles unless the package
-    // metadata explicitly manages them or they still contain the old FAZ hook.
-    if (!configured && !legacy && !alreadyManaged) { skipped++; continue; }
+    const storedTimeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim().toLowerCase();
+    const hasKnownTimeValidity = Boolean(storedTimeout && storedTimeout !== "none" && /^(?:\d+\s*[wdhm]\s*)+$/i.test(storedTimeout));
+    // Sync every package-managed/legacy profile and every manual profile with a
+    // concrete time validity. Preserve unconfigured hooks when validity is unknown.
+    if (!configured && !legacy && !alreadyManaged && !hasKnownTimeValidity) { skipped++; continue; }
 
     checked++;
     try {
@@ -102,7 +104,35 @@ async function syncHotspotProfileScripts(deps = {}) {
     }
   }
 
-  const result = { checked, updated, skipped, failed };
+  // A Hotspot Server Profile is separate from the User Profile above.
+  // Normalize auth only on profiles referenced by enabled Hotspot servers.
+  const authResult = { checked: 0, updated: 0, skipped: 0, failed: 0 };
+  if (typeof router.getHotspotServers === "function" &&
+      typeof router.ensureHotspotServerProfileAuth === "function") {
+    try {
+      const servers = await router.getHotspotServers();
+      const profileNames = [...new Set((servers || []).map(server => String(server?.profile || "").trim()).filter(Boolean))];
+      for (const profileName of profileNames) {
+        authResult.checked++;
+        try {
+          const outcome = await router.ensureHotspotServerProfileAuth(profileName);
+          if (outcome?.updated) authResult.updated++;
+          else authResult.skipped++;
+        } catch (error) {
+          authResult.failed++;
+          failed++;
+          logger.warn("[HOTSPOT SERVER AUTH SYNC] Could not normalize " + profileName + ": " + (error?.message || error));
+        }
+      }
+    } catch (error) {
+      authResult.failed++;
+      failed++;
+      logger.warn("[HOTSPOT SERVER AUTH SYNC] Could not inspect active Hotspot servers: " + (error?.message || error));
+    }
+  }
+  logger.log("[HOTSPOT SERVER AUTH SYNC] Completed.", authResult);
+
+  const result = { checked, updated, skipped, failed, serverAuth: authResult };
   logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
   return result;
 }
