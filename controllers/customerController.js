@@ -897,6 +897,7 @@ async function markPaid(req,res){
     await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,paidUntil,comment,username]);
     const paidCustomer=customer||{id:null,package_name:routerUser?.profile||activeProfile};
     if(paidCustomer.id)await logAuditAction({customerId:paidCustomer.id,adminId:getAdminId(req),action:"RENEW",details:{message:"Bill marked as paid; restored package profile and reset active session",paidUntil,package:paidCustomer.package_name,profile:activeProfile},ipAddress:getIpAddress(req)});
+    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",to:paidCustomer.phone||routerUser?.phone,username,message:"Your FAZ NETWORK bill is marked paid. Service active until "+paidUntil+".",variables:{name:paidCustomer.full_name||username,username,amount:paidCustomer.monthly_bill,gateway:"manual collection",new_expiry_date:paidUntil}});
     return res.json({success:true,username,paidUntil,profile:activeProfile,message:`Bill marked as paid. Package profile restored until ${paidUntil}; active session reset.`});
   }catch(error){return errorResponse(res,error);}
 }
