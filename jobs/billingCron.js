@@ -27,7 +27,7 @@ async function runExpiryWarnings(){
         if(!claim.rows.length)continue;
         try{
           const result=await dispatch({userType,event:"expiry_warning",to:customer.phone,username,message:"Reminder from FAZ NETWORK: your internet service expires in 2 days. Please renew on time to avoid service interruption.",variables:{name:customer.full_name||username,username,amount:customer.amount,expiry_date:expiry}});
-          const delivered=Boolean(result.success&&result.results?.some(item=>item.status==="fulfilled"&&!item.result?.skipped));
+          const delivered=Boolean(result.results?.some(item=>item.status==="fulfilled"&&item.result?.success!==false&&!item.result?.skipped));
           if(delivered){await db.query("UPDATE sms_notification_log SET status='sent',sent_at=NOW() WHERE event_key=$1",[eventKey]);sent++;}
           else await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]);
         }catch(error){
