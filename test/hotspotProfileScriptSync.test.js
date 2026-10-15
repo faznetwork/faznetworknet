@@ -24,7 +24,7 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
     logger:{log(){},warn(...args){throw new Error(args.join(" "));}}
   };
   const result=await syncHotspotProfileScripts(deps);
-  assert.deepEqual(result,{checked:4,updated:4,skipped:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
+  assert.deepEqual(result,{checked:4,updated:4,skipped:1,unchanged:0,ineligible:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
   assert.equal(updates.length,4);
   assert.deepEqual(updates.map(x=>Object.keys(x).sort()),[["name","onLogin"],["name","onLogin"],["name","onLogin"],["name","onLogin"]]);
   const thirty=updates.find(x=>x.name==="30-Day").onLogin;
@@ -66,7 +66,7 @@ test("startup sync enforces auth settings on active Hotspot server profiles", as
   };
   const result = await syncHotspotProfileScripts(deps);
   assert.deepEqual(checked, ["hsprof1", "guest-profile"], "each active server profile is synced once");
-  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 } });
+  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, unchanged: 0, ineligible: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 } });
 });
 
 test("RouterOS server-profile auth preserves MAC/PAP/CHAP using supported properties", async () => {
