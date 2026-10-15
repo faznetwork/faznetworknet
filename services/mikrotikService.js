@@ -910,7 +910,7 @@ class MikroTikService {
 
   _hotspotExpiryComment(data) {
     const supplied=this._str(data?.comment).trim();
-    if(/^Exp: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})?$/.test(supplied))return supplied;
+    if(/^Exp: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})?$/.test(supplied)||supplied==="FAZ|DATA_ONLY")return supplied;
 
     const date=this._str(data?.expiryDate).trim();
     if(/^\d{4}-\d{2}-\d{2}$/.test(date))return "Exp: "+date;
