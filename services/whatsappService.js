@@ -12,6 +12,7 @@ let reconnectTimer = null;
 let reconnectAttempt = 0;
 let authConfigured = false;
 let reconnectAllowed = true;
+let accountMetadata = null;
 const tableReadyByDatabase = new WeakMap();
 
 function getBaileys() {
@@ -137,9 +138,57 @@ async function createDatabaseAuthState(options = {}) {
   };
 }
 
+function extractConnectedAccount(user, linkedSince = new Date().toISOString()) {
+  const rawId = String(user?.id || user?.jid || "");
+  const jidUser = rawId.split(":")[0].split("@")[0];
+  const digits = jidUser.replace(/\D/g, "");
+  let phone = null;
+  try {
+    if (digits) phone = "+" + normalizePhone(digits);
+  } catch (_) {}
+  const name = String(user?.name || user?.verifiedName || "").trim() || null;
+  return { phone, name, linkedSince };
+}
+
+async function loadConnectedAccount() {
+  await ensureSessionTable();
+  const result = await db.query("SELECT value FROM whatsapp_sessions WHERE key = $1 LIMIT 1", ["metadata"]);
+  const value = result.rows && result.rows[0] ? result.rows[0].value : null;
+  if (value && typeof value === "object" && !Array.isArray(value)) accountMetadata = value;
+  else if (typeof value === "string") {
+    try { accountMetadata = JSON.parse(value); } catch (_) { accountMetadata = null; }
+  }
+  return accountMetadata;
+}
+
+async function persistConnectedAccount(user) {
+  const extracted = extractConnectedAccount(user);
+  if (!extracted.phone) {
+    console.warn("[WhatsApp] Connected, but the socket did not expose a valid phone JID.");
+    return accountMetadata;
+  }
+  let previous = accountMetadata;
+  if (!previous) {
+    try { previous = await loadConnectedAccount(); } catch (_) {}
+  }
+  const linkedSince = previous?.phone === extracted.phone && previous?.linkedSince
+    ? previous.linkedSince
+    : new Date().toISOString();
+  accountMetadata = { ...extracted, linkedSince };
+  await ensureSessionTable();
+  await db.query(
+    `INSERT INTO whatsapp_sessions(key, value, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    ["metadata", JSON.stringify(accountMetadata)]
+  );
+  return accountMetadata;
+}
+
 async function hasRegisteredSession() {
   const baileys = getBaileys();
   await ensureSessionTable();
+  await loadConnectedAccount();
   const result = await db.query(
     "SELECT value FROM whatsapp_sessions WHERE key = $1 LIMIT 1",
     ["creds"]
@@ -219,6 +268,10 @@ async function connect() {
         qrDataUrl = null;
         qrText = null;
         lastError = null;
+        const connectedSocket = socket;
+        persistConnectedAccount(connectedSocket?.user).catch(error => {
+          console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+        });
       }
       if (update.connection === "connecting") connection = "connecting";
       if (update.connection === "close") {
@@ -272,7 +325,9 @@ function getStatus() {
     qrDataUrl,
     qrText: Boolean(qrText),
     lastError,
-    authConfigured
+    authConfigured,
+    account: accountMetadata ? { ...accountMetadata } : null,
+    socketStatus: connection === "connected" ? "Active & Ready" : connection
   };
 }
 
@@ -290,6 +345,7 @@ async function sendMessage({ to, message } = {}) {
 async function clearStoredAuth() {
   await ensureSessionTable();
   await db.query("DELETE FROM whatsapp_sessions");
+  accountMetadata = null;
 }
 
 async function unlink() {
@@ -322,5 +378,6 @@ module.exports = {
   sendMessage,
   unlink,
   normalizePhone,
+  extractConnectedAccount,
   createDatabaseAuthState
 };

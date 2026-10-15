@@ -182,7 +182,18 @@ async function testNotification(req,res){
  }catch(error){return errorResponse(res,error,502);}
 }
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
+async function testWhatsApp(req,res){
+ try{
+  const to=String(req.body?.to||req.body?.phone||"").trim();
+  const message=String(req.body?.message||"").trim();
+  if(!to)throw new Error("Recipient mobile number is required.");
+  if(!message)throw new Error("Test message is required.");
+  if(message.length>4000)throw new Error("Test message must be 4000 characters or fewer.");
+  const result=await require("../services/notificationDispatcher").testChannel("whatsapp",{to,message});
+  return res.set("Cache-Control","no-store").json({success:true,message:"WhatsApp test message sent to the gateway successfully.",result});
+ }catch(error){return errorResponse(res,error,502);}
+}
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect()});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
