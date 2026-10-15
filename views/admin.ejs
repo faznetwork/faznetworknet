@@ -7071,7 +7071,7 @@ async function pollHotspotOverview(){
     if(r&&r.querySelector('.dashboard-activity-empty'))r.innerHTML=dashboardOverviewEmpty('bi-exclamation-circle','Unable to load recharges','Refresh to retry.');
   }finally{dashboardOverviewBusy=false;}
 }
-async function loadDashboardRechargeFilter(period){
+async function loadDashboardRechargeFilter(period,configuredEndpoint){
   const allowed=new Set(['all','today','yesterday','last7days','thismonth','last30days','thisyear']);
   const filter=allowed.has(String(period||'all'))?String(period||'all'):'all';
   const content=document.getElementById('dynamicPageContent');if(!content)return;
@@ -7081,7 +7081,7 @@ async function loadDashboardRechargeFilter(period){
   safeSetText('pageTitle','Hotspot Recharges · '+(dashboardKpiPeriods.find(x=>x.id===filter)?.label||'All recent'));
   content.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hourglass-split text-success me-2"></i>Loading filtered Hotspot recharges…</div><div class="card-body text-center py-5"><div class="spinner-border text-success" role="status" aria-label="Loading"></div></div></div></section>';
   try{
-    const endpoint='/api/dashboard/hotspot-overview'+(filter==='all'?'':'?filter='+encodeURIComponent(filter));
+    const expectedEndpoint='/api/dashboard/hotspot-overview'+(filter==='all'?'':'?filter='+encodeURIComponent(filter));const endpoint=configuredEndpoint===expectedEndpoint?configuredEndpoint:expectedEndpoint;
     const data=await jsonFetch(endpoint,{cache:'no-store',timeout:10000});
     if(!data||data.success===false)throw new Error(data?.message||'Could not load recharges');
     const rows=Array.isArray(data.filteredRecharges)?data.filteredRecharges:[];
@@ -7101,7 +7101,7 @@ function dashboardKpiRipple(button,event){
 }
 async function loadDashboardKpiTarget(card){
   if(!card)return;
-  const button=card.closest('.dashboard-kpi-card');if(button){button.classList.add('is-navigating');button.setAttribute('aria-busy','true');}
+  const button=document.querySelector('[data-kpi-id="'+card.id+'"]');if(button){button.classList.add('is-navigating');button.setAttribute('aria-busy','true');}
   try{
     const target=String(card.targetRoute||'');
     if(target==='hotspot-vouchers:all'||target==='hotspot-vouchers:active'||target==='hotspot-vouchers:expired'){
@@ -7109,7 +7109,7 @@ async function loadDashboardKpiTarget(card){
       if(typeof window.loadHotspotVoucherRecords!=='function')throw new Error('Hotspot voucher view is unavailable.');
       await window.loadHotspotVoucherRecords(status,status==='all'?'All Hotspot Users':status==='active'?'Active Hotspot Users':'Expired Hotspot Users');
     }else if(target.startsWith('recharges:')){
-      await loadDashboardRechargeFilter(target.split(':')[1]);
+      await loadDashboardRechargeFilter(target.split(':')[1],card.apiEndpoint);
     }
   }catch(error){console.error('[Dashboard KPI navigation]',error);alert(error.message||'Unable to open the selected dashboard details.');}
   finally{if(button){button.classList.remove('is-navigating');button.setAttribute('aria-busy','false');}}
