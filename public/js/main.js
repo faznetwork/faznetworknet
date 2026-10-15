@@ -1,13 +1,26 @@
 (() => {
-  // Shared dashboard KPI destination handler. Total and active counts use the
-  // complete MikroTik-backed Hotspot user list/session view, not the voucher ledger.
+  // Route dashboard KPI clicks to the existing admin-panel view handlers.
+  // Resolve handlers at click time because admin.ejs registers them after this file.
   window.openHotspotKpiUsers = async function (status) {
     if (status === 'all' || status === 'active') {
-      if (typeof window.loadHotspotSection !== 'function') throw new Error('Hotspot User Management view is unavailable.');
-      return window.loadHotspotSection(status, status === 'active' ? 'active_user' : 'all_user');
+      const titleKey = status === 'active' ? 'active_user' : 'all_user';
+      if (typeof window.loadHotspotSection === 'function') {
+        return window.loadHotspotSection(status, titleKey);
+      }
+      const menuLink = document.querySelector(
+        status === 'active'
+          ? '[onclick*="loadHotspotSection(\'active\'"][onclick*="active_user"]'
+          : '[onclick*="loadHotspotSection(\'all\'"][onclick*="all_user"]'
+      );
+      if (menuLink) { menuLink.click(); return true; }
+      return false;
     }
-    if (typeof window.loadHotspotVoucherRecords !== 'function') throw new Error('Expired & Cleanup view is unavailable.');
-    return window.loadHotspotVoucherRecords('expired', 'Expired Hotspot Users');
+    if (typeof window.loadHotspotVoucherRecords === 'function') {
+      return window.loadHotspotVoucherRecords('cleanup', 'Expired & Cleanup');
+    }
+    const cleanupLink = document.querySelector('[onclick*="loadHotspotVoucherRecords(\'cleanup\'"]');
+    if (cleanupLink) { cleanupLink.click(); return true; }
+    return false;
   };
 
   // Enforce exclusive visibility for the two dashboard sections. The admin
