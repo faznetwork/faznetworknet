@@ -1119,7 +1119,7 @@
 .kpi-gradient-teal{--kpi-a:#115e59;--kpi-b:#14b8a6}
 .kpi-gradient-purple{--kpi-a:#6b21a8;--kpi-b:#a855f7}
 .dashboard-kpi-ripple{position:absolute;z-index:2;width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.5);transform:translate(-50%,-50%) scale(0);animation:dashboardRipple .55s ease-out forwards;pointer-events:none}
-.dashboard-activity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px;margin-bottom:24px}
+.dashboard-activity-section-heading{margin:0 0 10px}.dashboard-activity-section-heading h2{color:#0f172a}.dashboard-activity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px;margin-bottom:24px}
 .dashboard-activity-panel{min-width:0;overflow:hidden;border:1px solid #e2e8f0;border-radius:17px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.055)}
 .dashboard-activity-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid #e8eef5;background:linear-gradient(110deg,#fff,#f0fdf4)}
 .dashboard-activity-heading h2{font-size:.96rem;font-weight:800;color:#0f172a;margin:0}
@@ -1937,6 +1937,7 @@
                   <button type="button" class="btn btn-sm btn-outline-success" id="refreshDashboardOverview"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh</button>
                 </div>
                 <div id="dashboardKpiGrid" class="dashboard-kpi-grid" aria-live="polite" aria-busy="true"></div>
+                <div class="dashboard-activity-section-heading"><h2 class="h6 fw-bold mb-1">Latest Activity</h2><p class="small text-muted mb-0">Recent saved Hotspot accounts and successful recharge records</p></div>
                 <div class="dashboard-activity-grid">
                   <section class="dashboard-activity-panel" aria-labelledby="dashboardRecentCustomersTitle">
                     <div class="dashboard-activity-heading"><div><h2 id="dashboardRecentCustomersTitle"><i class="bi bi-people-fill text-success me-2" aria-hidden="true"></i>Recent Hotspot Customers</h2><p>Recently created saved Hotspot accounts</p></div><button type="button" class="btn btn-sm btn-outline-success" id="viewAllDashboardCustomers">View all</button></div>
@@ -7103,7 +7104,6 @@ async function loadDashboardKpiTarget(card){
   if(!card)return;
   const button=document.querySelector('[data-kpi-id="'+card.id+'"]');if(button){button.classList.add('is-navigating');button.setAttribute('aria-busy','true');}
   try{
-    const target=String(card.targetRoute||'');
     if(card.id==='total-users'||card.id==='active-users'||card.id==='expired-users'){
       const status=card.id==='active-users'?'active':card.id==='expired-users'?'expired':'all';
       if(typeof window.loadHotspotVoucherRecords!=='function')throw new Error('Hotspot voucher view is unavailable.');
