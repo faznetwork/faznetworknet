@@ -1,5 +1,10 @@
 const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
+function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
+function normalizeHotspotMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
+function normalizeProfileIdentifier(value){return String(value??"").normalize("NFKC").trim().toLowerCase().replace(/\b(hours?|hrs?)\b/g,"h").replace(/\b(minutes?|mins?)\b/g,"m").replace(/\b(seconds?|secs?)\b/g,"s").replace(/\b(days?)\b/g,"d").replace(/\b(weeks?)\b/g,"w").replace(/\b(months?)\b/g,"mo").replace(/[^a-z0-9]/g,"");}
+function profileIdentifierMatches(profileName,metadata,requested){if(!requested)return false;const aliases=[profileName,metadata?.id,metadata?.profileId,metadata?.profile_id,metadata?.packageId,metadata?.package_id,metadata?.packageName,metadata?.package_name,metadata?.alias,metadata?.aliases];const target=normalizeProfileIdentifier(requested);return Boolean(target)&&aliases.flatMap(value=>Array.isArray(value)?value:[value]).filter(value=>value!==undefined&&value!==null&&String(value).trim()!=="").some(value=>normalizeProfileIdentifier(value)===target);}
+function hotspotError(code,statusCode,message){const error=new Error(message);error.code=code;error.statusCode=statusCode;return error;}
 function errorResponse(res,e){console.error("[Hotspot API]",e);const message=e?.message||"Hotspot operation failed.";return res.status(e?.statusCode||503).json({success:false,users:[],profiles:[],message,error:message});}
 function randomPin(length=8){return crypto.randomBytes(Math.ceil(length*1.5)).toString("base64url").replace(/[^A-Za-z0-9]/g,"").slice(0,length).toUpperCase();}
 function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","active"].includes(filter)?filter:"all";}
@@ -32,7 +37,7 @@ async function ensureCalendarProfile(profile, routerProfile, profileValidity) {
 }
 async function writeProfileMetadata(v){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_profile_metadata',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(v)]);}
 async function servers(req,res){try{const data=await mikrotikService.getHotspotServers();return res.json({success:true,servers:data.map(s=>({name:s.name,interface:s.interface,profile:s.profile}))});}catch(e){return errorResponse(res,e);}}
-async function profiles(req,res){try{const [data,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);return res.json({success:true,profiles:data.map(p=>{const m=meta[p.name]||{};let v;try{v=m.validityValue?normalizeProfileValidity(m.validityValue,m.validityUnit):parseStoredValidity(p);}catch(_){v=parseStoredValidity(p);}return {...p,price:Number(m.price||0),validityValue:v.value,validityUnit:v.unit,validityLabel:m.validityLabel||v.validityLabel,limitBytesTotal:Number(m.limitBytesTotal||v.limitBytesTotal||0)};})});}catch(e){return errorResponse(res,e);}}
+async function profiles(req,res){try{const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);const data=Array.isArray(routerProfiles)&&routerProfiles.length?routerProfiles:Object.entries(meta).map(([name,m])=>({name,rateLimit:String(m?.rateLimit||""),sharedUsers:"1",sessionTimeout:"",raw:{}}));return res.json({success:true,profiles:data.filter(p=>p.name&&String(p.name).toLowerCase()!=="default").map(p=>{const m=meta[p.name]||{};let v;try{v=m.validityValue?normalizeProfileValidity(m.validityValue,m.validityUnit):parseStoredValidity(p);}catch(_){v=parseStoredValidity(p);}return {...p,profile_id:String(m.id||m.profileId||m.profile_id||m.packageId||m.package_id||m.packageName||m.package_name||m.alias||p.name),price:Number(m.price||0),validityValue:v.value,validityUnit:v.unit,validityLabel:m.validityLabel||v.validityLabel,limitBytesTotal:Number(m.limitBytesTotal||v.limitBytesTotal||0)};})});}catch(e){return errorResponse(res,e);}}
 function previewProfileScript(req,res){
  try{
   const body=req.body||{};
@@ -200,38 +205,41 @@ async function generate(req,res){
 }
 async function createUser(req,res){
   try{
-    const username=clean(req.body.username,100);
-    const password=username;
-    const profile=clean(req.body.profile,100);
-    const server=clean(req.body.server,100);
-    if(!username||!profile||!server)return res.status(400).json({success:false,message:"Phone number, profile, and a detected Hotspot server are required."});
-    if(!/^[A-Za-z0-9._@+-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username / phone number contains unsupported characters."});
-    if(password.length>100)return res.status(400).json({success:false,message:"Password must be 100 characters or fewer."});
-    const existingDb=await db.query("SELECT id,status FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) AND status IN ('unused','active') ORDER BY id DESC LIMIT 1",[username]);
-    if(existingDb.rows.length)return res.status(409).json({success:false,message:"This phone number already has an unused or active Hotspot package. Expired packages can be purchased again."});
-    const [mtUsers,profiles,servers]=await Promise.all([mikrotikService.getHotspotUsers(),mikrotikService.getHotspotProfiles(),mikrotikService.getHotspotServers()]);
-    if(mtUsers.some(u=>String(u.username||"").toLowerCase()===username.toLowerCase()))return res.status(409).json({success:false,message:"Hotspot username already exists in MikroTik."});
-    const matchedServer=servers.find(s=>String(s.name||"").trim().toLowerCase()===server.trim().toLowerCase());
-    if(!matchedServer)return res.status(409).json({success:false,message:"Selected Hotspot server is no longer present on MikroTik. Refresh the detected server list."});
-    const routerProfile=profiles.find(p=>String(p.name||"").toLowerCase()===profile.toLowerCase());
-    if(!routerProfile)return res.status(400).json({success:false,message:"The selected Hotspot profile does not exist on MikroTik."});
-    const profileMeta=(await readProfileMetadata())[routerProfile.name]||{};
-    const profileValidity=profileMeta.validityValue?normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit):parseStoredValidity(routerProfile);
-    if(!profileValidity.validity)return res.status(400).json({success:false,message:"The selected profile has no time-based calendar validity. Configure a minutes, hours, or days profile first."});
-    const validity=profileValidity.validity;
-    await ensureCalendarProfile(routerProfile.name,routerProfile,profileValidity);
-    const routerComment=hotspotExpiryComment(validity);
-    await mikrotikService.createHotspotUser({username,password,profile:routerProfile.name,server:matchedServer.name,validity,comment:routerComment});
-    try{
-      const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[routerProfile.name]);
-      const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||profileMeta.price||0);
-      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,cleanup_status,comment,phone,server,time_limit,data_limit,created_at) VALUES($1,$2,$3,$4,$5,'unused','pending',$6,$7,$8,$9,NULL,NOW())",
-        [username,password,routerProfile.name,validity,profilePrice,routerComment,username,server,validity]);
-    }catch(dbError){
-      try{await mikrotikService.removeHotspotUser(username);}catch(_){}
-      throw dbError;
-    }
-    return res.status(201).json({success:true,message:"Hotspot user provisioned successfully on MikroTik",user:{username,profile:routerProfile.name}});
+    const body=req.body&&typeof req.body==="object"?req.body:{};
+    const phone=normalizeHotspotPhone(body.phone||body.customer_phone||"");
+    const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
+    const server=clean(body.server||"all",100)||"all";
+    if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi phone number (01XXXXXXXXX)."});
+    if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",message:"Select a Hotspot package/profile."});
+    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);
+    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
+    if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
+    if(candidates.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:"The selected package/profile could not be mapped to exactly one saved Hotspot profile."});
+    const profileRow=candidates[0],profile=String(profileRow.name||"").trim(),profileMeta=meta[profile]||{};
+    const profileValidity=profileMeta.validityValue?normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit):parseStoredValidity(profileRow);
+    const validity=String(profileValidity.validity||"").trim(),quota=Number(profileMeta.limitBytesTotal||profileValidity.limitBytesTotal||0);
+    if(!validity&&!quota)return res.status(400).json({success:false,code:"PROFILE_INVALID",message:"Configure a time validity or data quota for this package before creating an account."});
+    const priceResult=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1",[profile]).catch(()=>({rows:[]}));
+    const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0),comment="FAZ|PENDING|PROFILE="+profile;
+    const saved=await db.withTransaction(async client=>{
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
+      const result=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
+      const rows=result.rows||[],macs=[...new Set(rows.map(row=>normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username)).filter(Boolean))];
+      if(macs.length>1)throw hotspotError("ACCOUNT_MAC_CONFLICT",409,"This phone has conflicting MAC bindings; an administrator must reconcile the account.");
+      const now=Date.now(),live=rows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","unused","active"].includes(status))return false;if(row.expires_at&&new Date(row.expires_at).getTime()<=now)return false;return true;});
+      if(live.length)return {conflict:true};
+      const knownMac=macs[0]||null,target=(knownMac?rows.find(row=>(normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username))===knownMac):null)||rows[0]||null;
+      const username=knownMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+phone),profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||requestedProfile);
+      const params=[username,phone,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,knownMac];
+      let stored;
+      if(target)stored=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status='pending_claim',comment=$6,phone=$7,server=$8,time_limit=$9,data_limit=$10,profile_id=$11,mac_address=$12,first_login_at=NULL,expires_at=NULL,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$13 RETURNING id,username,profile,profile_id,phone,status,mac_address",[...params,target.id]);
+      else stored=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,cleanup_status) VALUES($1,$2,$3,$4,$5,'pending_claim',$6,$7,$8,$9,$10,$11,$12,'not_required') RETURNING id,username,profile,profile_id,phone,status,mac_address",params);
+      if(!stored.rows?.length)throw new Error("Pending Hotspot account could not be saved.");
+      return {conflict:false,row:stored.rows[0]};
+    });
+    if(saved.conflict)return res.status(409).json({success:false,code:"ACTIVE_PACKAGE_EXISTS",message:"This phone already has a pending or active Hotspot package. Expired accounts can be assigned a new package."});
+    hotspotListCache.expiresAt=0;
+    return res.status(201).json({success:true,pending_activation:true,message:"Pending Hotspot account saved. The device MAC will bind on the customer's first captive-portal login.",user:{phone,profile:saved.row.profile,profile_id:saved.row.profile_id,status:saved.row.status,mac_address:saved.row.mac_address||null}});
   }catch(e){return errorResponse(res,e);}
 }
 async function dashboardMetrics(req,res){

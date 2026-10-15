@@ -31,12 +31,12 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
   const manual=updates.find(x=>x.name==="Manual-1h").onLogin;
-  assert.match(thirty,/get .*uid comment/); assert.match(thirty,/start-time=23:59:59/); assert.doesNotMatch(thirty,/interval=30d/);
-  assert.match(hour,/get .*uid comment/); assert.match(hour,/start-time=23:59:59/); assert.doesNotMatch(hour,/interval=1h/);
+  assert.match(thirty,/get .*uid comment/); assert.match(thirty,/start-time=\$expTime/); assert.doesNotMatch(thirty,/interval=30d/);
+  assert.match(hour,/get .*uid comment/); assert.match(hour,/start-time=\$expTime/); assert.doesNotMatch(hour,/interval=1h/);
   assert.doesNotMatch(thirty,/FAZ\\|PROFILE=|comment=/);
   assert.doesNotMatch(hour,/FAZ\\|EXP=|FIRST_LOGIN=|comment=/);
-  assert.match(custom,/get .*uid comment/); assert.match(custom,/start-time=23:59:59/); assert.doesNotMatch(custom,/interval=7d/);
-  assert.match(manual,/get .*uid comment/); assert.match(manual,/start-time=23:59:59/); assert.doesNotMatch(manual,/interval=1h/);
+  assert.match(custom,/get .*uid comment/); assert.match(custom,/start-time=\$expTime/); assert.doesNotMatch(custom,/interval=7d/);
+  assert.match(manual,/get .*uid comment/); assert.match(manual,/start-time=\$expTime/); assert.doesNotMatch(manual,/interval=1h/);
   assert.match(manual,/CUSTOM_PROFILE_HOOK/);
   assert.match(custom,/FAZ_CUSTOM_ON_LOGIN_HOOK_START/);
   assert.match(custom,/CUSTOM_PROFILE_HOOK/);
@@ -69,7 +69,7 @@ test("startup sync enforces auth settings on active Hotspot server profiles", as
   assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, unchanged: 0, ineligible: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 } });
 });
 
-test("RouterOS server-profile auth preserves MAC/PAP/CHAP using supported properties", async () => {
+test("RouterOS server-profile auth requires phone/password login and prevents MAC-only bypass", async () => {
   const originalWithConnection = mikrotikService._withConnection;
   const state = { ".id": "*1", name: "hsprof1", "login-by": "http-chap" };
   const calls = [];
@@ -87,10 +87,10 @@ test("RouterOS server-profile auth preserves MAC/PAP/CHAP using supported proper
   try {
     const result = await mikrotikService.ensureHotspotServerProfileAuth("hsprof1");
     assert.equal(result.updated, true);
-    assert.equal(result.loginBy, "mac,http-pap,http-chap");
+    assert.equal(result.loginBy, "http-pap,http-chap");
     const setCall = calls.find(call => call.command === "/ip/hotspot/profile/set");
     assert.ok(setCall);
-    assert.ok(setCall.params.includes("=login-by=mac,http-pap,http-chap"));
+    assert.ok(setCall.params.includes("=login-by=http-pap,http-chap"));
     assert.equal(setCall.params.some(param => param.startsWith("=mac-auth-mode=")), false);
     assert.equal(calls.filter(call => call.command === "/ip/hotspot/profile/print").length, 2);
   } finally {
