@@ -2108,6 +2108,7 @@
         </section>
         <div id="systemSmsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemSmsSaveBtn" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Notification Hub</button></div>
       </form>
+      <div class="modal fade" id="notificationTestLogModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="notificationTestLogTitle">Notification Test Response</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><pre id="notificationTestLogBody" class="small text-wrap mb-0" style="max-height:55vh;overflow:auto"></pre></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
     </div>
   </div>
 </div>
@@ -4466,7 +4467,71 @@ async function deletePlan(id,name){
         document.getElementById('setSmsMode')?.addEventListener('change',toggleSmsProviderFields);
         document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}}); 
         document.getElementById('systemBillingForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({billing_cycle_type:document.getElementById('setBillingCycle').value,grace_period_days:document.getElementById('setGraceDays').value,expiry_action:document.querySelector('input[name="setExpiryAction"]:checked')?.value||'quarantine'},'systemBillingSaveBtn','systemBillingResult');}catch(_){}}); 
-        document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{const payload={sms_provider_mode:document.getElementById('setSmsMode').value,sms_gateway_mode:document.getElementById('setSmsMode').value,sms_sender_id:document.getElementById('setSmsSender').value,sms_api_url:document.getElementById('setSmsApiUrl').value,sms_api_method:document.getElementById('setSmsApiMethod').value,sms_device_webhook_url:document.getElementById('setSmsDeviceUrl').value,sms_device_url:document.getElementById('setSmsDeviceUrl').value,sms_event_expiry_warning:document.getElementById('setSmsExpiryWarning').checked,sms_event_payment_receipt:document.getElementById('setSmsPaymentReceipt').checked,sms_event_line_expiry:document.getElementById('setSmsLineExpiry').checked,sms_template_expiry_warning:document.getElementById('setSmsTemplateExpiry').value,sms_template_payment_receipt:document.getElementById('setSmsTemplatePayment').value,sms_template_line_block:document.getElementById('setSmsTemplateLine').value};const key=document.getElementById('setSmsApiKey').value,token=document.getElementById('setSmsDeviceToken').value;if(key)payload.sms_api_key=key;if(token)payload.sms_device_token=token;await saveSystemSettings(payload,'systemSmsSaveBtn','systemSmsResult');document.getElementById('setSmsApiKey').value='';document.getElementById('setSmsDeviceToken').value='';}catch(_){}}); 
+        function collectNotificationPayload(){
+          const mode=document.getElementById('setSmsMode').value;
+          const payload={
+            sms_provider_mode:mode,sms_gateway_mode:mode,sms_provider_preset:document.getElementById('smsProviderPreset').value,
+            sms_sender_id:document.getElementById('setSmsSender').value,sms_api_url:document.getElementById('setSmsApiUrl').value,sms_api_method:document.getElementById('setSmsApiMethod').value,
+            sms_http_param_mapping:JSON.stringify(collectNotificationMapping('smsMappingRows')),
+            sms_device_webhook_url:document.getElementById('setSmsDeviceUrl').value,sms_device_url:document.getElementById('setSmsDeviceUrl').value,
+            sms_device_http_method:document.getElementById('smsDeviceMethod').value,sms_device_param_mapping:JSON.stringify(collectNotificationMapping('smsDeviceMappingRows')),
+            notification_channel_sms_enabled:document.getElementById('notifySmsEnabled').checked,
+            notification_channel_whatsapp_enabled:document.getElementById('notifyWhatsappEnabled').checked,
+            notification_channel_telegram_enabled:document.getElementById('notifyTelegramEnabled').checked,
+            notification_channel_messenger_enabled:document.getElementById('notifyMessengerEnabled').checked,
+            telegram_default_chat_id:document.getElementById('telegramChatId').value,messenger_page_id:document.getElementById('messengerPageId').value
+          };
+          document.querySelectorAll('.notify-rule').forEach(el=>{payload['notification_rule_'+el.dataset.type+'_'+el.dataset.event+'_'+el.dataset.channel+'_enabled']=el.checked;});
+          const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,telegramToken=document.getElementById('telegramBotToken').value,messengerToken=document.getElementById('messengerPageToken').value;
+          if(apiKey)payload.sms_api_key=apiKey;if(deviceToken)payload.sms_device_token=deviceToken;if(telegramToken)payload.telegram_bot_token=telegramToken;if(messengerToken)payload.messenger_page_access_token=messengerToken;
+          return payload;
+        }
+        async function saveNotificationHub(){
+          await saveSystemSettings(collectNotificationPayload(),'systemSmsSaveBtn','systemSmsResult');
+          ['setSmsApiKey','setSmsDeviceToken','telegramBotToken','messengerPageToken'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+        }
+        async function showNotificationTestLog(title,data){
+          const modal=document.getElementById('notificationTestLogModal'),heading=document.getElementById('notificationTestLogTitle'),pre=document.getElementById('notificationTestLogBody');
+          if(!modal||!heading||!pre){window.alert(title+'\n'+JSON.stringify(data,null,2));return;}
+          heading.textContent=title;pre.textContent=JSON.stringify(data,null,2);
+          if(window.bootstrap?.Modal)window.bootstrap.Modal.getOrCreateInstance(modal).show();else window.alert(title+'\n'+pre.textContent);
+        }
+        async function runNotificationTest(channel,extra={}){
+          const button=channel==='sms'?document.getElementById('notifySmsTestBtn'):channel==='telegram'?document.getElementById('telegramTestBtn'):document.getElementById('messengerTestBtn');
+          const resultEl=document.getElementById(channel==='telegram'?'telegramTestResult':channel==='messenger'?'messengerTestResult':'systemSmsResult');
+          if(button)button.disabled=true;
+          try{
+            await saveNotificationHub();
+            const to=channel==='sms'?document.getElementById('notifySmsTestTo').value:channel==='whatsapp'?document.getElementById('notifySmsTestTo').value:'';
+            const message=channel==='sms'?document.getElementById('notifySmsTestMessage').value:'FAZ NETWORK test notification';
+            const response=await fetch('/api/settings/notifications/test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({channel,to,message,...extra}),cache:'no-store'});
+            const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||data.error||'Test notification failed.');
+            if(resultEl)resultEl.textContent='Test request completed.';await showNotificationTestLog(channel.toUpperCase()+' test response',data);
+          }catch(error){if(resultEl)resultEl.textContent=error.message||'Test notification failed.';await showNotificationTestLog(channel.toUpperCase()+' test error',{success:false,error:error.message||String(error)});}
+          finally{if(button)button.disabled=false;}
+        }
+        async function refreshWhatsAppStatus(){
+          const pill=document.getElementById('whatsappStatusPill'),wrap=document.getElementById('whatsappQrWrap'),message=document.getElementById('whatsappStatusMessage');
+          try{
+            const response=await fetch('/api/settings/notifications/whatsapp/status',{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to read WhatsApp status.');
+            const s=data.status||{};if(pill){pill.textContent=s.connected?'Connected':(s.connection||'Disconnected');pill.className='badge '+(s.connected?'text-bg-success':s.connection==='error'?'text-bg-danger':'text-bg-secondary');}
+            if(wrap){wrap.replaceChildren();if(s.qrDataUrl){const img=document.createElement('img');img.src=s.qrDataUrl;img.alt='Scan this QR code with WhatsApp Linked Devices';img.width=280;img.height=280;img.className='img-fluid';wrap.append(img);const p=document.createElement('p');p.className='small text-muted mt-2 mb-0';p.textContent='WhatsApp → Linked devices → Link a device';wrap.append(p);}else{const p=document.createElement('p');p.className='small text-muted mb-0';p.textContent=s.connected?'WhatsApp device is linked and ready.':s.lastError||'No QR code available yet. Press Connect / Reconnect.';wrap.append(p);}}
+            if(message)message.textContent=s.lastError||'';
+          }catch(error){if(message)message.textContent=error.message||'WhatsApp status unavailable.';}
+        }
+        document.querySelectorAll('[data-notify-tab]').forEach(button=>button.addEventListener('click',()=>setNotificationTab(button.dataset.notifyTab)));
+        document.getElementById('setSmsMode')?.addEventListener('change',toggleSmsProviderFields);
+        document.getElementById('smsProviderPreset')?.addEventListener('change',()=>{const p=document.getElementById('smsProviderPreset').value;const url=document.getElementById('setSmsApiUrl');if(p==='greenweb'&&url&&!url.value)url.value='https://api.greenweb.com.bd/api.php';const mapping=p==='greenweb'?{token:'{token}',to:'{to}',message:'{message}',senderid:'{sender_id}'}:p==='alpha_sms'?{api_key:'{token}',to:'{to}',message:'{message}',sender_id:'{sender_id}'}:p==='elitbuzz'?{api_key:'{token}',to:'{to}',message:'{message}',sender_id:'{sender_id}'}:{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'};renderNotificationMapping('smsMappingRows',mapping);});
+        document.getElementById('smsMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsMappingRows'));
+        document.getElementById('smsDeviceMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsDeviceMappingRows'));
+        document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
+        document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
+        document.getElementById('telegramTestBtn')?.addEventListener('click',()=>runNotificationTest('telegram'));
+        document.getElementById('messengerTestBtn')?.addEventListener('click',()=>runNotificationTest('messenger',{messengerRecipientId:document.getElementById('messengerTestRecipient').value}));
+        document.getElementById('whatsappConnectBtn')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/connect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'WhatsApp connection failed.');await refreshWhatsAppStatus();}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'WhatsApp connection failed.';}finally{b.disabled=false;}});
+        document.getElementById('whatsappStatusBtn')?.addEventListener('click',refreshWhatsAppStatus);
+        document.getElementById('whatsappUnlinkBtn')?.addEventListener('click',async e=>{if(!window.confirm('Unlink WhatsApp and remove the saved local session?'))return;const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/unlink',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Unable to unlink WhatsApp.');await refreshWhatsAppStatus();}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'Unlink failed.';}finally{b.disabled=false;}});
+ 
 
         let hotspotWebhookSettingsLoaded=false;
         function renderWebhookEndpointDisplay(){
