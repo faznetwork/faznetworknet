@@ -4394,16 +4394,74 @@ async function deletePlan(id,name){
 
 
         let systemSettingsLoaded=false,systemSettingsCache={};
-        function toggleSmsProviderFields(){const mode=document.getElementById('setSmsMode')?.value||'disabled';const bulk=document.getElementById('setSmsBulkFields'),device=document.getElementById('setSmsDeviceFields'),disabled=document.getElementById('setSmsDisabledNote');if(bulk)bulk.style.display=mode==='bulk_sms'?'block':'none';if(device)device.style.display=mode==='personal_device'?'block':'none';if(disabled)disabled.style.display=mode==='disabled'?'block':'none';}
-        async function loadSystemSettings(force=false){if(systemSettingsLoaded&&!force)return;try{const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
-          const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:s.sms_provider_mode||s.sms_gateway_mode||'disabled',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:s.sms_api_method||'POST',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,setSmsTemplateExpiry:s.sms_template_expiry_warning,setSmsTemplatePayment:s.sms_template_payment_receipt,setSmsTemplateLine:s.sms_template_line_block};
-          for(const [id,value] of Object.entries(values)){const el=document.getElementById(id);if(el)el.value=value||'';}
-          document.getElementById('setExpiryQuarantine').checked=(s.expiry_action||'quarantine')==='quarantine';document.getElementById('setExpiryDisable').checked=s.expiry_action==='disable_secret';
-          document.getElementById('setSmsExpiryWarning').checked=String(s.sms_event_expiry_warning??'true')==='true';document.getElementById('setSmsPaymentReceipt').checked=String(s.sms_event_payment_receipt??'true')==='true';document.getElementById('setSmsLineExpiry').checked=String(s.sms_event_line_expiry??'true')==='true';
-          document.getElementById('setSmsApiKey').value='';document.getElementById('setSmsDeviceToken').value='';
-          document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Device token saved. Leave blank to retain it.':'No device token configured.';
-          toggleSmsProviderFields();systemSettingsLoaded=true;
-        }catch(e){generalSettingsResult('systemBrandResult',e.message||'Unable to load system settings.',false);}}
+        let notificationHubTab='sms';
+        const notificationEvents=[['payment','Payment'],['recharge','Recharge'],['renewal','Renewal'],['welcome','Welcome'],['expiry_warning','Expiring in 2 days'],['expired','Expired / Disconnection']];
+        const notificationTypes=[['hotspot','Hotspot'],['pppoe','PPPoE']];
+        const notificationChannels=[['sms','SMS'],['whatsapp','WhatsApp'],['telegram','Telegram'],['messenger','Messenger']];
+        function parseNotificationMapping(raw,fallback){try{const value=typeof raw==='string'?JSON.parse(raw||'{}'):raw;return value&&typeof value==='object'&&!Array.isArray(value)?value:{...fallback};}catch(_){return {...fallback};}}
+        function renderNotificationMapping(containerId,mapping){
+          const root=document.getElementById(containerId);if(!root)return;root.replaceChildren();
+          const entries=Object.entries(mapping&&typeof mapping==='object'?mapping:{});
+          for(const [key,value] of entries.length?entries:[['to','{to}'],['message','{message}']]){
+            const row=document.createElement('div');row.className='row g-2 align-items-center';
+            const keyCol=document.createElement('div');keyCol.className='col-5 col-md-4';
+            const keyInput=document.createElement('input');keyInput.className='form-control form-control-sm notify-map-key';keyInput.maxLength=100;keyInput.placeholder='Provider key';keyInput.value=key;keyInput.setAttribute('aria-label','Provider parameter key');
+            const valCol=document.createElement('div');valCol.className='col';
+            const valInput=document.createElement('input');valInput.className='form-control form-control-sm notify-map-value';valInput.maxLength=500;valInput.placeholder='{to} / {message} / {token}';valInput.value=String(value??'');valInput.setAttribute('aria-label','Mapped value');
+            const delCol=document.createElement('div');delCol.className='col-auto';const del=document.createElement('button');del.type='button';del.className='btn btn-sm btn-outline-danger';del.textContent='×';del.title='Remove parameter';del.addEventListener('click',()=>row.remove());
+            keyCol.append(keyInput);valCol.append(valInput);delCol.append(del);row.append(keyCol,valCol,delCol);root.append(row);
+          }
+        }
+        function collectNotificationMapping(containerId){
+          const root=document.getElementById(containerId),mapping={};if(!root)return mapping;
+          root.querySelectorAll('.row').forEach(row=>{const key=String(row.querySelector('.notify-map-key')?.value||'').trim(),value=String(row.querySelector('.notify-map-value')?.value??'');if(key)mapping[key]=value;});
+          return mapping;
+        }
+        function addNotificationMapping(containerId){const root=document.getElementById(containerId);if(!root)return;const current=collectNotificationMapping(containerId);current['param_'+(Object.keys(current).length+1)]='';renderNotificationMapping(containerId,current);}
+        function renderNotificationRules(settings={}){
+          const body=document.getElementById('notificationRulesBody');if(!body)return;body.replaceChildren();
+          for(const [type,typeLabel] of notificationTypes)for(const [event,eventLabel] of notificationEvents){
+            const tr=document.createElement('tr');const tdType=document.createElement('td');tdType.textContent=typeLabel;const tdEvent=document.createElement('td');tdEvent.textContent=eventLabel;tr.append(tdType,tdEvent);
+            for(const [channel,label] of notificationChannels){const td=document.createElement('td');td.className='text-center';const input=document.createElement('input');input.type='checkbox';input.className='form-check-input notify-rule';input.dataset.type=type;input.dataset.event=event;input.dataset.channel=channel;input.setAttribute('aria-label',typeLabel+' '+eventLabel+' '+label);const key='notification_rule_'+type+'_'+event+'_'+channel+'_enabled';input.checked=String(settings[key]??((type==='pppoe'&&channel==='sms'&&['payment','expiry_warning','expired','renewal'].includes(event))||(type==='hotspot'&&channel==='sms'&&['payment','recharge','renewal','welcome'].includes(event))))==='true';td.append(input);tr.append(td);}
+            body.append(tr);
+          }
+        }
+        function toggleSmsProviderFields(){
+          let mode=document.getElementById('setSmsMode')?.value||'disabled';
+          if(mode==='bulk_sms')mode='custom_http';
+          const preset=document.getElementById('smsPresetWrap'),http=document.getElementById('smsHttpFields'),android=document.getElementById('smsAndroidFields'),note=document.getElementById('smsModeNote');
+          if(preset)preset.style.display=mode==='provider_preset'?'block':'none';
+          if(http)http.style.display=['provider_preset','custom_http'].includes(mode)?'block':'none';
+          if(android)android.style.display=mode==='personal_device'?'block':'none';
+          if(note){note.textContent=mode==='disabled'?'SMS delivery is disabled. No outbound SMS will be sent.':mode==='personal_device'?'SMS will be sent through your Android phone gateway and physical SIM.':'Provider-specific fields and parameter mapping are used to build the outbound HTTP request.';}
+        }
+        function setNotificationTab(tab){
+          notificationHubTab=tab;
+          document.querySelectorAll('[data-notify-tab]').forEach(button=>button.classList.toggle('active',button.dataset.notifyTab===tab));
+          document.querySelectorAll('[data-notify-panel]').forEach(panel=>panel.style.display=panel.dataset.notifyPanel===tab?'block':'none');
+          if(tab==='whatsapp')refreshWhatsAppStatus();
+        }
+        async function loadSystemSettings(force=false){
+          if(systemSettingsLoaded&&!force)return;
+          try{
+            const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
+            const mode=['bulk_sms'].includes(s.sms_provider_mode||s.sms_gateway_mode)?'custom_http':(s.sms_provider_mode||s.sms_gateway_mode||'disabled');
+            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',telegramChatId:s.telegram_default_chat_id,messengerPageId:s.messenger_page_id};
+            for(const [id,value] of Object.entries(values)){const el=document.getElementById(id);if(el)el.value=value||'';}
+            const checkValues={notifySmsEnabled:s.notification_channel_sms_enabled??'true',notifyWhatsappEnabled:s.notification_channel_whatsapp_enabled??'false',notifyTelegramEnabled:s.notification_channel_telegram_enabled??'false',notifyMessengerEnabled:s.notification_channel_messenger_enabled??'false'};
+            for(const [id,value] of Object.entries(checkValues)){const el=document.getElementById(id);if(el)el.checked=String(value)==='true';}
+            for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['telegramBotToken','telegram_bot_token'],['messengerPageToken','messenger_page_access_token']]){const el=document.getElementById(id);if(el)el.value='';}
+            document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';
+            document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Gateway token saved. Leave blank to retain it.':'No gateway token configured.';
+            document.getElementById('telegramTokenHint').textContent=s.telegram_bot_token_configured?'Bot token saved. Leave blank to retain it.':'No bot token configured.';
+            document.getElementById('messengerTokenHint').textContent=s.messenger_page_access_token_configured?'Page token saved. Leave blank to retain it.':'No page token configured.';
+            renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
+            renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
+            renderNotificationRules(s);
+            document.getElementById('setExpiryQuarantine').checked=(s.expiry_action||'quarantine')==='quarantine';document.getElementById('setExpiryDisable').checked=s.expiry_action==='disable_secret';
+            toggleSmsProviderFields();systemSettingsLoaded=true;
+          }catch(e){generalSettingsResult('systemBrandResult',e.message||'Unable to load system settings.',false);}
+        }
         async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
         document.getElementById('setSmsMode')?.addEventListener('change',toggleSmsProviderFields);
         document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}}); 
