@@ -645,7 +645,7 @@ class MikroTikService {
     return this._withConnection("active PPPoE session query", async (connection) => {
       const rows = await connection.write("/ppp/active/print");
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
-    }, undefined, 3500);
+    });
   }
 
   async getActiveSessionsSafe() {
@@ -657,7 +657,21 @@ class MikroTikService {
       return { sessions: [], live_sync: "timeout", checkedAt: new Date().toISOString() };
     }
     try {
-      const sessions = await this.getActiveSessions();
+      // Keep the tighter deadline scoped to Customer 360; existing callers of
+      // getActiveSessions() retain their original timeout behavior.
+      const sessions = await this._withConnection("Customer 360 active PPPoE session query", async (connection) => {
+        const rows = await connection.write("/ppp/active/print");
+        return (Array.isArray(rows) ? rows : [])
+          .filter((item) => this._str(item.service).toLowerCase() === "pppoe")
+          .map((item) => ({
+            id: this._str(item[".id"]), username: this._str(item.name),
+            service: this._str(item.service), address: this._str(item.address),
+            uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
+            bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
+            encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
+            radius: this._str(item.radius), raw: item
+          })).filter((item) => item.username);
+      }, undefined, 3500);
       this._activeSessionsCache = sessions;
       this._activeSessionsCacheAt = Date.now();
       this._activeSessionsCacheUntil = Date.now() + 4000;
