@@ -28,3 +28,19 @@ test("dynamic provider mapping accepts object or JSON and safely falls back",()=
  assert.deepEqual(parseMapping('{"receiver":"{to}","msg":"{message}"}'),{receiver:"{to}",msg:"{message}"});
  assert.deepEqual(parseMapping("not-json",{to:"{to}"}),{to:"{to}"});
 });
+
+test("universal SMS engine sends provider-defined x-www-form-urlencoded fields",async()=>{
+ const {sendSms}=require("../services/smsService");
+ const oldFetch=global.fetch;let captured;
+ global.fetch=async(url,options)=>{captured={url:String(url),options};return new Response(JSON.stringify({error:0,msg:"accepted"}),{status:200,headers:{"content-type":"application/json"}});};
+ try{
+  const result=await sendSms({to:"01712345678",message:"Hello Rahim",settings:{sms_provider_mode:"custom_http",sms_api_url:"https://provider.example/send",sms_api_method:"POST_FORM",sms_http_param_mapping:JSON.stringify({receiver:"{to}",msg:"{message}",api_key:"{token}"}),sms_api_key:"test-secret",sms_sender_id:"FAZ"}});
+  assert.equal(result.success,true);
+  assert.equal(captured.options.method,"POST");
+  assert.equal(captured.options.headers["Content-Type"],"application/x-www-form-urlencoded;charset=UTF-8");
+  const params=new URLSearchParams(String(captured.options.body));
+  assert.equal(params.get("receiver"),"01712345678");
+  assert.equal(params.get("msg"),"Hello Rahim");
+  assert.equal(params.get("api_key"),"test-secret");
+ }finally{global.fetch=oldFetch;}
+});
