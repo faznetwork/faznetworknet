@@ -69,7 +69,7 @@ test("startup sync enforces auth settings on active Hotspot server profiles", as
   assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, unchanged: 0, ineligible: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 } });
 });
 
-test("RouterOS server-profile auth preserves MAC/PAP/CHAP using supported properties", async () => {
+test("RouterOS server-profile auth requires phone/password login and prevents MAC-only bypass", async () => {
   const originalWithConnection = mikrotikService._withConnection;
   const state = { ".id": "*1", name: "hsprof1", "login-by": "http-chap" };
   const calls = [];
@@ -87,10 +87,10 @@ test("RouterOS server-profile auth preserves MAC/PAP/CHAP using supported proper
   try {
     const result = await mikrotikService.ensureHotspotServerProfileAuth("hsprof1");
     assert.equal(result.updated, true);
-    assert.equal(result.loginBy, "mac,http-pap,http-chap");
+    assert.equal(result.loginBy, "http-pap,http-chap");
     const setCall = calls.find(call => call.command === "/ip/hotspot/profile/set");
     assert.ok(setCall);
-    assert.ok(setCall.params.includes("=login-by=mac,http-pap,http-chap"));
+    assert.ok(setCall.params.includes("=login-by=http-pap,http-chap"));
     assert.equal(setCall.params.some(param => param.startsWith("=mac-auth-mode=")), false);
     assert.equal(calls.filter(call => call.command === "/ip/hotspot/profile/print").length, 2);
   } finally {
