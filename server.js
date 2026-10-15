@@ -40,6 +40,7 @@ app.get("/api/settings/public",settingsController.publicSettings);
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
 app.get("/api/dashboard/stats",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.stats);
+app.get("/api/dashboard/hotspot-overview",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.hotspotOverview);
 app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
 app.get("/login",(req,res)=>{
   if(isAdminAuthenticated(req)) return res.redirect("/admin");
