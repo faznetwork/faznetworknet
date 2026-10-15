@@ -2998,20 +2998,153 @@
         async function removeHotspotUser(username,event){if(event)event.stopPropagation();if(!confirm('Delete user '+username+' from MikroTik and Database?'))return;try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message||'Could not delete Hotspot user.');}}
         async function loadHotspotProfiles(titleKey) {
             purgeStuckBackdrops();
-            currentHotspotMode='profiles'; currentHotspotTitleKey=titleKey||'hotspot_profile'; setHotspotTitle(currentHotspotTitleKey);
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div><div class="small text-muted mt-2">Loading Hotspot profiles…</div></div></div></section>');
+            currentHotspotMode = 'profiles';
+            currentHotspotTitleKey = titleKey || 'hotspot_profile';
+            setHotspotTitle(currentHotspotTitleKey);
+
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card border-0 shadow-sm"><div class="card-body text-center py-5"><div class="spinner-border text-success" role="status" aria-label="Loading"></div><div class="small text-muted mt-2">Loading Hotspot profiles…</div></div></div></section>');
+
             try {
-                const data=await jsonFetch('/api/hotspot/profiles');
-                currentHotspotProfiles=Array.isArray(data.profiles)?data.profiles:[];
-                const rows=currentHotspotProfiles.map(function(p){
-                    const price=Number(p.price||0);
-                    return '<tr><td><div class="d-flex align-items-center gap-2"><span class="hotspot-profile-avatar"><i class="bi bi-wifi"></i></span><div><div class="fw-semibold">'+escapeHtml(p.name)+'</div><div class="small text-muted">MikroTik user profile</div></div></div></td><td><span class="badge bg-primary-subtle text-primary border">'+escapeHtml(p.rateLimit||'Not set')+'</span></td><td><strong class="text-success">৳ '+price.toFixed(2)+'</strong></td><td><span class="badge bg-light text-dark border">'+escapeHtml(p.validityLabel||p.sessionTimeout||'Not set')+'</span></td><td>'+escapeHtml(p.sharedUsers||'1')+'</td><td class="text-end"><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" data-profile-name="'+escapeHtml(p.name)+'" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square me-1"></i>Edit</button><button class="btn btn-outline-danger" data-profile-name="'+escapeHtml(p.name)+'" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3 me-1"></i>Delete</button></div></td></tr>';
+                const data = await jsonFetch('/api/hotspot/profiles');
+                currentHotspotProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+
+                const profileDetails = currentHotspotProfiles.map(function (p) {
+                    const name = String(p.name || '');
+                    const price = Number(p.price || 0);
+                    const rateLimit = p.rateLimit || p['rate-limit'] || 'Not set';
+                    const validity = p.validityLabel || p.sessionTimeout || p['session-timeout'] || 'Not set';
+                    const sharedUsers = p.sharedUsers || p['shared-users'] || '1';
+                    const safeName = escapeHtml(name);
+                    const safeRate = escapeHtml(rateLimit);
+                    const safeValidity = escapeHtml(validity);
+                    const safeShared = escapeHtml(sharedUsers);
+                    const safePrice = Number.isFinite(price) ? price.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+
+                    return {
+                        name: name,
+                        safeName: safeName,
+                        rateLimit: safeRate,
+                        validity: safeValidity,
+                        sharedUsers: safeShared,
+                        price: safePrice
+                    };
+                });
+
+                const cards = profileDetails.map(function (p) {
+                    return '<article class="hp-profile-card">' +
+                        '<div class="hp-profile-card-top">' +
+                            '<div class="hp-profile-identity">' +
+                                '<span class="hp-profile-icon" aria-hidden="true"><i class="bi bi-wifi"></i></span>' +
+                                '<div class="hp-profile-title-wrap"><h3 class="hp-profile-name">' + p.safeName + '</h3><p class="hp-profile-subtitle">MikroTik Hotspot profile</p></div>' +
+                            '</div>' +
+                            '<span class="hp-rate-badge">' + p.rateLimit + '</span>' +
+                        '</div>' +
+                        '<div class="hp-profile-metrics">' +
+                            '<div class="hp-profile-metric hp-profile-price"><span class="hp-metric-label">Price</span><strong>৳ ' + p.price + '</strong></div>' +
+                            '<div class="hp-profile-metric"><span class="hp-metric-label">Validity / Quota</span><strong>' + p.validity + '</strong></div>' +
+                        '</div>' +
+                        '<div class="hp-profile-card-meta"><span><i class="bi bi-people me-1" aria-hidden="true"></i>Shared users</span><strong>' + p.sharedUsers + '</strong></div>' +
+                        '<div class="hp-profile-card-actions">' +
+                            '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square" aria-hidden="true"></i><span>Edit</span></button>' +
+                            '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span></button>' +
+                        '</div>' +
+                    '</article>';
                 }).join('');
-                const body=rows||'<tr><td colspan="6" class="text-center py-5 text-muted"><i class="bi bi-wifi fs-2 d-block mb-2"></i>No Hotspot profiles found.</td></tr>';
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-md-row align-items-md-center gap-3"><div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">Hotspot Profiles</h5><span class="badge rounded-pill bg-success">'+currentHotspotProfiles.length+'</span></div><div class="small text-muted mt-1">Live RouterOS profiles, package prices and validity</div></div><div class="d-flex flex-wrap gap-2 ms-md-auto"><button type="button" class="btn btn-outline-success" onclick="syncHotspotProfiles(this)"><i class="bi bi-arrow-repeat me-1"></i>Sync All Profiles</button><button type="button" class="btn btn-theme" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Profile</button></div></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-profile-table"><thead class="table-light"><tr><th>Profile Name</th><th>Rate Limit (Rx/Tx)</th><th>Price (BDT)</th><th>Validity / Quota</th><th>Shared Users</th><th class="text-end">Actions</th></tr></thead><tbody>'+body+'</tbody></table></div></div></section>');
-                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
-            } catch(error) {
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message||'Unable to load profiles')+'</div></section>');
+
+                const tableRows = profileDetails.map(function (p) {
+                    return '<tr>' +
+                        '<td><div class="hp-table-profile"><span class="hp-profile-icon hp-profile-icon-sm" aria-hidden="true"><i class="bi bi-wifi"></i></span><div><div class="hp-table-profile-name">' + p.safeName + '</div><div class="hp-table-profile-subtitle">MikroTik Hotspot profile</div></div></div></td>' +
+                        '<td><span class="hp-rate-badge">' + p.rateLimit + '</span></td>' +
+                        '<td><strong class="hp-table-price">৳ ' + p.price + '</strong></td>' +
+                        '<td><span class="hp-validity-badge">' + p.validity + '</span></td>' +
+                        '<td><span class="hp-shared-users">' + p.sharedUsers + '</span></td>' +
+                        '<td class="hp-table-actions"><div class="hp-table-action-group">' +
+                            '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)" aria-label="Edit ' + p.safeName + '" title="Edit profile"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>' +
+                            '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)" aria-label="Delete ' + p.safeName + '" title="Delete profile"><i class="bi bi-trash3" aria-hidden="true"></i></button>' +
+                        '</div></td>' +
+                    '</tr>';
+                }).join('');
+
+                const empty = '<div class="hp-profile-empty"><span class="hp-profile-empty-icon"><i class="bi bi-wifi"></i></span><strong>No Hotspot profiles found</strong><span>Create a profile to set its speed, price, and validity.</span><button type="button" class="btn btn-success mt-2" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Profile</button></div>';
+
+                appendHotspotView(
+                    '<section class="hotspot-dynamic-view admin-view hp-profiles-view">' +
+                        '<style>' +
+                            '.hp-profiles-view{width:100%;max-width:100%;min-width:0;color:#0f172a;overflow-x:clip}' +
+                            '.hp-profiles-view *{box-sizing:border-box;min-width:0}' +
+                            '.hp-profiles-shell{width:100%;max-width:1500px;margin:0 auto}' +
+                            '.hp-profiles-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}' +
+                            '.hp-profiles-heading{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0;font-size:1.35rem;font-weight:800;letter-spacing:-.025em;color:#0f172a}' +
+                            '.hp-profiles-count{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:27px;padding:0 .55rem;border:1px solid #a7f3d0;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.8rem;font-weight:800}' +
+                            '.hp-profiles-subtitle{margin:.35rem 0 0;color:#64748b;font-size:.85rem;line-height:1.5}' +
+                            '.hp-profiles-actions{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}' +
+                            '.hp-profiles-actions .btn{min-height:42px;border-radius:10px;font-weight:750}' +
+                            '.hp-profiles-surface{overflow:hidden;border:1px solid #e2e8f0;border-radius:16px;background:#fff;box-shadow:0 4px 20px rgba(15,23,42,.045)}' +
+                            '.hp-profiles-surface-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid #e2e8f0;background:#fff}' +
+                            '.hp-profiles-surface-title{margin:0;font-size:.9rem;font-weight:800;color:#334155}' +
+                            '.hp-profiles-surface-note{color:#64748b;font-size:.78rem}' +
+                            '.hp-profile-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:.85rem}' +
+                            '.hp-profile-card{min-width:0;padding:1rem;border:1px solid #e2e8f0;border-radius:15px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.035);transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}' +
+                            '.hp-profile-card:active{transform:translateY(1px)}' +
+                            '.hp-profile-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.65rem;flex-wrap:wrap}' +
+                            '.hp-profile-identity,.hp-table-profile{display:flex;align-items:center;gap:.7rem;min-width:0}' +
+                            '.hp-profile-icon{display:inline-flex;align-items:center;justify-content:center;width:43px;height:43px;flex:0 0 43px;border:1px solid #a7f3d0;border-radius:13px;background:#ecfdf5;color:#047857;font-size:1.2rem}' +
+                            '.hp-profile-icon-sm{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:1rem}' +
+                            '.hp-profile-title-wrap{min-width:0}' +
+                            '.hp-profile-name{margin:0;color:#0f172a;font-size:1rem;font-weight:800;line-height:1.35;overflow-wrap:anywhere}' +
+                            '.hp-profile-subtitle,.hp-table-profile-subtitle{margin:.2rem 0 0;color:#64748b;font-size:.75rem;line-height:1.4}' +
+                            '.hp-rate-badge{display:inline-flex;align-items:center;max-width:100%;padding:.35rem .6rem;border:1px solid #a7f3d0;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.75rem;font-weight:800;overflow-wrap:anywhere}' +
+                            '.hp-profile-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin-top:1rem}' +
+                            '.hp-profile-metric{display:flex;flex-direction:column;justify-content:center;gap:.35rem;min-width:0;padding:.8rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}' +
+                            '.hp-profile-price{border-color:#bbf7d0;background:#f0fdf4}' +
+                            '.hp-metric-label{color:#64748b;font-size:.73rem;font-weight:650}' +
+                            '.hp-profile-metric strong{color:#1e293b;font-size:.95rem;font-weight:850;line-height:1.4;overflow-wrap:anywhere}' +
+                            '.hp-profile-price strong{color:#047857;font-size:1.15rem}' +
+                            '.hp-profile-card-meta{display:flex;align-items:center;justify-content:space-between;gap:.7rem;padding:.75rem 0;border-bottom:1px solid #edf2f7;color:#64748b;font-size:.8rem}' +
+                            '.hp-profile-card-meta strong{color:#334155;font-weight:800}' +
+                            '.hp-profile-card-actions{display:flex;justify-content:flex-end;gap:.55rem;padding-top:.85rem}' +
+                            '.hp-action-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-width:39px;min-height:38px;padding:.45rem .75rem;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#334155;font-size:.8rem;font-weight:750;line-height:1.1;white-space:nowrap;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease}' +
+                            '.hp-action-edit{border-color:#a7f3d0;background:#f0fdf4;color:#047857}' +
+                            '.hp-action-edit:hover{border-color:#6ee7b7;background:#d1fae5;color:#065f46}' +
+                            '.hp-action-delete{border-color:#fecaca;background:#fff;color:#b91c1c}' +
+                            '.hp-action-delete:hover{border-color:#fca5a5;background:#fef2f2;color:#991b1b}' +
+                            '.hp-profile-table-wrap{display:none;width:100%;overflow:visible}' +
+                            '.hp-profile-table{width:100%;margin:0;border-collapse:separate;border-spacing:0;table-layout:auto}' +
+                            '.hp-profile-table thead th{padding:.95rem 1rem;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:.72rem;font-weight:800;letter-spacing:.045em;text-transform:uppercase;white-space:nowrap}' +
+                            '.hp-profile-table tbody td{padding:.9rem 1rem;border-bottom:1px solid #edf2f7;background:#fff;color:#334155;font-size:.84rem;vertical-align:middle}' +
+                            '.hp-profile-table tbody tr:last-child td{border-bottom:0}' +
+                            '.hp-profile-table tbody tr{transition:background .15s ease}' +
+                            '.hp-profile-table tbody tr:hover td{background:#f8fafc}' +
+                            '.hp-table-profile-name{color:#0f172a;font-size:.86rem;font-weight:800;overflow-wrap:anywhere}' +
+                            '.hp-table-price{color:#047857;font-size:.95rem;font-weight:850;white-space:nowrap}' +
+                            '.hp-validity-badge{display:inline-flex;max-width:200px;padding:.35rem .6rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;font-size:.77rem;font-weight:700;overflow-wrap:anywhere}' +
+                            '.hp-shared-users{display:inline-flex;align-items:center;justify-content:center;min-width:32px;padding:.3rem .5rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;font-weight:750}' +
+                            '.hp-table-actions{text-align:right;white-space:nowrap;width:1%}' +
+                            '.hp-table-action-group{display:flex;align-items:center;justify-content:flex-end;gap:.4rem}' +
+                            '.hp-table-action-group .hp-action-btn{width:36px;height:36px;min-width:36px;padding:0}' +
+                            '.hp-profile-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;padding:2.5rem 1rem;text-align:center;color:#64748b;font-size:.85rem}' +
+                            '.hp-profile-empty strong{color:#334155;font-size:.95rem}' +
+                            '.hp-profile-empty-icon{display:flex;align-items:center;justify-content:center;width:54px;height:54px;margin-bottom:.3rem;border:1px solid #a7f3d0;border-radius:16px;background:#ecfdf5;color:#047857;font-size:1.5rem}' +
+                            '@media(min-width:576px){.hp-profile-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.hp-profile-card{padding:1.1rem}}' +
+                            '@media(min-width:768px){.hp-profile-cards{display:none}.hp-profile-table-wrap{display:block}.hp-profiles-surface-head{padding:1.05rem 1.25rem}.hp-profile-table thead th:first-child,.hp-profile-table tbody td:first-child{padding-left:1.25rem}.hp-profile-table thead th:last-child,.hp-profile-table tbody td:last-child{padding-right:1.25rem}}' +
+                            '@media(max-width:575.98px){.hp-profiles-header{align-items:stretch;flex-direction:column}.hp-profiles-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}.hp-profiles-actions .btn{width:100%}.hp-profile-card{padding:.9rem}.hp-profile-card-top{gap:.6rem}.hp-profile-metric{padding:.7rem}.hp-profile-name{font-size:.95rem}}' +
+                            '@media(prefers-reduced-motion:reduce){.hp-profile-card,.hp-profile-table tbody tr,.hp-action-btn{transition:none}}' +
+                        '</style>' +
+                        '<div class="hp-profiles-shell">' +
+                            '<header class="hp-profiles-header">' +
+                                '<div><h2 class="hp-profiles-heading"><i class="bi bi-wifi text-success" aria-hidden="true"></i>Hotspot Profiles <span class="hp-profiles-count">' + profileDetails.length + '</span></h2><p class="hp-profiles-subtitle">Manage package speeds, prices, and validity for MikroTik Hotspot.</p></div>' +
+                                '<div class="hp-profiles-actions"><button type="button" class="btn btn-outline-success" onclick="syncHotspotProfiles(this)"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Sync All Profiles</button><button type="button" class="btn btn-success" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create Profile</button></div>' +
+                            '</header>' +
+                            '<div class="hp-profiles-surface">' +
+                                '<div class="hp-profiles-surface-head"><h3 class="hp-profiles-surface-title">Profile inventory</h3><span class="hp-profiles-surface-note">' + profileDetails.length + ' profile' + (profileDetails.length === 1 ? '' : 's') + '</span></div>' +
+                                (profileDetails.length ? '<div class="hp-profile-cards">' + cards + '</div><div class="hp-profile-table-wrap"><table class="hp-profile-table"><thead><tr><th>Profile Name</th><th>Rate Limit (Rx/Tx)</th><th>Price (BDT)</th><th>Validity / Quota</th><th>Shared Users</th><th class="hp-table-actions">Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : empty) +
+                            '</div>' +
+                        '</div>' +
+                    '</section>'
+                );
+                updateLanguage(localStorage.getItem('faz_preferred_lang') || 'en');
+            } catch (error) {
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger" role="alert">' + escapeHtml(error.message || 'Unable to load profiles') + '</div></section>');
             }
         }
 
