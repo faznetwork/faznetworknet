@@ -84,7 +84,7 @@ async function runBroadcast(id){
   const settings=await settingsService.getAllSettings();
   while(true){
    const claimed=await db.query(
-    "UPDATE broadcast_recipients SET status='sending',updated_at=NOW() WHERE id=(SELECT id FROM broadcast_recipients WHERE broadcast_id=$1 AND status='queued' ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *",
+    "UPDATE broadcast_recipients SET status='sending',updated_at=NOW() WHERE id=(SELECT id FROM broadcast_recipients WHERE broadcast_id=$1 AND status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *",
     [id]
    );
    const recipient=claimed.rows?.[0];
