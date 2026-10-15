@@ -5,7 +5,7 @@ const mikrotikService = require("../services/mikrotikService");
 const { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript } = require("../services/hotspotProfileConfig");
 
 const LEGACY_HOTSPOT_HOOK = /FAZ\|(?:EXP|PROFILE|INIT)=|FIRST_LOGIN=/i;
-const MANAGED_HOTSPOT_HOOK = /FAZ_HOTSPOT_EXPIRY_V2/i;
+const MANAGED_HOTSPOT_HOOK = /FAZ_HOTSPOT_EXPIRY_V[23]/i;
 const CUSTOM_HOOK_MARKER = "FAZ_CUSTOM_ON_LOGIN_HOOK_START";
 
 function parseMetadata(value) {
