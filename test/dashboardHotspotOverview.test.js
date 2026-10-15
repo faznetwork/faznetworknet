@@ -26,7 +26,7 @@ test("Hotspot recharge period filter is whitelisted and uses a Bangladesh-time S
  const{controller,state}=loadController(),res=recorder();
  await controller.hotspotOverview({query:{filter:"today"}},res);
  assert.equal(res.statusCode,200);assert.equal(res.body.filter,"today");
- const sales=state.queries.find(q=>q.sql.includes("FROM transactions t INNER JOIN hotspot_vouchers v"));
+ const sales=state.queries.find(q=>q.sql.includes("SELECT s.matched_username,s.profile")&&q.sql.includes("LIMIT 200"));
  assert.ok(sales);assert.match(sales.sql,/Asia\/Dhaka/);assert.equal(sales.sql.includes("LIMIT 200"),true);
 });
 test("Invalid Hotspot recharge filter is rejected before querying the database",async()=>{
