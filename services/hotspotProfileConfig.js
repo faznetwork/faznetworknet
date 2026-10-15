@@ -79,7 +79,7 @@ function buildHotspotOnLoginScript(config = {}) {
     ':foreach oldSched in=[/system scheduler find where name=$sched] do={ /system scheduler remove $oldSched; }',
     ':local userComment ""',
     ':if ([:len $uid] > 0) do={ :set userComment [/ip hotspot user get $uid comment]; }',
-    ':if ((([:len $userComment] = 15) || ([:len $userComment] = 24)) && ([:pick $userComment 0 5] = "Exp: ") && ([:pick $userComment 9 10] = "-") && ([:pick $userComment 12 13] = "-") && (([:len $userComment] = 15) || (([:pick $userComment 15 16] = " ") && ([:pick $userComment 18 19] = ":") && ([:pick $userComment 21 22] = ":"))) do={',
+    ':if ((([:len $userComment] = 15) || ([:len $userComment] = 24)) && ([:pick $userComment 0 5] = "Exp: ") && ([:pick $userComment 9 10] = "-") && ([:pick $userComment 12 13] = "-") && (([:len $userComment] = 15) || (([:pick $userComment 15 16] = " ") && ([:pick $userComment 18 19] = ":") && ([:pick $userComment 21 22] = ":")))) do={',
     ':local expIso [:pick $userComment 5 15]',
     ':local expTime "23:59:59"',
     ':local timedComment ([:len $userComment] = 24)',
