@@ -2468,44 +2468,10 @@
         }
         // Hotspot global entry points: define these before any dependent admin code executes.
         window.loadHotspotDashboard = function() {
-            console.log('[HOTSPOT UI] loadHotspotDashboard triggered');
-            const dashboard=document.getElementById('view-dashboard');
-            if(dashboard) dashboard.style.display='none';
-            const container=document.getElementById('dynamicPageContent');
-            if(!container) return false;
-            container.style.display='block';
-            safeSetText('pageTitle', 'Hotspot Dashboard');
-            setMobilePageLoading(true, 'LOADING');
-            container.innerHTML =
-                hotspotSubnavMarkup()+
-                '<div class="dashboard-shortcuts hotspot-dashboard-shortcuts mb-4">'+
-                    '<button type="button" class="dashboard-round-button dashboard-round-customers" onclick="window.loadHotspotSection(\'all\',\'all_user\')" title="Open all Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-people-fill"></i></span><strong id="hsTotal">—</strong><span class="dashboard-round-label">Total Hotspot Users</span><span class="dashboard-round-hint">View user list</span></button>'+
-                    '<button type="button" class="dashboard-round-button dashboard-round-online" onclick="window.loadHotspotSection(\'active\',\'active_user\')" title="Open active Hotspot sessions"><span class="dashboard-round-icon"><i class="bi bi-wifi"></i></span><strong id="hsOnline">—</strong><span class="dashboard-round-label">Online</span><span class="dashboard-round-hint">Live sessions</span></button>'+
-                    '<button type="button" class="dashboard-round-button dashboard-round-offline" onclick="window.loadHotspotSection(\'offline\',\'offline_user\')" title="Open offline Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-wifi-off"></i></span><strong id="hsOffline">—</strong><span class="dashboard-round-label">Offline</span><span class="dashboard-round-hint">View offline list</span></button>'+
-                    '<button type="button" class="dashboard-round-button dashboard-round-collection" onclick="window.loadHotspotVoucherSales()" title="Open Hotspot voucher sales history"><span class="dashboard-round-icon"><i class="bi bi-cash-coin"></i></span><strong id="hsRevenue" class="dashboard-round-amount">৳0.00</strong><span class="dashboard-round-label">Today\'s Collection</span><span class="dashboard-round-hint">Voucher sales</span></button>'+
-                    '<button type="button" class="dashboard-round-button dashboard-round-router hotspot-router-action" onclick="window.loadDevices()" title="Open MikroTik devices" aria-label="Open MikroTik device management"><span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><span class="hotspot-router-action-copy"><strong>Open MikroTik</strong><span class="dashboard-round-hint">Device management and router status</span></span><i class="bi bi-arrow-up-right hotspot-router-action-arrow" aria-hidden="true"></i></button>'+
-                '</div>'+
-                '<div class="hotspot-dashboard-tip"><i class="bi bi-lightbulb" aria-hidden="true"></i><p>Tap a metric to open its details. Use the Hotspot menu for voucher management.</p></div>'
-            fetch('/api/hotspot/dashboard-metrics')
-                .then(function(response){ return response.json().then(function(data){ return {ok:response.ok,data:data}; }); })
-                .then(function(result){
-                    const d=result.data||{};
-                    if(!result.ok || d.success===false) throw new Error(d.message||d.error||'Unable to load Hotspot dashboard metrics.');
-                    safeSetText('hsTotal', Number(d.totalUsers||0));
-                    safeSetText('hsOnline', Number(d.onlineClients ?? d.activeUsers ?? 0));
-                    safeSetText('hsOffline', Number(d.offlineUsers||0));
-                    safeSetText('hsVouchers', Number(d.totalVouchers||0));
-                    safeSetText('hsRevenue', Number(d.todayRevenue||0).toFixed(2));
-                })
-                .catch(function(error){
-                    console.warn('[HOTSPOT UI]',error);
-                    safeSetText('hsTotal',0);
-                    safeSetText('hsOnline',0);
-                    safeSetText('hsOffline',0);
-                    safeSetText('hsVouchers',0);
-                    safeSetText('hsRevenue','0.00');
-                })
-                .finally(function(){ setMobilePageLoading(false, 'READY'); });
+            // The Hotspot Dashboard menu now opens the canonical nine-card overview.
+            // Do not rebuild the legacy circular dashboard in dynamicPageContent.
+            if (typeof window.switchView === 'function') window.switchView('dashboard');
+            if (typeof window.startNocPolling === 'function') window.startNocPolling();
             return false;
         };
 
@@ -3245,32 +3211,13 @@
             await loadOptions();
         }
         async function loadHotspotDashboard(){
-            purgeStuckBackdrops();
-            currentHotspotMode='dashboard'; setHotspotTitle('hotspot_dashboard');
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view">'+
-            '<div class="dashboard-shortcuts hotspot-dashboard-shortcuts mb-4">'+
-            '<button type="button" class="dashboard-round-button dashboard-round-customers" onclick="window.loadHotspotSection(\'all\',\'all_user\')" title="Open all Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-people-fill"></i></span><strong id="hsRoundTotalUsers">—</strong><span class="dashboard-round-label">Total Hotspot Users</span><span class="dashboard-round-hint">View user list</span></button>'+
-            '<button type="button" class="dashboard-round-button dashboard-round-online" onclick="window.loadHotspotSection(\'active\',\'active_user\')" title="Open active Hotspot sessions"><span class="dashboard-round-icon"><i class="bi bi-wifi"></i></span><strong id="hsRoundActiveUsers">—</strong><span class="dashboard-round-label">Online</span><span class="dashboard-round-hint">Live sessions</span></button>'+
-            '<button type="button" class="dashboard-round-button dashboard-round-offline" onclick="window.loadHotspotSection(\'offline\',\'offline_user\')" title="Open offline Hotspot users"><span class="dashboard-round-icon"><i class="bi bi-wifi-off"></i></span><strong id="hsRoundOfflineUsers">—</strong><span class="dashboard-round-label">Offline</span><span class="dashboard-round-hint">View offline list</span></button>'+
-            '<button type="button" class="dashboard-round-button dashboard-round-collection" onclick="window.loadHotspotVoucherSales()" title="Open Hotspot voucher sales history"><span class="dashboard-round-icon"><i class="bi bi-cash-coin"></i></span><strong id="hsRoundTodayRevenue" class="dashboard-round-amount">৳0.00</strong><span class="dashboard-round-label">Today\'s Collection</span><span class="dashboard-round-hint">Voucher sales</span></button>'+
-            '<button type="button" class="dashboard-round-button dashboard-round-router" onclick="window.loadDevices()" title="Open MikroTik devices"><span class="dashboard-round-icon"><i class="bi bi-router-fill"></i></span><strong>Open</strong><span class="dashboard-round-label">MikroTik</span><span class="dashboard-round-hint">Device management</span></button>'+
-            '</div><div class="row g-3 mb-4">'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active Sessions</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Sales</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div><span id="hsVouchersSoldToday" class="small text-muted">0 payments</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expiring in &lt; 1h</div><span id="hsExpiringWithinHour" class="fs-3 fw-bold mt-1 d-block text-warning">0</span></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Cleanup Pending / Evicted Today</div><span id="hsCleanupPending" class="fs-3 fw-bold mt-1 d-block text-danger">0</span><span id="hsEvictedToday" class="small text-muted">0 evicted today</span></div></div></div></div>'+
-            '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 mt-2"><div><h5 class="mb-1 fw-bold">Voucher Inventory</h5><div class="small text-muted">Counts from PostgreSQL voucher records</div></div><button type="button" class="btn btn-outline-success btn-sm" onclick="window.refreshHotspotVoucherStats()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>'+
-            '<div class="row g-3 mb-4">'+
-            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Vouchers</div><span id="hsVoucherTotal" class="fs-3 fw-bold d-block mt-1">—</span></div></div></div>'+
-            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Unused</div><span id="hsVoucherUnused" class="fs-3 fw-bold d-block mt-1 text-primary">—</span><div class="small text-muted">Not used yet</div></div></div></div>'+
-            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Used</div><span id="hsVoucherUsed" class="fs-3 fw-bold d-block mt-1 text-info">—</span><div class="small text-muted">Active + expired</div></div></div></div>'+
-            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active</div><span id="hsVoucherActive" class="fs-3 fw-bold d-block mt-1 text-success">—</span></div></div></div>'+
-            '<div class="col-6 col-md-4 col-xl"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Expired</div><span id="hsVoucherExpired" class="fs-3 fw-bold d-block mt-1 text-danger">—</span><div class="small text-muted"><span id="hsVoucherCleanupPending">0</span> cleanup pending</div></div></div></div></div>'+
-            '<div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-theme" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill"></i> + Add Hotspot User</button><button type="button" class="btn btn-outline-success" onclick="window.loadVoucherGeneratorSection()"><i class="bi bi-lightning-charge-fill"></i> ⚡ Batch Generator</button></div>'+
-            '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>Real-Time Active Users</div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="4" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
-            window.refreshHotspotVoucherStats();
-            await refreshHotspotDashboardMetrics();
+            // Compatibility alias for any existing internal callers. Always use the
+            // canonical dashboard so the retired circular layout cannot be restored.
+            if (typeof window.switchView === 'function') window.switchView('dashboard');
+            if (typeof window.startNocPolling === 'function') window.startNocPolling();
+            return false;
         }
+        window.loadHotspotDashboard = loadHotspotDashboard;
         window.refreshHotspotVoucherStats = async function refreshHotspotVoucherStats(){
             const ids=['hsVoucherTotal','hsVoucherUnused','hsVoucherUsed','hsVoucherActive','hsVoucherExpired','hsVoucherCleanupPending'];
             try{
