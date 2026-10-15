@@ -4484,8 +4484,137 @@ async function deletePlan(id,name){
           notificationHubTab=tab;
           document.querySelectorAll('[data-notify-tab]').forEach(button=>button.classList.toggle('active',button.dataset.notifyTab===tab));
           document.querySelectorAll('[data-notify-panel]').forEach(panel=>panel.style.display=panel.dataset.notifyPanel===tab?'block':'none');
+          const saveButton=document.getElementById('systemSmsSaveBtn'),saveResult=document.getElementById('systemSmsResult');
+          if(saveButton)saveButton.style.display=['templates','broadcast'].includes(tab)?'none':'';
+          if(saveResult)saveResult.style.display=['templates','broadcast'].includes(tab)?'none':'';
           if(tab==='whatsapp')refreshWhatsAppStatus();
+          if(tab==='templates')loadNotificationTemplates();
+          if(tab==='broadcast'){loadBroadcastAudienceCount();loadBroadcastHistory();}
         }
+        let notificationTemplateCache=[];
+        let activeBroadcastId=null;
+        let broadcastPollTimer=null;
+        const notificationTemplateDefaults={
+          pppoe_renewal:'Dear {name}, your FAZ NETWORK service renewal is complete. New expiry: {expiry_date}.',
+          pppoe_payment:'Dear {name}, payment of Tk {amount} received. Your service is active until {expiry_date}. Thank you, {company_name}.',
+          pppoe_expiry_warning:'Dear {name}, your internet package expires on {expiry_date}. Please renew to avoid interruption. {company_name}.',
+          hotspot_purchase:'Dear {name}, your Hotspot package {package} purchase is confirmed for Tk {amount}.',
+          hotspot_renewal:'Dear {name}, your Hotspot package {package} has been renewed. Valid until {expiry_date}.',
+          hotspot_expiry_warning:'Dear {name}, your Hotspot package expires on {expiry_date}. Please recharge to continue.',
+          welcome_message:'Welcome to {company_name}, {name}! Your account {username} is ready.'
+        };
+        function notificationTemplatePreview(){
+          const body=document.getElementById('notifyTemplateBody'),preview=document.getElementById('notifyTemplatePreview'),length=document.getElementById('notifyTemplatePreviewLength'),count=document.getElementById('notifyTemplateCharCount');
+          if(!body||!preview)return;
+          const sample={name:'Alex Rahman',username:'alex017',package:'30 Mbps Package',amount:'525',expiry_date:'31/10/2026',company_name:'FAZ NETWORK'};
+          const rendered=body.value.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(all,key)=>Object.prototype.hasOwnProperty.call(sample,key)?sample[key]:all);
+          preview.textContent=rendered||'Your message preview will appear here.';
+          if(length)length.textContent=rendered.length+' characters';
+          if(count)count.textContent=body.value.length+' / 4000';
+        }
+        function selectedNotificationTemplate(){
+          const event=document.getElementById('notifyTemplateEvent')?.value||'pppoe_renewal',channel=document.getElementById('notifyTemplateChannel')?.value||'whatsapp';
+          const saved=notificationTemplateCache.find(t=>t.event_key===event&&t.channel===channel);
+          const body=document.getElementById('notifyTemplateBody'),active=document.getElementById('notifyTemplateActive');
+          if(body)body.value=saved?saved.template_body:(notificationTemplateDefaults[event]||'Dear {name}, {company_name} notification.');
+          if(active)active.checked=saved?Boolean(saved.is_active):true;
+          notificationTemplatePreview();
+        }
+        async function loadNotificationTemplates(){
+          const result=document.getElementById('notifyTemplateResult');
+          try{
+            const response=await fetch('/api/settings/notifications/templates',{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to load templates.');
+            notificationTemplateCache=Array.isArray(data.templates)?data.templates:[];
+            selectedNotificationTemplate();
+            if(result){result.className='small mt-3 text-muted';result.textContent='Loaded '+notificationTemplateCache.length+' saved template(s). Unsaved events use the default message until saved.';}
+          }catch(error){if(result){result.className='small mt-3 text-danger';result.textContent=error.message||'Unable to load templates.';}}
+        }
+        async function saveNotificationTemplate(){
+          const button=document.getElementById('notifyTemplateSaveBtn'),result=document.getElementById('notifyTemplateResult');
+          const payload={event_key:document.getElementById('notifyTemplateEvent').value,channel:document.getElementById('notifyTemplateChannel').value,template_body:document.getElementById('notifyTemplateBody').value,is_active:document.getElementById('notifyTemplateActive').checked};
+          if(button)button.disabled=true;
+          try{
+            const response=await fetch('/api/settings/notifications/templates',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload),cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to save template.');
+            notificationTemplateCache=notificationTemplateCache.filter(t=>!(t.event_key===payload.event_key&&t.channel===payload.channel));notificationTemplateCache.push(data.template);
+            if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Template saved.';}
+          }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save template.';}}
+          finally{if(button)button.disabled=false;}
+        }
+        function broadcastEscape(value){const node=document.createElement('span');node.textContent=value==null?'':String(value);return node.innerHTML;}
+        function broadcastPreview(){
+          const message=document.getElementById('broadcastMessage'),preview=document.getElementById('broadcastPreview'),count=document.getElementById('broadcastMessageCount');
+          if(!message||!preview)return;
+          const sample={name:'Alex Rahman',username:'alex017',package:'30 Mbps Package',amount:'525',expiry_date:'31/10/2026',company_name:'FAZ NETWORK'};
+          preview.textContent=message.value.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(all,key)=>Object.prototype.hasOwnProperty.call(sample,key)?sample[key]:all)||'Your broadcast preview will appear here.';
+          if(count)count.textContent=message.value.length+' / 4000';
+        }
+        async function loadBroadcastAudienceCount(){
+          const group=document.getElementById('broadcastAudience')?.value||'all',count=document.getElementById('broadcastRecipientCount'),note=document.getElementById('broadcastRecipientNote');
+          if(count)count.textContent='…';if(note)note.textContent='Counting unique valid phone numbers…';
+          try{const response=await fetch('/api/notifications/audience-count?group='+encodeURIComponent(group),{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to count recipients.');if(count)count.textContent=Number(data.count||0).toLocaleString();if(note)note.textContent='Unique recipients with valid Bangladesh mobile numbers.';}
+          catch(error){if(count)count.textContent='—';if(note)note.textContent=error.message||'Unable to count recipients.';}
+        }
+        function renderBroadcastHistory(rows){
+          const box=document.getElementById('broadcastHistory');if(!box)return;
+          if(!rows||!rows.length){box.textContent='No broadcasts recorded yet.';return;}
+          box.innerHTML='<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Created</th><th>Title</th><th>Audience</th><th>Delivery</th><th>Status</th></tr></thead><tbody>'+rows.map(row=>'<tr><td>'+broadcastEscape(row.created_at?new Date(row.created_at).toLocaleString():'—')+'</td><td>'+broadcastEscape(row.title)+'</td><td>'+broadcastEscape(row.audience)+'</td><td>'+Number(row.success_count||0)+' / '+Number(row.total_recipients||0)+' <span class="text-danger">('+Number(row.failed_count||0)+' failed)</span></td><td>'+broadcastEscape(row.status)+'</td></tr>').join('')+'</tbody></table></div>';
+        }
+        async function loadBroadcastHistory(){
+          try{const response=await fetch('/api/notifications/broadcast/history',{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to load history.');renderBroadcastHistory(data.broadcasts||[]);}
+          catch(error){const box=document.getElementById('broadcastHistory');if(box)box.textContent=error.message||'Unable to load broadcast history.';}
+        }
+        function renderBroadcastProgress(data){
+          const job=data.broadcast||{},card=document.getElementById('broadcastProgressCard'),bar=document.getElementById('broadcastProgressBar'),pill=document.getElementById('broadcastStatusPill'),summary=document.getElementById('broadcastProgressSummary'),failed=document.getElementById('broadcastProgressFailures'),log=document.getElementById('broadcastDeliveryLog');
+          if(card)card.style.display='block';
+          const percent=Number(job.progress||0);if(bar){bar.style.width=percent+'%';bar.textContent=percent+'%';bar.setAttribute('aria-valuenow',String(percent));bar.classList.toggle('progress-bar-animated',['queued','running'].includes(job.status));}
+          if(pill){pill.textContent=String(job.status||'queued').toUpperCase();pill.className='badge '+(job.status==='completed'?'text-bg-success':job.status==='failed'?'text-bg-danger':'text-bg-primary');}
+          if(summary)summary.textContent='Sent: '+Number(job.sent_count||0)+' / '+Number(job.total_recipients||0)+' (successful: '+Number(job.success_count||0)+')';
+          if(failed)failed.textContent='Failed: '+Number(job.failed_count||0);
+          if(log){const rows=data.recipients||[];log.innerHTML=rows.length?rows.map(row=>{const errors=Object.values(row.results||{}).filter(v=>v&&v.success===false).map(v=>v.error).join('; ')||row.error||'—';return '<tr><td>'+broadcastEscape(row.recipient_name||row.username||'—')+'</td><td>'+broadcastEscape(row.phone)+'</td><td>'+broadcastEscape(row.status)+'</td><td class="small text-break">'+broadcastEscape(errors)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="text-muted small">Waiting for the first delivery result…</td></tr>';}
+        }
+        async function pollBroadcastProgress(id){
+          try{
+            const response=await fetch('/api/notifications/broadcast/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to read delivery progress.');
+            renderBroadcastProgress(data);
+            const status=data.broadcast?.status;
+            if(['completed','failed','cancelled'].includes(status)){activeBroadcastId=null;await loadBroadcastHistory();return;}
+            broadcastPollTimer=window.setTimeout(()=>pollBroadcastProgress(id),2200);
+          }catch(error){const result=document.getElementById('broadcastResult');if(result){result.className='small mt-3 text-danger';result.textContent=error.message||'Progress polling failed.';}broadcastPollTimer=window.setTimeout(()=>pollBroadcastProgress(id),5000);}
+        }
+        async function startBulkBroadcast(){
+          const button=document.getElementById('broadcastStartBtn'),result=document.getElementById('broadcastResult');
+          const channels=[];if(document.getElementById('broadcastWhatsApp').checked)channels.push('whatsapp');if(document.getElementById('broadcastSms').checked)channels.push('sms');
+          const title=document.getElementById('broadcastTitle').value.trim(),message=document.getElementById('broadcastMessage').value;
+          const count=Number(String(document.getElementById('broadcastRecipientCount').textContent||'').replace(/,/g,''));
+          if(!title||!message.trim()){if(result){result.className='small mt-3 text-danger';result.textContent='Enter a title and message before sending.';}return;}
+          if(!channels.length){if(result){result.className='small mt-3 text-danger';result.textContent='Select WhatsApp, SMS, or both.';}return;}
+          if(!Number.isFinite(count)||count<1){if(result){result.className='small mt-3 text-danger';result.textContent='No eligible recipients are available. Refresh the audience count.';}return;}
+          if(!window.confirm('Send this message to '+count+' unique recipients via '+channels.join(' + ').toUpperCase()+'? Delivery will be paced at 1.5–3 seconds between recipients. This may send real customer messages.'))return;
+          if(button)button.disabled=true;
+          if(result){result.className='small mt-3 text-muted';result.textContent='Creating broadcast queue…';}
+          try{
+            const response=await fetch('/api/notifications/broadcast',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title,message,audience:document.getElementById('broadcastAudience').value,channels}),cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to queue broadcast.');
+            activeBroadcastId=data.broadcast.id;
+            if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Broadcast queued.';}
+            if(broadcastPollTimer)window.clearTimeout(broadcastPollTimer);
+            await pollBroadcastProgress(activeBroadcastId);
+          }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to start broadcast.';}}
+          finally{if(button)button.disabled=false;}
+        }
+        document.getElementById('notifyTemplateEvent')?.addEventListener('change',selectedNotificationTemplate);
+        document.getElementById('notifyTemplateChannel')?.addEventListener('change',selectedNotificationTemplate);
+        document.getElementById('notifyTemplateBody')?.addEventListener('input',notificationTemplatePreview);
+        document.querySelectorAll('[data-template-variable]').forEach(button=>button.addEventListener('click',()=>{const area=document.getElementById('notifyTemplateBody');if(!area)return;const value=button.dataset.templateVariable||'';area.setRangeText(value,area.selectionStart,area.selectionEnd,'end');area.dispatchEvent(new Event('input',{bubbles:true}));area.focus();}));
+        document.getElementById('notifyTemplateSaveBtn')?.addEventListener('click',saveNotificationTemplate);
+        document.getElementById('broadcastAudience')?.addEventListener('change',loadBroadcastAudienceCount);
+        document.getElementById('broadcastRefreshCount')?.addEventListener('click',loadBroadcastAudienceCount);
+        document.getElementById('broadcastHistoryRefresh')?.addEventListener('click',loadBroadcastHistory);
+        document.getElementById('broadcastMessage')?.addEventListener('input',broadcastPreview);
+        document.getElementById('broadcastStartBtn')?.addEventListener('click',startBulkBroadcast);
         async function loadSystemSettings(force=false){
           if(systemSettingsLoaded&&!force)return;
           try{
