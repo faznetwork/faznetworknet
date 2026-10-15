@@ -95,7 +95,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
  if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendSms({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings})]);
+ if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",async()=>sendTelegram(settings,await textFor("telegram"))]);
  if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",async()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,await textFor("messenger"))]);
