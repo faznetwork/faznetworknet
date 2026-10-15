@@ -19,11 +19,11 @@ function getBaileys() {
 }
 
 function normalizePhone(value) {
-  let digits = String(value || "").replace(/\\D/g, "");
+  let digits = String(value || "").replace(/\D/g, "");
   if (digits.startsWith("00880")) digits = digits.slice(2);
   if (digits.startsWith("01") && digits.length === 11) digits = "88" + digits;
   if (digits.startsWith("1") && digits.length === 10) digits = "880" + digits;
-  if (!/^8801\\d{9}$/.test(digits)) {
+  if (!/^8801\d{9}$/.test(digits)) {
     throw new Error("Enter a valid Bangladesh mobile number (01XXXXXXXXX or 8801XXXXXXXXX).");
   }
   return digits;
