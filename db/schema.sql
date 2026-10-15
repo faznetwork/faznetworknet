@@ -212,9 +212,16 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_attempts INTEGER N
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_error TEXT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS router_removed_at TIMESTAMPTZ;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS profile_id VARCHAR(100);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_address VARCHAR(17);
+ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_status_check;
+ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_status_check CHECK (status IN ('pending_claim','unused','active','expired'));
 -- Permit repeat purchases after expiry while preventing simultaneous live vouchers for one phone.
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_username_key;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_live_username_ci ON hotspot_vouchers (LOWER(username)) WHERE status IN ('unused','active');
+DROP INDEX IF EXISTS uq_hotspot_vouchers_live_username_ci;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_live_username_ci ON hotspot_vouchers (LOWER(username)) WHERE status IN ('pending_claim','unused','active');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_mac_address_ci ON hotspot_vouchers (LOWER(mac_address)) WHERE mac_address IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_profile_id ON hotspot_vouchers(profile_id);
 CREATE TABLE IF NOT EXISTS hotspot_voucher_sales_archive (
   transaction_id BIGINT PRIMARY KEY,
   channel VARCHAR(40),
