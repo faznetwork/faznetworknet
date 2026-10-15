@@ -67,11 +67,11 @@ async function syncHotspotProfileScripts(deps = {}) {
   const settings = await database.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   const metadata = parseMetadata(settings.rows?.[0]?.value);
   const profiles = await router.getHotspotProfiles();
-  let checked = 0, updated = 0, skipped = 0, failed = 0;
+  let checked = 0, updated = 0, skipped = 0, unchanged = 0, ineligible = 0, failed = 0;
 
   for (const profile of profiles || []) {
     const name = String(profile?.name || "").trim();
-    if (!name) { skipped++; continue; }
+    if (!name) { skipped++; ineligible++; continue; }
     const oldLogin = String(profile?.raw?.["on-login"] || "");
     const configured = metadata[name] && typeof metadata[name] === "object";
     const legacy = LEGACY_HOTSPOT_HOOK.test(oldLogin);
@@ -80,7 +80,7 @@ async function syncHotspotProfileScripts(deps = {}) {
     const hasKnownTimeValidity = Boolean(storedTimeout && storedTimeout !== "none" && /^(?:\d+\s*[wdhm]\s*)+$/i.test(storedTimeout));
     // Sync every package-managed/legacy profile and every manual profile with a
     // concrete time validity. Preserve unconfigured hooks when validity is unknown.
-    if (!configured && !legacy && !alreadyManaged && !hasKnownTimeValidity) { skipped++; continue; }
+    if (!configured && !legacy && !alreadyManaged && !hasKnownTimeValidity) { skipped++; ineligible++; continue; }
 
     checked++;
     try {
@@ -95,7 +95,7 @@ async function syncHotspotProfileScripts(deps = {}) {
       const nextScript = onLogin + (customHook
         ? '; :local fazCustomHookMarker "' + CUSTOM_HOOK_MARKER + '"; ' + customHook
         : "");
-      if (nextScript === oldLogin) { skipped++; continue; }
+      if (nextScript === oldLogin) { skipped++; unchanged++; continue; }
       await router.updateHotspotProfile({ name, onLogin: nextScript });
       updated++;
     } catch (error) {
@@ -132,7 +132,7 @@ async function syncHotspotProfileScripts(deps = {}) {
   }
   logger.log("[HOTSPOT SERVER AUTH SYNC] Completed.", authResult);
 
-  const result = { checked, updated, skipped, failed, serverAuth: authResult };
+  const result = { checked, updated, skipped, unchanged, ineligible, failed, serverAuth: authResult };
   logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
   return result;
 }
