@@ -12,7 +12,8 @@ function renewalRuleEvents(type,eventName){
  return [...new Set([eventName,"renewal","payment","recharge"])];
 }
 function extractCustomerPhone(customer={}){
- return customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no||"";
+ const account=customer||{};
+ return account.phone||account.mobile||account.account_phone||account.mobile_number||account.contact_no||"";
 }
 function isValidBdWhatsAppPhone(value){return /^8801[3-9]\d{8}$/.test(String(value||""));}
 function smsEvent(event){const map={payment:"payment_receipt",payment_receipt:"payment_receipt",recharge:"payment_receipt",renewal:"payment_receipt",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"line_expiry",expired:"line_expiry"};return map[event]||event;}
