@@ -16,6 +16,7 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
         {name:"30-Day",sharedUsers:"1",sessionTimeout:"4w2d",raw:{"on-login":oldThirtyDay}},
         {name:"1-Hour",sharedUsers:"1",sessionTimeout:"1h",raw:{"on-login":oldHour}},
         {name:"Office-Manual",sharedUsers:"1",sessionTimeout:"none",raw:{"on-login":customHook}},
+        {name:"Manual-1h",sharedUsers:"1",sessionTimeout:"1h",raw:{"on-login":customHook}},
         {name:"NewPlan",sharedUsers:"1",sessionTimeout:"1d",raw:{"on-login":customHook}}
       ],
       updateHotspotProfile:async payload=>{updates.push(payload);return {name:payload.name};}
@@ -23,17 +24,20 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
     logger:{log(){},warn(...args){throw new Error(args.join(" "));}}
   };
   const result=await syncHotspotProfileScripts(deps);
-  assert.deepEqual(result,{checked:3,updated:3,skipped:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
-  assert.equal(updates.length,3);
+  assert.deepEqual(result,{checked:4,updated:4,skipped:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
+  assert.equal(updates.length,4);
   assert.deepEqual(updates.map(x=>Object.keys(x).sort()),[["name","onLogin"],["name","onLogin"],["name","onLogin"]]);
   const thirty=updates.find(x=>x.name==="30-Day").onLogin;
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
+  const manual=updates.find(x=>x.name==="Manual-1h").onLogin;
   assert.match(thirty,/interval=30d/);
   assert.match(hour,/interval=1h/);
   assert.doesNotMatch(thirty,/FAZ\\|PROFILE=|comment=/);
   assert.doesNotMatch(hour,/FAZ\\|EXP=|FIRST_LOGIN=|comment=/);
   assert.match(custom,/interval=7d/);
+  assert.match(manual,/interval=1h/);
+  assert.match(manual,/CUSTOM_PROFILE_HOOK/);
   assert.match(custom,/FAZ_CUSTOM_ON_LOGIN_HOOK_START/);
   assert.match(custom,/CUSTOM_PROFILE_HOOK/);
   for(const update of updates){

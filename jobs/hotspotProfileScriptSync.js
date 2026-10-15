@@ -76,9 +76,11 @@ async function syncHotspotProfileScripts(deps = {}) {
     const configured = metadata[name] && typeof metadata[name] === "object";
     const legacy = LEGACY_HOTSPOT_HOOK.test(oldLogin);
     const alreadyManaged = MANAGED_HOTSPOT_HOOK.test(oldLogin);
-    // Do not rewrite unrelated manually-created profiles unless the package
-    // metadata explicitly manages them or they still contain the old FAZ hook.
-    if (!configured && !legacy && !alreadyManaged) { skipped++; continue; }
+    const storedTimeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim().toLowerCase();
+    const hasKnownTimeValidity = Boolean(storedTimeout && storedTimeout !== "none" && /^(?:\d+\s*[wdhm]\s*)+$/i.test(storedTimeout));
+    // Sync every package-managed/legacy profile and every manual profile with a
+    // concrete time validity. Preserve unconfigured hooks when validity is unknown.
+    if (!configured && !legacy && !alreadyManaged && !hasKnownTimeValidity) { skipped++; continue; }
 
     checked++;
     try {
