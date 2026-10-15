@@ -1131,10 +1131,20 @@ async function updateCustomer(req,res){
     const packageDefinition=await resolvePackageDefinition(requestedProfile,packageName);
     if(!packageDefinition)return res.status(400).json({success:false,message:"Selected package/profile is not configured in the billing package table."});
     const profileName=packageDefinition.profileName||requestedProfile,password=clean(body.password||row.password,255);
-    const disabled=body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
+    const requestedAccountStatus=String(body.accountStatus||"").trim().toLowerCase();
+    if(requestedAccountStatus&&!["active","suspended","expired"].includes(requestedAccountStatus))return res.status(400).json({success:false,message:"Account status must be Active, Suspended, or Expired."});
+    if(requestedAccountStatus==="expired"&&dateStatus(expirationDate)!=="expired")return res.status(400).json({success:false,message:"An account can be marked Expired only when its expiry date is before today."});
+    if(requestedAccountStatus==="active"&&dateStatus(expirationDate)==="expired")return res.status(409).json({success:false,message:"This expiry date is in the past. Update the expiry date before reactivating the account."});
+    const disabled=requestedAccountStatus?requestedAccountStatus==="suspended":body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
     const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
     const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100);
+    const remoteAddressInput=String(body.remoteAddress??body.remote_address??"").trim();
+    if((hasOwn("remoteAddress")||hasOwn("remote_address"))&&remoteAddressInput){
+      const octets=remoteAddressInput.split(".");
+      if(octets.length!==4||!octets.every(part=>/^\d{1,3}$/.test(part)&&Number(part)<=255))return res.status(400).json({success:false,message:"Static IP must be a valid IPv4 address."});
+    }
+    const remoteAddress=clean(remoteAddressInput||row.remote_address,100);
     const onuSerial=clean(body.onuSerial||body.onu_serial||row.onu_serial,150),fiberDropCore=clean(body.fiberDropCore||body.fiber_drop_core||row.fiber_drop_core,80),remarks=clean(body.remarks||body.note||row.remarks,1000);
     const usernameChanged=String(row.username).toLowerCase()!==username.toLowerCase(),packageChanged=String(row.profile||"").toLowerCase()!==profileName.toLowerCase();
     const duplicate=await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1",[row.id,username,phone]);
@@ -1150,23 +1160,23 @@ async function updateCustomer(req,res){
       if(usernameChanged){
         const oldSecret=await mikrotikService.getPppoeSecret(previousUsername);
         const newSecret=await mikrotikService.getPppoeSecret(username);
-        if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled});
-        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+        if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled,remoteAddress,allowStaticRemoteAddress:true});
+        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
       }else{
         const secret=await mikrotikService.getPppoeSecret(username);
-        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
       }
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
-    const nextStatus=expired?"expired":effectiveDisabled?"inactive":"active";
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29 WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink]);
+    const nextStatus=expired?"expired":effectiveDisabled?(requestedAccountStatus==="suspended"?"suspended":"inactive"):"active";
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30 WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
-    await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,synced_at,updated_at)
-      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NOW(),NOW())
-      ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),synced_at=NOW(),updated_at=NOW()`,
-      [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus,onuMac]);
+    await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,remote_address,synced_at,updated_at)
+      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NULLIF($12,''),NOW(),NOW())
+      ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),remote_address=EXCLUDED.remote_address,synced_at=NOW(),updated_at=NOW()`,
+      [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus,onuMac,remoteAddress]);
     await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date,billingCycle:row.billing_cycle,billingDurationDays:row.billing_duration_days,billingExpiryOverride:row.billing_expiry_override},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate,billingCycle,billingDurationDays,billingExpiryOverride,billingStatus:nextBillingStatus}},ipAddress:getIpAddress(req)});
     if(packageChanged) await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed from ${row.package_name||row.profile} to ${packageDefinition.name}`,previousPackage:row.package_name,previousProfile:row.profile,newPackage:packageDefinition.name,newProfile:profileName},ipAddress:getIpAddress(req)});
     return res.json({success:true,message:"Customer profile saved and synchronized with MikroTik.",customer:result.rows[0],kicked:packageChanged});

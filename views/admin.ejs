@@ -275,6 +275,28 @@
         .customer-serial { color: #64748b; font: 800 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
         .customer-live-table .customer-session { font-size: 11px; line-height: 1.35; margin-top: 4px; }
         .customer-search-wrap { min-width: 260px; } .customer-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+        .customer-enterprise-header{gap:14px;padding:18px 22px;border-bottom:1px solid #e2e8f0;background:linear-gradient(115deg,#fff 0%,#f8fffb 100%);flex-wrap:wrap}
+        .customer-enterprise-header .customer-toolbar-search{flex:1 1 280px;max-width:460px;min-width:220px}
+        .customer-enterprise-header .customer-toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .customer-enterprise-header .customer-count-pill{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:4px 9px;border-radius:999px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;font-size:12px;font-weight:800}
+        .customer-enterprise-header .customer-router-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#f0fdf4;color:#047857;border:1px solid #bbf7d0;font-size:11px;font-weight:800;white-space:nowrap}
+        .customer-enterprise-header .customer-router-pill i{font-size:8px}
+        .customer-enterprise-header .form-control,.customer-enterprise-header .input-group-text{min-height:38px}
+        .customer-action-group .btn{width:34px;min-width:34px;height:34px;padding:0!important}
+        .customer-quick-modal .modal-content{border:0;border-radius:20px;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,.24)}
+        .customer-quick-modal .modal-header{padding:20px 22px;background:linear-gradient(120deg,#0a3d2e,#116149);color:#fff;border:0}
+        .customer-quick-modal .btn-close{filter:brightness(0) invert(1);opacity:.85}
+        .customer-quick-modal .quick-avatar{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border-radius:15px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);font-weight:800;font-size:15px}
+        .customer-quick-modal .quick-field{min-width:0;padding:13px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+        .customer-quick-modal .quick-label{display:block;margin-bottom:6px;color:#64748b;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+        .customer-quick-modal .quick-value{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:#0f172a;font-size:13px;font-weight:700;overflow-wrap:anywhere}
+        .customer-quick-modal .quick-value code{white-space:normal;overflow-wrap:anywhere;color:#334155;font-size:12px}
+        .customer-quick-modal .quick-copy{display:inline-grid;place-items:center;width:28px;height:28px;flex:0 0 28px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569}
+        .customer-quick-modal .quick-copy:hover{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+        .customer-quick-modal .quick-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}
+        .customer-quick-modal .quick-status.online{background:#dcfce7;color:#166534}
+        .customer-quick-modal .quick-status.offline{background:#f1f5f9;color:#475569}
+        @media(max-width:767.98px){.customer-enterprise-header{padding:14px}.customer-enterprise-header .customer-toolbar-search{max-width:none;min-width:100%;order:3}.customer-enterprise-header .customer-toolbar-actions{width:100%}.customer-enterprise-header .customer-toolbar-actions .btn{flex:1}.customer-quick-modal .modal-dialog{margin:12px;max-width:calc(100% - 24px)}}
         .ip-pool-page{--pool-ink:#0f172a;--pool-muted:#64748b;color:var(--pool-ink)}
         .ip-pool-hero{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;padding:24px;margin-bottom:22px;border:1px solid #dbeafe;border-radius:18px;background:linear-gradient(120deg,#fff 0%,#f0fdf4 100%);box-shadow:0 8px 26px rgba(15,23,42,.045)}
         .ip-pool-eyebrow{font-size:10px;font-weight:800;letter-spacing:.14em;color:#059669;margin-bottom:8px}.ip-pool-hero h3{font-size:25px;font-weight:800;letter-spacing:-.03em;margin:0}.ip-pool-hero p{font-size:13px;color:#64748b;margin:7px 0 12px}.ip-pool-summary{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#475569}.ip-pool-toolbar{display:flex;gap:9px;flex-wrap:wrap}.ip-pool-card{position:relative;overflow:hidden;padding:19px;border:1px solid var(--pool-accent);border-top:4px solid var(--pool-accent);border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(15,23,42,.045);transition:transform .18s ease,box-shadow .18s ease}.ip-pool-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.09)}.ip-pool-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.ip-pool-icon{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;color:var(--pool-accent);background:color-mix(in srgb,var(--pool-accent) 12%,white);font-size:19px}.ip-pool-live{display:inline-flex;align-items:center;gap:6px;border:1px solid #a7f3d0;background:#ecfdf5;color:#047857;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800}.ip-pool-live span{width:6px;height:6px;border-radius:50%;background:#10b981}.ip-pool-name{font-size:17px;font-weight:800;overflow-wrap:anywhere;margin-bottom:17px}.ip-pool-field{display:flex;flex-direction:column;gap:5px;min-width:0}.ip-pool-field>span{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8}.ip-pool-field code,.ip-pool-field strong{font-size:12px;overflow-wrap:anywhere;color:#334155}.ip-pool-field code{white-space:normal;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:9px}.ip-pool-meta{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.ip-pool-device{border-top:1px solid #edf2f7;margin-top:16px;padding-top:13px;color:#64748b;font-size:12px}.ip-pool-actions{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid #edf2f7}.ip-pool-actions .btn{flex:1;font-size:12px;font-weight:700;border-radius:8px}.ip-pool-empty-card{padding:45px 20px;border:1px dashed #cbd5e1;border-radius:16px;background:#fff;text-align:center;color:#64748b}.ip-pool-empty-card h5{font-weight:800;color:#334155}.ip-pool-empty-card p{font-size:13px}@media(max-width:768px){.ip-pool-hero{padding:18px}.ip-pool-toolbar{width:100%}.ip-pool-toolbar .btn{flex:1}.ip-pool-meta{gap:9px}}
@@ -1874,7 +1896,7 @@
             <!-- VIEW 3: ALL CUSTOMER -->
             <section id="view-all-customer" class="admin-view" style="display:none">
                 <div class="card card-custom">
-                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerRestoreBtn" class="btn btn-outline-primary btn-sm ms-auto" onclick="restoreMissingRouterCustomer(this)" title="Restore a MikroTik PPPoE secret that is missing from All Customers"><i class="bi bi-person-check me-1"></i> Restore Missing User</button><button id="customerPushSyncBtn" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
+                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerPushSyncBtn" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
                 </div>
             </section>
@@ -1955,6 +1977,7 @@
                   <div class="col-md-6"><label class="form-label fw-semibold" for="cpBillingCycle">Billing Duration / Cycle</label><select id="cpBillingCycle" class="form-select"><option value="monthly">Monthly</option><option value="15_days">15 Days</option><option value="30_days">30 Days</option><option value="custom_days">Custom Days</option></select></div>
                   <div class="col-md-6" id="cpCustomDaysWrap"><label class="form-label fw-semibold" for="cpBillingDays">Custom Duration (Days)</label><input id="cpBillingDays" type="number" min="1" max="3650" step="1" class="form-control" placeholder="e.g. 45"><div class="form-text">Used for the next renewal when Custom Days is selected.</div></div>
                   <div class="col-12"><div class="form-check form-switch border rounded-3 bg-white p-3 ps-5"><input id="cpAutoExpire" class="form-check-input" type="checkbox"><label class="form-check-label fw-semibold" for="cpAutoExpire">Automatically enforce expiry</label><div class="small text-muted">When enabled, overdue accounts move to the EXPIRED profile and the active session is disconnected. Leave off for migration overrides to preserve connectivity.</div></div></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold" for="cpAccountStatus">Account Status</label><select id="cpAccountStatus" class="form-select"><option value="active">Active</option><option value="suspended">Suspended</option><option value="expired">Expired</option></select><div class="form-text">Expired status requires an expiry date in the past.</div></div>
                   <div class="col-md-6"><label class="form-label fw-semibold">Billing Status</label><select id="cpBillingStatus" class="form-select"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></div>
                   <div class="col-md-6"><label class="form-label fw-semibold">Package</label><div id="cpPackageLabel" class="form-control bg-light">—</div></div>
                 </div>
@@ -1986,6 +2009,7 @@
           <div class="tab-pane fade" id="cp-tab-tech">
             <div class="card border-0 shadow-sm"><div class="card-body"><div class="row g-3">
               <div class="col-md-6"><label class="form-label fw-semibold">PPPoE Username</label><input id="cpUsername" class="form-control" readonly></div>
+              <div class="col-md-6"><label class="form-label fw-semibold" for="cpRemoteAddress">Static IPv4 Address</label><input id="cpRemoteAddress" class="form-control" placeholder="Optional static IPv4 address"></div>
               <div class="col-md-6"><label class="form-label fw-semibold">PPPoE Password</label><div class="input-group"><input id="cpPassword" type="password" class="form-control"><button id="cpPasswordToggle" type="button" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div>
               <div class="col-md-6"><label class="form-label fw-semibold">Admin Note / Comment</label><input id="cpRemarks" class="form-control" placeholder="Internal memo"></div>
             </div></div></div>
@@ -1993,10 +2017,9 @@
         </div>
       </div>
       <div class="modal-footer bg-white">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button id="cpRenewBtn" type="button" class="btn btn-success"><i class="bi bi-calendar-plus me-1"></i> Renew +1 Month</button>
-        
-        <button id="cpSaveBtn" type="button" class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i> Save & Sync to MikroTik</button>
+        <button id="cpSaveBtn" type="button" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> Save Changes</button>
       </div>
     </div>
   </div>
@@ -5103,26 +5126,36 @@ async function deletePlan(id,name){
             return billingStatus === 'paid' && /^\d{4}-\d{2}-\d{2}$/.test(paidUntil) && paidUntil >= today && !suspended && !expired;
         }
 
+        let customerSearchDebounceTimer = null;
+        function scheduleCustomerSearch(query) {
+            if (customerSearchDebounceTimer) clearTimeout(customerSearchDebounceTimer);
+            customerSearchDebounceTimer = setTimeout(() => filterCustomerRows(query), 180);
+        }
         function filterCustomerRows(query) {
             const q = String(query || '').trim().toLowerCase();
-            // Keep the selected billing filter applied when the search box changes.
             const activeTab = document.querySelector('#customerBillingTabs button[data-billing-filter].active');
             const wanted = String(activeTab?.getAttribute('data-billing-filter') || 'all').toLowerCase();
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
                 const rowStatus = String(row.getAttribute('data-billing-status') || 'unpaid').toLowerCase();
                 const matchesStatus = wanted === 'all' || rowStatus === wanted;
-                const matchesSearch = !q || row.innerText.toLowerCase().includes(q);
+                const searchIndex = String(row.dataset.search || row.innerText || '').toLowerCase();
+                const matchesSearch = !q || searchIndex.includes(q);
                 row.style.display = matchesStatus && matchesSearch ? '' : 'none';
             });
         }
 
-        async function openCustomerEditModal(customerId) {
-            const id=String(customerId||'').trim();
+        async function openCustomerEditModal(customerId, usernameFallback) {
+            const id=String(customerId||usernameFallback||'').trim();
             if(!id)return;
             try{
-                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile');
+                let data;
+                try { data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile',{timeout:7000}); }
+                catch(firstError) {
+                    if(!usernameFallback)throw firstError;
+                    data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(usernameFallback),{timeout:7000});
+                }
                 const customer=data.customer||{};
-                const username=String(customer.username||id).trim();
+                const username=String(customer.username||usernameFallback||id).trim();
                 if(!username)throw new Error('Customer username is missing.');
                 await openCustomerProfile(username,data);
             }catch(error){alert(error.message||'Unable to open Customer 360 / Master Management Hub.');}
@@ -5315,8 +5348,8 @@ async function deletePlan(id,name){
                     const customerId=String(editBtn.dataset.id||'').trim();
                     const username=String(editBtn.dataset.username||'').trim();
                     if(editBtn.disabled)return;
-                    if(customerId&&typeof window.openCustomerEditModal==='function'){
-                        window.openCustomerEditModal(customerId);
+                    if(typeof window.openCustomerEditModal==='function'&&(customerId||username)){
+                        window.openCustomerEditModal(customerId,username);
                     }else if(username){
                         window.openCustomerProfile(username);
                     }else{
@@ -5395,22 +5428,23 @@ async function deletePlan(id,name){
             if (!content) return;
             content.innerHTML = `
                     <div class="card card-custom">
-                        <div class="card-custom-header flex-wrap">
-                            <div class="d-flex align-items-center gap-2">
+                        <div class="card-custom-header customer-enterprise-header">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
                                 <i class="bi bi-people text-success fs-5"></i>
-                                <span data-key="customer_table">${escapeHtml(t.customer_table)}</span>
-                                <span class="badge bg-success">${visibleUsers.length}</span>
-                                <span class="badge bg-light text-success border"><i class="bi bi-broadcast"></i> <span data-key="router_live">${escapeHtml(t.router_live)}</span></span>
+                                <span class="fw-bold" data-key="customer_table">${escapeHtml(t.customer_table)}</span>
+                                <span class="customer-count-pill">${visibleUsers.length}</span>
+                                <span class="customer-router-pill"><i class="bi bi-circle-fill"></i><span data-key="router_live">${escapeHtml(t.router_live)}</span></span>
                             </div>
-                            <div class="customer-search-wrap ms-auto mt-2 mt-md-0">
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                                    <input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)">
+                            <div class="customer-search-wrap customer-toolbar-search">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-secondary"></i></span>
+                                    <input id="customerLiveSearch" type="search" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
                                 </div>
                             </div>
-                            ${currentCustomerFilter === 'all' ? '<button class="btn btn-outline-primary btn-sm mt-2 mt-md-0" onclick="restoreMissingRouterCustomer(this)" title="Restore an existing MikroTik PPPoE secret into this Billing Panel"><i class="bi bi-person-check me-1"></i> Restore Missing User</button>' : ''}
-                            <button class="btn btn-success btn-sm mt-2 mt-md-0" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button>
-                            <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshCustomerSection()"><i class="bi bi-arrow-clockwise"></i></button>
+                            <div class="customer-toolbar-actions">
+                                <button class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync to MikroTik</button>
+                                <button class="btn btn-outline-success btn-sm" onclick="refreshCustomerSection()" title="Refresh customer records" aria-label="Refresh customer records"><i class="bi bi-arrow-clockwise"></i></button>
+                            </div>
                         </div>
                         <div id="customerBillingTabs" class="px-3 pt-3 d-flex flex-wrap gap-2">
                             <button type="button" class="btn btn-sm btn-outline-secondary active" data-billing-filter="all" onclick="setCustomerBillingFilter('all',this)">All Customers (<span>${counts.all}</span>)</button>
@@ -5472,7 +5506,7 @@ async function deletePlan(id,name){
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
-            return '<tr data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
+            return '<tr data-search="' + escapeHtml([metadata.displayName, metadata.displayPhone, user.username || '', ip, caller, user.package_name || user.profile || ''].join(' ')) + '" data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
                 '<td class="ps-3"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
                 '<td class="customer-identity-cell"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
                     '<a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link fw-semibold text-decoration-none d-inline-flex align-items-center" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a>' +
@@ -5486,7 +5520,7 @@ async function deletePlan(id,name){
                     '<button type="button" class="btn btn-sm ' + (billingStatus === 'paid' ? 'btn-success text-white' : 'btn-outline-danger') + ' px-2 py-1 action-paid-btn" data-username="' + escapeHtml(user.username || '') + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid / active' : 'Mark as Paid') + '">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-outline-success px-2 py-1 action-renew-btn" data-id="' + escapeHtml(customerId) + '" data-name="' + escapeHtml(metadata.displayName || user.username || '') + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-expiry="' + escapeHtml(expiryRaw) + '" title="Renew for 1 Month" aria-label="Renew customer for one month" onclick="event.preventDefault(); event.stopPropagation(); window.handleOpenRenewConfirm({id:this.dataset.id,name:this.dataset.name,username:this.dataset.username,price:Number(this.dataset.price||0),expiry:this.dataset.expiry},this)"><i class="bi bi-arrow-repeat"></i></button>' +
                     '<button type="button" class="btn btn-sm btn-outline-info px-2 py-1 action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Summary"><i class="bi bi-eye"></i></button>' +
-                    '<button type="button" class="btn btn-sm btn-outline-primary px-2 py-1 action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit ' + escapeHtml(metadata.displayName || user.username || 'customer') + '" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-primary px-2 py-1 action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit ' + escapeHtml(metadata.displayName || user.username || 'customer') + '" ><i class="bi bi-pencil-square"></i></button>' +
                     '<button type="button" class="btn btn-sm btn-outline-danger px-2 py-1 action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>' +
                 '</div></td>' +
                 '<td class="mobile-customer-card-cell" colspan="8">' +
@@ -5496,7 +5530,7 @@ async function deletePlan(id,name){
                     '<button type="button" class="btn mc-pay action-paid-btn" data-id="' + escapeHtml(customerId) + '" data-name="' + escapeHtml(metadata.displayName || user.username || '') + '" data-username="' + escapeHtml(user.username || '') + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid for current cycle' : 'Mark as Paid') + '" aria-label="' + (billingStatus === 'paid' ? 'Already paid' : 'Mark customer as paid') + '"><i class="bi ' + (billingStatus === 'paid' ? 'bi-check2' : 'bi-cash-coin') + '"></i></button>' +
                     '<button type="button" class="btn mc-sync" data-id="' + escapeHtml(customerId) + '" data-name="' + escapeHtml(metadata.displayName || user.username || '') + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" data-expiry="' + escapeHtml(expiryRaw) + '" title="Renew for 1 Month" aria-label="Renew customer for one month" onclick="event.preventDefault();event.stopPropagation();if(typeof window.handleOpenRenewConfirm===\'function\')window.handleOpenRenewConfirm({id:this.dataset.id,name:this.dataset.name,username:this.dataset.username,price:Number(this.dataset.price||0),expiry:this.dataset.expiry},this);else alert(\'Renewal confirmation is unavailable. Please refresh the page.\')"><i class="bi bi-arrow-repeat"></i></button>' +
                     '<button type="button" class="btn mc-view action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Customer 360" aria-label="View customer"><i class="bi bi-eye"></i></button>' +
-                    '<button type="button" class="btn mc-edit action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit customer" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openCustomerEditForm === \'function\') window.openCustomerEditForm(this.dataset.id, this.dataset.username); else alert(\'Customer editor is not ready. Please refresh the page.\');"><i class="bi bi-pencil-square"></i></button>' +
+                    '<button type="button" class="btn mc-edit action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit customer" ><i class="bi bi-pencil-square"></i></button>' +
                     '<button type="button" class="btn mc-delete action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" title="Delete from MikroTik & DB" aria-label="Delete customer" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>' +
                   '</div></div></td>' +
             '</tr>';
@@ -5575,11 +5609,12 @@ async function deletePlan(id,name){
                 setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',live.ip||'—');
                 const bill=modalEl.querySelector('#cpBillingStatus');if(bill)bill.value=String(customer.billing_status||'Unpaid').toLowerCase();
                 const disabled=Boolean(customer.disabled);const toggle=modalEl.querySelector('#cpSecretToggle');if(toggle){toggle.checked=!disabled;toggle.dataset.username=customer.username||name;}
+                const accountStatus=modalEl.querySelector('#cpAccountStatus');if(accountStatus)accountStatus.value=['active','suspended','expired'].includes(String(customer.status||'').toLowerCase())?String(customer.status).toLowerCase():(disabled?'suspended':(safeDate&&safeDate<today?'expired':'active'));
                 setVal('cpFullName',customer.fullName||customer.full_name||'');setVal('cpPhone',customer.phone||'');setVal('cpEmail',customer.email||'');setVal('cpWhatsappNumber',customer.whatsapp_phone||customer.whatsappPhone||'');setVal('cpTelegramLink',customer.telegram_link||customer.telegramLink||'');setVal('cpFacebookLink',customer.facebook_link||customer.facebookLink||'');setVal('cpAltPhone',customer.alternative_phone||'');
                 const contactStatus=modalEl.querySelector('#cpNotificationReadiness');if(contactStatus){const validPhone=/^(?:\+?8801[3-9]\d{8}|01[3-9]\d{8})$/.test(String(customer.whatsapp_phone||customer.phone||'').replace(/[\s()-]/g,''));contactStatus.className='alert '+((customer.email||validPhone)?'alert-success':'alert-info')+' py-2 mb-0 small';contactStatus.innerHTML='<i class="bi '+((customer.email||validPhone)?'bi-check-circle':'bi-info-circle')+' me-1"></i>'+((customer.email||validPhone)?'Contact details saved. Actual delivery still depends on the corresponding sender being configured.':'Add a valid email or phone number. Sender configuration is managed separately.');}
                 setVal('cpAddress',customer.installation_address||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
                 setVal('cpOnuMac',customer.onu_mac||'');setVal('cpOnuSerial',customer.onu_serial||'');setVal('cpFiberCore',customer.fiber_drop_core||'');
-                setVal('cpUsername',customer.username||name);setVal('cpPassword',customer.password||'');setVal('cpRemarks',customer.remarks||'');
+                setVal('cpUsername',customer.username||name);const savedRemoteAddress=String(customer.remoteAddress||customer.remote_address||'');setVal('cpRemoteAddress',/^(?:\d{1,3}\.){3}\d{1,3}$/.test(savedRemoteAddress)?savedRemoteAddress:'');setVal('cpPassword',customer.password||'');setVal('cpRemarks',customer.remarks||'');
                 setVal('cpExpiration',formatDateForInput(safeDate));
                 const storedCycle=String(customer.billing_cycle||customer.billingCycle||'monthly').trim().toLowerCase().replace(/[\\s-]+/g,'_');const storedDays=customer.billing_duration_days??customer.billingDurationDays??'';const billingCycle=['monthly','month','1_month'].includes(storedCycle)?'monthly':['15_days','15_day'].includes(storedCycle)?'15_days':['30_days','30_day'].includes(storedCycle)?'30_days':Number(storedDays)===15?'15_days':Number(storedDays)===30?'30_days':'custom_days';
                 const cycleInput=modalEl.querySelector('#cpBillingCycle'),daysInput=modalEl.querySelector('#cpBillingDays'),autoExpire=modalEl.querySelector('#cpAutoExpire');
@@ -5676,13 +5711,15 @@ async function deletePlan(id,name){
             hub()?.querySelector('#cpPasswordToggle')?.addEventListener('click',()=>{const input=hub().querySelector('#cpPassword'),icon=hub().querySelector('#cpPasswordToggle i');if(input.type==='password'){input.type='text';icon.className='bi bi-eye-slash';}else{input.type='password';icon.className='bi bi-eye';}});
             hub()?.querySelector('#cpPlan')?.addEventListener('change',function(){const option=this.selectedOptions[0],price=Number(option?.dataset.price||0);const e=hub()?.querySelector('#cpBillAmount');if(e)e.value='৳ '+price.toFixed(2);});
             hub()?.querySelector('#cpKickBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username)return;if(!confirm('Disconnect active session for '+username+'?'))return;const b=m.querySelector('#cpKickBtn');hubLoading(b,true,'Disconnecting...');try{const d=await jsonFetch('/api/customers/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Active session disconnected.');await openCustomerProfile(username);}catch(e){alert(e.message||'Unable to disconnect session.');}finally{hubLoading(b,false,'Disconnect');}});
-            hub()?.querySelector('#cpSecretToggle')?.addEventListener('change',async function(){const m=hub(),username=m?.dataset.username;if(!username)return;const enabled=this.checked;try{await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,disabled:!enabled})});}catch(e){this.checked=!enabled;alert(e.message||'Unable to update secret state.');}});
+            hub()?.querySelector('#cpSecretToggle')?.addEventListener('change',async function(){const m=hub(),username=m?.dataset.username;if(!username)return;const enabled=this.checked;const statusInput=hub()?.querySelector('#cpAccountStatus');if(statusInput)statusInput.value=enabled?'active':'suspended';try{await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,disabled:!enabled,accountStatus:enabled?'active':'suspended'})});}catch(e){this.checked=!enabled;if(statusInput)statusInput.value=this.checked?'active':'suspended';alert(e.message||'Unable to update secret state.');}});
+            const accountStatusInput=hub()?.querySelector('#cpAccountStatus');
+            accountStatusInput?.addEventListener('change',()=>{const status=accountStatusInput.value,toggle=hub()?.querySelector('#cpSecretToggle');if(toggle){toggle.checked=status!=='suspended';}});
             const cycleInput=hub()?.querySelector('#cpBillingCycle'),daysInput=hub()?.querySelector('#cpBillingDays'),expiryInput=hub()?.querySelector('#cpExpiration'),autoExpire=hub()?.querySelector('#cpAutoExpire');
             cycleInput?.addEventListener('change',()=>{const wrap=hub()?.querySelector('#cpCustomDaysWrap');if(wrap)wrap.classList.toggle('d-none',cycleInput.value!=='custom_days');if(cycleInput.value==='15_days'&&daysInput)daysInput.value='15';else if(cycleInput.value==='30_days'&&daysInput)daysInput.value='30';if(autoExpire&&cycleInput.value!==cycleInput.dataset.initialValue)autoExpire.checked=false;});
             expiryInput?.addEventListener('change',()=>{if(autoExpire&&expiryInput.value!==expiryInput.dataset.initialValue)autoExpire.checked=false;});
             daysInput?.addEventListener('input',()=>{if(autoExpire&&daysInput.value!==daysInput.dataset.initialValue)autoExpire.checked=false;});
             hub()?.querySelector('#cpSyncBtn')?.addEventListener('click',async()=>{const m=hub(),id=m?.dataset.customerId||m?.dataset.username;if(!m||!id)return;if(!confirm('Sync '+(m.dataset.username||'this customer')+' credentials, expiry and Caller ID/MAC from the panel to MikroTik?'))return;const b=m.querySelector('#cpSyncBtn');hubLoading(b,true,'Syncing Customer...');try{const d=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/sync-mikrotik',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});alert(d.message||'Customer synced to MikroTik.');await openCustomerProfile(m.dataset.username||id);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to sync this customer.');}finally{hubLoading(b,false,'Sync Customer to MikroTik');}});
-             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),telegramLink:m.querySelector('#cpTelegramLink').value.trim(),facebookLink:m.querySelector('#cpFacebookLink').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
+             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire'),accountStatus=m.querySelector('#cpAccountStatus');const requestedStatus=String(accountStatus?.value||'active').toLowerCase();const expiryIso=dateInputToIso(expiry.value)||'';const todayDhaka=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());if(requestedStatus==='expired'&&(!expiryIso||expiryIso>=todayDhaka))throw new Error('To mark this account Expired, set its expiry date to a date before today.');if(requestedStatus==='active'&&expiryIso&&expiryIso<todayDhaka)throw new Error('This expiry date is already past. Update the expiry date before marking the account Active.');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const rawPhone=m.querySelector('#cpPhone').value.trim(),phoneDigits=rawPhone.replace(/\D/g,'').replace(/^880(?=1[3-9]\d{8}$)/,'');if(!/^01[3-9]\d{8}$/.test(phoneDigits))throw new Error('Enter a valid 11-digit Bangladesh mobile number (01XXXXXXXXX).');const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:phoneDigits,email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),telegramLink:m.querySelector('#cpTelegramLink').value.trim(),facebookLink:m.querySelector('#cpFacebookLink').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,remoteAddress:m.querySelector('#cpRemoteAddress').value.trim(),expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,accountStatus:requestedStatus,disabled:requestedStatus==='suspended'||(requestedStatus==='expired'?false:!m.querySelector('#cpSecretToggle').checked)};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(typeof showCustomerActionToast==='function')showCustomerActionToast(d.message||'Customer profile saved.');else alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for the configured billing cycle?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
@@ -5862,36 +5899,111 @@ async function deletePlan(id,name){
             } catch (error) { alert(error.message); }
         }
 
-        function viewCustomerDetails(encodedUsername) {
-            const username = decodeURIComponent(encodedUsername);
-            const user = currentCustomerUsers.find(item => String(item.username) === username);
-            if (!user) return;
-            const session = user.session || {};
-            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
-            const t = translations[lang] || translations.en;
-            const modal = document.createElement('div');
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title"><i class="bi bi-person-circle text-success me-2"></i>${escapeHtml(t.view_customer)}: ${escapeHtml(user.username)}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="row g-2">
-                                <div class="col-6"><small class="text-muted">${escapeHtml(t.full_name_phone)}</small><div>${escapeHtml(user.comment || '-')}</div><div>${escapeHtml(user.phone || '-')}</div></div>
-                                <div class="col-6"><small class="text-muted">${escapeHtml(t.package_profile)}</small><div>${escapeHtml(user.profile || '-')}</div></div>
-                                <div class="col-6"><small class="text-muted">${escapeHtml(t.ip_caller_id)}</small><div>${escapeHtml(user.session_ip || user.remote_address || '-')}</div><div>${escapeHtml(user.session_caller_id || user.caller_id || '-')}</div></div>
-                                <div class="col-6"><small class="text-muted">${escapeHtml(t.expiry_date)}</small><div>${escapeHtml(user.expiry_date ? FazDate.formatDate(user.expiry_date) : '-')}</div></div>
-                            </div>
-                        </div>
+        async function viewCustomerDetails(encodedUsername) {
+            const username = decodeURIComponent(String(encodedUsername || ''));
+            const user = (currentCustomerUsers || []).find(item => String(item.username || '') === username)
+                || (Array.isArray(window.cachedCustomers) ? window.cachedCustomers.find(item => String(item.username || '') === username) : null);
+            if (!user) { if (username && typeof window.openCustomerProfile === 'function') window.openCustomerProfile(username); return; }
+            const meta = parseCustomerMetadata(user);
+            const initials = String(meta.displayName || username).split(/\s+/).filter(Boolean).slice(0,2).map(x=>x.charAt(0).toUpperCase()).join('') || 'CU';
+            const expiryRaw = String(user.expiry_date || user.expiration_date || '').trim();
+            const formatQuickDate = value => {
+                const iso = String(value || '').slice(0,10);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return 'Not set';
+                return new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Dhaka'}).format(new Date(iso+'T00:00:00+06:00'));
+            };
+            let modalEl = document.getElementById('customerQuickViewModal');
+            if (!modalEl) {
+                modalEl = document.createElement('div');
+                modalEl.id = 'customerQuickViewModal';
+                modalEl.className = 'modal fade customer-quick-modal';
+                modalEl.tabIndex = -1;
+                modalEl.setAttribute('aria-labelledby','customerQuickViewTitle');
+                modalEl.setAttribute('aria-hidden','true');
+                document.body.appendChild(modalEl);
+            }
+            const live = user.session || {};
+            const online = Boolean(customerStatus(user).online || user.session_ip || live.ip || user.online || user.is_online);
+            const ip = live.ip || user.session_ip || user.remote_address || user.remoteAddress || 'Not assigned';
+            const mac = live.mac || user.session_caller_id || user.caller_id || user.mac || user.router_mac || 'Not available';
+            const packageName = user.package_name || user.profile || 'No package';
+            modalEl.innerHTML = `
+              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <div class="d-flex align-items-center gap-3 min-w-0">
+                      <div class="quick-avatar">${escapeHtml(initials)}</div>
+                      <div class="min-w-0">
+                        <h5 class="modal-title fw-bold mb-1" id="customerQuickViewTitle">${escapeHtml(meta.displayName || username)}</h5>
+                        <div class="small text-white-50">${escapeHtml(meta.displayPhone || user.phone || 'No phone number')} · ${escapeHtml(username)}</div>
+                      </div>
                     </div>
-                </div>`;
-            document.body.appendChild(modal);
-            const instance = getOrCreateModal(modal);
-            modal.addEventListener('hidden.bs.modal', () => modal.remove());
+                    <button type="button" class="btn-close ms-3" data-bs-dismiss="modal" aria-label="Close Quick View"></button>
+                  </div>
+                  <div class="modal-body p-4">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                      <span id="quickViewStatus" class="quick-status ${online?'online':'offline'}"><i class="bi bi-circle-fill"></i>${online?'Online':'Offline'}</span>
+                      <span class="customer-package"><i class="bi bi-speedometer2 me-1"></i><span id="quickViewPackage">${escapeHtml(packageName)}</span></span>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-12"><div class="quick-field"><span class="quick-label">Live Uptime</span><div class="quick-value"><span id="quickViewUptime">${escapeHtml(live.uptime || user.session_uptime || '—')}</span></div></div></div>
+                      <div class="col-6"><div class="quick-field"><span class="quick-label">Active IP</span><div class="quick-value"><code id="quickViewIp">${escapeHtml(ip)}</code><button class="quick-copy" type="button" data-copy-target="quickViewIp" title="Copy IP" aria-label="Copy IP"><i class="bi bi-copy"></i></button></div></div></div>
+                      <div class="col-6"><div class="quick-field"><span class="quick-label">MAC / Caller ID</span><div class="quick-value"><code id="quickViewMac">${escapeHtml(mac)}</code><button class="quick-copy" type="button" data-copy-target="quickViewMac" title="Copy MAC address" aria-label="Copy MAC address"><i class="bi bi-copy"></i></button></div></div></div>
+                      <div class="col-12"><div class="quick-field"><span class="quick-label">Billing Expiry</span><div class="quick-value"><span id="quickViewExpiry">${escapeHtml(formatQuickDate(expiryRaw))}</span><span class="small text-muted">Asia/Dhaka</span></div></div></div>
+                    </div>
+                    <div id="quickViewLoadNote" class="small text-muted mt-3" role="status" aria-live="polite">Checking live session…</div>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                      <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Close</button>
+                      <button type="button" class="btn btn-success" id="quickViewOpen360"><i class="bi bi-person-lines-fill me-1"></i>Open Customer 360</button>
+                    </div>
+                  </div>
+                </div>
+              </div>`;
+            const instance = getOrCreateModal(modalEl);
+            modalEl.querySelector('#quickViewOpen360')?.addEventListener('click', () => {
+                instance.hide();
+                if (typeof window.openCustomerProfile === 'function') window.openCustomerProfile(username);
+            }, { once: true });
+            if(!modalEl.dataset.copyBound){
+                modalEl.dataset.copyBound='1';
+                modalEl.addEventListener('click', async event => {
+                    const copyButton = event.target.closest('[data-copy-target]');
+                    if (!copyButton) return;
+                    const target = modalEl.querySelector('#' + copyButton.dataset.copyTarget);
+                    const value = String(target?.textContent || '').trim();
+                    if (!value || value === '—' || value === 'Not assigned' || value === 'Not available') return;
+                    try {
+                        await navigator.clipboard.writeText(value);
+                        copyButton.innerHTML = '<i class="bi bi-check2"></i>';
+                        setTimeout(() => { if (copyButton.isConnected) copyButton.innerHTML = '<i class="bi bi-copy"></i>'; }, 1200);
+                    } catch (_) {
+                        const range = document.createRange(); if (target) { range.selectNodeContents(target); const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); }
+                    }
+                });
+            }
             instance.show();
+            const quickViewRequestId = (window.__customerQuickViewRequestId = (window.__customerQuickViewRequestId || 0) + 1);
+            try {
+                const response = await jsonFetch('/api/customers/profile?username=' + encodeURIComponent(username), {timeout:6000});
+                if (quickViewRequestId !== window.__customerQuickViewRequestId) return;
+                const customer = response.customer || {};
+                const liveData = response.live || {};
+                const isOnline = Boolean(liveData.online);
+                const liveAvailable = response.liveStatusAvailable !== false && !['timeout','unavailable'].includes(String(response.live_sync||'').toLowerCase());
+                const status = modalEl.querySelector('#quickViewStatus');
+                if (status) { status.className = 'quick-status ' + (isOnline?'online':'offline'); status.innerHTML = '<i class="bi bi-circle-fill"></i>' + (liveAvailable?(isOnline?'Online':'Offline'):'Live status unavailable'); }
+                const setQuick = (id,value) => { const el=modalEl.querySelector('#'+id); if(el)el.textContent=value || '—'; };
+                setQuick('quickViewUptime', isOnline ? (liveData.uptime || '—') : '—');
+                setQuick('quickViewIp', liveData.ip || customer.remote_address || ip);
+                setQuick('quickViewMac', liveData.mac || customer.caller_id || customer.onu_mac || mac);
+                setQuick('quickViewPackage', customer.package_name || customer.profile || packageName);
+                setQuick('quickViewExpiry', formatQuickDate(customer.expirationDate || customer.expiration_date || expiryRaw));
+                setQuick('quickViewLoadNote', !liveAvailable ? 'Live status is temporarily unavailable; saved customer details remain available.' : (isOnline ? 'Live session updated just now.' : 'Customer record loaded. No active PPPoE session detected.'));
+            } catch (error) {
+                if (quickViewRequestId !== window.__customerQuickViewRequestId) return;
+                const note = modalEl.querySelector('#quickViewLoadNote');
+                if (note) note.textContent = 'Live status is temporarily unavailable; saved customer details are shown.';
+            }
         }
 
         async function fetchCustomers() {
@@ -5939,31 +6051,6 @@ async function deletePlan(id,name){
             } catch (error) { alert(error.message || 'Failed to push EXP dates to MikroTik.'); }
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
-        async function restoreMissingRouterCustomer(button) {
-            const username = (window.prompt('Enter the exact MikroTik PPPoE username to restore into All Customers:') || '').trim();
-            if (!username) return;
-            if (!window.confirm('Restore "' + username + '" from its existing MikroTik PPPoE secret into FAZ NETWORK Billing Panel? This does not change or delete anything on MikroTik.')) return;
-            const original = button ? button.innerHTML : '';
-            if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Restoring...'; }
-            try {
-                const result = await jsonFetch('/api/pppoe/restore-user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username }),
-                    timeout: 90000
-                });
-                if (!result || !result.success) throw new Error(result?.message || 'Restore failed.');
-                await fetchCustomers();
-                await refreshDashboard();
-                alert(result.message || ('Restored ' + username + ' into All Customers.'));
-            } catch (error) {
-                alert('Could not restore customer: ' + (error?.message || 'Unknown error'));
-            } finally {
-                if (button) { button.disabled = false; button.innerHTML = original; }
-            }
-        }
-        window.restoreMissingRouterCustomer = restoreMissingRouterCustomer;
-
         async function syncPanelCustomersToMikroTik(button){
             if(!confirm('Sync all current Billing Panel customers to MikroTik? Existing PPPoE secrets will be updated and missing secrets will be created from current customer records. Customer name, phone and expiry will be written in each RouterOS comment. Deleted/tombstoned customers will not be recreated. Continue?'))return;
             const original=button.innerHTML;

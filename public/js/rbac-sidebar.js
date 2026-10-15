@@ -14,7 +14,7 @@
       if(role==='staff'){
         item.querySelectorAll('a,button').forEach(control=>{
           const text=(control.textContent||'').trim().toLowerCase();
-          if(/add customer|due collection|add expenses|delete|edit|sync|push exp|restore missing|settings|manage|payment|invoice|billing/.test(text)) control.hidden=true;
+          if(/add customer|due collection|add expenses|delete|edit|sync|push exp|settings|manage|payment|invoice|billing/.test(text)) control.hidden=true;
         });
         if(label==='Customer') item.querySelectorAll('.submenu > li').forEach(li=>{
           if(/add customer|due collection/i.test(li.textContent||'')) li.hidden=true;

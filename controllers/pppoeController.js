@@ -522,57 +522,6 @@ async function createProfile(req, res) {
   }
 }
 
-async function restoreUserToPanel(req, res) {
-  const username = clean(req.body?.username, 100);
-  if (!username) return res.status(400).json({ success: false, message: "PPPoE username is required." });
-
-  let previousTombstone = null;
-  try {
-    // This explicit admin action restores only a secret that really exists on
-    // MikroTik. RouterOS configuration is read-only; no secret/session is changed.
-    const secret = await mikrotikService.getPppoeSecret(username);
-    if (!secret) {
-      return res.status(404).json({ success: false, message: `MikroTik PPPoE secret "${username}" was not found; nothing was changed.` });
-    }
-
-    const previous = await db.query(
-      "SELECT username, customer_id, deleted_at FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1) LIMIT 1",
-      [username]
-    );
-    previousTombstone = previous.rows[0] || null;
-    await db.query("DELETE FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1)", [username]);
-
-    try {
-      await syncFromRouter({ onlyUsername: username });
-      const restored = await db.query(
-        "SELECT id, username, full_name, phone, package_name, profile, expiration_date, provisioning_status, status FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
-        [username]
-      );
-      if (!restored.rows.length) {
-        const err = new Error("MikroTik user was found, but the Billing Panel customer row could not be created. Check for a duplicate phone number or database constraint.");
-        err.statusCode = 409;
-        throw err;
-      }
-      return res.json({
-        success: true,
-        message: `Restored ${username} into FAZ NETWORK Billing Panel. MikroTik secret and active session were not changed.`,
-        customer: restored.rows[0]
-      });
-    } catch (syncError) {
-      // If restoration failed, reinstate the protection that existed before
-      // this explicit attempt. A failed restore must not silently un-delete.
-      if (previousTombstone) {
-        await db.query(
-          "INSERT INTO customer_deletion_tombstones(username, customer_id, deleted_at) VALUES($1,$2,$3) ON CONFLICT(username) DO UPDATE SET customer_id=EXCLUDED.customer_id, deleted_at=EXCLUDED.deleted_at",
-          [previousTombstone.username, previousTombstone.customer_id, previousTombstone.deleted_at]
-        );
-      }
-      throw syncError;
-    }
-  } catch (error) {
-    return errorResponse(res, error);
-  }
-}
 
 async function removeUser(req,res){
   // Keep PPPoE deletion on the exact same unconditional deletion path used
@@ -582,4 +531,4 @@ async function removeUser(req,res){
   return customerController.removeCustomer(req,res);
 }
 
-module.exports = { users, profiles, active, syncSessions, createUser, updateUser, toggleUser, kickUser, createProfile, restoreUserToPanel, removeUser };
+module.exports = { users, profiles, active, syncSessions, createUser, updateUser, toggleUser, kickUser, createProfile, removeUser };

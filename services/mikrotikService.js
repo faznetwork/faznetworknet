@@ -1170,7 +1170,7 @@ class MikroTikService {
   async createSecret(data) {
     const name = this._str(data.username).trim(); const password = this._str(data.password); const profile = this._str(data.profile).trim();
     if (!name || !password || !profile) throw new Error("Username, password, and profile are required.");
-    return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; });
+    return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "remote-address": data.allowStaticRemoteAddress ? this._validStaticRemoteAddress(data.remoteAddress) : undefined, "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; });
   }
   async renewSecret(username, data) {
     const name = this._str(username).trim();

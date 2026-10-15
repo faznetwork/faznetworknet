@@ -3,7 +3,6 @@ const controller=require("../controllers/pppoeController");
 const customerController=require("../controllers/customerController");
 const router=express.Router();
 const {requireRole}=require("../middleware/rbac");
-router.post("/restore-user",controller.restoreUserToPanel);
 router.get("/users",controller.users);
 router.post("/users",customerController.createCustomer);
 router.post("/provision",customerController.createCustomer);
