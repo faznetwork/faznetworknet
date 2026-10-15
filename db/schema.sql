@@ -725,3 +725,11 @@ CREATE INDEX IF NOT EXISTS idx_router_devices_status ON router_devices(status);
 CREATE INDEX IF NOT EXISTS idx_router_devices_host ON router_devices(lower(host));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_name ON router_devices(lower(router_name));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_host_api ON router_devices(lower(host), api_type);
+
+
+-- Baileys auth credentials and Signal keys must survive ephemeral Render restarts.
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  key VARCHAR(255) PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
