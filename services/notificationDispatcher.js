@@ -3,7 +3,18 @@ const settingsService=require("./appSettings");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[event]||String(event||"").toLowerCase();}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function renewalRuleEvents(type,eventName){
+ if(type!=="pppoe"||!["payment","renewal","recharge"].includes(eventName))return [eventName];
+ // These legacy names are all used by PPPoE renewal/payment entry points. Treat an
+ // enabled renewal/payment/recharge rule as the same business event, while keeping
+ // other notification events isolated.
+ return [...new Set([eventName,"renewal","payment","recharge"])];
+}
+function extractCustomerPhone(customer={}){
+ return customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no||"";
+}
+function isValidBdWhatsAppPhone(value){return /^8801[3-9]\\d{8}$/.test(String(value||""));}
 function smsEvent(event){const map={payment:"payment_receipt",payment_receipt:"payment_receipt",recharge:"payment_receipt",renewal:"payment_receipt",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"line_expiry",expired:"line_expiry"};return map[event]||event;}
 function normalizePhone(value){
  let digits=String(value||"").replace(/[^\d]/g,"");
@@ -35,16 +46,35 @@ function formatMessage(settings,event,variables,message){
  const source=templateKey&&settings[templateKey]?settings[templateKey]:message||"";
  return smsService.renderTemplate(source,{company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...variables});
 }
-async function dispatchNow({userType="pppoe",event="payment",to,phone,username,message,variables={},messengerRecipientId,channels}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),eventName=eventKey(event);
- const recipient=normalizePhone(phone||to),context={username,name:username,phone:recipient,...variables};
+ const rawPhone=extractCustomerPhone(customer)||phone||to;
+ const normalizedPhone=normalizePhone(rawPhone);
+ const recipient=isValidBdWhatsAppPhone(normalizedPhone)?normalizedPhone:"";
+ const customerUsername=String(customer?.username||username||"unknown").trim()||"unknown";
+ const isPppoeRenewal=type==="pppoe"&&["payment","renewal","recharge"].includes(eventName);
+ if(isPppoeRenewal){
+  if(recipient)console.info(`[Dispatcher] Triggering PPPoE renewal notification for ${customerUsername} (${recipient}).`);
+  else console.warn(`[Notification] No valid phone found for customer: ${customerUsername}.`);
+ }
+ const context={username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipient,...variables};
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
  const channelEnabled=(name)=>selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
- const ruleEnabled=(name)=>bool(settings,"notification_rule_"+type+"_"+eventName+"_"+name+"_enabled",name==="sms"&&type==="pppoe"&&["payment","expiry_warning","expired"].includes(eventName));
+ const ruleEvents=renewalRuleEvents(type,eventName);
+ const ruleEnabled=(name)=>{
+  const keys=ruleEvents.map(ruleEvent=>"notification_rule_"+type+"_"+ruleEvent+"_"+name+"_enabled");
+  if(keys.some(key=>Object.prototype.hasOwnProperty.call(settings,key)&&settingsService.bool(settings[key])))return true;
+  if(keys.some(key=>Object.prototype.hasOwnProperty.call(settings,key)))return false;
+  return name==="sms"&&type==="pppoe"&&["payment","expiry_warning","expired"].includes(eventName);
+ };
+ const whatsappChannelEnabled=channelEnabled("whatsapp");
+ const whatsappRuleEnabled=ruleEnabled("whatsapp");
+ if(isPppoeRenewal&&whatsappChannelEnabled&&recipient&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
+ if(isPppoeRenewal&&whatsappChannelEnabled&&!recipient)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipient)jobs.push(["sms",()=>smsService.sendNotification({to:recipient,message:text,event:smsEvent(eventName),variables:context})]);
- if(channelEnabled("whatsapp")&&ruleEnabled("whatsapp")&&recipient)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipient,message:text})]);
+ if(whatsappChannelEnabled&&whatsappRuleEnabled&&recipient)jobs.push(["whatsapp",()=>whatsappService.sendMessage({to:recipient,message:text})]);
  if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",()=>sendTelegram(settings,text)]);
  if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,text)]);
  const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
@@ -64,4 +94,4 @@ async function testChannel(channel,{to,message="FAZ NETWORK test notification",m
  if(channel==="messenger")return sendMessenger(settings,messengerRecipientId,message);
  throw new Error("Unsupported notification channel.");
 }
-module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,eventKey};
+module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone};
