@@ -19,6 +19,7 @@ function clearCookie(res){res.setHeader("Set-Cookie",COOKIE+"=; Path=/; HttpOnly
 function clean(v,n=120){return String(v??"").trim().slice(0,n);}
 function phone(v){let n=String(v??"").replace(/[^\d]/g,"");if(n.startsWith("880")&&n.length===13)n="0"+n.slice(3);return n;}
 function validPhone(v){return /^01\d{9}$/.test(phone(v));}
+function normalizeMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
 async function passwordMatches(input,stored){const p=String(input??""),s=String(stored??"");if(!p||!s)return false;if(p===s)return true;if(/^\$2[aby]\$/.test(s)){try{return await require("bcryptjs").compare(p,s)}catch(_){return false}}return false;}
 function normalizeExpiryDate(value){if(!value)return "";if(value instanceof Date){if(Number.isNaN(value.getTime()))return "";return value.toISOString().slice(0,10);}const raw=String(value).trim();if(/^\d{4}-\d{2}-\d{2}/.test(raw))return raw.slice(0,10);const m=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(!m)return "";const day=Number(m[1]),month=Number(m[2]),year=Number(m[3]),d=new Date(Date.UTC(year,month-1,day));return d.getUTCFullYear()===year&&d.getUTCMonth()===month-1&&d.getUTCDate()===day?[String(year),String(month).padStart(2,"0"),String(day).padStart(2,"0")].join("-"):"";}
 function daysLeft(v){if(!v)return null;const d=String(v).slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return null;const t=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());return Math.ceil((Date.parse(d+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/86400000);}
@@ -32,10 +33,12 @@ async function login(req,res){
   if(!identifier||!password)return res.status(400).json({success:false,message:"Login details are required."});
   let subject="",name="",mobile="";
   if(type==="hotspot"){
-   const p=phone(identifier);if(!validPhone(p)||password!==p)return res.status(401).json({success:false,message:"Hotspot login requires the 11-digit mobile number as both username and password."});
-   let u=null;try{u=await mikrotikService.getHotspotUser(p)}catch(e){console.warn("[Self-care] Hotspot lookup:",e.message)}
-   if(u&&!u.disabled&&u.password===p){subject=u.username;name=u.username;mobile=p;}
-   else{const q=await db.query("SELECT username,password,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[p]).catch(()=>({rows:[]}));if(!q.rows.length||q.rows[0].status==="expired"||!(await passwordMatches(p,q.rows[0].password)))return res.status(401).json({success:false,message:"Hotspot account not found or mobile-number login is not enabled."});subject=q.rows[0].username;name=subject;mobile=p;}
+   const p=phone(identifier);if(!validPhone(p)||password!==p)return res.status(401).json({success:false,message:"Enter the registered 11-digit mobile number as the Hotspot self-care password."});
+   const q=await db.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||substring($1 from 2)) ORDER BY id DESC LIMIT 20",[p]);
+   const now=Date.now(),account=(q.rows||[]).find(row=>["pending_claim","active","unused"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=now));
+   if(!account||!(await passwordMatches(p,account.password)))return res.status(401).json({success:false,message:"No pending or active Hotspot account matches this phone number."});
+   // Use phone as the stable self-care subject because RouterOS username becomes the MAC on first login.
+   subject=p;name=p;mobile=p;}
   }else{
    const p=phone(identifier),q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') IN ($2, '880'||substring($2 from 2)) LIMIT 1",[identifier,p]),c=q.rows[0]||null,username=c?.username||identifier;
    const ures=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),u=ures.rows[0]||null;
@@ -54,12 +57,21 @@ async function profile(req,res){
  const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in to view your account."});
  try{
   if(s.type==="hotspot"){
-   const results=await Promise.allSettled([withTimeout(mikrotikService.getHotspotUser(s.sub),"Hotspot user lookup"),withTimeout(mikrotikService.getHotspotActiveSession(s.sub),"Hotspot active-session lookup"),db.query("SELECT profile,validity,price,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[s.sub]),db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")]);
-   const u=results[0].status==="fulfilled"?results[0].value:null,a=results[1].status==="fulfilled"?results[1].value:null,v=results[2].status==="fulfilled"?results[2].value.rows[0]||null:null;
-   if(!u&&!v)return res.status(404).json({success:false,message:"Hotspot account could not be found."});
-   let meta={};try{meta=JSON.parse(results[3].status==="fulfilled"?results[3].value.rows[0]?.value||"{}":"{}")}catch(_){}
-   const raw=u?.raw||{},total=Number(u?.limitBytesTotal||raw["limit-bytes-total"]||0),used=Math.max(0,Number(u?.bytesIn||raw["bytes-in"]||0))+Math.max(0,Number(u?.bytesOut||raw["bytes-out"]||0)),profile=clean(u?.profile||v?.profile,100),m=meta[profile]||{};
-   const paymentAccounts=await readMfsAccounts();return res.json({success:true,customer:{type:"hotspot",name:s.name||s.sub,username:s.sub,phone:s.phone||s.sub,profile,status:u?.disabled?"Disabled":a?"Online":"Offline",online:Boolean(a),ip:a?.address||null,uptime:a?.uptime||null,limitUptime:u?.limitUptime||raw["limit-uptime"]||v?.validity||m.validityValue||null,limitBytesTotal:total,usedBytes:used,remainingBytes:Math.max(0,total-used),limitGb:total?gb(total):null,usedGb:gb(used),remainingGb:total?gb(Math.max(0,total-used)):null,price:Number(v?.price||m.price||0),paymentAccounts,payments:[]}});
+   const p=phone(s.phone||s.sub);
+   const records=await db.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||substring($1 from 2)) ORDER BY id DESC LIMIT 20",[p]);
+   const v=(records.rows||[]).find(row=>["pending_claim","active","unused"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()))||null;
+   if(!v)return res.status(404).json({success:false,message:"Hotspot account could not be found."});
+   const routerUsername=normalizeMac(v.mac_address)||normalizeMac(v.username);
+   const results=await Promise.allSettled([
+     routerUsername?withTimeout(mikrotikService.getHotspotUser(routerUsername),"Hotspot user lookup"):Promise.resolve(null),
+     routerUsername?withTimeout(mikrotikService.getHotspotActiveSession(routerUsername),"Hotspot active-session lookup"):Promise.resolve(null),
+     db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")
+   ]);
+   const u=results[0].status==="fulfilled"?results[0].value:null,a=results[1].status==="fulfilled"?results[1].value:null;
+   let meta={};try{meta=JSON.parse(results[2].status==="fulfilled"?results[2].value.rows[0]?.value||"{}":"{}")}catch(_){}
+   const raw=u?.raw||{},total=Number(u?.limitBytesTotal||raw["limit-bytes-total"]||0),used=Math.max(0,Number(u?.bytesIn||raw["bytes-in"]||0))+Math.max(0,Number(u?.bytesOut||raw["bytes-out"]||0)),profile=clean(u?.profile||v.profile,100),m=meta[profile]||{};
+   const paymentAccounts=await readMfsAccounts(),status=String(v.status||"").toLowerCase(),pending=status==="pending_claim"&&!routerUsername;
+   return res.json({success:true,customer:{type:"hotspot",name:s.name||p,username:routerUsername||"Pending activation",phone:p,profile,status:pending?"Pending activation":u?.disabled?"Disabled":a?"Online":status==="expired"?"Expired":"Offline",online:Boolean(a),ip:a?.address||null,uptime:a?.uptime||null,limitUptime:u?.limitUptime||raw["limit-uptime"]||v.validity||m.validityValue||null,limitBytesTotal:total,usedBytes:used,remainingBytes:Math.max(0,total-used),limitGb:total?gb(total):null,usedGb:gb(used),remainingGb:total?gb(Math.max(0,total-used)):null,price:Number(v.price||m.price||0),paymentAccounts,payments:[]}});
   }
   const username=s.sub,qr=await db.query("SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name,p.price AS linked_price,p.rate_limit AS linked_rate_limit,p.duration_months AS linked_duration_months FROM customers c LEFT JOIN LATERAL (SELECT p.plan_name,p.profile_name,p.price,p.rate_limit,p.duration_months FROM packages p WHERE LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name) OR LOWER(p.profile_name)=LOWER(c.package_name) ORDER BY CASE WHEN LOWER(p.profile_name)=LOWER(c.profile) THEN 0 WHEN LOWER(p.plan_name)=LOWER(c.package_name) THEN 1 ELSE 2 END,p.id ASC LIMIT 1) p ON TRUE WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]),c=qr.rows[0]||null,ur=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),u=ur.rows[0]||null;
   if(!c&&!u)return res.status(404).json({success:false,message:"PPPoE account could not be found."});
