@@ -3312,21 +3312,18 @@
                 const profileDetails = currentHotspotProfiles.map(function (p) {
                     const name = String(p.name || '');
                     const price = Number(p.price || 0);
-                    const rateLimit = p.rateLimit || p['rate-limit'] || 'Not set';
-                    const validity = p.validityLabel || p.sessionTimeout || p['session-timeout'] || 'Not set';
-                    const sharedUsers = p.sharedUsers || p['shared-users'] || '1';
-                    const safeName = escapeHtml(name);
-                    const safeRate = escapeHtml(rateLimit);
-                    const safeValidity = escapeHtml(validity);
-                    const safeShared = escapeHtml(sharedUsers);
+                    const rateLimit = String(p.rateLimit || p['rate-limit'] || '').trim();
+                    const validity = String(p.validityLabel || p.sessionTimeout || p['session-timeout'] || 'Not set');
+                    const sharedUsers = String(p.sharedUsers || p['shared-users'] || '1');
                     const safePrice = Number.isFinite(price) ? price.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-
                     return {
                         name: name,
-                        safeName: safeName,
-                        rateLimit: safeRate,
-                        validity: safeValidity,
-                        sharedUsers: safeShared,
+                        safeName: escapeHtml(name),
+                        rateLimit: escapeHtml(rateLimit || 'Unlimited'),
+                        hasRateLimit: Boolean(rateLimit),
+                        validity: escapeHtml(validity),
+                        sharedUsers: escapeHtml(sharedUsers),
+                        deviceLabel: Number(sharedUsers) === 1 ? 'Device' : 'Devices',
                         price: safePrice
                     };
                 });
@@ -3338,32 +3335,18 @@
                                 '<span class="hp-profile-icon" aria-hidden="true"><i class="bi bi-wifi"></i></span>' +
                                 '<div class="hp-profile-title-wrap"><h3 class="hp-profile-name">' + p.safeName + '</h3><p class="hp-profile-subtitle">MikroTik Hotspot profile</p></div>' +
                             '</div>' +
-                            '<span class="hp-rate-badge">' + p.rateLimit + '</span>' +
+                            '<div class="hp-profile-price-header"><span>Price</span><strong>৳ ' + p.price + '</strong></div>' +
                         '</div>' +
-                        '<div class="hp-profile-metrics">' +
-                            '<div class="hp-profile-metric hp-profile-price"><span class="hp-metric-label">Price</span><strong>৳ ' + p.price + '</strong></div>' +
-                            '<div class="hp-profile-metric"><span class="hp-metric-label">Validity / Quota</span><strong>' + p.validity + '</strong></div>' +
+                        '<div class="hp-profile-specs">' +
+                            '<div class="hp-profile-spec"><span class="hp-spec-label">Speed Limit</span><span class="hp-rate-badge ' + (p.hasRateLimit ? 'hp-rate-configured' : 'hp-rate-unlimited') + '">' + p.rateLimit + '</span></div>' +
+                            '<div class="hp-profile-spec"><span class="hp-spec-label"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>Validity</span><strong>' + p.validity + '</strong></div>' +
+                            '<div class="hp-profile-spec"><span class="hp-spec-label"><i class="bi bi-people me-1" aria-hidden="true"></i>Shared Users</span><strong>' + p.sharedUsers + ' ' + p.deviceLabel + '</strong></div>' +
                         '</div>' +
-                        '<div class="hp-profile-card-meta"><span><i class="bi bi-people me-1" aria-hidden="true"></i>Shared users</span><strong>' + p.sharedUsers + '</strong></div>' +
                         '<div class="hp-profile-card-actions">' +
-                            '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square" aria-hidden="true"></i><span>Edit</span></button>' +
+                            '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square" aria-hidden="true"></i><span>Edit Profile</span></button>' +
                             '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span></button>' +
                         '</div>' +
                     '</article>';
-                }).join('');
-
-                const tableRows = profileDetails.map(function (p) {
-                    return '<tr>' +
-                        '<td><div class="hp-table-profile"><span class="hp-profile-icon hp-profile-icon-sm" aria-hidden="true"><i class="bi bi-wifi"></i></span><div><div class="hp-table-profile-name">' + p.safeName + '</div><div class="hp-table-profile-subtitle">MikroTik Hotspot profile</div></div></div></td>' +
-                        '<td><span class="hp-rate-badge">' + p.rateLimit + '</span></td>' +
-                        '<td><strong class="hp-table-price">৳ ' + p.price + '</strong></td>' +
-                        '<td><span class="hp-validity-badge">' + p.validity + '</span></td>' +
-                        '<td><span class="hp-shared-users">' + p.sharedUsers + '</span></td>' +
-                        '<td class="hp-table-actions"><div class="hp-table-action-group">' +
-                            '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)" aria-label="Edit ' + p.safeName + '" title="Edit profile"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>' +
-                            '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)" aria-label="Delete ' + p.safeName + '" title="Delete profile"><i class="bi bi-trash3" aria-hidden="true"></i></button>' +
-                        '</div></td>' +
-                    '</tr>';
                 }).join('');
 
                 const empty = '<div class="hp-profile-empty"><span class="hp-profile-empty-icon"><i class="bi bi-wifi"></i></span><strong>No Hotspot profiles found</strong><span>Create a profile to set its speed, price, and validity.</span><button type="button" class="btn btn-success mt-2" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Profile</button></div>';
@@ -3385,7 +3368,8 @@
                             '.hp-profiles-surface-title{margin:0;font-size:.9rem;font-weight:800;color:#334155}' +
                             '.hp-profiles-surface-note{color:#64748b;font-size:.78rem}' +
                             '.hp-profile-cards{display:grid;grid-template-columns:minmax(0,1fr);gap:.85rem}' +
-                            '.hp-profile-card{min-width:0;padding:1rem;border:1px solid #e2e8f0;border-radius:15px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.035);transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}' +
+                            '.hp-profile-card{min-width:0;padding:1.15rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;box-shadow:0 1px 2px rgba(15,23,42,.06);transition:box-shadow .2s ease,border-color .2s ease}' +
+                            '.hp-profile-card:hover{border-color:#cbd5e1;box-shadow:0 4px 10px rgba(15,23,42,.1)}' +
                             '.hp-profile-card:active{transform:translateY(1px)}' +
                             '.hp-profile-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.65rem;flex-wrap:wrap}' +
                             '.hp-profile-identity,.hp-table-profile{display:flex;align-items:center;gap:.7rem;min-width:0}' +
@@ -3394,7 +3378,17 @@
                             '.hp-profile-title-wrap{min-width:0}' +
                             '.hp-profile-name{margin:0;color:#0f172a;font-size:1rem;font-weight:800;line-height:1.35;overflow-wrap:anywhere}' +
                             '.hp-profile-subtitle,.hp-table-profile-subtitle{margin:.2rem 0 0;color:#64748b;font-size:.75rem;line-height:1.4}' +
-                            '.hp-rate-badge{display:inline-flex;align-items:center;max-width:100%;padding:.35rem .6rem;border:1px solid #a7f3d0;border-radius:999px;background:#ecfdf5;color:#047857;font-size:.75rem;font-weight:800;overflow-wrap:anywhere}' +
+                            '.hp-rate-badge{display:inline-flex;align-items:center;max-width:100%;padding:.4rem .65rem;border:1px solid #a7f3d0;border-radius:8px;background:#ecfdf5;color:#047857;font-size:.82rem;font-weight:750;overflow-wrap:anywhere}' +
+                            '.hp-rate-configured{border-color:#a7f3d0;background:#ecfdf5;color:#047857}' +
+                            '.hp-rate-unlimited{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}' +
+                            '.hp-profile-price-header{display:flex;flex-direction:column;align-items:flex-end;gap:.15rem;flex:0 0 auto;padding-left:.5rem}' +
+                            '.hp-profile-price-header span{color:#64748b;font-size:.73rem;font-weight:700}' +
+                            '.hp-profile-price-header strong{color:#059669;font-size:1.2rem;font-weight:900;line-height:1.3;white-space:nowrap}' +
+                            '.hp-profile-specs{display:grid;gap:.15rem;margin-top:1rem;padding:.25rem .85rem;border:1px solid #e2e8f0;border-radius:10px;background:#fff}' +
+                            '.hp-profile-spec{display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-width:0;padding:.7rem 0;border-bottom:1px solid #f1f5f9}' +
+                            '.hp-profile-spec:last-child{border-bottom:0}' +
+                            '.hp-spec-label{color:#64748b;font-size:.8rem;font-weight:650;flex:0 0 auto}' +
+                            '.hp-profile-spec strong{color:#334155;font-size:.85rem;font-weight:800;text-align:right;overflow-wrap:anywhere}' +
                             '.hp-profile-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin-top:1rem}' +
                             '.hp-profile-metric{display:flex;flex-direction:column;justify-content:center;gap:.35rem;min-width:0;padding:.8rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}' +
                             '.hp-profile-price{border-color:#bbf7d0;background:#f0fdf4}' +
@@ -3409,27 +3403,13 @@
                             '.hp-action-edit:hover{border-color:#6ee7b7;background:#d1fae5;color:#065f46}' +
                             '.hp-action-delete{border-color:#fecaca;background:#fff;color:#b91c1c}' +
                             '.hp-action-delete:hover{border-color:#fca5a5;background:#fef2f2;color:#991b1b}' +
-                            '.hp-profile-table-wrap{display:none;width:100%;overflow:visible}' +
-                            '.hp-profile-table{width:100%;margin:0;border-collapse:separate;border-spacing:0;table-layout:auto}' +
-                            '.hp-profile-table thead th{padding:.95rem 1rem;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:.72rem;font-weight:800;letter-spacing:.045em;text-transform:uppercase;white-space:nowrap}' +
-                            '.hp-profile-table tbody td{padding:.9rem 1rem;border-bottom:1px solid #edf2f7;background:#fff;color:#334155;font-size:.84rem;vertical-align:middle}' +
-                            '.hp-profile-table tbody tr:last-child td{border-bottom:0}' +
-                            '.hp-profile-table tbody tr{transition:background .15s ease}' +
-                            '.hp-profile-table tbody tr:hover td{background:#f8fafc}' +
-                            '.hp-table-profile-name{color:#0f172a;font-size:.86rem;font-weight:800;overflow-wrap:anywhere}' +
-                            '.hp-table-price{color:#047857;font-size:.95rem;font-weight:850;white-space:nowrap}' +
-                            '.hp-validity-badge{display:inline-flex;max-width:200px;padding:.35rem .6rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;font-size:.77rem;font-weight:700;overflow-wrap:anywhere}' +
-                            '.hp-shared-users{display:inline-flex;align-items:center;justify-content:center;min-width:32px;padding:.3rem .5rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;font-weight:750}' +
-                            '.hp-table-actions{text-align:right;white-space:nowrap;width:1%}' +
-                            '.hp-table-action-group{display:flex;align-items:center;justify-content:flex-end;gap:.4rem}' +
-                            '.hp-table-action-group .hp-action-btn{width:36px;height:36px;min-width:36px;padding:0}' +
                             '.hp-profile-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;padding:2.5rem 1rem;text-align:center;color:#64748b;font-size:.85rem}' +
                             '.hp-profile-empty strong{color:#334155;font-size:.95rem}' +
                             '.hp-profile-empty-icon{display:flex;align-items:center;justify-content:center;width:54px;height:54px;margin-bottom:.3rem;border:1px solid #a7f3d0;border-radius:16px;background:#ecfdf5;color:#047857;font-size:1.5rem}' +
-                            '@media(min-width:576px){.hp-profile-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.hp-profile-card{padding:1.1rem}}' +
-                            '@media(min-width:768px){.hp-profile-cards{display:none}.hp-profile-table-wrap{display:block}.hp-profiles-surface-head{padding:1.05rem 1.25rem}.hp-profile-table thead th:first-child,.hp-profile-table tbody td:first-child{padding-left:1.25rem}.hp-profile-table thead th:last-child,.hp-profile-table tbody td:last-child{padding-right:1.25rem}}' +
-                            '@media(max-width:575.98px){.hp-profiles-header{align-items:stretch;flex-direction:column}.hp-profiles-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}.hp-profiles-actions .btn{width:100%}.hp-profile-card{padding:.9rem}.hp-profile-card-top{gap:.6rem}.hp-profile-metric{padding:.7rem}.hp-profile-name{font-size:.95rem}}' +
-                            '@media(prefers-reduced-motion:reduce){.hp-profile-card,.hp-profile-table tbody tr,.hp-action-btn{transition:none}}' +
+                            '@media(min-width:1024px){.hp-profile-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}' +
+                            '@media(min-width:1280px){.hp-profile-cards{grid-template-columns:repeat(4,minmax(0,1fr))}}' +
+                            '@media(max-width:575.98px){.hp-profiles-header{align-items:stretch;flex-direction:column}.hp-profiles-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}.hp-profiles-actions .btn{width:100%}.hp-profile-card{padding:.95rem}.hp-profile-card-top{gap:.6rem}.hp-profile-name{font-size:.98rem}.hp-profile-price-header strong{font-size:1.05rem}.hp-profile-specs{padding:.2rem .65rem}}' +
+                            '@media(prefers-reduced-motion:reduce){.hp-profile-card,.hp-action-btn{transition:none}}' +
                         '</style>' +
                         '<div class="hp-profiles-shell">' +
                             '<header class="hp-profiles-header">' +
@@ -3438,7 +3418,7 @@
                             '</header>' +
                             '<div class="hp-profiles-surface">' +
                                 '<div class="hp-profiles-surface-head"><h3 class="hp-profiles-surface-title">Profile inventory</h3><span class="hp-profiles-surface-note">' + profileDetails.length + ' profile' + (profileDetails.length === 1 ? '' : 's') + '</span></div>' +
-                                (profileDetails.length ? '<div class="hp-profile-cards">' + cards + '</div><div class="hp-profile-table-wrap"><table class="hp-profile-table"><thead><tr><th>Profile Name</th><th>Rate Limit (Rx/Tx)</th><th>Price (BDT)</th><th>Validity / Quota</th><th>Shared Users</th><th class="hp-table-actions">Actions</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' : empty) +
+                                (profileDetails.length ? '<div class="hp-profile-cards">' + cards + '</div>' : empty) +
                             '</div>' +
                         '</div>' +
                     '</section>'
@@ -3453,8 +3433,8 @@
             const existing=profileName?currentHotspotProfiles.find(function(p){return String(p.name)===String(profileName);}):null;
             let modal=document.getElementById('hotspotProfileModal');
             if(!modal){
-                modal=document.createElement('div');modal.id='hotspotProfileModal';modal.className='modal fade';modal.tabIndex=-1;
-                modal.innerHTML='<div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header bg-light"><div><h5 class="modal-title fw-bold"><i class="bi bi-wifi text-success me-2"></i>Create / Edit Hotspot Profile</h5><div class="small text-muted">Set speed, price, and custom time or data validity.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="hotspotProfileForm"><div class="modal-body p-4"><input type="hidden" id="hotspotProfileOriginalName"><div class="row g-3"><div class="col-md-6"><label class="form-label fw-semibold">Profile Name</label><input id="hotspotProfileName" class="form-control" required maxlength="100" placeholder="Profile-1Day"></div><div class="col-md-6"><label class="form-label fw-semibold">Rate Limit (Rx/Tx)</label><input id="hotspotProfileRate" class="form-control" required placeholder="10M/10M"></div><div class="col-md-4"><label class="form-label fw-semibold">Price (৳ BDT)</label><input id="hotspotProfilePrice" type="number" min="0" step="0.01" class="form-control" value="20" required></div><div class="col-md-4"><label class="form-label fw-semibold">Shared Users</label><input id="hotspotProfileShared" type="number" min="1" step="1" class="form-control" value="1" required></div><div class="col-md-4"><label class="form-label fw-semibold">Validity Value</label><input id="hotspotProfileValidityValue" type="number" min="1" step="1" class="form-control" value="1" required></div><div class="col-md-6"><label class="form-label fw-semibold">Validity Unit</label><select id="hotspotProfileValidityUnit" class="form-select" required><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days" selected>Days</option><option value="gb">GB (data quota, no time limit)</option></select></div><div class="col-md-6"><label class="form-label fw-semibold">Resolved Validity</label><div id="hotspotProfileValidityPreview" class="form-control bg-light fw-semibold">1 Day</div></div><div class="col-12"><label class="form-label fw-semibold">RouterOS On-Login Policy Preview</label><textarea id="hotspotProfileOnLogin" class="form-control font-monospace small" rows="6" readonly></textarea><div class="form-text">This exact script is generated by the backend used by Save Profile and Sync All Profiles. Previewing is read-only; Save Profile or Sync All Profiles applies it to MikroTik.</div></div></div><div id="hotspotProfileFormResult" class="small mt-3" role="status" aria-live="polite"></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-theme" id="hotspotProfileSave"><i class="bi bi-cloud-check me-1"></i>Save Profile to MikroTik</button></div></form></div></div>';
+                modal=document.createElement('div');modal.id='hotspotProfileModal';modal.className='modal fade';modal.tabIndex=-1;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-labelledby','hotspotProfileModalTitle');
+                modal.innerHTML='<div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header bg-light"><div><h5 id="hotspotProfileModalTitle" class="modal-title fw-bold"><i class="bi bi-wifi text-success me-2"></i>Create Hotspot Profile</h5><div class="small text-muted">Set speed, price, and custom time or data validity.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="hotspotProfileForm"><div class="modal-body p-4"><input type="hidden" id="hotspotProfileOriginalName"><div class="row g-3"><div class="col-md-6"><label class="form-label fw-semibold">Profile Name</label><input id="hotspotProfileName" class="form-control" required maxlength="100" placeholder="Profile-1Day"></div><div class="col-md-6"><label class="form-label fw-semibold">Speed Limit / Rate Limit (RX/TX) (Optional)</label><input id="hotspotProfileRate" class="form-control" type="text" placeholder="e.g., 50M/50M (leave blank for Unlimited speed)" autocomplete="off"></div><div class="col-md-4"><label class="form-label fw-semibold">Price (৳ BDT)</label><input id="hotspotProfilePrice" type="number" min="0" step="0.01" class="form-control" value="20" required></div><div class="col-md-4"><label class="form-label fw-semibold">Shared Users</label><input id="hotspotProfileShared" type="number" min="1" step="1" class="form-control" value="1" required></div><div class="col-md-4"><label class="form-label fw-semibold">Validity Value</label><input id="hotspotProfileValidityValue" type="number" min="1" step="1" class="form-control" value="1" required></div><div class="col-md-6"><label class="form-label fw-semibold">Validity Unit</label><select id="hotspotProfileValidityUnit" class="form-select" required><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days" selected>Days</option><option value="gb">GB (data quota, no time limit)</option></select></div><div class="col-md-6"><label class="form-label fw-semibold">Resolved Validity</label><div id="hotspotProfileValidityPreview" class="form-control bg-light fw-semibold">1 Day</div></div><div class="col-12"><label class="form-label fw-semibold">RouterOS On-Login Policy Preview</label><textarea id="hotspotProfileOnLogin" class="form-control font-monospace small" rows="6" readonly></textarea><div class="form-text">This exact script is generated by the backend used by Save Profile and Sync All Profiles. Previewing is read-only; Save Profile or Sync All Profiles applies it to MikroTik.</div></div></div><div id="hotspotProfileFormResult" class="small mt-3" role="status" aria-live="polite"></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-theme" id="hotspotProfileSave"><i class="bi bi-cloud-check me-1"></i>Save Profile to MikroTik</button></div></form></div></div>';
                 document.body.appendChild(modal);
                 let previewSequence=0,previewTimer=null;
                 function refreshPreview(){
@@ -3493,10 +3473,10 @@
                     event.preventDefault();
                     const button=document.getElementById('hotspotProfileSave'),result=document.getElementById('hotspotProfileFormResult');
                     const original=document.getElementById('hotspotProfileOriginalName').value.trim(),name=document.getElementById('hotspotProfileName').value.trim(),rateLimit=document.getElementById('hotspotProfileRate').value.trim(),validityValue=Number(document.getElementById('hotspotProfileValidityValue').value),validityUnit=document.getElementById('hotspotProfileValidityUnit').value,price=Number(document.getElementById('hotspotProfilePrice').value),sharedUsers=Number(document.getElementById('hotspotProfileShared').value);
-                    if(!name||!rateLimit||!Number.isSafeInteger(validityValue)||validityValue<1||!Number.isFinite(price)||price<0||!Number.isSafeInteger(sharedUsers)||sharedUsers<1){if(result)result.textContent='Enter a profile name, rate limit, non-negative price, and positive whole-number validity/shared users.';return;}
+                    if(!name||!Number.isSafeInteger(validityValue)||validityValue<1||!Number.isFinite(price)||price<0||!Number.isSafeInteger(sharedUsers)||sharedUsers<1){if(result)result.textContent='Enter a profile name, non-negative price, and positive whole-number validity/shared users.';return;}
                     button.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving profile and package metadata…';}
                     try{
-                        const response=await fetch(original?'/api/hotspot/profiles/update':'/api/hotspot/profiles/create',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({name,rateLimit,sharedUsers,validityValue,validityUnit,price})});
+                        const response=await fetch(original?'/api/hotspot/profiles/'+encodeURIComponent(original):'/api/hotspot/profiles/create',{method:original?'PUT':'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({name,rateLimit,sharedUsers,validityValue,validityUnit,price})});
                         const data=await response.json();if(!response.ok||data.success===false)throw new Error(data.message||data.error||'Unable to save profile.');
                         bootstrap.Modal.getInstance(modal)?.hide();await loadHotspotProfiles('hotspot_profile');
                     }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Profile save failed.';}else alert(error.message);}finally{button.disabled=false;}
@@ -3507,7 +3487,7 @@
             const match=String(existing?.sessionTimeout||existing?.['session-timeout']||'1d').match(/^(\d+)(m|h|d)$/i);
             set('hotspotProfileValidityValue',existing?.validityValue||(match?Number(match[1]):1));
             set('hotspotProfileValidityUnit',existing?.validityUnit||(match?({m:'minutes',h:'hours',d:'days'}[match[2].toLowerCase()]):'days'));
-            const nameField=document.getElementById('hotspotProfileName');if(nameField)nameField.disabled=Boolean(existing);
+            const nameField=document.getElementById('hotspotProfileName');if(nameField){nameField.readOnly=Boolean(existing);nameField.disabled=false;}const modalTitle=document.getElementById('hotspotProfileModalTitle');if(modalTitle)modalTitle.innerHTML='<i class="bi bi-wifi text-success me-2"></i>'+(existing?'Edit Hotspot Profile':'Create Hotspot Profile');const saveButton=document.getElementById('hotspotProfileSave');if(saveButton)saveButton.innerHTML='<i class="bi bi-cloud-check me-1"></i>'+(existing?'Update Profile':'Save Profile to MikroTik');
             const result=document.getElementById('hotspotProfileFormResult');if(result){result.className='small mt-3';result.textContent='';}
             ['hotspotProfileValidityValue','hotspotProfileValidityUnit','hotspotProfileName'].forEach(function(id){document.getElementById(id)?.dispatchEvent(new Event('input'));});
             if(modal.parentElement!==document.body)document.body.appendChild(modal);
