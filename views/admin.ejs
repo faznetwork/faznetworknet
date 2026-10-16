@@ -4729,7 +4729,6 @@ async function deletePlan(id,name){
         document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
         document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
         document.getElementById('telegramTokenToggle')?.addEventListener('click',e=>{const input=document.getElementById('telegramBotToken'),icon=e.currentTarget.querySelector('i');const show=input.type==='password';input.type=show?'text':'password';e.currentTarget.setAttribute('aria-label',show?'Hide Bot Token':'Show Bot Token');if(icon)icon.className=show?'bi bi-eye-slash':'bi bi-eye';});
-        document.getElementById('telegramTestChatId')?.addEventListener('input',e=>{if(!String(e.target.value||'').trim())return;});
         document.getElementById('telegramTestBtn')?.addEventListener('click',async e=>{
           const button=e.currentTarget,resultEl=document.getElementById('telegramTestResult'),targetChatId=String(document.getElementById('telegramTestChatId')?.value||document.getElementById('telegramChatId')?.value||'').trim(),message=String(document.getElementById('telegramTestMessage')?.value||'').trim();
           resultEl.className='alert alert-secondary py-2 small mb-0';resultEl.textContent='';
