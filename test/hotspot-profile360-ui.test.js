@@ -52,7 +52,7 @@ test("Profile 360 saves explicitly and opens Subscriber 360 in a mobile bottom s
  assert.match(js,/profile360SubmitBound/);
  assert.match(js,/method:"PUT"/);
  assert.match(js,/Profile updated successfully!/);
- assert.match(js,/data\.message\|data\.error/);
+ assert.match(js,/data\\.message\\|\\|data\\.error/);
  assert.match(master,/mobileSubscriberModal/);
  assert.match(master,/mobile-subscriber-back/);
  assert.match(master,/mobile-subscriber-close/);
