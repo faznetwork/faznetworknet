@@ -57,7 +57,7 @@ test("manual Hotspot assignment rejects a package whose price differs from the t
  try{
   db.query=async(sql)=>{
    if(sql.startsWith("SELECT * FROM transactions"))return {rows:[transaction()]};
-   if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(metadata())}]};
+   if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({"1-Hour":{...metadata()["1-Hour"],price:15}})}]};
    if(sql.startsWith("UPDATE transactions SET status='processing'")){claimed=true;return {rows:[{id:77}]};}
    throw new Error("Unexpected query: "+sql);
   };
