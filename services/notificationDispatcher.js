@@ -93,7 +93,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",async()=>sendTelegram(settings,await textFor("telegram"))]);
  if(channelEnabled("messenger")&&ruleEnabled("messenger")){
-  let psid=String(customer?.messenger_psid||messengerRecipientId||context.messengerRecipientId||"").trim();
+  let psid=String(customer?.messenger_psid||"").trim();
   if(!psid&&customerUsername!=="unknown"){
    try{const linked=await db.query("SELECT messenger_psid FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);psid=String(linked.rows?.[0]?.messenger_psid||"").trim();}
    catch(error){console.warn("[Messenger] PSID lookup failed for customer "+customerUsername+": "+String(error?.message||error).slice(0,160));}
