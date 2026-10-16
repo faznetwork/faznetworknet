@@ -183,6 +183,22 @@ async function testNotification(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:"Test notification request completed.",result});
  }catch(error){return errorResponse(res,error,502);}
 }
+async function testEmail(req,res){
+ try{
+  const to=String(req.body?.to||req.body?.recipientEmail||"").trim();
+  const subject=String(req.body?.subject||"").trim();
+  if(!to||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to))throw new Error("A valid recipient email address is required.");
+  if(!subject)throw new Error("Test email subject is required.");
+  if(subject.length>200)throw new Error("Email subject must be 200 characters or fewer.");
+  const emailService=require("../services/emailService");
+  const verification=await emailService.verifyConnection();
+  if(!verification.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:verification.error||"Email provider configuration verification failed.",details:verification});
+  const isAppsScript=verification.provider==="apps_script";
+  const result=await emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding."});
+  if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",details:result,verification});
+  return res.set("Cache-Control","no-store").json({success:true,message:isAppsScript?"Google Apps Script confirmed the test email request successfully.":"SMTP connection verified and test email sent successfully.",verification,result});
+ }catch(error){return errorResponse(res,error,502);}
+}
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
 async function testWhatsApp(req,res){
  try{
