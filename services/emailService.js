@@ -68,16 +68,31 @@ async function sendAppsScriptEmail({ to, subject, html, text }, config) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    // Fetch's default redirect behavior changes POST to GET for 302/303 responses.
     // Apps Script ContentService commonly redirects to script.googleusercontent.com.
+    // text/plain avoids cross-origin JSON preflight behavior while still carrying JSON text.
     const response = await fetch(appsScript.url, {
       method: "POST",
       redirect: "follow",
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ token: appsScript.token, type: "notification", to: String(to).trim(), subject: String(subject).trim(), html: htmlBody })
     });
     const responseText = await response.text();
+    const contentType = response.headers && typeof response.headers.get === "function"
+      ? String(response.headers.get("content-type") || "")
+      : "";
+    const looksLikeHtml = /(?:^\s*<!doctype\s+html|^\s*<html\b)/i.test(responseText) || /text\/html/i.test(contentType);
+    if (response.redirected || looksLikeHtml) {
+      let responseHost = "";
+      try { responseHost = new URL(response.url || appsScript.url).hostname; } catch (_) {}
+      console.warn("[EmailService] Google Apps Script redirected or returned HTML", {
+        status: response.status,
+        redirected: Boolean(response.redirected),
+        responseHost,
+        contentType: contentType.slice(0, 100),
+        preview: responseText.replace(/[\r\n\t]+/g, " ").slice(0, 240)
+      });
+    }
     let payload;
     try { payload = JSON.parse(responseText); } catch (_) {
       throw new Error("Google Apps Script returned a non-JSON response (HTTP " + response.status + ").");
