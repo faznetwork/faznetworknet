@@ -4738,7 +4738,7 @@ async function deletePlan(id,name){
             await saveNotificationHub();
             const response=await fetch('/api/settings/notifications/telegram/test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({targetChatId,message}),cache:'no-store'});
             const data=await response.json().catch(()=>({}));
-            if(!response.ok||!data.success){const details=data.details||data;throw new Error(data.message||data.error||data.details?.error||'Telegram test failed.');}
+            if(!response.ok||!data.success){const details=data.details||data;const parts=[data.message||data.error||details.error,details.error_code?'API code '+details.error_code:'',details.hint||''].filter(Boolean);throw new Error(parts.join(' · ')||'Telegram test failed.');}
             resultEl.className='alert alert-success py-2 small mb-0';resultEl.textContent='Success: '+(data.message||'Telegram message sent.')+(data.result?.result?.message_id?' Message ID: '+data.result.result.message_id: '');
           }catch(error){resultEl.className='alert alert-danger py-2 small mb-0';resultEl.textContent='Telegram error: '+(error.message||'Test failed.');}
           finally{button.disabled=false;}
