@@ -5,7 +5,11 @@ function normalizeUsername(value) {
 }
 
 function sessionUsername(session) {
-  return normalizeUsername(session?.username || session?.name || session?.user || "");
+  for (const candidate of [session?.username, session?.name, session?.user]) {
+    const normalized = normalizeUsername(candidate);
+    if (normalized) return normalized;
+  }
+  return "";
 }
 
 function createActiveSessionMap(sessions) {
