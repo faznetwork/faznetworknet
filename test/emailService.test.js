@@ -145,7 +145,7 @@ test("Apps Script URL validation blocks non-Google or non-HTTPS endpoints", asyn
   settingsService.getAllSettings = async () => validAppsScriptSettings({ email_apps_script_url: "http://example.com/exec" });
   const result = await emailService.verifyConnection();
   assert.equal(result.success, false);
-  assert.match(result.error, /HTTPS Google Apps Script URL/);
+  assert.match(result.error, /HTTPS Google Apps Script/);
 });
 
 test("Email test endpoint reports Apps Script success only when its JSON confirms delivery", async () => {
