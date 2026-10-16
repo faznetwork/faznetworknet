@@ -4,7 +4,7 @@ const ALLOWED_EVENTS = new Set([
   "pppoe_renewal", "pppoe_payment", "pppoe_expiry_warning", "pppoe_expired",
   "hotspot_purchase", "hotspot_renewal", "hotspot_expiry_warning", "hotspot_expired", "welcome_message"
 ]);
-const ALLOWED_CHANNELS = new Set(["whatsapp", "sms", "telegram", "messenger", "email"]);
+const ALLOWED_CHANNELS = new Set(["whatsapp", "sms", "email"]);
 function fail(res, error, status=400) {
   const message=String(error?.message||"Notification template operation failed.");
   return res.status(status).json({success:false,message,error:message});
