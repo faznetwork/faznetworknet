@@ -26,8 +26,12 @@ CREATE TABLE IF NOT EXISTS broadcast_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
+  worker_token TEXT,
+  worker_lease_until TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE broadcast_logs ADD COLUMN IF NOT EXISTS worker_token TEXT;
+ALTER TABLE broadcast_logs ADD COLUMN IF NOT EXISTS worker_lease_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_broadcast_logs_created_at ON broadcast_logs(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS broadcast_recipients (
