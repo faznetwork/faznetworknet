@@ -192,6 +192,18 @@ async function testMessenger(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:"Test Messenger alert sent successfully.",result});
  }catch(error){return errorResponse(res,error,502);}
 }
+async function testTelegram(req,res){
+ try{
+  const targetChatId=String(req.body?.targetChatId||req.body?.chatId||req.body?.to||"").trim();
+  const message=String(req.body?.message||"").trim();
+  if(!targetChatId)throw new Error("Target Telegram Chat ID is required.");
+  if(!message)throw new Error("Test message text is required.");
+  if(message.length>4096)throw new Error("Telegram test message must be 4096 characters or fewer.");
+  const result=await require("../services/telegramService").sendTelegramMessage(targetChatId,message,{parse_mode:"HTML",disable_web_page_preview:true});
+  if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Telegram test delivery failed.",error:result.error||"Telegram test delivery failed.",details:result});
+  return res.set("Cache-Control","no-store").json({success:true,message:"Test Telegram message sent successfully.",result});
+ }catch(error){return errorResponse(res,error,502);}
+}
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
 async function testWhatsApp(req,res){
  try{
@@ -207,4 +219,4 @@ async function testWhatsApp(req,res){
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect()});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,testMessenger,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,testMessenger,testTelegram,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};

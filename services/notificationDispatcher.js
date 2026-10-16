@@ -4,6 +4,7 @@ const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 const messengerService=require("./messengerService");
+const telegramService=require("./telegramService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
@@ -47,14 +48,7 @@ function normalizePhone(value){
  if(digits.startsWith("1")&&digits.length===10)return "880"+digits;
  return digits;
 }
-async function sendTelegram(settings,message){
- const token=String(settings.telegram_bot_token||"").trim(),chatId=String(settings.telegram_default_chat_id||"").trim();
- if(!token||!chatId)throw new Error("Telegram Bot Token and default Chat ID are required.");
- const response=await fetch("https://api.telegram.org/bot"+encodeURIComponent(token)+"/sendMessage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chatId,text:String(message||"").slice(0,4000),disable_web_page_preview:true}),redirect:"error"});
- const data=await response.json().catch(()=>({}));
- if(!response.ok||data.ok===false)throw new Error("Telegram delivery failed"+(data.description?": "+String(data.description).slice(0,160):"."));
- return {success:true,result:data.result?{message_id:data.result.message_id}:undefined};
-}
+
 function formatMessage(settings,event,variables,message,customTemplate){
  const templateKey={payment:"sms_template_payment_receipt",payment_receipt:"sms_template_payment_receipt",recharge:"sms_template_payment_receipt",renewal:"sms_template_payment_receipt",welcome:"sms_template_welcome",expiry_warning:"sms_template_expiry_warning",expired:"sms_template_line_block",line_expiry:"sms_template_line_block"}[event];
  const source=customTemplate!==null&&customTemplate!==undefined?customTemplate:(templateKey&&settings[templateKey]?settings[templateKey]:message||"");
@@ -72,7 +66,11 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
  const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
- const textFor=async channel=>formatMessage(settings,eventName,context,message,await getCustomTemplate(type,rawEvent,eventName,channel));
+ const escapeTelegramHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+ const textFor=async channel=>{
+  const variables=channel==="telegram"?Object.fromEntries(Object.entries(context).map(([key,value])=>[key,value===null||value===undefined?value:escapeTelegramHtml(value)])):context;
+  return formatMessage(settings,eventName,variables,message,await getCustomTemplate(type,rawEvent,eventName,channel));
+ };
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
@@ -91,7 +89,16 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
- if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",async()=>sendTelegram(settings,await textFor("telegram"))]);
+ if(channelEnabled("telegram")&&ruleEnabled("telegram")){
+  let telegramChatId=String(customer?.telegram_chat_id||"").trim();
+  if(!telegramChatId&&customerUsername!=="unknown"){
+   try{const linked=await db.query("SELECT telegram_chat_id FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);telegramChatId=String(linked.rows?.[0]?.telegram_chat_id||"").trim();}
+   catch(error){console.warn("[Telegram] Chat ID lookup failed for customer "+customerUsername+": "+String(error?.message||error).slice(0,160));}
+  }
+  telegramChatId=telegramChatId||String(settings.telegram_default_chat_id||"").trim();
+  if(!telegramChatId)jobs.push(["telegram",async()=>({success:false,error:"No customer Telegram Chat ID is linked and no default Chat ID is configured."})]);
+  else jobs.push(["telegram",async()=>telegramService.sendTelegramMessage(telegramChatId,await textFor("telegram"),{parse_mode:"HTML",disable_web_page_preview:true})]);
+ }
  if(channelEnabled("messenger")&&ruleEnabled("messenger")){
   let psid=String(customer?.messenger_psid||"").trim();
   if(!psid&&customerUsername!=="unknown"){
@@ -114,7 +121,7 @@ async function testChannel(channel,{to,message="FAZ NETWORK test notification",m
  const settings=await settingsService.getAllSettings();
  if(channel==="sms"){if(String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")==="disabled")throw new Error("SMS engine is disabled. Select a provider mode and save settings first.");return smsService.sendSms({to,message,event:"manual",settings});}
  if(channel==="whatsapp")return whatsappService.sendMessage({to,message});
- if(channel==="telegram")return sendTelegram(settings,message);
+ if(channel==="telegram")return telegramService.sendTelegramMessage(to||settings.telegram_default_chat_id,message,{parse_mode:"HTML",disable_web_page_preview:true});
  if(channel==="messenger")return messengerService.sendMessengerMessage(messengerRecipientId,message);
  throw new Error("Unsupported notification channel.");
 }
