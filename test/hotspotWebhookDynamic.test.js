@@ -161,6 +161,50 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
   }
 });
 
+
+test("manually generated unused voucher activates from phone number and captive-portal MAC",async()=>{
+  const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles;
+  const oldRecharge=mikrotik.rechargeHotspotUser;
+  let routerPayload=null,activationQuery="";
+  try{
+    db.query=async(sql,params=[])=>{
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:41,username:params[1],status:"active",first_login_at:new Date()}]};
+      throw new Error("Unexpected database query: "+sql);
+    };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+      if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+      if(sql.startsWith("SELECT * FROM hotspot_vouchers")){
+        activationQuery=sql;
+        assert.match(sql,/pending_claim/);
+        assert.match(sql,/unused/);
+        assert.match(sql,/expires_at IS NULL OR expires_at > NOW\(\)/);
+        return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:null,first_login_at:null})]};
+      }
+      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")){
+        return {rows:[pendingVoucher({username:params[0],password:params[1],mac_address:params[2],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
+      }
+      throw new Error("Unexpected transactional query: "+sql);
+    }});
+    mikrotik.getHotspotProfiles=async()=>oneHourProfile();
+    mikrotik.rechargeHotspotUser=async payload=>{routerPayload=payload;return {username:payload.username};};
+    const res=responseRecorder();
+    await hotspotAuthController.activate({ip:"manual-unused-activation-test",body:{phone:"01712345678",mac:"aa-bb-cc-dd-ee-ff"}},res);
+    assert.equal(res.statusCode,200,JSON.stringify(res.body));
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
+    assert.equal(routerPayload.username,"AA:BB:CC:DD:EE:FF");
+    assert.equal(routerPayload.password,"01712345678");
+    assert.equal(routerPayload.profile,"1-Hour");
+    assert.equal(routerPayload.macAddress,"AA:BB:CC:DD:EE:FF");
+    assert.match(routerPayload.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    assert.ok(activationQuery);
+  }finally{
+    db.query=oldQuery;db.withTransaction=oldTransaction;
+    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
+  }
+});
+
 test("an already-bound phone rejects a different device MAC before touching RouterOS",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
   let routerWrites=0;
