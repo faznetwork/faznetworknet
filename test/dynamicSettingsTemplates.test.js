@@ -15,9 +15,9 @@ test("all updated EJS templates compile after branding and settings changes",()=
 
 test("admin notification hub has no orphaned JavaScript member chains",()=>{
  const source=fs.readFileSync(path.join(__dirname,"..","views/admin.ejs"),"utf8");
- assert.doesNotMatch(source,/^\\s*\\.(?:forEach|map|then|catch|addEventListener)\\b/m,
+ assert.doesNotMatch(source,/^\s*\.(?:forEach|map|then|catch|addEventListener)\\b/m,
   "a standalone member chain is a JavaScript syntax error that prevents the admin script from initializing");
- assert.match(source,/function setNotificationTab\\(tab\\)/);
+ assert.match(source,/function setNotificationTab\(tab\)/);
  assert.match(source,/data-notify-tab="sms"/);
 });
 
