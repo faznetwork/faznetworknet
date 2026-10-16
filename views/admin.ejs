@@ -4704,7 +4704,7 @@ async function deletePlan(id,name){
         }
         async function saveNotificationHub(){
           await saveSystemSettings(collectNotificationPayload(),'systemSmsSaveBtn','systemSmsResult');
-          .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+
         }
         async function runEmailTest(){
           const button=document.getElementById("emailTestBtn"),result=document.getElementById("emailTestResult");
