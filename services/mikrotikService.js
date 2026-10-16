@@ -880,7 +880,8 @@ class MikroTikService {
       const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});
       const params=["=.id="+user[".id"],"=profile="+profile,"=comment="+comment];
       if(password)params.push("=password="+password);
-      if(macAddress){
+      if(macAddress === "__CLEAR__") params.push("=mac-address=");
+      else if(macAddress){
         if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress))throw new Error("A valid normalized MAC address is required.");
         params.push("=mac-address="+macAddress);
       }
@@ -954,12 +955,19 @@ class MikroTikService {
     });
   }
 
-  async ensureHotspotServerProfileAuth(nameValue) {
+  async ensureHotspotServerProfileAuth(nameValue, modeValue = "seamless") {
     const name = this._str(nameValue).trim();
     if (!name) throw new Error("Hotspot server profile name is required.");
     // RouterOS has no mac-as-username boolean on a HotSpot Server Profile.
     // MAC-cookie lifetime belongs to the HotSpot User Profile.
-    const expectedLoginBy = ["mac", "http-pap", "http-chap", "mac-cookie"];
+    const modes = {
+      seamless: ["mac", "http-pap", "http-chap", "mac-cookie"],
+      credentials: ["http-pap", "http-chap"],
+      chap_only: ["http-chap"]
+    };
+    const mode = this._str(modeValue || "seamless").trim().toLowerCase();
+    const expectedLoginBy = modes[mode];
+    if (!expectedLoginBy) throw new Error("Unsupported Hotspot engine mode.");
     const normalizeLoginBy = value => this._str(value).split(",").map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(",");
     return this._withConnection("Hotspot server profile authentication sync", async (connection) => {
       const rows = await connection.write("/ip/hotspot/profile/print");
@@ -973,8 +981,8 @@ class MikroTikService {
       }
       const verifiedRows = await connection.write("/ip/hotspot/profile/print");
       const verified = (Array.isArray(verifiedRows) ? verifiedRows : []).find(row => this._str(row.name) === name);
-      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain login-by=mac,http-pap,http-chap,mac-cookie for HotSpot server profile \"" + name + "\".");
-      return { name, updated, loginBy: this._str(verified["login-by"]) };
+      if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain the requested login-by mode for HotSpot server profile \"" + name + "\".");
+      return { name, mode, updated, loginBy: this._str(verified["login-by"]) };
     });
   }
 

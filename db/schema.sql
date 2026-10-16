@@ -838,3 +838,5 @@ INSERT INTO app_settings(key,value) VALUES
  ('email_apps_script_url',''),
  ('email_apps_script_token','')
 ON CONFLICT(key) DO NOTHING;
+
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_lock BOOLEAN NOT NULL DEFAULT TRUE;

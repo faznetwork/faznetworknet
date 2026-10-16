@@ -15,6 +15,7 @@ router.post("/website",controller.saveWebsite);
 router.get("/hotspot-profiles",controller.hotspotProfiles);
 router.get("/hotspot-profile-settings",controller.getHotspotProfileSettings);
 router.post("/hotspot-profile-settings",controller.saveHotspotProfileSettings);
+router.post("/hotspot-engine",controller.saveHotspotEngine);
 router.get("/all",controller.getAllSettings);
 router.post("/update",controller.updateSettings);
 router.post("/notifications/test",controller.testNotification);
