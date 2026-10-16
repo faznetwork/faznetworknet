@@ -159,7 +159,7 @@ async function updateSettings(req,res){
   appSettingsService.invalidate();
   const all=await appSettingsService.getAllSettings();
   const safe={...all};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","email_apps_script_token","mikrotik_password"])delete safe[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","smtp_password","email_apps_script_token","mikrotik_password"])delete safe[key];
   safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);safe.email_apps_script_token_configured=Boolean(all.email_apps_script_token);
   safe.sms_api_key_configured=Boolean(all.sms_api_key);
   safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.smtp_password_configured=Boolean(all.smtp_password);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);safe.messenger_app_secret_configured=Boolean(all.messenger_app_secret);safe.messenger_verify_token_configured=Boolean(all.messenger_verify_token);
