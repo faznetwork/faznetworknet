@@ -85,7 +85,11 @@ async function handleTelegramUpdate(update, dependencies = {}) {
 
 router.post("/", async (req, res) => {
   const expectedSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || "").trim();
-  if (expectedSecret && !safeEqual(req.get("x-telegram-bot-api-secret-token"), expectedSecret)) {
+  if (!expectedSecret) {
+    console.error("[Telegram Webhook] TELEGRAM_WEBHOOK_SECRET is not configured; refusing unsigned updates.");
+    return res.sendStatus(503);
+  }
+  if (!safeEqual(req.get("x-telegram-bot-api-secret-token"), expectedSecret)) {
     console.warn("[Telegram Webhook] Rejected request with invalid secret token.");
     return res.sendStatus(403);
   }
