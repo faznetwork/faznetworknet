@@ -139,7 +139,7 @@ async function getAllSettings(req,res){
   for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","smtp_password","mikrotik_password"])delete out[key];
   out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);
   out.sms_api_key_configured=Boolean(map.sms_api_key);
-  out.sms_device_token_configured=Boolean(map.sms_device_token);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);out.smtp_password_configured=Boolean(map.smtp_password);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
   return res.set("Cache-Control","no-store").json({success:true,settings:out});
  }catch(error){return errorResponse(res,error,503);}
 }
