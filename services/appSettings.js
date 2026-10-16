@@ -9,7 +9,7 @@ const DEFAULTS={
  sms_gateway_mode:"disabled",sms_provider_mode:"disabled",sms_provider_preset:"custom",sms_api_url:"",sms_api_key:"",sms_sender_id:"",sms_api_method:"POST_JSON",sms_http_param_mapping:'{"to":"{to}","message":"{message}","token":"{token}","sender_id":"{sender_id}"}',
  sms_device_url:"",sms_device_webhook_url:"",sms_device_token:"",sms_device_http_method:"POST_JSON",sms_device_param_mapping:'{"to":"{to}","message":"{message}","token":"{token}"}',
  notification_channel_sms_enabled:"true",notification_channel_whatsapp_enabled:"false",notification_channel_telegram_enabled:"false",notification_channel_messenger_enabled:"false",
- whatsapp_enabled:"false",telegram_bot_token:"",telegram_default_chat_id:"",messenger_page_access_token:"",messenger_page_id:"",
+ whatsapp_enabled:"false",telegram_bot_token:"",telegram_default_chat_id:"",messenger_page_access_token:"",messenger_page_id:"",messenger_app_secret:"",messenger_verify_token:"",
  sms_event_expiry_warning:"true",sms_event_payment_receipt:"true",sms_event_line_expiry:"true",sms_event_welcome:"true",
  sms_template_welcome:"Welcome to FAZ NETWORK, {name}. Your internet account {username} is ready. Helpline: {support_phone}",
  ...Object.fromEntries(["hotspot","pppoe"].flatMap(type=>["payment","recharge","renewal","welcome","expiry_warning","expired"].flatMap(event=>["sms","whatsapp","telegram","messenger"].map(channel=>["notification_rule_"+type+"_"+event+"_"+channel+"_enabled",String(type==="pppoe"&&channel==="sms"&&["payment","expiry_warning","expired"].includes(event))])))),

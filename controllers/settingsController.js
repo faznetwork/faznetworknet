@@ -114,7 +114,7 @@ const SETTINGS_RULES={
  sms_provider_preset:{oneOf:["greenweb","alpha_sms","elitbuzz","custom"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},
  sms_http_param_mapping:{json:true,max:4000},sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},sms_device_http_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},sms_device_param_mapping:{json:true,max:4000},
  notification_channel_sms_enabled:{bool:true},notification_channel_whatsapp_enabled:{bool:true},notification_channel_telegram_enabled:{bool:true},notification_channel_messenger_enabled:{bool:true},whatsapp_enabled:{bool:true},
- telegram_bot_token:{secret:true,max:500},telegram_default_chat_id:{max:150},messenger_page_access_token:{secret:true,max:2000},messenger_page_id:{max:150},
+ telegram_bot_token:{secret:true,max:500},telegram_default_chat_id:{max:150},messenger_page_access_token:{secret:true,max:2000},messenger_page_id:{max:150},messenger_app_secret:{secret:true,max:500},messenger_verify_token:{secret:true,max:500},
  sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true},sms_event_welcome:{bool:true},
  sms_template_expiry_warning:{max:1200},sms_template_payment_receipt:{max:1200},sms_template_line_block:{max:1200},sms_template_welcome:{max:1200}
 };
@@ -135,10 +135,10 @@ async function getAllSettings(req,res){
  try{
   const map=await appSettingsService.getAllSettings();
   const out={...map};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","mikrotik_password"])delete out[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","mikrotik_password"])delete out[key];
   out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);
   out.sms_api_key_configured=Boolean(map.sms_api_key);
-  out.sms_device_token_configured=Boolean(map.sms_device_token);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
   return res.set("Cache-Control","no-store").json({success:true,settings:out});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -157,10 +157,10 @@ async function updateSettings(req,res){
   appSettingsService.invalidate();
   const all=await appSettingsService.getAllSettings();
   const safe={...all};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","mikrotik_password"])delete safe[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","mikrotik_password"])delete safe[key];
   safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);
   safe.sms_api_key_configured=Boolean(all.sms_api_key);
-  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);
+  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);safe.messenger_app_secret_configured=Boolean(all.messenger_app_secret);safe.messenger_verify_token_configured=Boolean(all.messenger_verify_token);
   return res.set("Cache-Control","no-store").json({success:true,message:"System settings saved. Cached branding/settings refreshed.",settings:safe,updatedKeys:updates.map(([key])=>key)});
  }catch(error){return errorResponse(res,error,400);}
 }
@@ -181,6 +181,17 @@ async function testNotification(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:"Test notification request completed.",result});
  }catch(error){return errorResponse(res,error,502);}
 }
+async function testMessenger(req,res){
+ try{
+  const psid=String(req.body?.psid||req.body?.messengerRecipientId||"").trim();
+  const message=String(req.body?.message||"").trim();
+  if(!psid)throw new Error("Target Messenger PSID is required.");
+  if(!message)throw new Error("Sample message is required.");
+  if(message.length>2000)throw new Error("Messenger test message must be 2000 characters or fewer.");
+  const result=await require("../services/messengerService").sendMessengerMessage(psid,message,"ACCOUNT_UPDATE");
+  return res.set("Cache-Control","no-store").json({success:true,message:"Test Messenger alert sent successfully.",result});
+ }catch(error){return errorResponse(res,error,502);}
+}
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
 async function testWhatsApp(req,res){
  try{
@@ -196,4 +207,4 @@ async function testWhatsApp(req,res){
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect()});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,testMessenger,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};

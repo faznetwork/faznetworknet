@@ -3,6 +3,7 @@ const settingsService=require("./appSettings");
 const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
+const messengerService=require("./messengerService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
@@ -54,15 +55,6 @@ async function sendTelegram(settings,message){
  if(!response.ok||data.ok===false)throw new Error("Telegram delivery failed"+(data.description?": "+String(data.description).slice(0,160):"."));
  return {success:true,result:data.result?{message_id:data.result.message_id}:undefined};
 }
-async function sendMessenger(settings,recipientId,message){
- const token=String(settings.messenger_page_access_token||"").trim(),pageId=String(settings.messenger_page_id||"").trim();
- if(!token||!pageId)throw new Error("Messenger Page ID and Page Access Token are required.");
- if(!recipientId) return {success:true,skipped:true,reason:"messenger_recipient_id_missing"};
- const response=await fetch("https://graph.facebook.com/v20.0/"+encodeURIComponent(pageId)+"/messages?access_token="+encodeURIComponent(token),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recipient:{id:String(recipientId)},messaging_type:"UTILITY",message:{text:String(message||"").slice(0,2000)}}),redirect:"error"});
- const data=await response.json().catch(()=>({}));
- if(!response.ok||data.error)throw new Error("Messenger delivery failed"+(data.error?.message?": "+String(data.error.message).slice(0,160):"."));
- return {success:true,messageId:data.message_id||null};
-}
 function formatMessage(settings,event,variables,message,customTemplate){
  const templateKey={payment:"sms_template_payment_receipt",payment_receipt:"sms_template_payment_receipt",recharge:"sms_template_payment_receipt",renewal:"sms_template_payment_receipt",welcome:"sms_template_welcome",expiry_warning:"sms_template_expiry_warning",expired:"sms_template_line_block",line_expiry:"sms_template_line_block"}[event];
  const source=customTemplate!==null&&customTemplate!==undefined?customTemplate:(templateKey&&settings[templateKey]?settings[templateKey]:message||"");
@@ -100,7 +92,15 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("telegram")&&ruleEnabled("telegram"))jobs.push(["telegram",async()=>sendTelegram(settings,await textFor("telegram"))]);
- if(channelEnabled("messenger")&&ruleEnabled("messenger"))jobs.push(["messenger",async()=>sendMessenger(settings,messengerRecipientId||context.messengerRecipientId,await textFor("messenger"))]);
+ if(channelEnabled("messenger")&&ruleEnabled("messenger")){
+  let psid=String(customer?.messenger_psid||"").trim();
+  if(!psid&&customerUsername!=="unknown"){
+   try{const linked=await db.query("SELECT messenger_psid FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);psid=String(linked.rows?.[0]?.messenger_psid||"").trim();}
+   catch(error){console.warn("[Messenger] PSID lookup failed for customer "+customerUsername+": "+String(error?.message||error).slice(0,160));}
+  }
+  if(!psid)console.info("[Messenger] Skipped: Customer "+customerUsername+" has not linked their Facebook Messenger.");
+  else jobs.push(["messenger",async()=>messengerService.sendMessengerMessage(psid,await textFor("messenger"))]);
+ }
  const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
  return {success:results.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:results.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}))};
 }
@@ -115,7 +115,7 @@ async function testChannel(channel,{to,message="FAZ NETWORK test notification",m
  if(channel==="sms"){if(String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")==="disabled")throw new Error("SMS engine is disabled. Select a provider mode and save settings first.");return smsService.sendSms({to,message,event:"manual",settings});}
  if(channel==="whatsapp")return whatsappService.sendMessage({to,message});
  if(channel==="telegram")return sendTelegram(settings,message);
- if(channel==="messenger")return sendMessenger(settings,messengerRecipientId,message);
+ if(channel==="messenger")return messengerService.sendMessengerMessage(messengerRecipientId,message);
  throw new Error("Unsupported notification channel.");
 }
 module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone};
