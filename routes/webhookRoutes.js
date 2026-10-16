@@ -24,7 +24,7 @@ function extractUsername(event) {
   const text = String(event?.message?.text || "").trim();
   const payload = String(event?.postback?.payload || event?.message?.quick_reply?.payload || "").trim();
   const candidate = payload || text;
-  const prefixed = candidate.match(/^(?:FAZ_LINK|LINK_ACCOUNT|LINK_PPPOE):\\s*(.+)$/i);
+  const prefixed = candidate.match(/^(?:FAZ_LINK|LINK_ACCOUNT|LINK_PPPOE):\s*(.+)$/i);
   const username = String(prefixed ? prefixed[1] : candidate).trim();
   if (!username || username.length > 100 || /\s/.test(username)) return "";
   return username;
