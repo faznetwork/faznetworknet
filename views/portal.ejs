@@ -24,7 +24,7 @@ document.getElementById("verify-form").onsubmit=async e=>{
   if(!selected||!selectedProfile){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="আগে একটি প্যাকেজ নির্বাচন করুন।";return;}
   document.getElementById("phone").value=phone;box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="পেমেন্ট যাচাই হচ্ছে…";
   try{
-    const r=await fetch("https://faznetwork-web.onrender.com/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone,account_phone:phone,trxId,amount:selected,profile_id:selectedProfile})});
+    const r=await fetch("https://faznetwork-web.onrender.com/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({service_type:"hotspot",phone,account_phone:phone,trxId,amount:selected,package_id:selectedProfile,profile_id:selectedProfile})});
     const d=await r.json();
     if(!r.ok||!d.success){
       const messages={NOT_FOUND_OR_DELAYED:"SMS এখনো সার্ভারে আসেনি। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",ALREADY_CLAIMED:"এই TrxID ইতিমধ্যে ব্যবহার করা হয়েছে।",TRANSACTION_IN_PROCESS:"এই TrxID অন্য একটি অনুরোধে যাচাই হচ্ছে।",AMOUNT_MISMATCH:"পেমেন্টের পরিমাণ নির্বাচিত প্যাকেজের দামের সঙ্গে মিলছে না।",INVALID_ACCOUNT_PHONE:"সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।",PROFILE_NOT_FOUND_OR_AMBIGUOUS:"প্যাকেজটি সঠিকভাবে শনাক্ত করা যায়নি। অন্য প্যাকেজ নির্বাচন করুন।",MULTIPLE_LIVE_PACKAGES:"এই নম্বরে একাধিক সক্রিয় প্যাকেজ আছে। Support-এর সঙ্গে যোগাযোগ করুন."};
