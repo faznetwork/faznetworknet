@@ -140,7 +140,7 @@ async function getAllSettings(req,res){
   for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","smtp_password","email_apps_script_token","mikrotik_password"])delete out[key];
   out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);out.email_apps_script_token_configured=Boolean(map.email_apps_script_token);
   out.sms_api_key_configured=Boolean(map.sms_api_key);
-  out.sms_device_token_configured=Boolean(map.sms_device_token);out.smtp_password_configured=Boolean(map.smtp_password);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);out.smtp_password_configured=Boolean(map.smtp_password);
   return res.set("Cache-Control","no-store").json({success:true,settings:out});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -159,10 +159,10 @@ async function updateSettings(req,res){
   appSettingsService.invalidate();
   const all=await appSettingsService.getAllSettings();
   const safe={...all};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","smtp_password","email_apps_script_token","mikrotik_password"])delete safe[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","smtp_password","email_apps_script_token","mikrotik_password"])delete safe[key];
   safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);safe.email_apps_script_token_configured=Boolean(all.email_apps_script_token);
   safe.sms_api_key_configured=Boolean(all.sms_api_key);
-  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.smtp_password_configured=Boolean(all.smtp_password);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);safe.messenger_app_secret_configured=Boolean(all.messenger_app_secret);safe.messenger_verify_token_configured=Boolean(all.messenger_verify_token);
+  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.smtp_password_configured=Boolean(all.smtp_password);
   return res.set("Cache-Control","no-store").json({success:true,message:"System settings saved. Cached branding/settings refreshed.",settings:safe,updatedKeys:updates.map(([key])=>key)});
  }catch(error){return errorResponse(res,error,400);}
 }
@@ -179,7 +179,7 @@ async function testNotification(req,res){
  try{
   const channel=String(req.body?.channel||"sms").toLowerCase(),to=String(req.body?.to||"").trim(),message=String(req.body?.message||"FAZ NETWORK test notification").trim();
   if(channel==="sms"||channel==="whatsapp"){if(!to)throw new Error("A recipient mobile number is required.");}
-  const result=await require("../services/notificationDispatcher").testChannel(channel,{to,message,messengerRecipientId:req.body?.messengerRecipientId});
+  const result=await require("../services/notificationDispatcher").testChannel(channel,{to,message});
   return res.set("Cache-Control","no-store").json({success:true,message:"Test notification request completed.",result});
  }catch(error){return errorResponse(res,error,502);}
 }
