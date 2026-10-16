@@ -20,7 +20,7 @@ function normalizeMac(value){
 }
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
 function hotspotDurationMs(value){
- const source=String(value||"").trim().toLowerCase(),re=/(\\d+(?:\\.\\d+)?)(w|d|h|m|s)/g;
+ const source=String(value||"").trim().toLowerCase(),re=/(\d+(?:\.\d+)?)(w|d|h|m|s)/g;
  let match,consumed="",total=0;const factors={w:604800000,d:86400000,h:3600000,m:60000,s:1000};
  while((match=re.exec(source))){consumed+=match[0];total+=Number(match[1])*factors[match[2]];}
  return source&&consumed===source&&Number.isFinite(total)&&total>0?total:0;
