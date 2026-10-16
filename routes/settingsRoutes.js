@@ -20,6 +20,7 @@ router.post("/update",controller.updateSettings);
 router.post("/notifications/test",controller.testNotification);
 router.get("/notifications/whatsapp/status",controller.whatsappStatus);
 router.post("/notifications/whatsapp/test",controller.testWhatsApp);
+router.post("/notifications/messenger/test",controller.testMessenger);
 router.post("/notifications/whatsapp/connect",controller.whatsappConnect);
 router.post("/notifications/whatsapp/unlink",controller.whatsappUnlink);
 module.exports=router;
