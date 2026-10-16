@@ -81,7 +81,7 @@ async function sendAppsScriptEmail({ to, subject, html, text }, config) {
     const contentType = response.headers && typeof response.headers.get === "function"
       ? String(response.headers.get("content-type") || "")
       : "";
-    const looksLikeHtml = /(?:^\\s*<!doctype\\s+html|^\\s*<html\\b)/i.test(responseText) || /text\\/html/i.test(contentType);
+    const looksLikeHtml = /(?:^\s*<!doctype\s+html|^\s*<html\b)/i.test(responseText) || /text\/html/i.test(contentType);
     if (response.redirected || looksLikeHtml) {
       let responseHost = "";
       try { responseHost = new URL(response.url || appsScript.url).hostname; } catch (_) {}
@@ -90,7 +90,7 @@ async function sendAppsScriptEmail({ to, subject, html, text }, config) {
         redirected: Boolean(response.redirected),
         responseHost,
         contentType: contentType.slice(0, 100),
-        preview: responseText.replace(/[\\r\\n\\t]+/g, " ").slice(0, 240)
+        preview: responseText.replace(/[\r\n\t]+/g, " ").slice(0, 240)
       });
     }
     let payload;
