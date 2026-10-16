@@ -830,3 +830,10 @@ CREATE TABLE IF NOT EXISTS broadcast_recipients (
 );
 CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_queue
   ON broadcast_recipients(broadcast_id, status, id);
+
+-- Google Apps Script Web App is the recommended email provider; SMTP remains available.
+INSERT INTO app_settings(key,value) VALUES
+ ('email_provider_mode','apps_script'),
+ ('email_apps_script_url',''),
+ ('email_apps_script_token','')
+ON CONFLICT(key) DO NOTHING;
