@@ -86,6 +86,7 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
         assert.equal(params[10],null);
         return {rows:[{id:41,username:params[0],phone:params[6],status:"pending_claim"}]};
       }
+      if(sql.startsWith("INSERT INTO hotspot_voucher_payments"))return {rows:[]};
       if(sql.startsWith("UPDATE transactions SET status='processed'"))return {rows:[{id:5}]};
       throw new Error("Unexpected transactional query: "+sql);
     }});
