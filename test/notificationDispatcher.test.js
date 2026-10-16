@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow}=require("../services/notificationDispatcher");
+const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow,testChannel}=require("../services/notificationDispatcher");
 const settingsService=require("../services/appSettings");
 const whatsappService=require("../services/whatsappService");
 const db=require("../db");
@@ -10,6 +10,14 @@ test("notification dispatcher normalizes Bangladeshi mobile numbers for channel 
  assert.equal(normalizePhone("01712345678"),"8801712345678");
  assert.equal(normalizePhone("+8801712345678"),"8801712345678");
  assert.equal(normalizePhone("008801712345678"),"8801712345678");
+});
+test("dispatcher rejects retired Telegram and Messenger channels",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings;
+ settingsService.getAllSettings=async()=>({});
+ try{
+  await assert.rejects(()=>testChannel("telegram",{to:"123",message:"test"}),/Unsupported notification channel/);
+  await assert.rejects(()=>testChannel("messenger",{to:"123",message:"test"}),/Unsupported notification channel/);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;}
 });
 test("notification dispatcher canonicalizes payment and expiry event names",()=>{
  assert.equal(eventKey("payment_receipt"),"payment");
