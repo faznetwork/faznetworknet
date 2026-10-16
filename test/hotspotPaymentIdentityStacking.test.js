@@ -59,14 +59,15 @@ async function withPaymentMocks({voucherRows=[],onStage=()=>{},claimBehavior}={}
 
 test("verifyTrx persists the voucher foreign key and a durable payment-to-voucher association",async()=>{
  let staged;
- await withPaymentMocks({},async({stats})=>{
+ await withPaymentMocks({onStage:value=>{staged=value;}},async({stats})=>{
   const res=responseRecorder();
   await paymentController.verifyTrx({ip:"identity-link-test",body:{service_type:"hotspot",phone:"01712345678",trxId:"STACK-TEST-905",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
   assert.equal(res.statusCode,200,JSON.stringify(res.body));
   assert.equal(res.body.pending_activation,true);
   assert.equal(stats().associationCount,1);
  });
- assert.ok(true);
+ assert.match(staged.sql,/transaction_id/);
+ assert.equal(staged.params[11],905,"new voucher stores the claimed transaction ID");
 });
 
 test("active Hotspot renewal stacks new duration from the saved future expires_at",async()=>{
