@@ -31,6 +31,6 @@ test("decommissioned notification channels have no frontend DOM references",()=>
 
 test("database schema INSERT blocks do not leave a trailing comma before ON CONFLICT",()=>{
  const schema=fs.readFileSync(path.join(__dirname,"..","db/schema.sql"),"utf8");
- assert.doesNotMatch(schema,/,(?:\\s*\\r?\\n\\s*)ON CONFLICT/i,
+ assert.doesNotMatch(schema,/,(?:\s*\r?\n\s*)ON CONFLICT/i,
   "PostgreSQL rejects a trailing comma before ON CONFLICT");
 });
