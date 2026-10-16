@@ -20,7 +20,7 @@ async function sendMessengerMessage(psid, messageText, tag = "ACCOUNT_UPDATE") {
   const recipient = String(psid || "").trim();
   const message = String(messageText || "").trim();
   const messageTag = String(tag || "ACCOUNT_UPDATE").trim().toUpperCase();
-  if (!recipient) throw new Error("A Messenger Page-Scoped ID (PSID) is required.");
+  if (!recipient) throw new Error("Messenger PSID is required.");
   if (!message) throw new Error("Messenger message text is required.");
   if (message.length > MAX_MESSAGE_LENGTH) throw new Error("Messenger message must be 2000 characters or fewer.");
   if (!ALLOWED_TAGS.has(messageTag)) throw new Error("Unsupported Messenger message tag.");
