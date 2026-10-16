@@ -5783,9 +5783,7 @@ async function deletePlan(id,name){
             select.innerHTML = '<option value="">Loading active packages…</option>';
             try {
                 if (!manualMatchPackagesPromise) {
-                    manualMatchPackagesPromise = jsonFetch('/api/hotspot/profiles').then(data => (data.profiles || [])
-                        .filter(profile => profile && profile.name && Number(profile.price) > 0)
-                        .map(profile => ({
+                    manualMatchPackagesPromise = jsonFetch('/api/hotspot/profiles').then(data => (data.profiles || []).filter(profile => profile && profile.name && Number(profile.price) > 0).map(profile => ({
                             id: String(profile.profile_id || profile.profileId || profile.id || profile.name),
                             name: String(profile.name),
                             price: Number(profile.price),
