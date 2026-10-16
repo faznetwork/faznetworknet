@@ -94,7 +94,7 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
     mikrotik.createHotspotUser=async()=>{routerWrites++;return {};};
     mikrotik.updateHotspotProfile=async()=>{routerWrites++;return {};};
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"payment-stage-test",body:{phone:"01712345678",trxId:"TXN-TEST-5",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
+    await paymentController.verifyTrx({ip:"payment-stage-test",body:{service_type:"hotspot",phone:"01712345678",trxId:"TXN-TEST-5",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
     assert.equal(res.statusCode,200,JSON.stringify(res.body));
     assert.equal(res.body.success,true);
     assert.equal(res.body.pending_activation,true);
@@ -218,7 +218,7 @@ test("verifyTrx rejects invalid Bangladeshi phone numbers before claiming a paym
   try{
     db.query=async()=>{called=true;return {rows:[]};};
     const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"bad-phone-test",body:{phone:"12345",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"}},res);
+    await paymentController.verifyTrx({ip:"bad-phone-test",body:{service_type:"hotspot",phone:"12345",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"}},res);
     assert.equal(res.statusCode,400);
     assert.equal(res.body.code,"INVALID_ACCOUNT_PHONE");
     assert.equal(called,false);

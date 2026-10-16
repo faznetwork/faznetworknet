@@ -61,17 +61,22 @@ function calculateHotspotExpiryDate(validityConfig){
  return expiry.toISOString().slice(0,10);
 }
 function endOfBillingMonth(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Math.max(1,Number(months)||1),0)).toISOString().slice(0,10);}
-async function renewalExpirationDate(durationMonths,query=db.query){
+async function renewalExpirationDate(durationMonths,query=db.query,currentExpiryDate=null){
  const result=await query("SELECT value FROM app_settings WHERE key='billing_cycle_type' LIMIT 1");
  const configured=String(result.rows[0]?.value||"");
  const today=new Date().toISOString().slice(0,10),months=Math.max(1,Number(durationMonths)||1);
- if(configured==="rolling_30")return addDays(today,30*months);
- if(configured==="monthly_1st")return endOfBillingMonth(today,months);
- // Preserve the historic date-to-date monthly calculation until the admin explicitly saves a cycle policy.
- return addCalendarMonths(today,months);
+ // Stack onto an existing future expiry. Date-only values are compared as ISO calendar dates,
+ // avoiding timezone parsing differences between PostgreSQL DATE and JS Date.
+ const currentExpiry=String(currentExpiryDate||"").trim().slice(0,10);
+ const baseDate=/^\d{4}-\d{2}-\d{2}$/.test(currentExpiry)&&currentExpiry>today?currentExpiry:today;
+ if(configured==="rolling_30")return addDays(baseDate,30*months);
+ // A paid renewal extends the existing validity; it must not reset a future expiry to this month-end.
+ if(configured==="monthly_1st")return addCalendarMonths(baseDate,months);
+ // Preserve date-to-date month duration while stacking on any still-valid time.
+ return addCalendarMonths(baseDate,months);
 }
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
-async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const expiration=await renewalExpirationDate(c.duration_months,query),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});onRouterMutation();await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
+async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const expiration=await renewalExpirationDate(c.duration_months,query,c.expiration_date||c.expiry_date),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});onRouterMutation();await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
 async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 async function webhook(req,res){
  let claimedTransactionId=null,routerSucceeded=false;
@@ -88,12 +93,16 @@ async function webhook(req,res){
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
   // Never mutate the original transaction when MacroDroid retries delivery.
   if(existing.rows.length)return res.json({success:true,status:"duplicate_ignored",code:"DUPLICATE_IGNORED",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
+  const serviceType=String(req.body?.service_type||req.body?.serviceType||req.query?.service_type||req.query?.serviceType||"").trim().toLowerCase();
   let user=null;
-  if(payment.customerRef){
+  // A Hotspot-originated payment is isolated from PPPoE resolvers by contract.
+  // Generic SMS events have no trusted service context, so phone-only matches stay unmatched
+  // until the customer explicitly verifies the TrxID in the correct service flow.
+  if(serviceType!=="hotspot"&&serviceType==="pppoe"&&payment.customerRef){
    const found=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) OR id::text=$1 LIMIT 1",[payment.customerRef]);
    user=found.rows[0]||null;
   }
-  if(!user&&payment.senderPhone){
+  if(!user&&serviceType==="pppoe"&&payment.senderPhone){
    const found=await db.query("SELECT username,phone FROM pppoe_users WHERE phone IS NOT NULL");
    user=found.rows.find(row=>normalizePhone(row.phone)===payment.senderPhone)||null;
   }
@@ -228,6 +237,8 @@ async function verifyTrx(req,res){
  if(!rateLimit(String(req.ip||"unknown")))return fail(429,"RATE_LIMITED","Too many verification attempts. Try again later.");
  let claimedTransactionId=null;
  try{
+  const serviceType=String(body.service_type||body.serviceType||"").trim().toLowerCase();
+  if(serviceType!=="hotspot")return fail(400,"SERVICE_TYPE_REQUIRED","Hotspot checkout must explicitly send service_type='hotspot'.");
   const phone=normalizePhone(body.phone||body.account_phone||body.customer_phone||body.username||"");
   if(!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi customer phone number.");
   const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
@@ -294,4 +305,4 @@ async function verifyTrx(req,res){
 }
 function macFromBody(body){return normalizeMac(body?.mac||body?.device_mac||body?.macAddress||"");}
 
-module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx};
+module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx,renewalExpirationDate};
