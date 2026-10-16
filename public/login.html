@@ -185,7 +185,6 @@
             margin-top: 4px;
         }
 
-        /* Packages Grid & Dynamic Highlight Styling */
         .packages-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -218,7 +217,6 @@
             transform: translateY(-2px);
         }
 
-        /* স্পেশাল সিলেকশন কালার - Vibrant Neon Glow */
         .pkg-card.selected {
             border-color: #10b981;
             background: linear-gradient(135deg, rgba(16, 185, 129, 0.28) 0%, rgba(4, 120, 87, 0.45) 100%) !important;
@@ -410,7 +408,7 @@
             <button type="button" class="tab-btn" onclick="switchTab('recharge')">নতুন প্যাকেজ / রিচার্জ</button>
         </div>
 
-        <!-- 1. Existing Customer Tab -->
+        <!-- ১. বিদ্যমান গ্রাহক ট্যাব -->
         <div id="tab-existing-content">
             <form id="existing-login-form" onsubmit="handleExistingLogin(event)">
                 <div class="input-group">
@@ -428,14 +426,14 @@
                 </div>
 
                 <div style="font-size: 11px; color: #a7f3d0; margin-bottom: 12px; text-align: left; line-height: 1.4;">
-                    💡 <b>পরামর্শ:</b> আপনার সক্রিয় বা রিলিজড প্যাকেজ থাকলে নম্বর দিয়ে সরাসরি সংযোগ চালু করুন।
+                    💡 <b>পরামর্শ:</b> পূর্বে প্যাকেজ নেওয়া থাকলে শুধু মোবাইল নম্বর দিয়ে সরাসরি সংযোগ চালু করুন।
                 </div>
 
                 <button type="submit" id="btn-existing-login" class="btn-action">ইন্টারনেট চালু করুন</button>
             </form>
         </div>
 
-        <!-- 2. New Recharge / Package Tab -->
+        <!-- ২. নতুন রিচার্জ / প্যাকেজ ট্যাব -->
         <div id="tab-recharge-content" style="display: none;">
             <div class="payment-account-card">
                 <div class="payment-account-title">
@@ -485,7 +483,7 @@
     </div>
 </div>
 
-<!-- MikroTik Captive Portal Standard Hidden Login Form -->
+<!-- মাইক্রোটিক স্ট্যান্ডার্ড হিডেন লগইন ফর্ম (MAC = Username, Phone = Password) -->
 <form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
     <input type="hidden" name="username" id="mt-user" value="$(mac)" />
     <input type="hidden" name="password" id="mt-pass" />
@@ -571,7 +569,6 @@
                     validity: pkg.validity || pkg.profile 
                 };
 
-                // সুন্দরভাবে কালার টগল করা
                 grid.querySelectorAll('.pkg-card').forEach(item => {
                     const active = (item === card);
                     item.classList.toggle('selected', active);
@@ -675,7 +672,7 @@
         }
     }
 
-    // বিদ্যমান গ্রাহক লগইন ফ্লো: ব্যাকএন্ড অ্যাক্টিভেশন যাচাই করে তবেই MikroTik এ সাবমিট হবে
+    // বিদ্যমান গ্রাহক লগইন ফ্লো: ব্যাকএন্ড অ্যাক্টিভেশন যাচাই ও MikroTik প্রভিশনিং
     async function handleExistingLogin(event) {
         event.preventDefault();
         const phoneInput = normalizePhoneInput(document.getElementById('existing_phone').value);
@@ -692,7 +689,6 @@
         const device = routerDeviceDetails();
 
         try {
-            // ১. ব্যাকএন্ডের অ্যাক্টিভেশন এন্ডপয়েন্টে আগে চেক করা
             const response = await fetch(ACTIVATE_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -707,7 +703,6 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok || !data.success) {
-                // মেয়াদ শেষ হলে সরাসরি সতর্কবার্তা দেওয়া
                 if (data.code === 'PACKAGE_EXPIRED' || data.error?.includes('expired') || response.status === 403) {
                     showStatus('❌ আপনার প্যাকেজের মেয়াদ শেষ হয়ে গেছে! অনুগ্রহ করে নতুন প্যাকেজ রিচার্জ করুন।', true);
                     setTimeout(() => switchTab('recharge'), 2000);
@@ -722,7 +717,7 @@
                 return;
             }
 
-            // ২. বৈধ প্যাকেজ পেলে সরাসরি MikroTik-এ সাবমিট (Username = MAC, Password = Phone)
+            // MikroTik ফর্ম সাবমিট
             const autoForm = document.getElementById('mikrotik-auto-login');
             document.getElementById('mt-user').value = String(data.username || device.mac);
             document.getElementById('mt-pass').value = String(data.password || phoneInput);
@@ -741,7 +736,7 @@
         }
     }
 
-    // নতুন রিচার্জ ও ভেরিফিকেশন ফ্লো
+    // নতুন রিচার্জ, অটো-অ্যাক্টিভেশন ও MikroTik এ সংযোগ ফ্লো
     async function handleVerification() {
         const phoneInput = normalizePhoneInput(document.getElementById('cust_phone').value);
         const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
@@ -767,11 +762,11 @@
         }
 
         btn.disabled = true;
-        btn.innerText = 'যাচাই করা হচ্ছে...';
+        btn.innerText = 'পেমেন্ট যাচাই করা হচ্ছে...';
         showStatus('প্যাকেজ ও পেমেন্টের তথ্য যাচাই করা হচ্ছে...');
 
         try {
-            // ১. TrxID ভেরিফিকেশন (Explicit service_type: 'hotspot' যুক্ত)
+            // ধাপ ১: TrxID ভেরিফাই ও ভাউচার স্টেজিং
             const response = await fetch(VERIFY_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -812,17 +807,41 @@
                 return;
             }
 
-            // ২. পেমেন্ট ভেরিফাই হলে তাৎক্ষণিক MikroTik-এ লগইন চালু
-            const autoForm = document.getElementById('mikrotik-auto-login');
-            document.getElementById('mt-user').value = String(data.username || device.mac);
-            document.getElementById('mt-pass').value = String(data.password || phoneInput);
+            // ধাপ ২: পেমেন্ট সফল হওয়ার পর স্বয়ংক্রিয়ভাবে MikroTik-এ ইউজার অ্যাক্টিভেশন
+            showStatus('পেমেন্ট সফল! মাইক্রোটিকে সংযোগ সক্রিয় করা হচ্ছে...');
+            btn.innerText = 'সংযোগ তৈরি হচ্ছে...';
 
-            showStatus('আলহামদুলিল্লাহ! রিচার্জ সফল হয়েছে। সংযোগ সক্রিয় করা হচ্ছে...');
-            btn.innerText = 'সংযোগ সক্রিয় হচ্ছে...';
+            const actResponse = await fetch(ACTIVATE_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'omit',
+                body: JSON.stringify({
+                    phone: phoneInput,
+                    mac: device.mac,
+                    ip: device.ip
+                })
+            });
+
+            const actData = await actResponse.json().catch(() => ({}));
+
+            if (!actResponse.ok || !actData.success) {
+                showStatus(actData.message || actData.error || 'মাইক্রোটিক সংযোগ তৈরিতে ব্যর্থ হয়েছে। অনুগ্রহ করে বিদ্যমান গ্রাহক ট্যাবে গিয়ে চেষ্টা করুন।', true);
+                btn.disabled = false;
+                btn.innerText = 'প্যাকেজ চালু করুন';
+                return;
+            }
+
+            // ধাপ ৩: মাইক্রোটিকে ইউজার নিশ্চিত হওয়ার পর স্বয়ংক্রিয় লগইন ফর্ম সাবমিট
+            const autoForm = document.getElementById('mikrotik-auto-login');
+            document.getElementById('mt-user').value = String(actData.username || device.mac);
+            document.getElementById('mt-pass').value = String(actData.password || phoneInput);
+
+            showStatus('আলহামদুলিল্লাহ! রিচার্জ সফল হয়েছে। ইন্টারনেট চালু হচ্ছে...');
+            btn.innerText = 'ইন্টারনেট চালু হচ্ছে...';
 
             setTimeout(() => {
                 autoForm.submit();
-            }, 500);
+            }, 400);
 
         } catch (err) {
             showStatus('সার্ভারের সাথে সংযোগ করা যায়নি। পেজ রিফ্রেশ করে আবার চেষ্টা করুন।', true);
