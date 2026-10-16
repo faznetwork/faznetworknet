@@ -237,8 +237,12 @@ async function verifyTrx(req,res){
  if(!rateLimit(String(req.ip||"unknown")))return fail(429,"RATE_LIMITED","Too many verification attempts. Try again later.");
  let claimedTransactionId=null;
  try{
-  const serviceType=String(body.service_type||body.serviceType||"").trim().toLowerCase();
-  if(serviceType!=="hotspot")return fail(400,"SERVICE_TYPE_REQUIRED","Hotspot checkout must explicitly send service_type='hotspot'.");
+  const explicitServiceType=String(body.service_type||body.serviceType||"").trim().toLowerCase();
+  // This endpoint is used by the captive Hotspot checkout. Older portal builds may omit
+  // service_type, so infer Hotspot only from unambiguous Hotspot fields (package_id or MAC).
+  const hasHotspotContext=["package_id","packageId","mac","mac_address","macAddress"].some(key=>String(body[key]||"").trim()!=="");
+  const serviceType=explicitServiceType||(hasHotspotContext?"hotspot":"");
+  if(serviceType!=="hotspot")return fail(400,"SERVICE_TYPE_REQUIRED","Hotspot checkout must send service_type='hotspot' or a Hotspot package_id/MAC.");
   const phone=normalizePhone(body.phone||body.account_phone||body.customer_phone||body.username||"");
   if(!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi customer phone number.");
   const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
