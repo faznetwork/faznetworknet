@@ -5802,7 +5802,7 @@ async function deletePlan(id,name){
                     const label = profile.name + ' — ৳' + profile.price.toFixed(2) + (profile.validity ? ' (' + profile.validity + ')' : '') + (matches ? ' ✓ amount matches' : '');
                     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(label) + '</option>';
                 }).join('');
-                const exact = sorted.find(profile => Math.round(profile.price * 100) === Math.round(Number(transactionAmount) * 100);
+                const exact = sorted.find(profile => Math.round(profile.price * 100) === Math.round(Number(transactionAmount) * 100));
                 if (exact) select.value = exact.id;
             } catch (error) {
                 manualMatchPackagesPromise = null;
