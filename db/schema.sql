@@ -101,7 +101,7 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(40);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_link VARCHAR(255);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS facebook_link VARCHAR(500);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS messenger_psid VARCHAR(150);
-CREATE INDEX IF NOT EXISTS idx_customers_messenger_psid ON customers(messenger_psid) WHERE messenger_psid IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_messenger_psid ON customers(messenger_psid) WHERE messenger_psid IS NOT NULL;
 
 -- General application settings (non-customer configuration).
 CREATE TABLE IF NOT EXISTS app_settings (
