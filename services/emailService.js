@@ -75,7 +75,7 @@ async function sendAppsScriptEmail({ to, subject, html }, config) {
       error.httpStatus = response.status;
       throw error;
     }
-    return { success: true, provider: APPS_SCRIPT_MODE, messageId: data.messageId || data.message_id || null, response: data };
+    return { success: true, provider: APPS_SCRIPT_MODE, messageId: data.messageId || data.message_id || null, message: String(data.message || "Email accepted by Google Apps Script.").slice(0, 300) };
   } finally {
     clearTimeout(timeout);
   }
