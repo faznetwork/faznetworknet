@@ -760,6 +760,30 @@ CREATE TABLE IF NOT EXISTS notification_templates (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(event_key, channel)
 );
+-- Upgrade existing installations as well as creating fresh schemas.
+ALTER TABLE notification_templates ADD COLUMN IF NOT EXISTS email_subject TEXT;
+ALTER TABLE notification_templates ADD COLUMN IF NOT EXISTS email_body TEXT;
+DO $faz_email_template_channel$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'notification_templates'::regclass
+      AND conname = 'notification_templates_channel_check'
+      AND pg_get_constraintdef(oid) NOT LIKE '%email%'
+  ) THEN
+    ALTER TABLE notification_templates DROP CONSTRAINT notification_templates_channel_check;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'notification_templates'::regclass
+      AND conname = 'notification_templates_channel_check'
+  ) THEN
+    ALTER TABLE notification_templates
+      ADD CONSTRAINT notification_templates_channel_check
+      CHECK (channel IN ('whatsapp','sms','telegram','messenger','email'));
+  END IF;
+END;
+$faz_email_template_channel$;
 CREATE INDEX IF NOT EXISTS idx_notification_templates_active
   ON notification_templates(event_key, channel) WHERE is_active = TRUE;
 
