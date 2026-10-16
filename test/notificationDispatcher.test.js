@@ -158,3 +158,41 @@ test("Messenger dispatch skips customers without a linked PSID",async()=>{
   assert.equal(result.results.length,0);
  }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;messengerService.sendMessengerMessage=originalSend;}
 });
+
+
+test("Email dispatch renders the email subject and HTML template with escaped customer variables",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
+ const emailService=require("../services/emailService"),originalSend=emailService.sendEmail;
+ const sent=[];
+ settingsService.getAllSettings=async()=>({
+  company_name:"FAZ NETWORK",notification_channel_email_enabled:"true",
+  notification_rule_pppoe_payment_email_enabled:"true",
+  notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false",
+  notification_channel_telegram_enabled:"false",notification_channel_messenger_enabled:"false"
+ });
+ db.query=async(sql)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"<p>Hello {name}</p>",email_subject:"Payment {amount} - {company_name}",email_body:"<p>Hello {name}, account {username}</p>"}]}:{rows:[]};
+ emailService.sendEmail=async payload=>{sent.push(payload);return {success:true,messageId:"email-test"};};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"pppoe_payment",customer:{username:"alice",full_name:"A <Admin>",email:"alice@example.com"},username:"alice",variables:{amount:"525",package:"30 Mbps",expiry_date:"2026-10-31"}});
+  assert.equal(result.success,true);
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].to,"alice@example.com");
+  assert.equal(sent[0].subject,"Payment 525 - FAZ NETWORK");
+  assert.match(sent[0].html,/A &lt;Admin&gt;/);
+  assert.match(sent[0].html,/alice/);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;emailService.sendEmail=originalSend;}
+});
+
+test("Email dispatch logs and skips customers without an email address",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query,originalInfo=console.info;
+ let logged="";
+ settingsService.getAllSettings=async()=>({notification_channel_email_enabled:"true",notification_rule_pppoe_payment_email_enabled:"true"});
+ db.query=async()=>({rows:[]});
+ console.info=(...args)=>{logged+=args.join(" ");};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"payment",customer:{username:"missing-email"},username:"missing-email"});
+  assert.equal(result.success,true);
+  assert.equal(result.results.length,0);
+  assert.match(logged,/\[Email\] Skipped: No email address found for customer: missing-email/);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;console.info=originalInfo;}
+});

@@ -133,6 +133,14 @@ INSERT INTO app_settings(key,value) VALUES
  ('notification_channel_whatsapp_enabled','false'),
  ('notification_channel_telegram_enabled','false'),
  ('notification_channel_messenger_enabled','false'),
+ ('notification_channel_email_enabled','false'),
+ ('smtp_host',''),
+ ('smtp_port','587'),
+ ('smtp_secure','false'),
+ ('smtp_username',''),
+ ('smtp_password',''),
+ ('email_from_name','FAZ NETWORK Billing'),
+ ('email_from_address',''),
  ('whatsapp_enabled','false'),
  ('telegram_bot_token',''),
  ('telegram_default_chat_id',''),
@@ -743,13 +751,39 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
 CREATE TABLE IF NOT EXISTS notification_templates (
   id BIGSERIAL PRIMARY KEY,
   event_key VARCHAR(80) NOT NULL,
-  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','telegram','messenger')),
+  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','telegram','messenger','email')),
   template_body TEXT NOT NULL,
+  email_subject TEXT,
+  email_body TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(event_key, channel)
 );
+-- Upgrade existing installations as well as creating fresh schemas.
+ALTER TABLE notification_templates ADD COLUMN IF NOT EXISTS email_subject TEXT;
+ALTER TABLE notification_templates ADD COLUMN IF NOT EXISTS email_body TEXT;
+DO $faz_email_template_channel$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'notification_templates'::regclass
+      AND conname = 'notification_templates_channel_check'
+      AND pg_get_constraintdef(oid) NOT LIKE '%email%'
+  ) THEN
+    ALTER TABLE notification_templates DROP CONSTRAINT notification_templates_channel_check;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'notification_templates'::regclass
+      AND conname = 'notification_templates_channel_check'
+  ) THEN
+    ALTER TABLE notification_templates
+      ADD CONSTRAINT notification_templates_channel_check
+      CHECK (channel IN ('whatsapp','sms','telegram','messenger','email'));
+  END IF;
+END;
+$faz_email_template_channel$;
 CREATE INDEX IF NOT EXISTS idx_notification_templates_active
   ON notification_templates(event_key, channel) WHERE is_active = TRUE;
 

@@ -5,6 +5,7 @@ const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 const messengerService=require("./messengerService");
 const telegramService=require("./telegramService");
+const emailService=require("./emailService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
@@ -24,7 +25,7 @@ function customTemplateEvents(type,rawEvent,eventName){
 }
 async function getCustomTemplate(type,rawEvent,eventName,channel){
  const candidates=customTemplateEvents(type,rawEvent,eventName);if(!candidates.length)return null;
- try{const result=await db.query("SELECT template_body FROM notification_templates WHERE event_key=ANY($1::varchar[]) AND channel=$2 AND is_active=TRUE ORDER BY array_position($1::varchar[],event_key) LIMIT 1",[candidates,channel]);return result.rows?.[0]?.template_body||null;}
+ try{const result=await db.query("SELECT template_body,email_subject,email_body FROM notification_templates WHERE event_key=ANY($1::varchar[]) AND channel=$2 AND is_active=TRUE ORDER BY array_position($1::varchar[],event_key) LIMIT 1",[candidates,channel]);const row=result.rows?.[0];if(!row)return null;return channel==="email"?{template_body:row.template_body,email_subject:row.email_subject||"",email_body:row.email_body||row.template_body||""}:row.template_body||null;}
  catch(error){console.warn("[Notification Hub] Custom template lookup skipped:",error.message);return null;}
 }
 function renewalRuleEvents(type,eventName){
@@ -54,6 +55,23 @@ function formatMessage(settings,event,variables,message,customTemplate){
  const source=customTemplate!==null&&customTemplate!==undefined?customTemplate:(templateKey&&settings[templateKey]?settings[templateKey]:message||"");
  return smsService.renderTemplate(source,{company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...variables});
 }
+
+function escapeEmailHtml(value){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function renderEmailTemplate(source,variables,html=true){
+ return String(source||"").replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(all,key)=>Object.prototype.hasOwnProperty.call(variables,key)?(html?escapeEmailHtml(variables[key]):String(variables[key]??"")):all);
+}
+function defaultEmailTemplate(event,context){
+ const map={
+  payment:{subject:"Payment confirmation - {company_name}",body:"<p>Dear {name},</p><p>We have received your payment of Tk {amount} for account <strong>{username}</strong>.</p><p>Thank you,<br>{company_name}</p>"},
+  renewal:{subject:"Service renewal confirmed - {company_name}",body:"<p>Dear {name},</p><p>Your {package} service has been renewed. Your new expiry date is <strong>{expiry_date}</strong>.</p><p>Thank you,<br>{company_name}</p>"},
+  recharge:{subject:"Recharge confirmation - {company_name}",body:"<p>Dear {name},</p><p>Your {package} recharge of Tk {amount} has been processed. Valid until {expiry_date}.</p><p>{company_name}</p>"},
+  expiry_warning:{subject:"Service expiry reminder - {company_name}",body:"<p>Dear {name},</p><p>Your {package} internet service is due to expire on <strong>{expiry_date}</strong>. Please renew to avoid interruption.</p><p>{company_name}</p>"},
+  expired:{subject:"Internet service expired - {company_name}",body:"<p>Dear {name},</p><p>Your internet service has expired. Please renew your package to restore service.</p><p>{company_name}</p>"},
+  welcome:{subject:"Welcome to {company_name}",body:"<p>Welcome {name}!</p><p>Your account <strong>{username}</strong> is ready. Package: {package}.</p><p>{company_name}</p>"}
+ };
+ return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
+}
+
 async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to;
@@ -89,6 +107,24 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
+ if(channelEnabled("email")&&ruleEnabled("email")){
+  let recipientEmail=String(customer?.email||"").trim();
+  if(!recipientEmail&&customerUsername!=="unknown"){
+   try{const linked=await db.query("SELECT email FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);recipientEmail=String(linked.rows?.[0]?.email||"").trim();}
+   catch(error){console.warn("[Email] Customer email lookup failed for "+customerUsername+": "+String(error?.message||error).slice(0,160));}
+  }
+  if(!recipientEmail)console.info("[Email] Skipped: No email address found for customer: "+customerUsername);
+  else jobs.push(["email",async()=>{
+   const custom=await getCustomTemplate(type,rawEvent,eventName,"email");
+   const defaults=defaultEmailTemplate(eventName,context);
+   const subjectSource=custom&&custom.email_subject?custom.email_subject:defaults.subject;
+   const bodySource=custom&&custom.email_body?custom.email_body:defaults.body;
+   const subject=renderEmailTemplate(subjectSource,context,false).replace(/[\r\n]+/g," ").trim().slice(0,200);
+   const html=renderEmailTemplate(bodySource,context,true);
+   const text=html.replace(/<\s*br\s*\/?>/gi,"\n").replace(/<\/(p|div|li|h[1-6])>/gi,"\n").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/[ \t]+\n/g,"\n").trim();
+   return emailService.sendEmail({to:recipientEmail,subject,html,text});
+  }]);
+ }
  if(channelEnabled("telegram")&&ruleEnabled("telegram")){
   let telegramChatId=String(customer?.telegram_chat_id||"").trim();
   if(!telegramChatId&&customerUsername!=="unknown"){
