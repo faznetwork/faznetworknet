@@ -2101,7 +2101,15 @@
         </section>
         <section data-notify-panel="telegram" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyTelegramEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyTelegramEnabled">Enable Telegram notifications</label></div>
-          <div class="row g-3"><div class="col-md-7"><label class="form-label" for="telegramBotToken">Bot Token</label><input id="telegramBotToken" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved token"><div id="telegramTokenHint" class="form-text"></div></div><div class="col-md-5"><label class="form-label" for="telegramChatId">Default Chat ID / Channel ID</label><input id="telegramChatId" class="form-control" placeholder="@channelname or numeric chat ID"></div><div class="col-12 d-flex gap-2 align-items-center"><button type="button" id="telegramTestBtn" class="btn btn-outline-primary">Send Test Message</button><span id="telegramTestResult" class="small" role="status"></span></div></div>
+          <div class="row g-3">
+            <div class="col-md-7"><label class="form-label" for="telegramBotToken">Bot Token</label><div class="input-group"><input id="telegramBotToken" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved token"><button type="button" class="btn btn-outline-secondary" id="telegramTokenToggle" aria-label="Show Bot Token"><i class="bi bi-eye"></i></button></div><div id="telegramTokenHint" class="form-text"></div></div>
+            <div class="col-md-5"><label class="form-label" for="telegramChatId">Default Chat ID / Channel ID</label><input id="telegramChatId" class="form-control" placeholder="@channelname or numeric chat ID"><div class="form-text">Used for admin/system alerts and as a fallback when a customer has no linked Telegram Chat ID.</div></div>
+            <div class="col-md-5"><label class="form-label" for="telegramTestChatId">Test Target Chat ID</label><input id="telegramTestChatId" class="form-control" placeholder="Defaults to the configured Chat ID"></div>
+            <div class="col-md-7"><label class="form-label" for="telegramTestMessage">Test Message Text</label><input id="telegramTestMessage" class="form-control" maxlength="4096" value="FAZ NETWORK test notification"></div>
+            <div class="col-12"><button type="button" id="telegramTestBtn" class="btn btn-outline-primary"><i class="bi bi-send me-1"></i>Send Test Telegram Message</button></div>
+            <div class="col-12"><div id="telegramTestResult" class="alert alert-secondary py-2 small mb-0 d-none" role="status" aria-live="polite"></div></div>
+            <div class="col-12"><div class="small text-muted">For direct customer alerts, populate <code>customers.telegram_chat_id</code> after the customer has securely linked their Telegram account. A username alone is not a Telegram Chat ID.</div></div>
+          </div>
         </section>
         <section data-notify-panel="messenger" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyMessengerEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyMessengerEnabled">Enable Facebook Messenger notifications</label></div>
@@ -4631,7 +4639,7 @@ async function deletePlan(id,name){
           try{
             const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
             const mode=['bulk_sms'].includes(s.sms_provider_mode||s.sms_gateway_mode)?'custom_http':(s.sms_provider_mode||s.sms_gateway_mode||'disabled');
-            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',telegramChatId:s.telegram_default_chat_id,messengerPageId:s.messenger_page_id};
+            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',telegramChatId:s.telegram_default_chat_id,telegramTestChatId:s.telegram_default_chat_id,messengerPageId:s.messenger_page_id};
             for(const [id,value] of Object.entries(values)){const el=document.getElementById(id);if(el)el.value=value||'';}
             const checkValues={notifySmsEnabled:s.notification_channel_sms_enabled??'true',notifyWhatsappEnabled:s.notification_channel_whatsapp_enabled??'false',notifyTelegramEnabled:s.notification_channel_telegram_enabled??'false',notifyMessengerEnabled:s.notification_channel_messenger_enabled??'false'};
             for(const [id,value] of Object.entries(checkValues)){const el=document.getElementById(id);if(el)el.checked=String(value)==='true';}
@@ -4720,7 +4728,22 @@ async function deletePlan(id,name){
         document.getElementById('smsDeviceMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsDeviceMappingRows'));
         document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
         document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
-        document.getElementById('telegramTestBtn')?.addEventListener('click',()=>runNotificationTest('telegram'));
+        document.getElementById('telegramTokenToggle')?.addEventListener('click',e=>{const input=document.getElementById('telegramBotToken'),icon=e.currentTarget.querySelector('i');const show=input.type==='password';input.type=show?'text':'password';e.currentTarget.setAttribute('aria-label',show?'Hide Bot Token':'Show Bot Token');if(icon)icon.className=show?'bi bi-eye-slash':'bi bi-eye';});
+        document.getElementById('telegramTestChatId')?.addEventListener('input',e=>{if(!String(e.target.value||'').trim())return;});
+        document.getElementById('telegramTestBtn')?.addEventListener('click',async e=>{
+          const button=e.currentTarget,resultEl=document.getElementById('telegramTestResult'),targetChatId=String(document.getElementById('telegramTestChatId')?.value||document.getElementById('telegramChatId')?.value||'').trim(),message=String(document.getElementById('telegramTestMessage')?.value||'').trim();
+          resultEl.className='alert alert-secondary py-2 small mb-0';resultEl.textContent='';
+          if(!targetChatId||!message){resultEl.className='alert alert-warning py-2 small mb-0';resultEl.textContent='Enter a target Chat ID and test message first.';return;}
+          button.disabled=true;resultEl.textContent='Sending test Telegram message…';
+          try{
+            await saveNotificationHub();
+            const response=await fetch('/api/settings/notifications/telegram/test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({targetChatId,message}),cache:'no-store'});
+            const data=await response.json().catch(()=>({}));
+            if(!response.ok||!data.success){const details=data.details||data;throw new Error(data.message||data.error||data.details?.error||'Telegram test failed.');}
+            resultEl.className='alert alert-success py-2 small mb-0';resultEl.textContent='Success: '+(data.message||'Telegram message sent.')+(data.result?.result?.message_id?' Message ID: '+data.result.result.message_id: '');
+          }catch(error){resultEl.className='alert alert-danger py-2 small mb-0';resultEl.textContent='Telegram error: '+(error.message||'Test failed.');}
+          finally{button.disabled=false;}
+        });
         document.getElementById('messengerTokenToggle')?.addEventListener('click',e=>{const input=document.getElementById('messengerPageToken'),icon=e.currentTarget.querySelector('i');const show=input.type==='password';input.type=show?'text':'password';e.currentTarget.setAttribute('aria-label',show?'Hide Page Access Token':'Show Page Access Token');if(icon)icon.className=show?'bi bi-eye-slash':'bi bi-eye';});
         document.getElementById('messengerTestBtn')?.addEventListener('click',async e=>{
           const button=e.currentTarget,resultEl=document.getElementById('messengerTestResult'),psid=String(document.getElementById('messengerTestRecipient')?.value||'').trim(),message=String(document.getElementById('messengerTestMessage')?.value||'').trim();
