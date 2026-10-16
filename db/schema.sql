@@ -249,6 +249,8 @@ SET needs_reconciliation=true
 WHERE status='processing' AND used=true AND claimed_at < NOW() - INTERVAL '5 minutes'
   AND needs_reconciliation=false;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS phone VARCHAR(40);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS customer_name VARCHAR(160);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS server VARCHAR(100) DEFAULT 'all';
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS time_limit VARCHAR(50);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS data_limit VARCHAR(50);
