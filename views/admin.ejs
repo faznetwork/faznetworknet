@@ -4553,8 +4553,11 @@ async function deletePlan(id,name){
         function selectedNotificationTemplate(){
           const event=document.getElementById('notifyTemplateEvent')?.value||'pppoe_renewal',channel=document.getElementById('notifyTemplateChannel')?.value||'whatsapp';
           const saved=notificationTemplateCache.find(t=>t.event_key===event&&t.channel===channel);
-          const body=document.getElementById('notifyTemplateBody'),active=document.getElementById('notifyTemplateActive');
-          if(body)body.value=saved?saved.template_body:(notificationTemplateDefaults[event]||'Dear {name}, {company_name} notification.');
+          const body=document.getElementById('notifyTemplateBody'),active=document.getElementById('notifyTemplateActive'),subject=document.getElementById('notifyTemplateSubject'),subjectWrap=document.getElementById('notifyTemplateSubjectWrap');
+          if(body)body.value=saved?(channel==='email'?(saved.email_body||saved.template_body):saved.template_body):(notificationTemplateDefaults[event]||'Dear {name}, {company_name} notification.');
+          const subjectDefaults={pppoe_renewal:'Service renewal confirmed - {company_name}',pppoe_payment:'Payment confirmation - {company_name}',pppoe_expiry_warning:'Service expiry reminder - {company_name}',pppoe_expired:'Internet service expired - {company_name}',hotspot_purchase:'Hotspot purchase confirmed - {company_name}',hotspot_renewal:'Recharge confirmation - {company_name}',hotspot_expiry_warning:'Hotspot expiry reminder - {company_name}',hotspot_expired:'Hotspot package expired - {company_name}',welcome_message:'Welcome to {company_name}'};
+          if(subject)subject.value=saved&&saved.email_subject?saved.email_subject:(subjectDefaults[event]||'Notification from {company_name}');
+          if(subjectWrap)subjectWrap.style.display=channel==='email'?'block':'none';
           if(active)active.checked=saved?Boolean(saved.is_active):true;
           notificationTemplatePreview();
         }
@@ -4570,7 +4573,7 @@ async function deletePlan(id,name){
         }
         async function saveNotificationTemplate(){
           const button=document.getElementById('notifyTemplateSaveBtn'),result=document.getElementById('notifyTemplateResult');
-          const payload={event_key:document.getElementById('notifyTemplateEvent').value,channel:document.getElementById('notifyTemplateChannel').value,template_body:document.getElementById('notifyTemplateBody').value,is_active:document.getElementById('notifyTemplateActive').checked};
+          const payload={event_key:document.getElementById('notifyTemplateEvent').value,channel:document.getElementById('notifyTemplateChannel').value,template_body:document.getElementById('notifyTemplateBody').value,email_body:document.getElementById('notifyTemplateBody').value,email_subject:document.getElementById('notifyTemplateSubject').value,is_active:document.getElementById('notifyTemplateActive').checked};
           if(button)button.disabled=true;
           try{
             const response=await fetch('/api/settings/notifications/templates',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload),cache:'no-store'}),data=await response.json();
@@ -4658,17 +4661,18 @@ async function deletePlan(id,name){
           try{
             const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
             const mode=['bulk_sms'].includes(s.sms_provider_mode||s.sms_gateway_mode)?'custom_http':(s.sms_provider_mode||s.sms_gateway_mode||'disabled');
-            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',telegramChatId:s.telegram_default_chat_id,telegramTestChatId:s.telegram_default_chat_id,messengerPageId:s.messenger_page_id};
+            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',telegramChatId:s.telegram_default_chat_id,telegramTestChatId:s.telegram_default_chat_id,messengerPageId:s.messenger_page_id,smtpHost:s.smtp_host,smtpPort:s.smtp_port||"587",smtpUsername:s.smtp_username,emailFromName:s.email_from_name||"FAZ NETWORK Billing",emailFromAddress:s.email_from_address};
             for(const [id,value] of Object.entries(values)){const el=document.getElementById(id);if(el)el.value=value||'';}
-            const checkValues={notifySmsEnabled:s.notification_channel_sms_enabled??'true',notifyWhatsappEnabled:s.notification_channel_whatsapp_enabled??'false',notifyTelegramEnabled:s.notification_channel_telegram_enabled??'false',notifyMessengerEnabled:s.notification_channel_messenger_enabled??'false'};
+            const checkValues={notifySmsEnabled:s.notification_channel_sms_enabled??'true',notifyWhatsappEnabled:s.notification_channel_whatsapp_enabled??'false',notifyTelegramEnabled:s.notification_channel_telegram_enabled??'false',notifyMessengerEnabled:s.notification_channel_messenger_enabled??'false',notifyEmailEnabled:s.notification_channel_email_enabled??'false',smtpSecure:s.smtp_secure??'false'};
             for(const [id,value] of Object.entries(checkValues)){const el=document.getElementById(id);if(el)el.checked=String(value)==='true';}
-            for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['telegramBotToken','telegram_bot_token'],['messengerPageToken','messenger_page_access_token']]){const el=document.getElementById(id);if(el)el.value='';}
+            for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['telegramBotToken','telegram_bot_token'],['messengerPageToken','messenger_page_access_token'],['smtpPassword','smtp_password']]){const el=document.getElementById(id);if(el)el.value='';}
             document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';
             document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Gateway token saved. Leave blank to retain it.':'No gateway token configured.';
             document.getElementById('telegramTokenHint').textContent=s.telegram_bot_token_configured?'Bot token saved. Leave blank to retain it.':'No bot token configured.';
             document.getElementById('messengerTokenHint').textContent=s.messenger_page_access_token_configured?'Page token saved. Leave blank to retain it.':'No page token configured.';
             document.getElementById('messengerAppSecretHint').textContent=s.messenger_app_secret_configured?'App Secret saved. Leave blank to retain it.':'No App Secret configured; webhook signatures will not be checked until one is saved.';
             document.getElementById('messengerVerifyTokenHint').textContent=s.messenger_verify_token_configured?'Webhook verify token saved. Leave blank to retain it.':'No webhook verify token configured.';
+            document.getElementById('smtpPasswordHint').textContent=s.smtp_password_configured?'SMTP password saved. Leave blank to retain it.':'No SMTP password configured.';
             renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
             renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
             renderNotificationRules(s);
@@ -4692,17 +4696,39 @@ async function deletePlan(id,name){
             notification_channel_whatsapp_enabled:document.getElementById('notifyWhatsappEnabled').checked,
             notification_channel_telegram_enabled:document.getElementById('notifyTelegramEnabled').checked,
             notification_channel_messenger_enabled:document.getElementById('notifyMessengerEnabled').checked,
+            notification_channel_email_enabled:document.getElementById('notifyEmailEnabled').checked,
+            smtp_host:document.getElementById('smtpHost').value,smtp_port:document.getElementById('smtpPort').value,smtp_secure:document.getElementById('smtpSecure').checked,smtp_username:document.getElementById('smtpUsername').value,email_from_name:document.getElementById('emailFromName').value,email_from_address:document.getElementById('emailFromAddress').value,
             telegram_default_chat_id:document.getElementById('telegramChatId').value,messenger_page_id:document.getElementById('messengerPageId').value
           };
           document.querySelectorAll('.notify-rule').forEach(el=>{payload['notification_rule_'+el.dataset.type+'_'+el.dataset.event+'_'+el.dataset.channel+'_enabled']=el.checked;});
-          const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,telegramToken=document.getElementById('telegramBotToken').value,messengerToken=document.getElementById('messengerPageToken').value,messengerSecret=document.getElementById('messengerAppSecret').value,messengerVerifyToken=document.getElementById('messengerVerifyToken').value;
-          if(apiKey)payload.sms_api_key=apiKey;if(deviceToken)payload.sms_device_token=deviceToken;if(telegramToken)payload.telegram_bot_token=telegramToken;if(messengerToken)payload.messenger_page_access_token=messengerToken;if(messengerSecret)payload.messenger_app_secret=messengerSecret;if(messengerVerifyToken)payload.messenger_verify_token=messengerVerifyToken;
+          const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,telegramToken=document.getElementById('telegramBotToken').value,messengerToken=document.getElementById('messengerPageToken').value,messengerSecret=document.getElementById('messengerAppSecret').value,messengerVerifyToken=document.getElementById('messengerVerifyToken').value,smtpPassword=document.getElementById('smtpPassword').value;
+          if(apiKey)payload.sms_api_key=apiKey;if(deviceToken)payload.sms_device_token=deviceToken;if(telegramToken)payload.telegram_bot_token=telegramToken;if(messengerToken)payload.messenger_page_access_token=messengerToken;if(messengerSecret)payload.messenger_app_secret=messengerSecret;if(messengerVerifyToken)payload.messenger_verify_token=messengerVerifyToken;if(smtpPassword)payload.smtp_password=smtpPassword;
           return payload;
         }
         async function saveNotificationHub(){
           await saveSystemSettings(collectNotificationPayload(),'systemSmsSaveBtn','systemSmsResult');
-          ['setSmsApiKey','setSmsDeviceToken','telegramBotToken','messengerPageToken','messengerAppSecret','messengerVerifyToken'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+          ['setSmsApiKey','setSmsDeviceToken','telegramBotToken','messengerPageToken','messengerAppSecret','messengerVerifyToken','smtpPassword'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
         }
+        async function runEmailTest(){
+          const button=document.getElementById("emailTestBtn"),result=document.getElementById("emailTestResult");
+          const to=document.getElementById("emailTestRecipient").value.trim(),subject=document.getElementById("emailTestSubject").value.trim();
+          if(!to||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){result.className="alert alert-warning py-2 small mb-0";result.textContent="Enter a valid recipient email address.";return;}
+          if(!subject){result.className="alert alert-warning py-2 small mb-0";result.textContent="Enter a test email subject.";return;}
+          if(button)button.disabled=true;result.className="alert alert-info py-2 small mb-0";result.textContent="Verifying SMTP connection and sending test email…";
+          try{
+            await saveNotificationHub();
+            const response=await fetch("/api/settings/notifications/email/test",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({to,subject}),cache:"no-store"});
+            const data=await response.json().catch(()=>({message:"Invalid server response"}));
+            if(!response.ok||!data.success)throw new Error(data.message||data.error||data.details?.error||"SMTP test failed.");
+            result.className="alert alert-success py-2 small mb-0";result.textContent=data.message||"SMTP connection verified and test email sent successfully.";
+          }catch(error){result.className="alert alert-danger py-2 small mb-0";result.textContent=error.message||"SMTP test failed.";}
+          finally{if(button)button.disabled=false;}
+        }
+        document.getElementById("smtpPasswordToggle")?.addEventListener("click",()=>{
+          const input=document.getElementById("smtpPassword"),button=document.getElementById("smtpPasswordToggle"),show=input.type==="password";
+          input.type=show?"text":"password";button.innerHTML=show?'<i class="bi bi-eye-slash"></i>':'<i class="bi bi-eye"></i>';button.setAttribute("aria-label",show?"Hide SMTP password":"Show SMTP password");
+        });
+        document.getElementById("emailTestBtn")?.addEventListener("click",runEmailTest);
         async function showNotificationTestLog(title,data){
           const modal=document.getElementById('notificationTestLogModal'),heading=document.getElementById('notificationTestLogTitle'),pre=document.getElementById('notificationTestLogBody');
           if(!modal||!heading||!pre){window.alert(title+'\n'+JSON.stringify(data,null,2));return;}
