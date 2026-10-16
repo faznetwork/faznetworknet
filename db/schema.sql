@@ -161,7 +161,7 @@ INSERT INTO app_settings(key,value) VALUES
  ('notification_rule_pppoe_expiry_warning_sms_enabled','true'),
  ('notification_rule_pppoe_expiry_warning_whatsapp_enabled','false'),
  ('notification_rule_pppoe_expired_sms_enabled','true'),
- ('notification_rule_pppoe_expired_whatsapp_enabled','false'),
+ ('notification_rule_pppoe_expired_whatsapp_enabled','false')
 ON CONFLICT(key) DO NOTHING;
 
 -- Idempotency ledger for outbound SMS events; contains no payment transaction data.
