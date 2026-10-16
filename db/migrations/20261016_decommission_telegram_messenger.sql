@@ -14,3 +14,11 @@ WHERE key IN (
   'messenger_verify_token'
 )
 OR key ~ '^notification_rule_.*_(telegram|messenger)_enabled$';
+
+-- Remove retired templates before tightening the channel constraint.
+DELETE FROM notification_templates WHERE channel IN ('telegram', 'messenger');
+ALTER TABLE notification_templates
+  DROP CONSTRAINT IF EXISTS notification_templates_channel_check;
+ALTER TABLE notification_templates
+  ADD CONSTRAINT notification_templates_channel_check
+  CHECK (channel IN ('whatsapp', 'sms', 'email'));
