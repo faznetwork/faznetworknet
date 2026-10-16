@@ -6,6 +6,7 @@ const smsService=require("../services/smsService");
 const whatsappService=require("../services/whatsappService");
 
 const activeWorkers=new Set();
+let recoveryTimer=null;
 const MAX_RECIPIENTS=5000;
 const MIN_DELAY_MS=1500;
 const MAX_DELAY_MS=3000;
@@ -178,6 +179,8 @@ async function resumePendingBroadcasts(){
   const result=await db.query("SELECT id FROM broadcast_logs WHERE status IN ('queued','running') AND (worker_token IS NULL OR worker_lease_until IS NULL OR worker_lease_until<NOW()) ORDER BY id");
   for(const row of result.rows||[])Promise.resolve().then(()=>runBroadcast(row.id));
   if(result.rows?.length)console.info("[Broadcast] Resumed "+result.rows.length+" queued broadcast job(s).");
+  const pending=await db.query("SELECT COUNT(*)::int AS count FROM broadcast_logs WHERE status IN ('queued','running')");
+  if(Number(pending.rows?.[0]?.count||0)>0&&!recoveryTimer){recoveryTimer=setTimeout(()=>{recoveryTimer=null;resumePendingBroadcasts();},30000);if(typeof recoveryTimer.unref==="function")recoveryTimer.unref();}
  }catch(error){console.warn("[Broadcast] Pending-job recovery skipped:",error.message);}
 }
 module.exports={audienceCount,create,progress,history,resumePendingBroadcasts,queryAudience,normalizePhone,dedupeRecipients,renderBroadcastMessage,randomDelayMs,MIN_DELAY_MS,MAX_DELAY_MS,MAX_RECIPIENTS};
