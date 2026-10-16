@@ -3432,20 +3432,167 @@
         function setHotspotKpiFilter(key,event){if(event)event.stopPropagation();window.__hotspotKpiFilter=['all','online','offline','expiring','expired'].includes(key)?key:'all';document.querySelectorAll('.hotspot-kpi-pill').forEach(p=>p.classList.toggle('is-selected',p.dataset.kpi===window.__hotspotKpiFilter));applyHotspotLocalFilters();}
         function applyHotspotLocalFilters(){const key=window.__hotspotKpiFilter||'all',q=(document.getElementById('hotspotSearch')?.value||'').trim().toLowerCase(),p=(document.getElementById('hotspotProfileFilter')?.value||'').toLowerCase(),s=(document.getElementById('hotspotServerFilter')?.value||'').toLowerCase(),mobile=window.matchMedia('(max-width: 767.98px)').matches;let shown=0;document.querySelectorAll('.hotspot-all-users-view .hotspot-kpi-pill').forEach(pill=>pill.classList.toggle('is-selected',pill.dataset.kpi===key));document.querySelectorAll('#hotspotUserBody tr[data-hotspot-row],#hotspotMobileCards [data-hotspot-card]').forEach(row=>{const st=row.dataset.status,exp=Number(row.dataset.expiryTime),txt=(row.dataset.search||'')+' '+(row.innerText||'').toLowerCase(),k=key==='all'||(key==='online'&&st==='online')||(key==='offline'&&st==='offline')||(key==='expired'&&st==='expired')||(key==='expiring'&&Number.isFinite(exp)&&exp>Date.now()&&exp<=Date.now()+259200000),ok=k&&(!q||txt.includes(q))&&(!p||txt.includes(p))&&(!s||txt.includes(s));row.style.display=ok?'':'none';if(ok&&((mobile&&row.matches('[data-hotspot-card]'))||(!mobile&&row.matches('tr[data-hotspot-row]'))))shown++;});let serial=0;document.querySelectorAll('#hotspotUserBody tr[data-hotspot-row]').forEach(row=>{if(row.style.display!=='none'){serial++;const cell=row.querySelector('[data-hotspot-serial]');if(cell)cell.textContent=serial;}});serial=0;document.querySelectorAll('#hotspotMobileCards [data-hotspot-card]').forEach(card=>{if(card.style.display!=='none'){serial++;const cell=card.querySelector('[data-hotspot-serial]');if(cell)cell.textContent=serial;}});const c=document.getElementById('hotspotVisibleCount');if(c)c.textContent='Showing '+shown+' of '+(window.__hotspotRenderedRows||[]).length+' users';}
         window.setHotspotKpiFilter=setHotspotKpiFilter;window.filterHotspotRows=window.filterHotspotAdvanced=applyHotspotLocalFilters;
-        window.viewHotspotUser=function(username,event){if(event)event.stopPropagation();const u=(window.__hotspotRenderedRows||[]).find(x=>x.username===username);if(!u)return;let m=document.getElementById('hotspotUserDetailsModal');if(!m){m=document.createElement('div');m.id='hotspotUserDetailsModal';m.className='modal fade hotspot-executive-modal';m.tabIndex=-1;document.body.appendChild(m);}const e=escapeHtml,s=u.session||{},online=u.status==='online',tile=(label,value)=>'<div class="hotspot-detail-tile"><div class="hotspot-detail-label">'+label+'</div><div class="hotspot-detail-value">'+e(value||'—')+'</div></div>';m.innerHTML='<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl"><div class="modal-content hotspot-executive-content"><div class="modal-header hotspot-executive-header"><div><div class="small text-uppercase opacity-75">Hotspot customer profile</div><h5 class="modal-title fw-bold">'+e(u.customer_name||u.name||u.username)+'</h5><div class="small opacity-75">'+e(u.phone||u.username)+' · '+e(u.username)+'</div></div><div class="d-flex align-items-center gap-2"><span class="badge '+(online?'bg-success':'bg-secondary')+'">'+(online?'Online':'Offline')+'</span><span class="badge bg-light text-dark">'+e(u.profile||'No profile')+'</span><button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal"></button></div></div><div class="modal-body p-3 p-md-4"><div class="hotspot-detail-grid">'+tile('Customer name',u.customer_name||u.name||u.username)+tile('Phone number',u.phone||u.username)+tile('Device MAC',s.macAddress||u.macAddress||u.username)+tile('IP address',s.address||u.address)+tile('Active session time',s.uptime||u.uptime)+tile('Total bandwidth',formatBytes(Number(s.bytesIn||u.bytesIn||0)+Number(s.bytesOut||u.bytesOut||0)))+tile('Current profile',u.profile)+tile('Server name',s.server||u.server)+tile('Exact expiry',u.expires_at||u.expiryLabel||u.comment)+tile('Payment reference',u.transaction_id?'Transaction #'+u.transaction_id:'No associated transaction')+tile('Package price','৳ '+Number(u.price||0).toFixed(2))+tile('Comment / note',u.comment||u.note)+'</div></div><div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button><button class="btn btn-success" onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById(\\'hotspotUserDetailsModal\\')).hide();renewHotspotUser('+JSON.stringify(String(username))+')"><i class="bi bi-arrow-repeat me-1"></i>Renew package</button></div></div></div>';bootstrap.Modal.getOrCreateInstance(m).show();};
-window.renewHotspotUser=async function(username,event){
- if(event)event.stopPropagation();const u=(window.__hotspotRenderedRows||[]).find(x=>x.username===username);if(!u)return;
- let m=document.getElementById('renewHotspotModal');if(!m){m=document.createElement('div');m.id='renewHotspotModal';m.className='modal fade hotspot-executive-modal';m.tabIndex=-1;document.body.appendChild(m);}
- m.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content hotspot-executive-content"><div class="modal-header hotspot-renew-header"><div><h5 class="modal-title fw-bold">Renew Hotspot Package</h5><div class="small">'+escapeHtml(u.customer_name||u.name||u.username)+' · '+escapeHtml(u.phone||u.username)+' · '+escapeHtml(u.macAddress||u.username)+'</div></div><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form id="renewHotspotForm"><div class="modal-body"><label class="form-label fw-bold" for="renewHotspotProfile">Active package</label><select id="renewHotspotProfile" class="form-select" required><option value="">Loading packages…</option></select><div class="hotspot-renew-summary mt-3"><div><span>Package price</span><strong id="renewHotspotPrice">৳ 0.00</strong></div><div><span>Validity</span><strong id="renewHotspotValidity">—</strong></div><div><span>Target expiry</span><strong id="renewHotspotExpiry">Choose package</strong></div></div><label class="form-check mt-3"><input id="renewHotspotNotify" class="form-check-input" type="checkbox" checked><span class="form-check-label">Send SMS / WhatsApp notification</span></label><div id="renewHotspotResult" class="small mt-3" role="status"></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button id="renewHotspotConfirm" class="btn btn-success" type="submit">Confirm renewal</button></div></form></div></div>';
- const modal=bootstrap.Modal.getOrCreateInstance(m),select=document.getElementById('renewHotspotProfile');let packages=[];
- const duration=v=>{const x=String(v||'').match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!x)return 0;const u=x[2].toLowerCase();return Number(x[1])*(u.startsWith('m')?60000:u.startsWith('h')?3600000:u.startsWith('w')?604800000:86400000);};
- const stamp=d=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(d);
- const chosen=()=>packages.find(p=>String(p.profile_id||p.name)===select.value||p.name===select.value);
- const preview=()=>{const p=chosen(),v=p?.validityLabel||[p?.validityValue,p?.validityUnit].filter(Boolean).join(' '),old=u.expires_at?new Date(u.expires_at):null,base=old&&old>Date.now()?old:new Date(),ms=duration(v);document.getElementById('renewHotspotPrice').textContent='৳ '+Number(p?.price||0).toFixed(2);document.getElementById('renewHotspotValidity').textContent=v||'—';document.getElementById('renewHotspotExpiry').textContent=ms?stamp(new Date(base.getTime()+ms)):(p?'Data quota package':'Choose package');};
- try{const d=await jsonFetch('/api/hotspot/profiles');packages=(Array.isArray(d.profiles)?d.profiles:[]).filter(p=>p.name&&String(p.name).toLowerCase()!=='default'&&(p.validityLabel||p.validityValue||p.limitBytesTotal));select.innerHTML='<option value="">Choose a package…</option>'+packages.map(p=>'<option value="'+escapeHtml(p.profile_id||p.name)+'">'+escapeHtml(p.name)+' · ৳ '+Number(p.price||0).toFixed(2)+' · '+escapeHtml(p.validityLabel||'Configured package')+'</option>').join('');const current=packages.find(p=>p.name===u.profile);if(current)select.value=String(current.profile_id||current.name);select.addEventListener('change',preview);preview();}catch(err){select.innerHTML='<option value="">Unable to load packages</option>';document.getElementById('renewHotspotResult').textContent=err.message;}
- document.getElementById('renewHotspotForm').onsubmit=async ev=>{ev.preventDefault();const p=chosen(),b=document.getElementById('renewHotspotConfirm'),r=document.getElementById('renewHotspotResult');if(!p){r.textContent='Choose a package.';return;}b.disabled=true;r.textContent='Renewing package…';try{const out=await jsonFetch('/api/hotspot/manual-renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.username,profile_id:p.profile_id||p.name,notify:document.getElementById('renewHotspotNotify').checked,customer_name:u.customer_name||u.name})});r.className='small mt-3 text-success';r.textContent=out.message||'Renewal successful.';await refreshHotspotCurrent();setTimeout(()=>bootstrap.Modal.getOrCreateInstance(m).hide(),700);}catch(err){r.className='small mt-3 text-danger';r.textContent=err.message||'Renewal failed.';}finally{b.disabled=false;}};
- modal.show();
-};
+        window.viewHotspotUser = function (username, event) {
+            try {
+                if (event) event.stopPropagation();
+                if (!document.body || !window.bootstrap || !window.bootstrap.Modal) return;
+                const rows = Array.isArray(window.__hotspotRenderedRows) ? window.__hotspotRenderedRows : [];
+                const u = rows.find(x => x && x.username === username);
+                if (!u) return;
+                let modalEl = document.getElementById('hotspotUserDetailsModal');
+                if (!modalEl) {
+                    modalEl = document.createElement('div');
+                    modalEl.id = 'hotspotUserDetailsModal';
+                    modalEl.className = 'modal fade hotspot-executive-modal';
+                    modalEl.tabIndex = -1;
+                    document.body.appendChild(modalEl);
+                }
+                const e = typeof escapeHtml === 'function' ? escapeHtml : (v => String(v == null ? '' : v));
+                const session = u.session || {};
+                const online = u.status === 'online';
+                const tile = (label, value) => '<div class="hotspot-detail-tile"><div class="hotspot-detail-label">' + label + '</div><div class="hotspot-detail-value">' + e(value || '—') + '</div></div>';
+                modalEl.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl"><div class="modal-content hotspot-executive-content"><div class="modal-header hotspot-executive-header"><div><div class="small text-uppercase opacity-75">Hotspot customer profile</div><h5 class="modal-title fw-bold">' + e(u.customer_name || u.name || u.username) + '</h5><div class="small opacity-75">' + e(u.phone || u.username) + ' · ' + e(u.username) + '</div></div><div class="d-flex align-items-center gap-2"><span class="badge ' + (online ? 'bg-success' : 'bg-secondary') + '">' + (online ? 'Online' : 'Offline') + '</span><span class="badge bg-light text-dark">' + e(u.profile || 'No profile') + '</span><button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal" aria-label="Close"></button></div></div><div class="modal-body p-3 p-md-4"><div class="hotspot-detail-grid">' +
+                    tile('Customer name', u.customer_name || u.name || u.username) +
+                    tile('Phone number', u.phone || u.username) +
+                    tile('Device MAC', session.macAddress || u.macAddress || u.username) +
+                    tile('IP address', session.address || u.address) +
+                    tile('Active session time', session.uptime || u.uptime) +
+                    tile('Total bandwidth', typeof formatBytes === 'function' ? formatBytes(Number(session.bytesIn || u.bytesIn || 0) + Number(session.bytesOut || u.bytesOut || 0)) : '—') +
+                    tile('Current profile', u.profile) + tile('Server name', session.server || u.server) +
+                    tile('Exact expiry', u.expires_at || u.expiryLabel || u.comment) +
+                    tile('Payment reference', u.transaction_id ? 'Transaction #' + u.transaction_id : 'No associated transaction') +
+                    tile('Package price', '৳ ' + Number(u.price || 0).toFixed(2)) + tile('Comment / note', u.comment || u.note) +
+                    '</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-success" data-hotspot-renew-user="' + e(String(username)) + '"><i class="bi bi-arrow-repeat me-1"></i>Renew package</button></div></div></div>';
+                const renewButton = modalEl.querySelector('[data-hotspot-renew-user]');
+                if (renewButton) renewButton.addEventListener('click', function (clickEvent) {
+                    clickEvent.preventDefault();
+                    clickEvent.stopPropagation();
+                    try {
+                        window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                        window.renewHotspotUser(String(username), clickEvent);
+                    } catch (error) { console.error('[Hotspot Details Modal] Renew action failed:', error); }
+                });
+                window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            } catch (error) {
+                console.error('[Hotspot Details Modal] Initialization failed:', error);
+            }
+        };
+
+        window.renewHotspotUser = async function (username, event) {
+            let modalEl = null;
+            try {
+                if (event) event.stopPropagation();
+                if (!document.body || !window.bootstrap || !window.bootstrap.Modal) {
+                    console.error('[Hotspot Renew Modal] Bootstrap or document body is unavailable.');
+                    return;
+                }
+                const rows = Array.isArray(window.__hotspotRenderedRows) ? window.__hotspotRenderedRows : [];
+                const user = rows.find(x => x && x.username === username);
+                if (!user) return;
+
+                modalEl = document.getElementById('renewHotspotModal');
+                if (!modalEl) {
+                    modalEl = document.createElement('div');
+                    modalEl.id = 'renewHotspotModal';
+                    modalEl.className = 'modal fade hotspot-executive-modal';
+                    modalEl.tabIndex = -1;
+                    document.body.appendChild(modalEl);
+                }
+                modalEl.innerHTML = '<div class="modal-dialog modal-dialog-centered"><div class="modal-content hotspot-executive-content"><div class="modal-header hotspot-renew-header"><div><h5 class="modal-title fw-bold">Renew Hotspot Package</h5><div class="small">' +
+                    escapeHtml(user.customer_name || user.name || user.username) + ' · ' + escapeHtml(user.phone || user.username) + ' · ' + escapeHtml(user.macAddress || user.username) +
+                    '</div></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div><form id="renewHotspotForm"><div class="modal-body"><label class="form-label fw-bold" for="renewHotspotProfile">Active package</label><select id="renewHotspotProfile" class="form-select" required><option value="">Loading packages…</option></select><div class="hotspot-renew-summary mt-3"><div><span>Package price</span><strong id="renewHotspotPrice">৳ 0.00</strong></div><div><span>Validity</span><strong id="renewHotspotValidity">—</strong></div><div><span>Target expiry</span><strong id="renewHotspotExpiry">Choose package</strong></div></div><label class="form-check mt-3"><input id="renewHotspotNotify" class="form-check-input" type="checkbox" checked><span class="form-check-label">Send SMS / WhatsApp notification</span></label><div id="renewHotspotResult" class="small mt-3" role="status" aria-live="polite"></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button id="renewHotspotConfirm" class="btn btn-success" type="submit">Confirm renewal</button></div></form></div></div>';
+
+                const form = modalEl.querySelector('#renewHotspotForm');
+                const select = modalEl.querySelector('#renewHotspotProfile');
+                const priceEl = modalEl.querySelector('#renewHotspotPrice');
+                const validityEl = modalEl.querySelector('#renewHotspotValidity');
+                const expiryEl = modalEl.querySelector('#renewHotspotExpiry');
+                const notifyEl = modalEl.querySelector('#renewHotspotNotify');
+                const resultEl = modalEl.querySelector('#renewHotspotResult');
+                const confirmButton = modalEl.querySelector('#renewHotspotConfirm');
+                if (!form || !select || !priceEl || !validityEl || !expiryEl || !notifyEl || !resultEl || !confirmButton) {
+                    throw new Error('Renewal modal markup is incomplete; refusing to bind handlers.');
+                }
+
+                const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+                let packages = [];
+                const duration = value => {
+                    const match = String(value || '').match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);
+                    if (!match) return 0;
+                    const unit = match[2].toLowerCase();
+                    return Number(match[1]) * (unit.startsWith('m') ? 60000 : unit.startsWith('h') ? 3600000 : unit.startsWith('w') ? 604800000 : 86400000);
+                };
+                const stamp = date => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date);
+                const chosen = () => packages.find(p => String(p.profile_id || p.name) === select.value || p.name === select.value);
+                const preview = () => {
+                    try {
+                        const pkg = chosen();
+                        const validity = pkg && (pkg.validityLabel || [pkg.validityValue, pkg.validityUnit].filter(Boolean).join(' '));
+                        const oldExpiry = user.expires_at ? new Date(user.expires_at) : null;
+                        const base = oldExpiry && Number.isFinite(oldExpiry.getTime()) && oldExpiry.getTime() > Date.now() ? oldExpiry : new Date();
+                        const milliseconds = duration(validity);
+                        priceEl.textContent = '৳ ' + Number(pkg && pkg.price || 0).toFixed(2);
+                        validityEl.textContent = validity || '—';
+                        expiryEl.textContent = milliseconds ? stamp(new Date(base.getTime() + milliseconds)) : (pkg ? 'Data quota package' : 'Choose package');
+                    } catch (error) {
+                        console.error('[Hotspot Renew Modal] Preview calculation failed:', error);
+                    }
+                };
+                select.addEventListener('change', preview);
+                form.addEventListener('submit', async function (submitEvent) {
+                    submitEvent.preventDefault();
+                    try {
+                        const pkg = chosen();
+                        if (!pkg) { resultEl.textContent = 'Choose a package.'; return; }
+                        confirmButton.disabled = true;
+                        resultEl.className = 'small mt-3';
+                        resultEl.textContent = 'Renewing package…';
+                        const response = await jsonFetch('/api/hotspot/manual-renew', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: user.username, profile_id: pkg.profile_id || pkg.name, notify: notifyEl.checked, customer_name: user.customer_name || user.name })
+                        });
+                        resultEl.className = 'small mt-3 text-success';
+                        resultEl.textContent = response.message || 'Renewal successful.';
+                        if (typeof refreshHotspotCurrent === 'function') await refreshHotspotCurrent();
+                        window.setTimeout(function () {
+                            try { window.bootstrap.Modal.getOrCreateInstance(modalEl).hide(); }
+                            catch (error) { console.error('[Hotspot Renew Modal] Close failed:', error); }
+                        }, 700);
+                    } catch (error) {
+                        console.error('[Hotspot Renew Modal] Submission failed:', error);
+                        resultEl.className = 'small mt-3 text-danger';
+                        resultEl.textContent = error && error.message ? error.message : 'Renewal failed.';
+                    } finally {
+                        confirmButton.disabled = false;
+                    }
+                });
+                modal.show();
+
+                try {
+                    const data = await jsonFetch('/api/hotspot/profiles');
+                    packages = (Array.isArray(data && data.profiles) ? data.profiles : []).filter(pkg =>
+                        pkg && pkg.name && String(pkg.name).toLowerCase() !== 'default' &&
+                        (pkg.validityLabel || pkg.validityValue || pkg.limitBytesTotal)
+                    );
+                    select.innerHTML = '<option value="">Choose a package…</option>' + packages.map(pkg =>
+                        '<option value="' + escapeHtml(pkg.profile_id || pkg.name) + '">' + escapeHtml(pkg.name) + ' · ৳ ' +
+                        Number(pkg.price || 0).toFixed(2) + ' · ' + escapeHtml(pkg.validityLabel || 'Configured package') + '</option>'
+                    ).join('');
+                    const current = packages.find(pkg => pkg.name === user.profile);
+                    if (current) select.value = String(current.profile_id || current.name);
+                    preview();
+                } catch (error) {
+                    console.error('[Hotspot Renew Modal] Package loading failed:', error);
+                    select.innerHTML = '<option value="">Unable to load packages</option>';
+                    resultEl.textContent = error && error.message ? error.message : 'Unable to load packages.';
+                }
+            } catch (error) {
+                console.error('[Hotspot Renew Modal] Initialization failed:', error);
+                const resultEl = modalEl && modalEl.querySelector('#renewHotspotResult');
+                if (resultEl) resultEl.textContent = 'The renewal dialog could not be initialized. Please close it and try again.';
+            }
+        };
 window.editHotspotUser=async function(username,event){if(event)event.stopPropagation();const u=(window.__hotspotRenderedRows||[]).find(x=>x.username===username);if(!u)return;let m=document.getElementById('hotspotUserEditModal');if(!m){m=document.createElement('div');m.id='hotspotUserEditModal';m.className='modal fade';m.tabIndex=-1;document.body.appendChild(m);}let profiles=[];try{const d=await jsonFetch('/api/hotspot/profiles');profiles=Array.isArray(d.profiles)?d.profiles:[];}catch(e){alert('Unable to load profiles: '+e.message);return;}const opts=profiles.map(p=>'<option value="'+escapeHtml(p.name)+'" '+(p.name===u.profile?'selected':'')+'>'+escapeHtml(p.name)+'</option>').join('');m.innerHTML='<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><form id="hotspotUserEditForm"><div class="modal-header"><h5 class="modal-title">Edit Hotspot User</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-2 small text-muted">'+escapeHtml(username)+'</div><label class="form-label">New Password (optional)</label><input name="password" type="password" class="form-control mb-3" autocomplete="new-password" maxlength="128" placeholder="Leave blank to keep current password"><label class="form-label">Profile</label><select name="profile" class="form-select mb-3" required>'+opts+'</select><label class="form-label">Comment</label><textarea name="comment" class="form-control" rows="3" maxlength="500">'+escapeHtml(u.comment||'')+'</textarea><div id="hotspotEditResult" class="small mt-3"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success">Save Changes</button></div></form></div></div>';const inst=bootstrap.Modal.getOrCreateInstance(m);m.querySelector('form').onsubmit=async ev=>{ev.preventDefault();ev.stopPropagation();const f=ev.currentTarget,b=f.querySelector('[type=submit]'),r=f.querySelector('#hotspotEditResult');b.disabled=true;r.textContent='Saving…';try{await jsonFetch('/api/hotspot/users/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,profile:f.elements.profile.value,comment:f.elements.comment.value,password:f.elements.password.value})});r.className='small mt-3 text-success';r.textContent='Saved successfully.';await refreshHotspotCurrent();setTimeout(()=>inst.hide(),250);}catch(err){r.className='small mt-3 text-danger';r.textContent=err.message||'Save failed.';}finally{b.disabled=false;}};inst.show();};
         async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter=all';const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
         async function refreshHotspotCurrent(){await loadHotspotSection(currentHotspotMode,currentHotspotTitleKey);}
@@ -3833,7 +3980,12 @@ window.editHotspotUser=async function(username,event){if(event)event.stopPropaga
         if (!window.__sidebarOverlayRecoveryBound) {
             window.__sidebarOverlayRecoveryBound = true;
             const overlayObserver = new MutationObserver(function () {
-                recoverStaleNavigationOverlay();
+                // Bootstrap inserts the backdrop before the modal's .show class is applied.
+                // Defer recovery so we never remove a valid backdrop mid-transition.
+                window.setTimeout(function () {
+                    try { recoverStaleNavigationOverlay(); }
+                    catch (error) { console.error('[Admin Overlay Recovery] Cleanup failed:', error); }
+                }, 120);
             });
             overlayObserver.observe(document.body, { childList: true, subtree: true });
             document.addEventListener('hidden.bs.modal', function () {
@@ -8469,7 +8621,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             recoverAdminClickability();
             if (document.body && !window.__fazAdminClickabilityRecoveryObserver) {
                 window.__fazAdminClickabilityRecoveryObserver = new MutationObserver(function () {
-                    recoverAdminClickability();
+                    // Avoid racing Bootstrap while it creates/removes modal backdrops.
+                    window.setTimeout(function () {
+                        try { recoverAdminClickability(); }
+                        catch (error) { console.error('[Admin Clickability Recovery] Cleanup failed:', error); }
+                    }, 120);
                 });
                 window.__fazAdminClickabilityRecoveryObserver.observe(document.body, { childList: true, subtree: true });
             }
