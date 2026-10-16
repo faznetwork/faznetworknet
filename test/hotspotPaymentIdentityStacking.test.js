@@ -1,6 +1,8 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
 const db=require("../db");
 const mikrotik=require("../services/mikrotikService");
 const paymentController=require("../controllers/paymentController");
@@ -56,6 +58,17 @@ async function withPaymentMocks({voucherRows=[],onStage=()=>{},claimBehavior}={}
   db.query=oldQuery;db.withTransaction=oldTx;mikrotik.getHotspotProfiles=oldProfiles;
  }
 }
+
+test("schema and reporting queries use stable Hotspot transaction associations",()=>{
+ const schema=fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8");
+ const reports=fs.readFileSync(path.join(__dirname,"../controllers/hotspotController.js"),"utf8");
+ const retention=fs.readFileSync(path.join(__dirname,"../jobs/hotspotExpirationCleanup.js"),"utf8");
+ assert.match(schema,/hotspot_vouchers_transaction_id_fkey FOREIGN KEY \(transaction_id\) REFERENCES transactions\(id\)/);
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS hotspot_voucher_payments/);
+ assert.match(schema,/transaction_id BIGINT PRIMARY KEY REFERENCES transactions\(id\)/);
+ assert.match(reports,/hp\.transaction_id=t\.id/);
+ assert.match(retention,/INNER JOIN hotspot_voucher_payments hp ON hp\.transaction_id=t\.id INNER JOIN hotspot_vouchers v ON v\.id=hp\.voucher_id/);
+});
 
 test("verifyTrx persists the voucher foreign key and a durable payment-to-voucher association",async()=>{
  let staged;
