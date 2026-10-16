@@ -23,7 +23,7 @@ test("Admin has Profile 360 and professional subscriber rows without General Set
 test("All Hotspot Users table has distinct identity fields, semantic validity pills, and non-overlapping icon-only actions", () => {
  const view=fs.readFileSync(path.join(root,"views/admin.ejs"),"utf8");
  assert.match(view,/\.hotspot-table-header th\{background:#0f172a!important;color:#f8fafc!important/);
- assert.match(view,/\.hotspot-user-row\{background:#fff!important/);
+ assert.match(view,/tbody tr\.hotspot-user-row\{background:#fff!important/);
  assert.match(view,/\.actions-cell-wrapper\{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important/);
  assert.match(view,/btn-action-view/);assert.match(view,/btn-action-renew/);assert.match(view,/btn-action-edit/);assert.match(view,/btn-action-delete/);
  assert.match(view,/const subscriberName=u=>/);assert.match(view,/Unnamed Subscriber/);
