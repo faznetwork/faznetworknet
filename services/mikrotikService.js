@@ -880,7 +880,8 @@ class MikroTikService {
       const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});
       const params=["=.id="+user[".id"],"=profile="+profile,"=comment="+comment];
       if(password)params.push("=password="+password);
-      if(macAddress){
+      if(macAddress === "__CLEAR__") params.push("=mac-address=");
+      else if(macAddress){
         if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress))throw new Error("A valid normalized MAC address is required.");
         params.push("=mac-address="+macAddress);
       }

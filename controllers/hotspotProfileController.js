@@ -16,6 +16,7 @@ function safeProfile(row) {
   return {
     id: row.id, username: row.username, name: row.customer_name || "",
     phone: row.phone || "", mac: row.mac_address || "",
+    mac_lock: row.mac_lock !== false,
     notes: row.note || "", profile: row.profile || "",
     profile_id: row.profile_id || "", status: row.status || "",
     expires_at: row.expires_at || null, server: row.server || "all"
@@ -26,7 +27,7 @@ async function getProfile(req, res) {
   if (!Number.isSafeInteger(id) || id < 1) return fail(res, 400, "A valid hotspot customer ID is required.");
   try {
     const result = await db.query(
-      "SELECT id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server FROM hotspot_vouchers WHERE id=$1 LIMIT 1",
+      "SELECT id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock FROM hotspot_vouchers WHERE id=$1 LIMIT 1",
       [id]
     );
     if (!result.rows?.length) return fail(res, 404, "Hotspot customer was not found.");
@@ -44,6 +45,7 @@ async function updateProfile(req, res) {
   const phone = normalizePhone(body.phone ?? body.customer_phone);
   const rawMac = String(body.mac ?? body.mac_address ?? "").trim();
   const mac = rawMac ? normalizeMac(rawMac) : "";
+  const macLock = body.mac_lock !== false;
   const notes = String(body.notes ?? body.note ?? "").trim().slice(0, 500);
   if (!name) return fail(res, 400, "Customer name is required.");
   if (!phone) return fail(res, 400, "Enter a valid Bangladesh mobile number (01XXXXXXXXX or 8801XXXXXXXXX).");
@@ -61,12 +63,13 @@ async function updateProfile(req, res) {
     const routerUser = await mikrotikService.getHotspotUser(username);
     if (!routerUser) return fail(res, 409, "The matching MikroTik Hotspot user was not found; database changes were not saved.");
     const chosenMac = mac || normalizeMac(row.mac_address) || normalizeMac(username);
+    if (macLock && !chosenMac) return fail(res, 400, "A valid MAC address is required when MAC lock is enabled.");
     const sync = await mikrotikService.updateHotspotUser(
-      username, routerUser.profile, routerUser.comment, phone, chosenMac
+      username, routerUser.profile, routerUser.comment, phone, macLock ? chosenMac : "__CLEAR__"
     );
     const saved = await db.query(
-      "UPDATE hotspot_vouchers SET customer_name=$1,phone=$2,mac_address=$3,note=$4,updated_at=NOW() WHERE id=$5 RETURNING id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server",
-      [name, phone, chosenMac || null, notes, id]
+      "UPDATE hotspot_vouchers SET customer_name=$1,phone=$2,mac_address=$3,note=$4,mac_lock=$5,updated_at=NOW() WHERE id=$6 RETURNING id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
+      [name, phone, chosenMac || null, notes, macLock, id]
     );
     try { require("../controllers/hotspotController").invalidateListCache?.(); } catch (_) {}
     return res.json({ success: true, message: "Customer profile saved and MikroTik credentials synchronized.", profile: safeProfile(saved.rows[0]), routerSync: sync });
