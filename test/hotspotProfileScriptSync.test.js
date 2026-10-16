@@ -87,10 +87,10 @@ test("RouterOS server-profile auth requires phone/password login and prevents MA
   try {
     const result = await mikrotikService.ensureHotspotServerProfileAuth("hsprof1");
     assert.equal(result.updated, true);
-    assert.equal(result.loginBy, "http-pap,http-chap");
+    assert.equal(result.loginBy, "mac,http-pap,http-chap,mac-cookie");
     const setCall = calls.find(call => call.command === "/ip/hotspot/profile/set");
     assert.ok(setCall);
-    assert.ok(setCall.params.includes("=login-by=http-pap,http-chap"));
+    assert.ok(setCall.params.includes("=login-by=mac,http-pap,http-chap,mac-cookie"));
     assert.equal(setCall.params.some(param => param.startsWith("=mac-auth-mode=")), false);
     assert.equal(calls.filter(call => call.command === "/ip/hotspot/profile/print").length, 2);
   } finally {
@@ -111,4 +111,53 @@ test("sync result reports server-profile authentication failures separately", as
   const result = await syncHotspotProfileScripts(deps);
   assert.equal(result.failed, 1);
   assert.deepEqual(result.serverAuth, { checked: 1, updated: 0, skipped: 0, failed: 1 });
+});
+
+test("RouterOS HotSpot user profiles enable MAC cookies with a one-day timeout", async () => {
+  const originalWithConnection = mikrotikService._withConnection;
+  const state = { ".id": "*2", name: "1-Hour", "add-mac-cookie": "false", "mac-cookie-timeout": "3d" };
+  const calls = [];
+  mikrotikService._withConnection = async (_label, callback) => callback({
+    async write(command, params) {
+      calls.push({command,params});
+      if (command === "/ip/hotspot/user/profile/print") return [{...state}];
+      if (command === "/ip/hotspot/user/profile/set") {
+        for (const param of params) {
+          if (param === "=add-mac-cookie=yes") state["add-mac-cookie"] = "true";
+          if (param.startsWith("=mac-cookie-timeout=")) state["mac-cookie-timeout"] = param.slice("=mac-cookie-timeout=".length);
+        }
+        return [];
+      }
+      throw new Error("Unexpected RouterOS command: " + command);
+    }
+  });
+  try {
+    const result = await mikrotikService.ensureHotspotUserProfileMacCookie("1-Hour");
+    assert.equal(result.updated,true);
+    assert.equal(result.addMacCookie,true);
+    assert.equal(result.macCookieTimeout,"1d");
+    const setCall=calls.find(call=>call.command==="/ip/hotspot/user/profile/set");
+    assert.ok(setCall.params.includes("=add-mac-cookie=yes"));
+    assert.ok(setCall.params.includes("=mac-cookie-timeout=1d"));
+    assert.equal(calls.filter(call=>call.command==="/ip/hotspot/user/profile/print").length,2);
+  } finally { mikrotikService._withConnection=originalWithConnection; }
+});
+
+test("startup sync applies MAC-cookie settings to all HotSpot user profiles", async () => {
+  const cookieProfiles=[];
+  const deps={
+    db:{query:async()=>({rows:[{value:"{}"}]})},
+    mikrotikService:{
+      getHotspotProfiles:async()=>[
+        {name:"1-Hour",sharedUsers:"1",sessionTimeout:"1h",raw:{"on-login":""}},
+        {name:"Office",sharedUsers:"1",sessionTimeout:"none",raw:{"on-login":""}}
+      ],
+      ensureHotspotUserProfileMacCookie:async name=>{cookieProfiles.push(name);return {name,updated:true};},
+      getHotspotServers:async()=>[],
+      updateHotspotProfile:async()=>({})
+    },
+    logger:{log(){},warn(...args){throw new Error(args.join(" "));}}
+  };
+  await syncHotspotProfileScripts(deps);
+  assert.deepEqual(cookieProfiles,["1-Hour","Office"]);
 });
