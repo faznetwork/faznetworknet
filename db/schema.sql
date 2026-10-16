@@ -717,7 +717,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
 CREATE TABLE IF NOT EXISTS notification_templates (
   id BIGSERIAL PRIMARY KEY,
   event_key VARCHAR(80) NOT NULL,
-  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','telegram','messenger','email')),
+  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','email')),
   template_body TEXT NOT NULL,
   email_subject TEXT,
   email_body TEXT,
@@ -746,7 +746,7 @@ BEGIN
   ) THEN
     ALTER TABLE notification_templates
       ADD CONSTRAINT notification_templates_channel_check
-      CHECK (channel IN ('whatsapp','sms','telegram','messenger','email'));
+      CHECK (channel IN ('whatsapp','sms','email'));
   END IF;
 END;
 $faz_email_template_channel$;
