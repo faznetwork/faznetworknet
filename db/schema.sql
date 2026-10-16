@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS customers (
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(40);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_link VARCHAR(255);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(150);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_telegram_chat_id ON customers(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id <> '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS facebook_link VARCHAR(500);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS messenger_psid VARCHAR(150);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_messenger_psid ON customers(messenger_psid) WHERE messenger_psid IS NOT NULL;
