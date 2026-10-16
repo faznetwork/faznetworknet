@@ -93,7 +93,7 @@ function createHotspotExpirationCleanup(deps = {}) {
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
     try {
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
@@ -182,11 +182,16 @@ function createHotspotExpirationCleanup(deps = {}) {
         // means its one-shot expiry scheduler (or an administrator) removed it.
         // Do not infer absence while RouterOS itself is unreachable.
         const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
-        const missingMacUser = snapshotAvailable && !user && macNamedVoucher &&
+        // A renewal is deliberately staged in PostgreSQL before RouterOS is touched.
+        // The old RouterOS scheduler may remove the prior user at its original deadline;
+        // do not mistake that expected gap for expiry while the staged cumulative expiry is still future.
+        const stagedFutureRenewal = effectiveStatus === "pending_claim" && voucher.renewal_stacked === true &&
+          expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
+        const missingMacUser = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
           ["active", "unused", "pending_claim"].includes(effectiveStatus);
-        const commentExpiryReached = !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
+        const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
-        const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
+        const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
         if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
         await database.query(
@@ -233,7 +238,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     const archived = await database.query(
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
       "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
-      "FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) " +
+      "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
       "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '3 days' " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );

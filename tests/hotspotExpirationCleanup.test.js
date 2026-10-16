@@ -145,6 +145,32 @@ test("marks due database vouchers expired and retains retry state when RouterOS 
   assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
 });
 
+test("preserves a staged future Hotspot renewal when the old RouterOS user has disappeared", async () => {
+  const futureExpiry = new Date("2026-10-20T12:00:00.000Z");
+  const rows = [{
+    id: 52, username: "AA:BB:CC:DD:EE:FF", status: "pending_claim",
+    comment: "Exp: 2026-10-20 18:00:00", validity: "1h",
+    first_login_at: new Date("2026-10-16T08:00:00.000Z"),
+    expires_at: futureExpiry, renewal_stacked: true, cleanup_status: "not_required",
+    phone: "01712345678", price: 10, profile: "1-Hour"
+  }];
+  const database = mockDb(rows);
+  let cleanupCalls = 0;
+  const router = {
+    async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
+    async cleanupExpiredHotspotUser() { cleanupCalls++; }
+  };
+  const run = createHotspotExpirationCleanup({
+    db: database, mikrotikService: router, logger: quietLogger(),
+    now: () => new Date("2026-10-16T10:00:00.000Z")
+  });
+  const result = await run();
+  assert.equal(result.expired, 0);
+  assert.equal(result.removed, 0);
+  assert.equal(cleanupCalls, 0, "a missing old RouterOS user must not invalidate a staged renewal");
+  assert.equal(database.calls.some(call => call.sql.includes("SET status='expired'")), false);
+});
+
 test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler removed the user", async () => {
   const rows = [{ id: 18, username: "AA:BB:CC:DD:EE:FF", status: "unused", comment: "Exp: 2026-10-20", cleanup_status: "not_required" }];
   const database = mockDb(rows);

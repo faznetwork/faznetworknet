@@ -197,6 +197,8 @@ CREATE TABLE IF NOT EXISTS hotspot_vouchers (
   price NUMERIC(12,2) NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'unused' CHECK (status IN ('unused','active','expired')),
   comment VARCHAR(500),
+  transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL,
+  renewal_stacked BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -260,6 +262,37 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS router_removed_at TIMESTAM
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS profile_id VARCHAR(100);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_address VARCHAR(17);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS transaction_id BIGINT;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS renewal_stacked BOOLEAN NOT NULL DEFAULT FALSE;
+DO $hotspot_fk$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hotspot_vouchers_transaction_id_fkey') THEN
+    ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL;
+  END IF;
+END $hotspot_fk$;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_transaction_id ON hotspot_vouchers(transaction_id) WHERE transaction_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS hotspot_voucher_payments (
+  transaction_id BIGINT PRIMARY KEY REFERENCES transactions(id) ON DELETE RESTRICT,
+  voucher_id BIGINT REFERENCES hotspot_vouchers(id) ON DELETE SET NULL,
+  phone VARCHAR(40) NOT NULL,
+  amount NUMERIC(12,2) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_hotspot_voucher_payments_voucher ON hotspot_voucher_payments(voucher_id, created_at DESC);
+-- Backfill historical payment-to-voucher associations using the stable phone key.
+INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,created_at)
+SELECT t.id,v.id,COALESCE(NULLIF(v.phone,''),t.matched_username),t.amount,t.created_at
+FROM transactions t
+JOIN LATERAL (
+  SELECT hv.id,hv.phone FROM hotspot_vouchers hv
+  WHERE LOWER(BTRIM(COALESCE(hv.phone,''))) = LOWER(BTRIM(COALESCE(t.matched_username,'')))
+     OR LOWER(BTRIM(hv.username)) = LOWER(BTRIM(COALESCE(t.matched_username,'')))
+  ORDER BY CASE WHEN LOWER(BTRIM(COALESCE(hv.phone,''))) = LOWER(BTRIM(COALESCE(t.matched_username,''))) THEN 0 ELSE 1 END, hv.id DESC
+  LIMIT 1
+) v ON TRUE
+WHERE t.claim_flow IN ('hotspot','manual_hotspot') AND t.status IN ('processed','PAID')
+  AND NULLIF(BTRIM(t.matched_username),'') IS NOT NULL
+ON CONFLICT(transaction_id) DO NOTHING;
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_status_check;
 ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_status_check CHECK (status IN ('pending_claim','unused','active','expired'));
 -- Permit repeat purchases after expiry while preventing simultaneous live vouchers for one phone.
