@@ -9,11 +9,13 @@ const emailService = require("../services/emailService");
 const originalCreateTransport = nodemailer.createTransport;
 const originalGetAllSettings = settingsService.getAllSettings;
 const originalFetch = global.fetch;
+const originalConsoleWarn = console.warn;
 
 test.afterEach(() => {
   nodemailer.createTransport = originalCreateTransport;
   settingsService.getAllSettings = originalGetAllSettings;
   global.fetch = originalFetch;
+  console.warn = originalConsoleWarn;
 });
 
 function validSettings(overrides = {}) {
@@ -105,7 +107,7 @@ test("Apps Script provider POSTs the required JSON payload and accepts successfu
   assert.equal(request.url, "https://script.google.com/macros/s/AKfycbExample/exec");
   assert.equal(request.options.method, "POST");
   assert.equal(request.options.redirect, "follow");
-  assert.equal(request.options.headers["Content-Type"], "application/json");
+  assert.equal(request.options.headers["Content-Type"], "text/plain;charset=utf-8");
   assert.deepEqual(request.body, {
     token: "script-secret-token",
     type: "notification",
@@ -135,10 +137,23 @@ test("Apps Script delivery rejects unsuccessful JSON and non-JSON responses", as
   assert.equal(rejected.success, false);
   assert.match(rejected.error, /Invalid token/);
 
-  global.fetch = async () => ({ ok: true, status: 200, text: async () => "<html>Redirect error</html>" });
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  global.fetch = async () => ({
+    ok: false,
+    status: 403,
+    redirected: true,
+    url: "https://script.googleusercontent.com/macros/echo",
+    headers: { get: name => name.toLowerCase() === "content-type" ? "text/html; charset=utf-8" : null },
+    text: async () => "<html>Forbidden redirect response</html>"
+  });
   const nonJson = await emailService.sendEmail({ to: "customer@example.com", subject: "Test", html: "<p>Hello</p>" });
   assert.equal(nonJson.success, false);
-  assert.match(nonJson.error, /non-JSON response/);
+  assert.match(nonJson.error, /non-JSON response \(HTTP 403\)/);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0][1].status, 403);
+  assert.equal(warnings[0][1].redirected, true);
+  assert.match(warnings[0][1].preview, /Forbidden redirect response/);
 });
 
 test("Apps Script URL validation blocks non-Google or non-HTTPS endpoints", async () => {
