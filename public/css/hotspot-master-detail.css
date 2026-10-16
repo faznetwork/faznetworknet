@@ -21,7 +21,7 @@
 .hotspot-all-users-view .form-control:focus,
 .hotspot-all-users-view .form-select:focus,
 #hotspotProfile360Modal .form-control:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.14)}
-#mobileSubscriberModal .modal-dialog{margin:0;max-width:none;width:100%;height:100%;align-items:flex-end}
+#mobileSubscriberModal .modal-dialog{display:flex;flex-direction:column;justify-content:flex-end;margin:0;max-width:none;width:100%;height:100dvh;align-items:stretch}
 #mobileSubscriberModal .modal-content{height:min(94dvh,900px);max-height:94dvh;border:0;border-radius:20px 20px 0 0;overflow:hidden;box-shadow:0 -12px 42px rgba(15,23,42,.18);padding-bottom:env(safe-area-inset-bottom)}
 #mobileSubscriberModal .mobile-subscriber-modal-header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,255,255,.98);border-bottom:1px solid #e2e8f0}
 #mobileSubscriberModal .mobile-subscriber-back,#mobileSubscriberModal .mobile-subscriber-close{min-height:42px;border:1px solid #dbe3ec;border-radius:10px;color:#0f172a;font-weight:750}
