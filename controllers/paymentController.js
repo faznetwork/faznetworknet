@@ -305,4 +305,4 @@ async function verifyTrx(req,res){
 }
 function macFromBody(body){return normalizeMac(body?.mac||body?.device_mac||body?.macAddress||"");}
 
-module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx};
+module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx,renewalExpirationDate};
