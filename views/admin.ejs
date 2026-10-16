@@ -2061,6 +2061,7 @@
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="whatsapp">WhatsApp</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="telegram">Telegram</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="messenger">Messenger</button></li>
+        <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="email"><i class="bi bi-envelope me-1"></i>Email</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="rules">Notification Rules</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="templates"><i class="bi bi-file-earmark-text me-1"></i>Message Templates</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="broadcast"><i class="bi bi-megaphone me-1"></i>Bulk Broadcast</button></li>
@@ -2111,6 +2112,23 @@
             <div class="col-12"><div class="small text-muted">For direct customer alerts, populate <code>customers.telegram_chat_id</code> after the customer has securely linked their Telegram account. A username alone is not a Telegram Chat ID.</div></div>
           </div>
         </section>
+        <section data-notify-panel="email" style="display:none">
+          <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyEmailEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyEmailEnabled">Enable Email Notifications</label></div>
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label" for="smtpHost">SMTP Host</label><input id="smtpHost" class="form-control" maxlength="253" placeholder="smtp.gmail.com"></div>
+            <div class="col-md-4"><label class="form-label" for="smtpPort">SMTP Port</label><input id="smtpPort" type="number" class="form-control" min="1" max="65535" value="587" required></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-md-4 pt-md-2"><input class="form-check-input" id="smtpSecure" type="checkbox"><label class="form-check-label" for="smtpSecure">Secure SSL/TLS (typically port 465)</label></div></div>
+            <div class="col-md-8"><label class="form-label" for="smtpUsername">Username / Email Address</label><input id="smtpUsername" type="email" class="form-control" autocomplete="username" maxlength="254" placeholder="billing@faznetwork.net"></div>
+            <div class="col-md-6"><label class="form-label" for="smtpPassword">SMTP Password / App Password</label><div class="input-group"><input id="smtpPassword" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved password"><button type="button" class="btn btn-outline-secondary" id="smtpPasswordToggle" aria-label="Show SMTP password"><i class="bi bi-eye"></i></button></div><div id="smtpPasswordHint" class="form-text"></div></div>
+            <div class="col-md-6"><label class="form-label" for="emailFromName">From Name</label><input id="emailFromName" class="form-control" maxlength="160" value="FAZ NETWORK Billing"></div>
+            <div class="col-md-6"><label class="form-label" for="emailFromAddress">From Email</label><input id="emailFromAddress" type="email" class="form-control" maxlength="254" placeholder="billing@faznetwork.net"></div>
+            <div class="col-12"><div class="alert alert-light border small mb-0"><i class="bi bi-shield-lock me-1 text-success"></i>SMTP passwords are stored in server settings and never returned to the browser. Gmail generally requires an App Password when 2-Step Verification is enabled.</div></div>
+            <div class="col-md-5"><label class="form-label" for="emailTestRecipient">Recipient Email</label><input id="emailTestRecipient" type="email" class="form-control" maxlength="254" placeholder="you@example.com" required></div>
+            <div class="col-md-7"><label class="form-label" for="emailTestSubject">Test Subject</label><input id="emailTestSubject" class="form-control" maxlength="200" value="FAZ NETWORK SMTP test email" required></div>
+            <div class="col-12"><button type="button" id="emailTestBtn" class="btn btn-outline-primary"><i class="bi bi-send me-1"></i>Send Test Email</button></div>
+            <div class="col-12"><div id="emailTestResult" class="alert alert-secondary py-2 small mb-0" role="status" aria-live="polite">Save SMTP settings, then send a test email to verify the SMTP handshake and delivery.</div></div>
+          </div>
+        </section>
         <section data-notify-panel="messenger" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyMessengerEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyMessengerEnabled">Enable Facebook Messenger notifications</label></div>
           <div class="row g-3">
@@ -2137,8 +2155,9 @@
             <div class="col-md-7"><label class="form-label" for="notifyTemplateEvent">Notification Event</label><select id="notifyTemplateEvent" class="form-select">
               <option value="pppoe_renewal">PPPoE Renewal</option><option value="pppoe_payment">PPPoE Payment Receipt</option><option value="pppoe_expiry_warning">PPPoE Expiry Warning</option><option value="pppoe_expired">PPPoE Expired / Disconnected</option><option value="hotspot_purchase">Hotspot Purchase</option><option value="hotspot_renewal">Hotspot Recharge / Renewal</option><option value="hotspot_expiry_warning">Hotspot Expiry Warning</option><option value="hotspot_expired">Hotspot Expired / Plan Ended</option><option value="welcome_message">Welcome Message</option>
             </select></div>
-            <div class="col-md-5"><label class="form-label" for="notifyTemplateChannel">Channel</label><select id="notifyTemplateChannel" class="form-select"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="telegram">Telegram</option><option value="messenger">Messenger</option></select></div>
-            <div class="col-12"><label class="form-label" for="notifyTemplateBody">Message Template</label><textarea id="notifyTemplateBody" class="form-control font-monospace" rows="5" maxlength="4000" placeholder="Dear {name}, your package {package} is renewed until {expiry_date}."></textarea><div class="d-flex justify-content-between gap-2 mt-1"><small class="text-muted">Click a variable to insert it at the cursor.</small><small id="notifyTemplateCharCount" class="text-muted">0 / 4000</small></div></div>
+            <div class="col-md-5"><label class="form-label" for="notifyTemplateChannel">Channel</label><select id="notifyTemplateChannel" class="form-select"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="telegram">Telegram</option><option value="messenger">Messenger</option><option value="email">Email</option></select></div>
+            <div class="col-12" id="notifyTemplateSubjectWrap" style="display:none"><label class="form-label" for="notifyTemplateSubject">Email Subject</label><input id="notifyTemplateSubject" class="form-control" maxlength="200" placeholder="Service renewal confirmed - {company_name}"></div>
+            <div class="col-12"><label class="form-label" for="notifyTemplateBody">Message Template <span class="text-muted small">(HTML/rich text supported for Email)</span></label><textarea id="notifyTemplateBody" class="form-control font-monospace" rows="5" maxlength="4000" placeholder="Dear {name}, your package {package} is renewed until {expiry_date}."></textarea><div class="d-flex justify-content-between gap-2 mt-1"><small class="text-muted">Click a variable to insert it at the cursor.</small><small id="notifyTemplateCharCount" class="text-muted">0 / 4000</small></div></div>
             <div class="col-12"><div class="small fw-semibold mb-2">Available Variables</div><div class="d-flex flex-wrap gap-2" id="notifyTemplateVariables">
               <button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{name}">+ {name}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{username}">+ {username}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{package}">+ {package}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{amount}">+ {amount}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{expiry_date}">+ {expiry_date}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{company_name}">+ {company_name}</button>
             </div></div>
@@ -4459,7 +4478,7 @@ async function deletePlan(id,name){
         let notificationHubTab='sms';
         const notificationEvents=[['payment','Payment'],['recharge','Recharge'],['renewal','Renewal'],['welcome','Welcome'],['expiry_warning','Expiring in 2 days'],['expired','Expired / Disconnection']];
         const notificationTypes=[['hotspot','Hotspot'],['pppoe','PPPoE']];
-        const notificationChannels=[['sms','SMS'],['whatsapp','WhatsApp'],['telegram','Telegram'],['messenger','Messenger']];
+        const notificationChannels=[['sms','SMS'],['whatsapp','WhatsApp'],['telegram','Telegram'],['messenger','Messenger'],['email','Email']];
         function parseNotificationMapping(raw,fallback){try{const value=typeof raw==='string'?JSON.parse(raw||'{}'):raw;return value&&typeof value==='object'&&!Array.isArray(value)?value:{...fallback};}catch(_){return {...fallback};}}
         function renderNotificationMapping(containerId,mapping){
           const root=document.getElementById(containerId);if(!root)return;root.replaceChildren();
