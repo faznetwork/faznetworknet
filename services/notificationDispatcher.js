@@ -70,7 +70,7 @@ function defaultEmailTemplate(event,context){
  return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
 }
 
-async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},channels}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to;
  const recipientPhone=normalizePhone(rawPhone);
