@@ -6203,7 +6203,7 @@ async function deletePlan(id,name){
                                 <div class="customer-search-wrap customer-toolbar-search">
                                     <div class="input-group">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-secondary"></i></span>
-                                        <input id="customerLiveSearch" name="customer-table-search" type="search" value="" autocomplete="off" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
+                                        <input id="customerLiveSearch" name="customer-table-search" type="search" value="${escapeHtml(new URLSearchParams(window.location.search).get('search') || '')}" autocomplete="off" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
                                     </div>
                                 </div>
                                 <div class="customer-toolbar-actions">
