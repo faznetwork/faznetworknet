@@ -291,9 +291,12 @@
 
   const renderUsers = () => {
     if (!usersBody) return;
-    const online = new Set(activeSessions.map((s) => s.username));
+    const normalizeSessionUsername = (value) => String(value ?? "").trim().toLowerCase();
+    const online = new Set(activeSessions
+      .map((s) => normalizeSessionUsername(s?.username || s?.name || s?.user))
+      .filter(Boolean));
     usersBody.innerHTML = users.length ? users.map((u) => {
-      const isOnline = online.has(u.username);
+      const isOnline = online.has(normalizeSessionUsername(u.username));
       const status = u.disabled
         ? "<span class='status-badge status-disabled'>Disabled</span>"
         : "<span class='status-badge status-active'>Active</span>";
