@@ -205,7 +205,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
     if(!selectedHotspotPackage.name||!selectedHotspotPackage.price){box.className="rounded-xl p-4 text-sm bg-red-400/10 text-red-200";box.textContent="Please select a valid package.";return;}
     btn.disabled=true;btn.textContent="Verifying payment…";box.className="rounded-xl p-4 text-sm bg-white/5 text-slate-200";box.textContent="Checking payment and saving your pending Hotspot package…";
     try{
-      const response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({phone:$("hotspotBuyerPhone").value.trim(),account_phone:$("hotspotBuyerPhone").value.trim(),trxId:$("hotspotBuyerTrxId").value.trim(),amount:selectedHotspotPackage.price,profile_id:selectedHotspotPackage.name,paymentMethod:$("paymentMethod").value})});
+      const response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({service_type:"hotspot",phone:$("hotspotBuyerPhone").value.trim(),account_phone:$("hotspotBuyerPhone").value.trim(),trxId:$("hotspotBuyerTrxId").value.trim(),amount:selectedHotspotPackage.price,profile_id:selectedHotspotPackage.name,paymentMethod:$("paymentMethod").value})});
       const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||data.message||"Payment verification failed.");
       box.className="rounded-xl p-4 text-sm bg-emerald-400/10 text-emerald-200";
       box.textContent="Payment verified. Connect to FAZ NETWORK Wi-Fi and enter this same 11-digit phone on the captive login page. Your device MAC will bind on first login, when package validity starts.";
