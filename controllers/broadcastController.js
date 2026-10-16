@@ -1,5 +1,6 @@
 "use strict";
 const db=require("../db");
+const crypto=require("node:crypto");
 const settingsService=require("../services/appSettings");
 const smsService=require("../services/smsService");
 const whatsappService=require("../services/whatsappService");
@@ -79,13 +80,17 @@ async function runBroadcast(id){
  const key=String(id);
  if(activeWorkers.has(key))return;
  activeWorkers.add(key);
+ const workerToken=crypto.randomUUID();
  try{
-  await db.query("UPDATE broadcast_logs SET status='running',started_at=COALESCE(started_at,NOW()),updated_at=NOW() WHERE id=$1 AND status IN ('queued','running')",[id]);
+  const lease=await db.query("UPDATE broadcast_logs SET status='running',started_at=COALESCE(started_at,NOW()),worker_token=$2,worker_lease_until=NOW()+INTERVAL '2 minutes',updated_at=NOW() WHERE id=$1 AND status IN ('queued','running') AND (worker_token IS NULL OR worker_lease_until IS NULL OR worker_lease_until<NOW()) RETURNING id",[id,workerToken]);
+  if(!lease.rows?.length)return;
   const settings=await settingsService.getAllSettings();
   while(true){
+   const heartbeat=await db.query("UPDATE broadcast_logs SET worker_lease_until=NOW()+INTERVAL '2 minutes',updated_at=NOW() WHERE id=$1 AND worker_token=$2 RETURNING id",[id,workerToken]);
+   if(!heartbeat.rows?.length)break;
    const claimed=await db.query(
-    "UPDATE broadcast_recipients SET status='sending',updated_at=NOW() WHERE id=(SELECT id FROM broadcast_recipients WHERE broadcast_id=$1 AND status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *",
-    [id]
+    "UPDATE broadcast_recipients SET status='sending',updated_at=NOW() WHERE id=(SELECT id FROM broadcast_recipients WHERE broadcast_id=$1 AND status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED) AND EXISTS(SELECT 1 FROM broadcast_logs WHERE id=$1 AND worker_token=$2) RETURNING *",
+    [id,workerToken]
    );
    const recipient=claimed.rows?.[0];
    if(!recipient)break;
@@ -110,10 +115,10 @@ async function runBroadcast(id){
    if(Number(pending.rows?.[0]?.count||0)>0)await delay(randomDelayMs());
   }
   const remaining=await db.query("SELECT COUNT(*)::int AS count FROM broadcast_recipients WHERE broadcast_id=$1 AND status IN ('queued','sending')",[id]);
-  await db.query("UPDATE broadcast_logs SET status=CASE WHEN $2=0 THEN 'completed' ELSE 'failed' END,completed_at=CASE WHEN $2=0 THEN NOW() ELSE completed_at END,updated_at=NOW() WHERE id=$1",[id,Number(remaining.rows?.[0]?.count||0)]);
+  await db.query("UPDATE broadcast_logs SET status=CASE WHEN $3=0 THEN 'completed' ELSE 'failed' END,completed_at=CASE WHEN $3=0 THEN NOW() ELSE completed_at END,worker_token=NULL,worker_lease_until=NULL,updated_at=NOW() WHERE id=$1 AND worker_token=$2",[id,workerToken,Number(remaining.rows?.[0]?.count||0)]);
  }catch(error){
   console.error("[Broadcast] Worker failed for job "+id+":",error.message);
-  await db.query("UPDATE broadcast_logs SET status='failed',updated_at=NOW() WHERE id=$1",[id]).catch(()=>{});
+  await db.query("UPDATE broadcast_logs SET status='failed',worker_token=NULL,worker_lease_until=NULL,updated_at=NOW() WHERE id=$1 AND worker_token=$2",[id,workerToken]).catch(()=>{});
  }finally{activeWorkers.delete(key);}
 }
 async function create(req,res){
@@ -168,8 +173,9 @@ async function history(req,res){
 }
 async function resumePendingBroadcasts(){
  try{
-  await db.query("UPDATE broadcast_recipients SET status='queued',updated_at=NOW() WHERE status='sending' AND broadcast_id IN (SELECT id FROM broadcast_logs WHERE status IN ('queued','running'))");
-  const result=await db.query("SELECT id FROM broadcast_logs WHERE status IN ('queued','running') ORDER BY id");
+  await db.query("UPDATE broadcast_recipients SET status='queued',updated_at=NOW() WHERE status='sending' AND broadcast_id IN (SELECT id FROM broadcast_logs WHERE status IN ('queued','running') AND (worker_token IS NULL OR worker_lease_until IS NULL OR worker_lease_until<NOW()))");
+  await db.query("UPDATE broadcast_logs SET worker_token=NULL,worker_lease_until=NULL WHERE status IN ('queued','running') AND (worker_lease_until IS NULL OR worker_lease_until<NOW())");
+  const result=await db.query("SELECT id FROM broadcast_logs WHERE status IN ('queued','running') AND (worker_token IS NULL OR worker_lease_until IS NULL OR worker_lease_until<NOW()) ORDER BY id");
   for(const row of result.rows||[])Promise.resolve().then(()=>runBroadcast(row.id));
   if(result.rows?.length)console.info("[Broadcast] Resumed "+result.rows.length+" queued broadcast job(s).");
  }catch(error){console.warn("[Broadcast] Pending-job recovery skipped:",error.message);}
