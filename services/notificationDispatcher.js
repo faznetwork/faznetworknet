@@ -4,15 +4,17 @@ const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
  const raw=String(rawEvent||"").toLowerCase();
  if(raw==="welcome"||raw==="welcome_message"||eventName==="welcome")return ["welcome_message"];
  if(type==="pppoe"){
+  if(raw==="pppoe_expired"||eventName==="expired")return ["pppoe_expired","expired"];
   if(eventName==="expiry_warning"||raw==="pppoe_expiry_warning")return ["pppoe_expiry_warning"];
   if(["payment","renewal","recharge"].includes(eventName))return raw==="pppoe_payment"||eventName==="payment"?["pppoe_payment","pppoe_renewal"]:["pppoe_renewal","pppoe_payment"];
  }
  if(type==="hotspot"){
+  if(raw==="hotspot_expired"||eventName==="expired")return ["hotspot_expired","expired"];
   if(eventName==="expiry_warning"||raw==="hotspot_expiry_warning")return ["hotspot_expiry_warning"];
   if(["payment","renewal","recharge"].includes(eventName))return raw==="hotspot_purchase"||eventName==="payment"?["hotspot_purchase","hotspot_renewal"]:["hotspot_renewal","hotspot_purchase"];
  }
