@@ -2970,6 +2970,7 @@
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
+                            <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim">
                             <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
                             <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX). Device MAC is automatically bound upon first login.</p>
                             <div class="hs-create-input-shell">
@@ -3023,6 +3024,7 @@
                           </div>
                         </div>
 
+                        <div class="mb-3"><label class="hs-create-label" for="hsCustomerNote">Optional Note / Address</label><textarea id="hsCustomerNote" name="note" class="form-control" rows="2" maxlength="1000" placeholder="Internal reference only"></textarea></div>
                         <div class="hs-create-actions">
                           <button type="button" id="hsClearForm" class="btn btn-outline-secondary hs-create-reset">
                             <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Reset
@@ -3296,6 +3298,8 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             phone: value,
+                            customer_name: document.getElementById('hsCustomerName')?.value.trim() || '',
+                            note: document.getElementById('hsCustomerNote')?.value.trim() || '',
                             profile_id: chosen.profile_id || chosen.name,
                             server: server.value || 'all'
                         })
