@@ -76,7 +76,7 @@ test("billing cron marks a past-due migration override expired without changing 
   try{
     db.query=async(sql,params=[])=>{
       calls.push({sql,params});
-      if(sql.startsWith("SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:42,username:"01712345678",full_name:"Migration Customer",phone:"01712345678",expiration_date:"2020-02-29",status:"active",billing_expiry_override:true}]};
+      if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:42,username:"01712345678",full_name:"Migration Customer",package_name:"Home 30",phone:"01712345678",expiration_date:"2020-02-29",status:"active",billing_expiry_override:true}]};
       return {rows:[]};
     };
     mikrotik.changeSecretProfile=async(...args)=>{throw new Error("must not change the live profile");};
