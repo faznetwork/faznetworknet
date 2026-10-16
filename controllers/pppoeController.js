@@ -1,5 +1,6 @@
 const mikrotikService = require("../services/mikrotikService");
 const db = require("../db");
+const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 
 function errorResponse(res, error) {
@@ -345,14 +346,10 @@ async function users(req, res) {
       }
       liveRows = snapshot.rows;
     }
-    const sessionMap = new Map();
-    for (const session of liveRows) {
-      const username = String(session.username || "").trim().toLowerCase();
-      if (username && !sessionMap.has(username)) sessionMap.set(username, session);
-    }
+    const sessionMap = createActiveSessionMap(liveRows);
 
     let users = result.rows.map(user => {
-      const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
+      const session = sessionMap.get(normalizeUsername(user.username));
       // Billing/customer metadata must come from the same canonical row as All Customer.
       // MikroTik/pppoe_users is authoritative only for live session and router fields.
       const hasCustomerRecord = user.customer_id != null;

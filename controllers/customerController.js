@@ -1,4 +1,5 @@
 const db = require("../db");
+const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const mikrotikService = require("../services/mikrotikService");
 const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
@@ -598,15 +599,11 @@ async function listCustomers(req,res){
         });
       }
     }
-    const sessionMap=new Map();
-    for(const session of Array.isArray(sessions)?sessions:[]){
-      const key=String(session.username||"").trim().toLowerCase();
-      if(key&&!sessionMap.has(key))sessionMap.set(key,session);
-    }
+    const sessionMap=createActiveSessionMap(sessions);
 
     const mapped=result.rows.map(row=>{
       const billing=evaluateCustomerBillingStatus({...row,expiration_date:row.expiration_date||row.pppoe_expiry_date||null});
-      const session=sessionMap.get(String(row.username||"").trim().toLowerCase());
+      const session=sessionMap.get(normalizeUsername(row.username));
       const expiration=row.expiration_date||row.pppoe_expiry_date||null;
       const comment=String(row.pppoe_comment||row.remarks||"").trim();
       const commentName=comment.match(/Customer:\s*([^|]+)/i)?.[1]?.trim() || comment.split("|")[0]?.trim() || "";
@@ -693,7 +690,7 @@ async function profile(req,res){
       const activeSessions=await withTimeout(()=>mikrotikService.getActiveSessions(),2000);
       if(!Array.isArray(activeSessions))throw new Error("MikroTik returned an invalid active-session list.");
       const normalizedUsername=String(username||"").trim().toLowerCase();
-      session=activeSessions.find(row=>String(row?.username||"").trim().toLowerCase()===normalizedUsername)||null;
+      session=findActiveSession(activeSessions,normalizedUsername);
     }catch(error){
       console.warn("[Customer 360] Live MikroTik active-session lookup failed; showing Offline:",error.message);
       session=null;
@@ -805,7 +802,7 @@ async function publicCustomerLogin(req,res){
         2000
       );
       const target=String(mtSecret?.name||dbUser?.username||candidateUsername).toLowerCase();
-      const session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===target);
+      const session=findActiveSession(sessions,target);
       online=Boolean(session);
       liveIp=String(session?.address||"");
       uptime=String(session?.uptime||"");
@@ -1321,7 +1318,7 @@ async function getCustomerLiveSession(req,res){
       return res.json({success:true,live:offlineLive(storedMac,"Invalid active-session response.","unavailable"),liveStatusAvailable:false,statusSource:"mikrotik-active-list-unavailable"});
     }
     const target=String(customer.username||"").trim().toLowerCase();
-    const session=sessions.find(item=>String(item?.username||item?.name||"").trim().toLowerCase()===target);
+    const session=findActiveSession(sessions,target);
     if(!session){
       return res.json({success:true,live:{...offlineLive(storedMac),live_sync:liveResult.live_sync},liveStatusAvailable:true,statusSource:"mikrotik-active-list"});
     }
