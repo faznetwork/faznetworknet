@@ -2115,18 +2115,30 @@
         <section data-notify-panel="email" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyEmailEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyEmailEnabled">Enable Email Notifications</label></div>
           <div class="row g-3">
-            <div class="col-md-8"><label class="form-label" for="smtpHost">SMTP Host</label><input id="smtpHost" class="form-control" maxlength="253" placeholder="smtp.gmail.com"></div>
+            <div class="col-md-6"><label class="form-label" for="emailProviderMode">Email Provider Mode</label><select id="emailProviderMode" class="form-select"><option value="apps_script">Google Apps Script Web App (Recommended)</option><option value="smtp">Custom SMTP Server (Fallback)</option></select></div>
+            <div class="col-md-6 d-flex align-items-end"><div class="small text-muted pb-2">Choose how FAZ NETWORK sends notification emails. Apps Script uses your authorized MailApp Web App.</div></div>
+          </div>
+          <div id="emailAppsScriptFields" class="row g-3 mt-1">
+            <div class="col-12"><label class="form-label" for="emailAppsScriptUrl">Web App Exec URL</label><input id="emailAppsScriptUrl" type="url" class="form-control" maxlength="1000" placeholder="https://script.google.com/macros/s/AKfycb.../exec" autocomplete="url"><div class="form-text">Use the deployed Apps Script Web App URL ending in /exec. Only HTTPS Google Apps Script URLs are accepted.</div></div>
+            <div class="col-md-8"><label class="form-label" for="emailAppsScriptToken">Secret API Token</label><div class="input-group"><input id="emailAppsScriptToken" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved token"><button type="button" class="btn btn-outline-secondary" id="emailAppsScriptTokenToggle" aria-label="Show Apps Script token"><i class="bi bi-eye"></i></button></div><div id="emailAppsScriptTokenHint" class="form-text"></div></div>
+            <div class="col-md-4 d-flex align-items-end"><div class="alert alert-light border small mb-0 w-100"><i class="bi bi-shield-lock me-1 text-success"></i>Token is stored server-side and never sent back to the browser.</div></div>
+          </div>
+          <div id="emailSmtpFields" class="row g-3 mt-1" style="display:none">
+            <div class="col-md-8"><label class="form-label" for="smtpHost">SMTP Host</label><input id="smtpHost" class="form-control" maxlength="253" placeholder="smtp.example.com"></div>
             <div class="col-md-4"><label class="form-label" for="smtpPort">SMTP Port</label><input id="smtpPort" type="number" class="form-control" min="1" max="65535" value="587" required></div>
             <div class="col-md-4"><div class="form-check form-switch mt-md-4 pt-md-2"><input class="form-check-input" id="smtpSecure" type="checkbox"><label class="form-check-label" for="smtpSecure">Secure SSL/TLS (typically port 465)</label></div></div>
-            <div class="col-md-8"><label class="form-label" for="smtpUsername">Username / Email Address</label><input id="smtpUsername" type="email" class="form-control" autocomplete="username" maxlength="254" placeholder="billing@faznetwork.net"></div>
+            <div class="col-md-8"><label class="form-label" for="smtpUsername">Username / Email Address</label><input id="smtpUsername" type="email" class="form-control" autocomplete="username" maxlength="254" placeholder="billing@example.com"></div>
             <div class="col-md-6"><label class="form-label" for="smtpPassword">SMTP Password / App Password</label><div class="input-group"><input id="smtpPassword" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved password"><button type="button" class="btn btn-outline-secondary" id="smtpPasswordToggle" aria-label="Show SMTP password"><i class="bi bi-eye"></i></button></div><div id="smtpPasswordHint" class="form-text"></div></div>
             <div class="col-md-6"><label class="form-label" for="emailFromName">From Name</label><input id="emailFromName" class="form-control" maxlength="160" value="FAZ NETWORK Billing"></div>
-            <div class="col-md-6"><label class="form-label" for="emailFromAddress">From Email</label><input id="emailFromAddress" type="email" class="form-control" maxlength="254" placeholder="billing@faznetwork.net"></div>
-            <div class="col-12"><div class="alert alert-light border small mb-0"><i class="bi bi-shield-lock me-1 text-success"></i>SMTP passwords are stored in server settings and never returned to the browser. Gmail generally requires an App Password when 2-Step Verification is enabled.</div></div>
+            <div class="col-md-6"><label class="form-label" for="emailFromAddress">From Email</label><input id="emailFromAddress" type="email" class="form-control" maxlength="254" placeholder="billing@example.com"></div>
+            <div class="col-12"><div class="alert alert-light border small mb-0"><i class="bi bi-shield-lock me-1 text-success"></i>SMTP credentials are stored server-side and never returned to the browser.</div></div>
+          </div>
+          <hr class="my-4">
+          <div class="row g-3">
             <div class="col-md-5"><label class="form-label" for="emailTestRecipient">Recipient Email</label><input id="emailTestRecipient" type="email" class="form-control" maxlength="254" placeholder="you@example.com" required></div>
-            <div class="col-md-7"><label class="form-label" for="emailTestSubject">Test Subject</label><input id="emailTestSubject" class="form-control" maxlength="200" value="FAZ NETWORK SMTP test email" required></div>
+            <div class="col-md-7"><label class="form-label" for="emailTestSubject">Test Subject</label><input id="emailTestSubject" class="form-control" maxlength="200" value="FAZ NETWORK test email" required></div>
             <div class="col-12"><button type="button" id="emailTestBtn" class="btn btn-outline-primary"><i class="bi bi-send me-1"></i>Send Test Email</button></div>
-            <div class="col-12"><div id="emailTestResult" class="alert alert-secondary py-2 small mb-0" role="status" aria-live="polite">Save SMTP settings, then send a test email to verify the SMTP handshake and delivery.</div></div>
+            <div class="col-12"><div id="emailTestResult" class="alert alert-secondary py-2 small mb-0" role="status" aria-live="polite">Save your active provider settings, then send a test email to validate delivery.</div></div>
           </div>
         </section>
         <section data-notify-panel="messenger" style="display:none">
