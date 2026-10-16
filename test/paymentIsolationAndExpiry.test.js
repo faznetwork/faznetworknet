@@ -7,6 +7,12 @@ const paymentController = require("../controllers/paymentController");
 
 const root = path.resolve(__dirname, "..");
 const source = fs.readFileSync(path.join(root, "controllers/paymentController.js"), "utf8");
+const portalSource = fs.readFileSync(path.join(root, "views/portal.ejs"), "utf8");
+
+test("Captive portal submits an explicit Hotspot type and package_id", () => {
+  assert.match(portalSource, /service_type:\s*"hotspot"/);
+  assert.match(portalSource, /package_id:selectedProfile/);
+});
 
 test("Hotspot-originated webhook payments never enter the PPPoE customer resolver", () => {
   const webhook = source.slice(source.indexOf("async function webhook"), source.indexOf("async function dynamicWebhook"));
@@ -16,7 +22,7 @@ test("Hotspot-originated webhook payments never enter the PPPoE customer resolve
   assert.doesNotMatch(webhook, /if\(!user&&payment\.senderPhone\)/);
 });
 
-test("Hotspot verification requires an explicit hotspot service type", async () => {
+test("Hotspot verification rejects requests with no service type or Hotspot-specific context", async () => {
   const oldQuery = require("../db").query;
   try {
     const db = require("../db");
@@ -26,7 +32,18 @@ test("Hotspot verification requires an explicit hotspot service type", async () 
     await paymentController.verifyTrx({ ip: "service-type-required-test", body: { phone: "01712345678", trxId: "TX-1", amount: 10, profile_id: "pkg-1" } }, res);
     assert.equal(res.statusCode, 400);
     assert.equal(res.body.code, "SERVICE_TYPE_REQUIRED");
-    assert.equal(queried, false, "reject before any transaction/customer lookup");
+    assert.equal(queried, false, "reject ambiguous requests before any transaction/customer lookup");
+
+    const hotspotRes = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+    await paymentController.verifyTrx({ ip: "service-type-inferred-test", body: { phone: "01712345678", trxId: "TX-2", amount: 10, package_id: "1-hour" } }, hotspotRes);
+    assert.equal(hotspotRes.statusCode, 404);
+    assert.equal(hotspotRes.body.code, "NOT_FOUND_OR_DELAYED");
+    assert.equal(queried, true, "a package_id safely infers the Hotspot flow");
+
+    const macRes = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+    await paymentController.verifyTrx({ ip: "service-type-mac-inferred-test", body: { phone: "01712345678", trxId: "TX-3", amount: 10, mac: "AA:BB:CC:DD:EE:FF" } }, macRes);
+    assert.equal(macRes.statusCode, 404);
+    assert.equal(macRes.body.code, "NOT_FOUND_OR_DELAYED");
   } finally {
     require("../db").query = oldQuery;
   }
