@@ -12,7 +12,7 @@ function metadata(){return {"1-Hour":{id:"pkg-1-hour",profile_id:"pkg-1-hour",pr
 
 test("manual Hotspot assignment atomically claims transaction, stages phone voucher, and notifies",async()=>{
  const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldDispatch=notifications.dispatchNotification;
- const seen={claimSql:"",claimParams:[],voucherSql:"",voucherParams:[],finalSql:"",notices:[],routerWrites:0};
+ const seen={claimSql:"",claimParams:[],voucherSql:"",voucherParams:[],associationParams:[],finalSql:"",notices:[],routerWrites:0};
  try{
   db.query=async(sql,params=[])=>{
    if(sql.startsWith("SELECT * FROM transactions"))return {rows:[transaction()]};
@@ -25,6 +25,7 @@ test("manual Hotspot assignment atomically claims transaction, stages phone vouc
    if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
    if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[]};
    if(sql.startsWith("INSERT INTO hotspot_vouchers")){seen.voucherSql=sql;seen.voucherParams=params;return {rows:[{id:31,username:params[0],profile:params[2],profile_id:params[9],validity:params[3],price:params[4],status:"pending_claim",phone:params[6],mac_address:params[10]}]};}
+   if(sql.startsWith("INSERT INTO hotspot_voucher_payments")){seen.associationParams=params;return {rows:[]};}
    if(sql.startsWith("UPDATE transactions SET status='processed'")){seen.finalSql=sql;return {rows:[{id:77}]};}
    throw new Error("Unexpected transactional query: "+sql);
   }});
@@ -43,6 +44,8 @@ test("manual Hotspot assignment atomically claims transaction, stages phone vouc
   assert.equal(seen.voucherParams[4],10);
   assert.equal(seen.voucherParams[6],"01712345678");
   assert.equal(seen.voucherParams[10],null,"manual assignment does not invent a device MAC");
+  assert.equal(seen.voucherParams[11],77,"manual assignment links the voucher to the claimed transaction");
+  assert.equal(seen.associationParams[0],77,"manual assignment persists the durable payment association");
   assert.match(seen.finalSql,/status='processed'/);
   assert.equal(seen.notices.length,2);
   assert.equal(seen.routerWrites,0);
