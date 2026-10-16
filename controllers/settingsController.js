@@ -129,7 +129,7 @@ function validateSettingValue(key,value,rule){
  if(rule.phone&&out&&!/^[+()\d\s-]{6,40}$/.test(out))throw new Error("Enter a valid phone number for "+key+".");
  if(rule.url&&out){let u;try{u=new URL(out);}catch(_){throw new Error(key+" must be a valid HTTP(S) URL.");}if(!["http:","https:"].includes(u.protocol))throw new Error(key+" must use HTTP or HTTPS.");out=u.toString();}
  if(rule.pathOrUrl&&out)out=validateUrl(out);
- if(rule.appsScriptUrl&&out){let parsed;try{parsed=new URL(out);}catch(_){throw new Error(key+" must be a valid Google Apps Script Web App URL.");}if(parsed.protocol!=="https:"||parsed.hostname!=="script.google.com"||!/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(parsed.pathname))throw new Error(key+" must be an HTTPS Google Apps Script URL ending in /macros/s/…/exec.");out=parsed.toString();}
+ if(rule.appsScriptUrl&&out){let parsed;try{parsed=new URL(out);}catch(_){throw new Error(key+" must be a valid Google Apps Script Web App URL.");}if(parsed.protocol!=="https:"||parsed.hostname!=="script.google.com"||!/^\/macros\/s\/[^/]+\/exec\/?$/.test(parsed.pathname))throw new Error(key+" must be an HTTPS Google Apps Script URL ending in /macros/s/…/exec.");out=parsed.toString();}
  if(rule.email&&out&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out))throw new Error(key+" must be a valid email address.");
  return out;
 }
