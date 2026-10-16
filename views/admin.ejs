@@ -2118,7 +2118,7 @@
           <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3"><div><h6 class="fw-bold mb-1">Custom Message Templates</h6><p class="small text-muted mb-0">Customize messages for each event and delivery channel. Unsaved templates continue to use the existing default messages.</p></div><span class="badge text-bg-success">Live variable preview</span></div>
           <div class="row g-3">
             <div class="col-md-7"><label class="form-label" for="notifyTemplateEvent">Notification Event</label><select id="notifyTemplateEvent" class="form-select">
-              <option value="pppoe_renewal">PPPoE Renewal</option><option value="pppoe_payment">PPPoE Payment Receipt</option><option value="pppoe_expiry_warning">PPPoE Expiry Warning</option><option value="hotspot_purchase">Hotspot Purchase</option><option value="hotspot_renewal">Hotspot Recharge / Renewal</option><option value="hotspot_expiry_warning">Hotspot Expiry Warning</option><option value="welcome_message">Welcome Message</option>
+              <option value="pppoe_renewal">PPPoE Renewal</option><option value="pppoe_payment">PPPoE Payment Receipt</option><option value="pppoe_expiry_warning">PPPoE Expiry Warning</option><option value="pppoe_expired">PPPoE Expired / Disconnected</option><option value="hotspot_purchase">Hotspot Purchase</option><option value="hotspot_renewal">Hotspot Recharge / Renewal</option><option value="hotspot_expiry_warning">Hotspot Expiry Warning</option><option value="hotspot_expired">Hotspot Expired / Plan Ended</option><option value="welcome_message">Welcome Message</option>
             </select></div>
             <div class="col-md-5"><label class="form-label" for="notifyTemplateChannel">Channel</label><select id="notifyTemplateChannel" class="form-select"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="telegram">Telegram</option><option value="messenger">Messenger</option></select></div>
             <div class="col-12"><label class="form-label" for="notifyTemplateBody">Message Template</label><textarea id="notifyTemplateBody" class="form-control font-monospace" rows="5" maxlength="4000" placeholder="Dear {name}, your package {package} is renewed until {expiry_date}."></textarea><div class="d-flex justify-content-between gap-2 mt-1"><small class="text-muted">Click a variable to insert it at the cursor.</small><small id="notifyTemplateCharCount" class="text-muted">0 / 4000</small></div></div>
@@ -4466,7 +4466,7 @@ async function deletePlan(id,name){
         function renderNotificationRules(settings={}){
           const body=document.getElementById('notificationRulesBody');if(!body)return;body.replaceChildren();
           for(const [type,typeLabel] of notificationTypes)for(const [event,eventLabel] of notificationEvents){
-            const tr=document.createElement('tr');const tdType=document.createElement('td');tdType.textContent=typeLabel;const tdEvent=document.createElement('td');tdEvent.textContent=eventLabel;tr.append(tdType,tdEvent);
+            const tr=document.createElement('tr');const tdType=document.createElement('td');tdType.textContent=typeLabel;const tdEvent=document.createElement('td');tdEvent.textContent=event==='expired'?(type==='pppoe'?'Expired / Disconnection':'Expired'):eventLabel;tr.append(tdType,tdEvent);
             for(const [channel,label] of notificationChannels){const td=document.createElement('td');td.className='text-center';const input=document.createElement('input');input.type='checkbox';input.className='form-check-input notify-rule';input.dataset.type=type;input.dataset.event=event;input.dataset.channel=channel;input.setAttribute('aria-label',typeLabel+' '+eventLabel+' '+label);const key='notification_rule_'+type+'_'+event+'_'+channel+'_enabled';input.checked=String(settings[key]??((type==='pppoe'&&channel==='sms'&&['payment','expiry_warning','expired','renewal'].includes(event))||(type==='hotspot'&&channel==='sms'&&['payment','recharge','renewal','welcome'].includes(event))))==='true';td.append(input);tr.append(td);}
             body.append(tr);
           }
@@ -4495,6 +4495,8 @@ async function deletePlan(id,name){
         let activeBroadcastId=null;
         let broadcastPollTimer=null;
         const notificationTemplateDefaults={
+          pppoe_expired:'প্রিয় {name}, আপনার FAZ NETWORK সংযোগের মেয়াদ আজ শেষ হয়েছে এবং সংযোগটি সাময়িকভাবে বন্ধ রয়েছে। সংযোগটি পুনরায় চালু করতে রিচার্জ করুন। ধন্যবাদ।',
+          hotspot_expired:'প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।',
           pppoe_renewal:'Dear {name}, your FAZ NETWORK service renewal is complete. New expiry: {expiry_date}.',
           pppoe_payment:'Dear {name}, payment of Tk {amount} received. Your service is active until {expiry_date}. Thank you, {company_name}.',
           pppoe_expiry_warning:'Dear {name}, your internet package expires on {expiry_date}. Please renew to avoid interruption. {company_name}.',
