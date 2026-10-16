@@ -41,7 +41,7 @@ test("All Hotspot Users renders a responsive master-detail Subscriber 360 worksp
  for(const id of ["hotspotMasterSearch","subscriberMasterList","hotspot-total-count","subscriberDetailCard","subscriberDetailBody","detailCustomerName","detailPhone","detailMac","detailIp","detailUptime","detailExpiry","detailRemaining","actionRenewBtn","actionEditBtn","actionKickBtn","actionDeleteBtn"]) assert.ok(js.includes(id), "missing workspace element: "+id);
  assert.match(js,/\/api\/hotspot\/users\/kick/);assert.match(js,/\/api\/hotspot\/users\/remove/);assert.ok(js.includes('encodeURIComponent(id)+"/profile"'));
  assert.match(js,/renewHotspotUser/);assert.match(js,/editHotspotUser/);assert.match(js,/active-subscriber-item/);assert.match(js,/scrollIntoView/);
- assert.match(css,/@media\s*\(max-width:\s*991\.98px\)/);assert.match(css,/position:\s*sticky/);
+ assert.match(css,/@media\s*\(max-width:\s*767\.98px\)/);assert.match(css,/position:\s*sticky/);
 });
 
 test("Profile 360 saves explicitly and opens Subscriber 360 in a mobile bottom sheet", () => {
