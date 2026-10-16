@@ -73,6 +73,10 @@ async function syncHotspotProfileScripts(deps = {}) {
     const name = String(profile?.name || "").trim();
     if (!name) { skipped++; ineligible++; continue; }
     const oldLogin = String(profile?.raw?.["on-login"] || "");
+    if (typeof router.ensureHotspotUserProfileMacCookie === "function") {
+      try { await router.ensureHotspotUserProfileMacCookie(name); }
+      catch (error) { failed++; logger.warn("[HOTSPOT USER PROFILE COOKIE SYNC] Could not normalize " + name + ": " + (error?.message || error)); }
+    }
     const configured = metadata[name] && typeof metadata[name] === "object";
     const legacy = LEGACY_HOTSPOT_HOOK.test(oldLogin);
     const alreadyManaged = MANAGED_HOTSPOT_HOOK.test(oldLogin);

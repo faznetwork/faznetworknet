@@ -79,11 +79,9 @@ function buildHotspotOnLoginScript(config = {}) {
     ':foreach oldSched in=[/system scheduler find where name=$sched] do={ /system scheduler remove $oldSched; }',
     ':local userComment ""',
     ':if ([:len $uid] > 0) do={ :set userComment [/ip hotspot user get $uid comment]; }',
-    ':if ((([:len $userComment] = 15) || ([:len $userComment] = 24)) && ([:pick $userComment 0 5] = "Exp: ") && ([:pick $userComment 9 10] = "-") && ([:pick $userComment 12 13] = "-") && (([:len $userComment] = 15) || (([:pick $userComment 15 16] = " ") && ([:pick $userComment 18 19] = ":") && ([:pick $userComment 21 22] = ":")))) do={',
+    ':if (([:len $userComment] = 24) && ([:pick $userComment 0 5] = "Exp: ") && ([:pick $userComment 9 10] = "-") && ([:pick $userComment 12 13] = "-") && ([:pick $userComment 15 16] = " ") && ([:pick $userComment 18 19] = ":") && ([:pick $userComment 21 22] = ":")) do={',
     ':local expIso [:pick $userComment 5 15]',
-    ':local expTime "23:59:59"',
-    ':local timedComment ([:len $userComment] = 24)',
-    ':if ($timedComment) do={ :set expTime [:pick $userComment 16 24]; }',
+    ':local expTime [:pick $userComment 16 24]',
     ':local expHour [:tonum [:pick $expTime 0 2]]',
     ':local expMinute [:tonum [:pick $expTime 3 5]]',
     ':local expSecond [:tonum [:pick $expTime 6 8]]',
@@ -106,12 +104,12 @@ function buildHotspotOnLoginScript(config = {}) {
     ':local currentMonthIndex [:find $months $currentMonth]',
     ':local isExpired false',
     ':if ($expYear < $currentYear) do={ :set isExpired true; } else={ :if ($expYear = $currentYear) do={ :if ($expMonth < ($currentMonthIndex + 1)) do={ :set isExpired true; } else={ :if (($expMonth = ($currentMonthIndex + 1)) && ($expDay < $currentDay)) do={ :set isExpired true; } } } }',
-    ':if (($expYear = $currentYear) && ($expMonth = ($currentMonthIndex + 1)) && ($expDay = $currentDay) && $timedComment) do={ :if (($expHour < $currentHour) || (($expHour = $currentHour) && ($expMinute < $currentMinute)) || (($expHour = $currentHour) && ($expMinute = $currentMinute) && ($expSecond <= $currentSecond))) do={ :set isExpired true; } }',
+    ':if (($expYear = $currentYear) && ($expMonth = ($currentMonthIndex + 1)) && ($expDay = $currentDay)) do={ :if (($expHour < $currentHour) || (($expHour = $currentHour) && ($expMinute < $currentMinute)) || (($expHour = $currentHour) && ($expMinute = $currentMinute) && ($expSecond <= $currentSecond))) do={ :set isExpired true; } }',
     ':if ($isExpired) do={ /ip hotspot active remove [find where user=$uName]; /ip hotspot cookie remove [find where user=$uName]; /ip hotspot cookie remove [find where mac-address=$uMac]; /ip hotspot user remove [find where name=$uName]; /ip hotspot host remove [find where mac-address=$uMac]; } else={',
     ':local monthIndex ($expMonth - 1)',
     ':local startDate (($months->$monthIndex) . "/" . [:pick $expIso 8 10] . "/" . [:tostr $expYear])',
     '/system scheduler add name=$sched start-date=$startDate start-time=$expTime on-event=' + schedulerEvent,
-    '}; } else={ :log warning ("FAZ HotSpot expiry comment invalid for user " . $uName . "; expected Exp: YYYY-MM-DD or Exp: YYYY-MM-DD HH:mm:ss"); }'
+    '}; } else={ :log warning ("FAZ HotSpot expiry comment invalid for user " . $uName . "; expected Exp: YYYY-MM-DD HH:mm:ss"); }'
   ].join('\n');
 
   return prefix + ' ' + expiryScript + ';';
