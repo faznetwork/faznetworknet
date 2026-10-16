@@ -15,7 +15,7 @@ function safeEqual(left, right) {
 }
 
 function parseStartPayload(text) {
-  const match = String(text || "").trim().match(/^\/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{1,64}))?(?:\s|$)/i);
+  const match = String(text || "").trim().match(/^\/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/i);
   return match ? String(match[1] || "").trim() : null;
 }
 
@@ -23,7 +23,7 @@ async function handleTelegramUpdate(update, dependencies = {}) {
   const query = dependencies.query || ((sql, values) => db.query(sql, values));
   const sendMessage = dependencies.sendMessage || telegramService.sendTelegramMessage;
   const message = update && update.message;
-  if (!message || !message.chat || message.chat.id === undefined || message.chat.id === null) {
+  if (!message || !message.chat || message.chat.id === undefined || message.chat.id === null || (message.chat.type && message.chat.type !== "private")) {
     return { handled: false, reason: "not-a-chat-message" };
   }
 
