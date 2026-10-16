@@ -5,6 +5,7 @@ const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdW
 const settingsService=require("../services/appSettings");
 const whatsappService=require("../services/whatsappService");
 const db=require("../db");
+const {ALLOWED_EVENTS}=require("../controllers/notificationTemplateController");
 test("notification dispatcher normalizes Bangladeshi mobile numbers for channel gateways",()=>{
  assert.equal(normalizePhone("01712345678"),"8801712345678");
  assert.equal(normalizePhone("+8801712345678"),"8801712345678");
@@ -78,3 +79,45 @@ test("custom PPPoE renewal template replaces runtime variables for WhatsApp",asy
   assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK."}]);
  }finally{settingsService.getAllSettings=originalGetAllSettings;whatsappService.sendMessage=originalSendMessage;db.query=originalDbQuery;}
 });
+
+
+test("template manager allows both dedicated expired events",()=>{
+ assert.equal(ALLOWED_EVENTS.has("pppoe_expired"),true);
+ assert.equal(ALLOWED_EVENTS.has("hotspot_expired"),true);
+});
+
+for(const scenario of [
+ {type:"pppoe",event:"pppoe_expired",rule:"notification_rule_pppoe_expired_whatsapp_enabled",templateKey:"pppoe_expired",name:"Alice",package:"50 Mbps",expiry:"2026-10-15"},
+ {type:"hotspot",event:"hotspot_expired",rule:"notification_rule_hotspot_expired_whatsapp_enabled",templateKey:"hotspot_expired",name:"01712345678",package:"Hotspot 1 GB",expiry:"2026-10-15"}
+]){
+ test("custom "+scenario.templateKey+" template dispatches with runtime variables and enabled rule",async()=>{
+  const originalGetAllSettings=settingsService.getAllSettings,originalSendMessage=whatsappService.sendMessage,originalDbQuery=db.query;
+  const sent=[];
+  settingsService.getAllSettings=async()=>({
+   company_name:"FAZ NETWORK",
+   notification_channel_whatsapp_enabled:"true",
+   notification_channel_sms_enabled:"false",
+   notification_channel_telegram_enabled:"false",
+   notification_channel_messenger_enabled:"false",
+   [scenario.rule]:"true"
+  });
+  db.query=async(sql,params)=>sql.includes("FROM notification_templates")
+   ?{rows:[{template_body:"প্রিয় {name}, {package}; username={username}; expiry={expiry_date}"}]}
+   :{rows:[]};
+  whatsappService.sendMessage=async payload=>{sent.push(payload);return {success:true};};
+  try{
+   const result=await dispatchNow({
+    userType:scenario.type,event:scenario.event,username:"test-user",to:"01712345678",
+    customer:{username:"test-user",full_name:scenario.name,phone:"01712345678"},
+    variables:{name:scenario.name,username:"test-user",package:scenario.package,expiry_date:scenario.expiry},
+    message:"Fallback message"
+   });
+   assert.equal(result.success,true);
+   assert.deepEqual(sent,[{to:"8801712345678",message:"প্রিয় "+scenario.name+", "+scenario.package+"; username=test-user; expiry="+scenario.expiry}]);
+  }finally{
+   settingsService.getAllSettings=originalGetAllSettings;
+   whatsappService.sendMessage=originalSendMessage;
+   db.query=originalDbQuery;
+  }
+ });
+}

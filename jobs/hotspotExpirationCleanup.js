@@ -93,7 +93,7 @@ function createHotspotExpirationCleanup(deps = {}) {
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
     try {
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
@@ -194,9 +194,9 @@ function createHotspotExpirationCleanup(deps = {}) {
           [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
         );
         expired++;
-        const contactResult=await database.query("SELECT phone,price FROM hotspot_vouchers WHERE id=$1 LIMIT 1",[voucher.id]).catch(()=>({rows:[]}));
-        const contact=contactResult.rows?.[0]||{};
-        if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"expired",to:contact.phone,username,message:"Your FAZ NETWORK Hotspot package has expired. Recharge to continue using the service.",variables:{name:contact.phone,username,amount:contact.price,expiry_date:expiryAt instanceof Date?expiryAt.toISOString().slice(0,10):""}});}
+        const contact=voucher;
+        const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
+        if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
         try {
           await router.cleanupExpiredHotspotUser(username);
           await database.query(
