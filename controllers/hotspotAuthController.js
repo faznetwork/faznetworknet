@@ -116,7 +116,9 @@ async function activate(req,res){
         if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This package expired during an earlier activation attempt. Purchase or assign a new package.");
       }else{
         firstLoginAt=now;
-        expiresAt=packageInfo.duration?new Date(now.getTime()+packageInfo.duration):null;
+        expiresAt=row.expires_at?new Date(row.expires_at):(packageInfo.duration?new Date(now.getTime()+packageInfo.duration):null);
+        if(expiresAt&&Number.isNaN(expiresAt.getTime()))throw makeError("EXPIRY_NOT_RECORDED",409,"The saved expiry is invalid. Contact support.");
+        if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This Hotspot package has expired. Purchase a new package to continue.");
       }
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
