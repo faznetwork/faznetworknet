@@ -1,6 +1,9 @@
 const express=require("express");const controller=require("../controllers/hotspotController");const router=express.Router();
 router.get("/",controller.page);
 router.get("/users",controller.list);
+const profileController=require("../controllers/hotspotProfileController");
+router.get("/users/:id/profile",profileController.getProfile);
+router.put("/users/:id/profile",profileController.updateProfile);
 router.post("/users",controller.createUser);
 router.post("/users/create",controller.createUser);
 router.post("/users/update",controller.updateUser);
