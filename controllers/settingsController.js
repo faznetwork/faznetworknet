@@ -114,7 +114,7 @@ const SETTINGS_RULES={
  sms_provider_preset:{oneOf:["greenweb","alpha_sms","elitbuzz","custom"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},
  sms_http_param_mapping:{json:true,max:4000},sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},sms_device_http_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},sms_device_param_mapping:{json:true,max:4000},
  notification_channel_sms_enabled:{bool:true},notification_channel_whatsapp_enabled:{bool:true},notification_channel_telegram_enabled:{bool:true},notification_channel_messenger_enabled:{bool:true},notification_channel_email_enabled:{bool:true},whatsapp_enabled:{bool:true},
- telegram_bot_token:{secret:true,max:500},telegram_default_chat_id:{max:150},messenger_page_access_token:{secret:true,max:2000},messenger_page_id:{max:150},messenger_app_secret:{secret:true,max:500},messenger_verify_token:{secret:true,max:500},smtp_host:{max:253},smtp_port:{numberMin:1,numberMax:65535},smtp_secure:{bool:true},smtp_username:{max:254},smtp_password:{secret:true,max:1000},email_from_name:{max:160},email_from_address:{email:true,max:254},
+ telegram_bot_token:{secret:true,max:500},telegram_default_chat_id:{max:150},messenger_page_access_token:{secret:true,max:2000},messenger_page_id:{max:150},messenger_app_secret:{secret:true,max:500},messenger_verify_token:{secret:true,max:500},email_provider_mode:{oneOf:["apps_script","smtp"]},email_apps_script_url:{url:true,max:1000},email_apps_script_token:{secret:true,max:1000},smtp_host:{max:253},smtp_port:{numberMin:1,numberMax:65535},smtp_secure:{bool:true},smtp_username:{max:254},smtp_password:{secret:true,max:1000},email_from_name:{max:160},email_from_address:{email:true,max:254},
  sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true},sms_event_welcome:{bool:true},
  sms_template_expiry_warning:{max:1200},sms_template_payment_receipt:{max:1200},sms_template_line_block:{max:1200},sms_template_welcome:{max:1200}
 };
@@ -136,10 +136,10 @@ async function getAllSettings(req,res){
  try{
   const map=await appSettingsService.getAllSettings();
   const out={...map};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","smtp_password","mikrotik_password"])delete out[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","email_apps_script_token","smtp_password","mikrotik_password"])delete out[key];
   out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);
   out.sms_api_key_configured=Boolean(map.sms_api_key);
-  out.sms_device_token_configured=Boolean(map.sms_device_token);out.smtp_password_configured=Boolean(map.smtp_password);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);out.smtp_password_configured=Boolean(map.smtp_password);out.email_apps_script_token_configured=Boolean(map.email_apps_script_token);out.telegram_bot_token_configured=Boolean(map.telegram_bot_token);out.messenger_page_access_token_configured=Boolean(map.messenger_page_access_token);out.messenger_app_secret_configured=Boolean(map.messenger_app_secret);out.messenger_verify_token_configured=Boolean(map.messenger_verify_token);
   return res.set("Cache-Control","no-store").json({success:true,settings:out});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -158,10 +158,10 @@ async function updateSettings(req,res){
   appSettingsService.invalidate();
   const all=await appSettingsService.getAllSettings();
   const safe={...all};
-  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","mikrotik_password"])delete safe[key];
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","telegram_bot_token","messenger_page_access_token","messenger_app_secret","messenger_verify_token","email_apps_script_token","smtp_password","mikrotik_password"])delete safe[key];
   safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);
   safe.sms_api_key_configured=Boolean(all.sms_api_key);
-  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.smtp_password_configured=Boolean(all.smtp_password);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);safe.messenger_app_secret_configured=Boolean(all.messenger_app_secret);safe.messenger_verify_token_configured=Boolean(all.messenger_verify_token);
+  safe.sms_device_token_configured=Boolean(all.sms_device_token);safe.smtp_password_configured=Boolean(all.smtp_password);safe.email_apps_script_token_configured=Boolean(all.email_apps_script_token);safe.telegram_bot_token_configured=Boolean(all.telegram_bot_token);safe.messenger_page_access_token_configured=Boolean(all.messenger_page_access_token);safe.messenger_app_secret_configured=Boolean(all.messenger_app_secret);safe.messenger_verify_token_configured=Boolean(all.messenger_verify_token);
   return res.set("Cache-Control","no-store").json({success:true,message:"System settings saved. Cached branding/settings refreshed.",settings:safe,updatedKeys:updates.map(([key])=>key)});
  }catch(error){return errorResponse(res,error,400);}
 }
@@ -201,11 +201,13 @@ async function testEmail(req,res){
   if(!subject)throw new Error("Test email subject is required.");
   if(subject.length>200)throw new Error("Email subject must be 200 characters or fewer.");
   const emailService=require("../services/emailService");
-  const verification=await emailService.verifyConnection();
-  if(!verification.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:verification.error||"SMTP connection verification failed.",details:verification});
-  const result=await emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your SMTP connection is working.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your SMTP connection is working."});
+  const settings=await appSettingsService.getAllSettings();
+  const verification=await emailService.verifyConnection(settings);
+  if(!verification.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:verification.error||"Email provider configuration validation failed.",details:verification});
+  const result=await emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and accepted this test request.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and accepted this test request."});
   if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",details:result});
-  return res.set("Cache-Control","no-store").json({success:true,message:"SMTP connection verified and test email sent successfully.",verification,result});
+  const provider=result.provider||emailService.providerMode(settings);
+  return res.set("Cache-Control","no-store").json({success:true,message:(provider==="apps_script"?"Google Apps Script accepted and sent the test email.":"SMTP connection verified and test email sent successfully."),provider,verification,result});
  }catch(error){return errorResponse(res,error,502);}
 }
 async function testTelegram(req,res){
