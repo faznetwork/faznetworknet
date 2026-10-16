@@ -8400,13 +8400,80 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
         }
 
+        function safeInitializeAdminRuntime() {
+            try {
+                initializeAdminRuntime();
+            } catch (error) {
+                console.error('[Admin Init Guard] Admin runtime initialization failed:', error);
+            }
+        }
+
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeAdminRuntime, { once: true });
+            document.addEventListener('DOMContentLoaded', safeInitializeAdminRuntime, { once: true });
         } else {
-            initializeAdminRuntime();
+            safeInitializeAdminRuntime();
         }
     </script>
     <script src="/js/rbac-sidebar.js?v=staff-actions-20261010" defer></script>
+    <script>
+    // Independent recovery script: this must remain a separate script block so a
+    // runtime exception in the large admin bundle cannot prevent overlay cleanup.
+    (function adminClickabilityRecovery() {
+        'use strict';
+        function recoverAdminClickability() {
+            try {
+                const modalOpen = document.querySelector('.modal.show, .modal.showing');
+                const offcanvasOpen = document.querySelector('.offcanvas.show, .offcanvas.showing');
+                if (!modalOpen && !offcanvasOpen) {
+                    document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach(function (el) {
+                        el.remove();
+                    });
+                    if (document.body) {
+                        document.body.classList.remove('modal-open', 'offcanvas-open');
+                        document.body.style.removeProperty('overflow');
+                        document.body.style.removeProperty('padding-right');
+                    }
+                }
+
+                const sidebar = document.getElementById('sidebar');
+                const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+                const mobileSidebarOpen = Boolean(sidebar && sidebar.classList.contains('show') && window.innerWidth < 768);
+                if (sidebarBackdrop && !mobileSidebarOpen) sidebarBackdrop.classList.remove('show');
+                if (document.body && !mobileSidebarOpen) {
+                    document.body.classList.remove('sidebar-open');
+                    document.body.style.pointerEvents = 'auto';
+                }
+            } catch (error) {
+                console.warn('[Admin Clickability Recovery] Overlay recovery failed:', error);
+            }
+        }
+
+        function startRecovery() {
+            recoverAdminClickability();
+            if (document.body && !window.__fazAdminClickabilityRecoveryObserver) {
+                window.__fazAdminClickabilityRecoveryObserver = new MutationObserver(function () {
+                    recoverAdminClickability();
+                });
+                window.__fazAdminClickabilityRecoveryObserver.observe(document.body, { childList: true, subtree: true });
+            }
+        }
+
+        window.addEventListener('error', function (event) {
+            console.error('[Admin Runtime Recovery] Client-side error detected:', event.error || event.message || 'Unknown error');
+            recoverAdminClickability();
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+            console.error('[Admin Runtime Recovery] Unhandled promise rejection:', event.reason || 'Unknown rejection');
+            recoverAdminClickability();
+        });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', startRecovery, { once: true });
+        } else {
+            startRecovery();
+        }
+    })();
+    </script>
 
     <!-- Dedicated MikroTik router onboarding; does not modify the shared Core connection or customer records. -->
     <style id="mikrotikAddRouterResponsiveStyles">
