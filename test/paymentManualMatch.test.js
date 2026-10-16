@@ -38,7 +38,7 @@ test("manual Hotspot assignment atomically claims transaction, stages phone vouc
   assert.equal(res.body.pending_activation,true);
   assert.match(seen.claimSql,/claim_flow='manual_hotspot'/);
   assert.equal(seen.claimParams[1],"01712345678");
-  assert.match(seen.voucherSql,/status='pending_claim'/);
+  assert.match(seen.voucherSql,/VALUES.*'pending_claim'/);
   assert.equal(seen.voucherParams[2],"1-Hour");
   assert.equal(seen.voucherParams[4],10);
   assert.equal(seen.voucherParams[6],"01712345678");
