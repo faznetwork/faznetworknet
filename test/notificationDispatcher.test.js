@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow}=require("../services/notificationDispatcher");
+const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow,testChannel}=require("../services/notificationDispatcher");
 const settingsService=require("../services/appSettings");
 const whatsappService=require("../services/whatsappService");
 const db=require("../db");
@@ -10,6 +10,14 @@ test("notification dispatcher normalizes Bangladeshi mobile numbers for channel 
  assert.equal(normalizePhone("01712345678"),"8801712345678");
  assert.equal(normalizePhone("+8801712345678"),"8801712345678");
  assert.equal(normalizePhone("008801712345678"),"8801712345678");
+});
+test("dispatcher rejects retired Telegram and Messenger channels",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings;
+ settingsService.getAllSettings=async()=>({});
+ try{
+  await assert.rejects(()=>testChannel("telegram",{to:"123",message:"test"}),/Unsupported notification channel/);
+  await assert.rejects(()=>testChannel("messenger",{to:"123",message:"test"}),/Unsupported notification channel/);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;}
 });
 test("notification dispatcher canonicalizes payment and expiry event names",()=>{
  assert.equal(eventKey("payment_receipt"),"payment");
@@ -37,8 +45,6 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
  settingsService.getAllSettings=async()=>({
   notification_channel_whatsapp_enabled:"true",
   notification_channel_sms_enabled:"false",
-  notification_channel_telegram_enabled:"false",
-  notification_channel_messenger_enabled:"false",
   notification_rule_pppoe_renewal_whatsapp_enabled:"false",
   notification_rule_pppoe_payment_whatsapp_enabled:"true",
   notification_rule_pppoe_recharge_whatsapp_enabled:"false"
@@ -68,7 +74,6 @@ test("custom PPPoE renewal template replaces runtime variables for WhatsApp",asy
  const sent=[];
  settingsService.getAllSettings=async()=>({
   company_name:"FAZ NETWORK",notification_channel_whatsapp_enabled:"true",notification_channel_sms_enabled:"false",
-  notification_channel_telegram_enabled:"false",notification_channel_messenger_enabled:"false",
   notification_rule_pppoe_renewal_whatsapp_enabled:"true"
  });
  db.query=async(sql,params)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"Hi {name}, {username} renews until {expiry_date} at {company_name}."}]}:{rows:[]};
@@ -97,8 +102,6 @@ for(const scenario of [
    company_name:"FAZ NETWORK",
    notification_channel_whatsapp_enabled:"true",
    notification_channel_sms_enabled:"false",
-   notification_channel_telegram_enabled:"false",
-   notification_channel_messenger_enabled:"false",
    [scenario.rule]:"true"
   });
   db.query=async(sql,params)=>sql.includes("FROM notification_templates")
@@ -123,43 +126,6 @@ for(const scenario of [
 }
 
 
-test("Messenger delivery uses linked PSID and custom template replacement",async()=>{
- const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
- const messengerService=require("../services/messengerService"),originalSend=messengerService.sendMessengerMessage;
- const sent=[];
- settingsService.getAllSettings=async()=>({
-  company_name:"FAZ NETWORK",
-  notification_channel_messenger_enabled:"true",
-  notification_rule_pppoe_expired_messenger_enabled:"true"
- });
- db.query=async(sql)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"Dear {name}, account {username} expired on {expiry_date}."}]}:{rows:[]};
- messengerService.sendMessengerMessage=async(psid,message,tag)=>{sent.push({psid,message,tag});return {success:true};};
- try{
-  const result=await dispatchNow({userType:"pppoe",event:"pppoe_expired",customer:{username:"alice",full_name:"Alice",messenger_psid:"998877"},username:"alice",message:"Fallback",variables:{expiry_date:"2026-10-16"}});
-  assert.equal(result.success,true);
-  assert.deepEqual(sent,[{psid:"998877",message:"Dear Alice, account alice expired on 2026-10-16.",tag:undefined}]);
- }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;messengerService.sendMessengerMessage=originalSend;}
-});
-
-test("Messenger dispatch skips customers without a linked PSID",async()=>{
- const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
- const messengerService=require("../services/messengerService"),originalSend=messengerService.sendMessengerMessage;
- let sent=0;
- settingsService.getAllSettings=async()=>({
-  notification_channel_messenger_enabled:"true",
-  notification_rule_pppoe_payment_messenger_enabled:"true"
- });
- db.query=async()=>({rows:[]});
- messengerService.sendMessengerMessage=async()=>{sent++;return {success:true};};
- try{
-  const result=await dispatchNow({userType:"pppoe",event:"payment",customer:{username:"unlinked-user"},username:"unlinked-user",message:"Payment received"});
-  assert.equal(result.success,true);
-  assert.equal(sent,0);
-  assert.equal(result.results.length,0);
- }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;messengerService.sendMessengerMessage=originalSend;}
-});
-
-
 test("Email dispatch renders the email subject and HTML template with escaped customer variables",async()=>{
  const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
  const emailService=require("../services/emailService"),originalSend=emailService.sendEmail;
@@ -167,8 +133,7 @@ test("Email dispatch renders the email subject and HTML template with escaped cu
  settingsService.getAllSettings=async()=>({
   company_name:"FAZ NETWORK",notification_channel_email_enabled:"true",
   notification_rule_pppoe_payment_email_enabled:"true",
-  notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false",
-  notification_channel_telegram_enabled:"false",notification_channel_messenger_enabled:"false"
+  notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false"
  });
  db.query=async(sql)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"<p>Hello {name}</p>",email_subject:"Payment {amount} - {company_name}",email_body:"<p>Hello {name}, account {username}</p>"}]}:{rows:[]};
  emailService.sendEmail=async payload=>{sent.push(payload);return {success:true,messageId:"email-test"};};

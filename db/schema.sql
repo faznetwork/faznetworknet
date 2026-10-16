@@ -99,11 +99,7 @@ CREATE TABLE IF NOT EXISTS customers (
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(40);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_link VARCHAR(255);
-ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(150);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_telegram_chat_id ON customers(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id <> '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS facebook_link VARCHAR(500);
-ALTER TABLE customers ADD COLUMN IF NOT EXISTS messenger_psid VARCHAR(150);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_messenger_psid ON customers(messenger_psid) WHERE messenger_psid IS NOT NULL;
 
 -- General application settings (non-customer configuration).
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -131,8 +127,6 @@ INSERT INTO app_settings(key,value) VALUES
  ('sms_device_param_mapping','{"to":"{to}","message":"{message}","token":"{token}"}'),
  ('notification_channel_sms_enabled','true'),
  ('notification_channel_whatsapp_enabled','false'),
- ('notification_channel_telegram_enabled','false'),
- ('notification_channel_messenger_enabled','false'),
  ('notification_channel_email_enabled','false'),
  ('smtp_host',''),
  ('smtp_port','587'),
@@ -142,60 +136,32 @@ INSERT INTO app_settings(key,value) VALUES
  ('email_from_name','FAZ NETWORK Billing'),
  ('email_from_address',''),
  ('whatsapp_enabled','false'),
- ('telegram_bot_token',''),
- ('telegram_default_chat_id',''),
- ('messenger_page_access_token',''),
- ('messenger_page_id',''),
  ('sms_event_welcome','true'),
  ('sms_template_welcome','Welcome to FAZ NETWORK, {name}. Your internet account {username} is ready. Helpline: {support_phone}'),
  ('notification_rule_hotspot_payment_sms_enabled','true'),
  ('notification_rule_hotspot_payment_whatsapp_enabled','false'),
- ('notification_rule_hotspot_payment_telegram_enabled','false'),
- ('notification_rule_hotspot_payment_messenger_enabled','false'),
  ('notification_rule_hotspot_recharge_sms_enabled','true'),
  ('notification_rule_hotspot_recharge_whatsapp_enabled','false'),
- ('notification_rule_hotspot_recharge_telegram_enabled','false'),
- ('notification_rule_hotspot_recharge_messenger_enabled','false'),
  ('notification_rule_hotspot_renewal_sms_enabled','true'),
  ('notification_rule_hotspot_renewal_whatsapp_enabled','false'),
- ('notification_rule_hotspot_renewal_telegram_enabled','false'),
- ('notification_rule_hotspot_renewal_messenger_enabled','false'),
  ('notification_rule_hotspot_welcome_sms_enabled','true'),
  ('notification_rule_hotspot_welcome_whatsapp_enabled','false'),
- ('notification_rule_hotspot_welcome_telegram_enabled','false'),
- ('notification_rule_hotspot_welcome_messenger_enabled','false'),
  ('notification_rule_hotspot_expiry_warning_sms_enabled','false'),
  ('notification_rule_hotspot_expiry_warning_whatsapp_enabled','false'),
- ('notification_rule_hotspot_expiry_warning_telegram_enabled','false'),
- ('notification_rule_hotspot_expiry_warning_messenger_enabled','false'),
  ('notification_rule_hotspot_expired_sms_enabled','false'),
  ('notification_rule_hotspot_expired_whatsapp_enabled','false'),
- ('notification_rule_hotspot_expired_telegram_enabled','false'),
- ('notification_rule_hotspot_expired_messenger_enabled','false'),
  ('notification_rule_pppoe_payment_sms_enabled','true'),
  ('notification_rule_pppoe_payment_whatsapp_enabled','false'),
- ('notification_rule_pppoe_payment_telegram_enabled','false'),
- ('notification_rule_pppoe_payment_messenger_enabled','false'),
  ('notification_rule_pppoe_recharge_sms_enabled','false'),
  ('notification_rule_pppoe_recharge_whatsapp_enabled','false'),
- ('notification_rule_pppoe_recharge_telegram_enabled','false'),
- ('notification_rule_pppoe_recharge_messenger_enabled','false'),
  ('notification_rule_pppoe_renewal_sms_enabled','true'),
  ('notification_rule_pppoe_renewal_whatsapp_enabled','false'),
- ('notification_rule_pppoe_renewal_telegram_enabled','false'),
- ('notification_rule_pppoe_renewal_messenger_enabled','false'),
  ('notification_rule_pppoe_welcome_sms_enabled','false'),
  ('notification_rule_pppoe_welcome_whatsapp_enabled','false'),
- ('notification_rule_pppoe_welcome_telegram_enabled','false'),
- ('notification_rule_pppoe_welcome_messenger_enabled','false'),
  ('notification_rule_pppoe_expiry_warning_sms_enabled','true'),
  ('notification_rule_pppoe_expiry_warning_whatsapp_enabled','false'),
- ('notification_rule_pppoe_expiry_warning_telegram_enabled','false'),
- ('notification_rule_pppoe_expiry_warning_messenger_enabled','false'),
  ('notification_rule_pppoe_expired_sms_enabled','true'),
  ('notification_rule_pppoe_expired_whatsapp_enabled','false'),
- ('notification_rule_pppoe_expired_telegram_enabled','false'),
- ('notification_rule_pppoe_expired_messenger_enabled','false')
 ON CONFLICT(key) DO NOTHING;
 
 -- Idempotency ledger for outbound SMS events; contains no payment transaction data.
@@ -751,7 +717,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
 CREATE TABLE IF NOT EXISTS notification_templates (
   id BIGSERIAL PRIMARY KEY,
   event_key VARCHAR(80) NOT NULL,
-  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','telegram','messenger','email')),
+  channel VARCHAR(20) NOT NULL CHECK (channel IN ('whatsapp','sms','email')),
   template_body TEXT NOT NULL,
   email_subject TEXT,
   email_body TEXT,
@@ -780,7 +746,7 @@ BEGIN
   ) THEN
     ALTER TABLE notification_templates
       ADD CONSTRAINT notification_templates_channel_check
-      CHECK (channel IN ('whatsapp','sms','telegram','messenger','email'));
+      CHECK (channel IN ('whatsapp','sms','email'));
   END IF;
 END;
 $faz_email_template_channel$;

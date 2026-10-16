@@ -3,8 +3,6 @@ const settingsService=require("./appSettings");
 const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
-const messengerService=require("./messengerService");
-const telegramService=require("./telegramService");
 const emailService=require("./emailService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
@@ -72,7 +70,7 @@ function defaultEmailTemplate(event,context){
  return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
 }
 
-async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},messengerRecipientId,channels}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},channels}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to;
  const recipientPhone=normalizePhone(rawPhone);
@@ -84,11 +82,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
  const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
- const escapeTelegramHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
- const textFor=async channel=>{
-  const variables=channel==="telegram"?Object.fromEntries(Object.entries(context).map(([key,value])=>[key,value===null||value===undefined?value:escapeTelegramHtml(value)])):context;
-  return formatMessage(settings,eventName,variables,message,await getCustomTemplate(type,rawEvent,eventName,channel));
- };
+ const textFor=async channel=>formatMessage(settings,eventName,context,message,await getCustomTemplate(type,rawEvent,eventName,channel));
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
@@ -125,25 +119,6 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
    return emailService.sendEmail({to:recipientEmail,subject,html,text});
   }]);
  }
- if(channelEnabled("telegram")&&ruleEnabled("telegram")){
-  let telegramChatId=String(customer?.telegram_chat_id||"").trim();
-  if(!telegramChatId&&customerUsername!=="unknown"){
-   try{const linked=await db.query("SELECT telegram_chat_id FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);telegramChatId=String(linked.rows?.[0]?.telegram_chat_id||"").trim();}
-   catch(error){console.warn("[Telegram] Chat ID lookup failed for customer "+customerUsername+": "+String(error?.message||error).slice(0,160));}
-  }
-  telegramChatId=telegramChatId||String(settings.telegram_default_chat_id||"").trim();
-  if(!telegramChatId)jobs.push(["telegram",async()=>({success:false,error:"No customer Telegram Chat ID is linked and no default Chat ID is configured."})]);
-  else jobs.push(["telegram",async()=>telegramService.sendTelegramMessage(telegramChatId,await textFor("telegram"),{parse_mode:"HTML",disable_web_page_preview:true})]);
- }
- if(channelEnabled("messenger")&&ruleEnabled("messenger")){
-  let psid=String(customer?.messenger_psid||"").trim();
-  if(!psid&&customerUsername!=="unknown"){
-   try{const linked=await db.query("SELECT messenger_psid FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);psid=String(linked.rows?.[0]?.messenger_psid||"").trim();}
-   catch(error){console.warn("[Messenger] PSID lookup failed for customer "+customerUsername+": "+String(error?.message||error).slice(0,160));}
-  }
-  if(!psid)console.info("[Messenger] Skipped: Customer "+customerUsername+" has not linked their Facebook Messenger.");
-  else jobs.push(["messenger",async()=>messengerService.sendMessengerMessage(psid,await textFor("messenger"))]);
- }
  const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
  return {success:results.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:results.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}))};
 }
@@ -153,12 +128,10 @@ function dispatchNotification(payload={}){
  task.then(result=>{if(!result.success)console.warn("[Notification Hub] One or more channel deliveries failed:",JSON.stringify({event:payload.event,userType:payload.userType,results:result.results||[],error:result.error}));});
  return {accepted:true,task};
 }
-async function testChannel(channel,{to,message="FAZ NETWORK test notification",messengerRecipientId}={}){
+async function testChannel(channel,{to,message="FAZ NETWORK test notification"}={}){
  const settings=await settingsService.getAllSettings();
  if(channel==="sms"){if(String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")==="disabled")throw new Error("SMS engine is disabled. Select a provider mode and save settings first.");return smsService.sendSms({to,message,event:"manual",settings});}
  if(channel==="whatsapp")return whatsappService.sendMessage({to,message});
- if(channel==="telegram")return telegramService.sendTelegramMessage(to||settings.telegram_default_chat_id,message,{parse_mode:"HTML",disable_web_page_preview:true});
- if(channel==="messenger")return messengerService.sendMessengerMessage(messengerRecipientId,message);
  throw new Error("Unsupported notification channel.");
 }
 module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone};
