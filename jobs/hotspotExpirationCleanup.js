@@ -182,11 +182,16 @@ function createHotspotExpirationCleanup(deps = {}) {
         // means its one-shot expiry scheduler (or an administrator) removed it.
         // Do not infer absence while RouterOS itself is unreachable.
         const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
-        const missingMacUser = snapshotAvailable && !user && macNamedVoucher &&
+        // A renewal is deliberately staged in PostgreSQL before RouterOS is touched.
+        // The old RouterOS scheduler may remove the prior user at its original deadline;
+        // do not mistake that expected gap for expiry while the staged cumulative expiry is still future.
+        const stagedFutureRenewal = effectiveStatus === "pending_claim" && voucher.renewal_stacked === true &&
+          expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
+        const missingMacUser = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
           ["active", "unused", "pending_claim"].includes(effectiveStatus);
-        const commentExpiryReached = !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
+        const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
-        const routerExpiryReached = Boolean(user && routerUserExpired(user, schedulerNames));
+        const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
         if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
         await database.query(
