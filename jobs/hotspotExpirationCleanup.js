@@ -233,7 +233,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     const archived = await database.query(
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
       "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
-      "FROM transactions t INNER JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) " +
+      "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
       "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '3 days' " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );
