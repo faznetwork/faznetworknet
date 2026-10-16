@@ -53,7 +53,7 @@ async function runBillingExpiration(){
     // Expiration dates are Bangladesh calendar dates. An explicit migration
     // override allows billing to be marked expired without changing live service.
     const q=await db.query(
-      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
+      "SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
       [EXPIRED_PROFILE,graceDays]
     );
     if(!q.rows.length){
@@ -111,7 +111,7 @@ async function runBillingExpiration(){
         }
 
         if(!overridden&&customer.phone){
-          require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"expired",to:customer.phone,username:customer.username,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",variables:{name:customer.full_name||customer.username,username:customer.username,expiry_date:String(customer.expiration_date||"").slice(0,10)}});
+          require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"pppoe_expired",to:customer.phone,username:customer.username,message:"প্রিয় {name}, আপনার FAZ NETWORK সংযোগের মেয়াদ আজ শেষ হয়েছে এবং সংযোগটি সাময়িকভাবে বন্ধ রয়েছে। সংযোগটি পুনরায় চালু করতে রিচার্জ করুন। ধন্যবাদ।",variables:{name:customer.full_name||customer.username,username:customer.username,package:customer.package_name||"",expiry_date:String(customer.expiration_date||"").slice(0,10)}});
         }
 
         await logAuditAction({
