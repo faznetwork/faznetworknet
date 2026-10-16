@@ -93,7 +93,7 @@ function createHotspotExpirationCleanup(deps = {}) {
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
     try {
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
