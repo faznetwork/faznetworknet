@@ -4657,9 +4657,6 @@ async function deletePlan(id,name){
             document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';
             document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Gateway token saved. Leave blank to retain it.':'No gateway token configured.';
             
-            
-            document.getElementById('messengerAppSecretHint').textContent=s.messenger_app_secret_configured?'App Secret saved. Leave blank to retain it.':'No App Secret configured; webhook signatures will not be checked until one is saved.';
-            
             document.getElementById('smtpPasswordHint').textContent=s.smtp_password_configured?'SMTP password saved. Leave blank to retain it.':'No SMTP password configured.';document.getElementById('emailAppsScriptTokenHint').textContent=s.email_apps_script_token_configured?'Secret token saved. Leave blank to retain it.':'No Apps Script token configured.';
             renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
             renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
