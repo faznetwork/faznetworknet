@@ -5718,6 +5718,10 @@ async function deletePlan(id,name){
         async function openManualMatchModal(trxId) {
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
             const t = translations[lang] || translations.en;
+            const tx = (currentPaymentRows || []).find(row => String(row.trx_id || '').trim().toLowerCase() === String(trxId || '').trim().toLowerCase()) || {};
+            const senderPhone = formatBdPhoneNumber(tx.sender_phone || '');
+            const txAmount = Number(tx.amount || 0);
+            const defaultType = String(tx.customer_type || '').toLowerCase() === 'hotspot' ? 'hotspot' : 'pppoe';
             const modal = document.createElement('div');
             modal.className = 'modal fade';
             modal.innerHTML = `
@@ -5726,31 +5730,119 @@ async function deletePlan(id,name){
                         <div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-check text-success me-2"></i>${escapeHtml(t.manual_match)}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                         <div class="modal-body">
                             <div class="mb-3"><label class="form-label" data-key="trx_txnid">${escapeHtml(t.trx_txnid)}</label><input class="form-control" id="manualMatchTrx" value="${escapeHtml(trxId)}" readonly></div>
-                            <div class="mb-3"><label class="form-label" data-key="username">${escapeHtml(t.username)}</label><input class="form-control" id="manualMatchUsername" placeholder="${escapeHtml(t.enter_username)}"></div>
+                            <div class="mb-3">
+                                <label class="form-label">Service Type</label>
+                                <div class="btn-group w-100" role="group" aria-label="Manual assignment service type">
+                                    <input type="radio" class="btn-check" name="manualMatchServiceType" id="manualMatchTypePppoe" value="pppoe" ${defaultType === 'pppoe' ? 'checked' : ''}>
+                                    <label class="btn btn-outline-success" for="manualMatchTypePppoe">PPPoE</label>
+                                    <input type="radio" class="btn-check" name="manualMatchServiceType" id="manualMatchTypeHotspot" value="hotspot" ${defaultType === 'hotspot' ? 'checked' : ''}>
+                                    <label class="btn btn-outline-success" for="manualMatchTypeHotspot">Hotspot</label>
+                                </div>
+                            </div>
+                            <div class="mb-3" id="manualMatchPppoeFields">
+                                <label class="form-label" data-key="username">${escapeHtml(t.username)}</label>
+                                <input class="form-control" id="manualMatchUsername" placeholder="${escapeHtml(t.enter_username)}" autocomplete="off">
+                            </div>
+                            <div id="manualMatchHotspotFields" class="d-none">
+                                <div class="mb-3">
+                                    <label class="form-label">Customer Mobile Number / Voucher Phone</label>
+                                    <input class="form-control" id="manualMatchPhone" inputmode="numeric" maxlength="11" placeholder="017XXXXXXXX" value="${escapeHtml(senderPhone === '—' ? '' : senderPhone)}" autocomplete="tel">
+                                    <div class="form-text">Transaction sender: ${escapeHtml(senderPhone)}. Confirm the customer's number before assigning.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Hotspot Package</label>
+                                    <select class="form-select" id="manualMatchPackage"><option value="">Loading active packages…</option></select>
+                                    <div class="form-text">Transaction amount: ৳${txAmount.toFixed(2)}. Matching-price packages are listed first; you may select another package, but the backend requires an exact amount match.</div>
+                                </div>
+                                <div class="small text-muted">Voucher will be staged for activation on the customer's first Wi-Fi login; no RouterOS changes are made by manual assignment.</div>
+                            </div>
                         </div>
-                        <div class="modal-footer"><button class="btn btn-light border" data-bs-dismiss="modal" data-key="cancel">${escapeHtml(t.cancel)}</button><button class="btn btn-theme" onclick="submitManualMatch()" data-key="match_payment">${escapeHtml(t.match_payment)}</button></div>
+                        <div class="modal-footer"><button class="btn btn-light border" data-bs-dismiss="modal" data-key="cancel">${escapeHtml(t.cancel)}</button><button class="btn btn-theme" id="manualMatchSubmit" onclick="submitManualMatch()" data-key="match_payment">${escapeHtml(t.match_payment)}</button></div>
                     </div>
                 </div>`;
             document.body.appendChild(modal);
             const instance = getOrCreateModal(modal);
             modal.addEventListener('hidden.bs.modal', () => modal.remove());
+            const typeInputs = modal.querySelectorAll('input[name="manualMatchServiceType"]');
+            const updateType = () => {
+                const selected = modal.querySelector('input[name="manualMatchServiceType"]:checked')?.value || 'pppoe';
+                document.getElementById('manualMatchPppoeFields').classList.toggle('d-none', selected !== 'pppoe');
+                document.getElementById('manualMatchHotspotFields').classList.toggle('d-none', selected !== 'hotspot');
+                if (selected === 'hotspot') void loadManualMatchHotspotPackages(txAmount);
+            };
+            typeInputs.forEach(input => input.addEventListener('change', updateType));
             instance.show();
-            setTimeout(()=>document.getElementById('manualMatchUsername')?.focus(),300);
+            updateType();
+            setTimeout(() => document.getElementById(defaultType === 'hotspot' ? 'manualMatchPhone' : 'manualMatchUsername')?.focus(), 300);
+        }
+
+        let manualMatchPackagesPromise = null;
+        async function loadManualMatchHotspotPackages(transactionAmount) {
+            const select = document.getElementById('manualMatchPackage');
+            if (!select) return;
+            select.innerHTML = '<option value="">Loading active packages…</option>';
+            try {
+                if (!manualMatchPackagesPromise) {
+                    manualMatchPackagesPromise = jsonFetch('/api/hotspot/profiles').then(data => (data.profiles || []).filter(profile => profile && profile.name && Number(profile.price) > 0).map(profile => ({
+                            id: String(profile.profile_id || profile.profileId || profile.id || profile.name),
+                            name: String(profile.name),
+                            price: Number(profile.price),
+                            validity: String(profile.validityLabel || profile.validity || '')
+                        })));
+                }
+                const packages = await manualMatchPackagesPromise;
+                if (!document.getElementById('manualMatchPackage')) return;
+                const sorted = packages.slice().sort((a, b) => {
+                    const aMatch = Math.round(a.price * 100) === Math.round(Number(transactionAmount) * 100) ? 0 : 1;
+                    const bMatch = Math.round(b.price * 100) === Math.round(Number(transactionAmount) * 100) ? 0 : 1;
+                    return aMatch - bMatch || a.price - b.price || a.name.localeCompare(b.name);
+                });
+                select.innerHTML = '<option value="">Select Hotspot package</option>' + sorted.map(profile => {
+                    const matches = Math.round(profile.price * 100) === Math.round(Number(transactionAmount) * 100);
+                    const label = profile.name + ' — ৳' + profile.price.toFixed(2) + (profile.validity ? ' (' + profile.validity + ')' : '') + (matches ? ' ✓ amount matches' : '');
+                    return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(label) + '</option>';
+                }).join('');
+                const exact = sorted.find(profile => Math.round(profile.price * 100) === Math.round(Number(transactionAmount) * 100);
+                if (exact) select.value = exact.id;
+            } catch (error) {
+                manualMatchPackagesPromise = null;
+                if (document.getElementById('manualMatchPackage')) select.innerHTML = '<option value="">Could not load packages — retry by switching service type</option>';
+                console.error('[Manual Match] Hotspot package load failed:', error);
+            }
         }
 
         async function submitManualMatch() {
             const trxId = document.getElementById('manualMatchTrx')?.value.trim();
-            const username = document.getElementById('manualMatchUsername')?.value.trim();
-            if (!trxId || !username) return alert('Transaction ID and username are required.');
+            const serviceType = document.querySelector('input[name="manualMatchServiceType"]:checked')?.value || 'pppoe';
+            const payload = { trxId, service_type: serviceType };
+            if (serviceType === 'hotspot') {
+                payload.phone = document.getElementById('manualMatchPhone')?.value.trim();
+                payload.package_id = document.getElementById('manualMatchPackage')?.value;
+                if (!trxId || !payload.phone || !payload.package_id) return alert('Transaction ID, customer phone and Hotspot package are required.');
+            } else {
+                payload.username = document.getElementById('manualMatchUsername')?.value.trim();
+                if (!trxId || !payload.username) return alert('Transaction ID and PPPoE username are required.');
+            }
+            const submit = document.getElementById('manualMatchSubmit');
+            if (submit) { submit.disabled = true; submit.textContent = 'Matching…'; }
             try {
                 await jsonFetch('/api/payments/manual-match', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({trxId, username})
+                    body:JSON.stringify(payload)
                 });
                 document.querySelector('.modal.show .btn-close')?.click();
                 await fetchPaymentsSection();
-            } catch (error) { alert(error.message); }
+            } catch (error) {
+                alert(error.message);
+                if (submit) { submit.disabled = false; submit.textContent = tSafeManualMatchLabel(); }
+            }
+        }
+
+        function tSafeManualMatchLabel() {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            const t = translations[lang] || translations.en;
+            return t.match_payment || 'Match Payment';
         }
 
         emergencyUiUnfreeze();
