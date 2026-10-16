@@ -6203,7 +6203,7 @@ async function deletePlan(id,name){
                                 <div class="customer-search-wrap customer-toolbar-search">
                                     <div class="input-group">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-secondary"></i></span>
-                                        <input id="customerLiveSearch" type="search" value="" autocomplete="off" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
+                                        <input id="customerLiveSearch" type="search" value="" readonly autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
                                     </div>
                                 </div>
                                 <div class="customer-toolbar-actions">
@@ -6244,13 +6244,28 @@ async function deletePlan(id,name){
                         </div>
                     </div>
                 </section>`;
-            // Prevent browser autofill/session restoration from leaking the admin username into this filter.
-            // Only restore a filter when the URL explicitly carries a search parameter.
+            // Keep this dynamically rendered filter read-only until a real user focuses it.
+            // Browser autofill/password managers can ignore autocomplete hints; readonly prevents
+            // them from injecting a saved login such as "admin" during initial render.
+            // Preserve search only when the URL explicitly contains ?search=...
             const customerSearchInput = content.querySelector('#customerLiveSearch');
             if (customerSearchInput) {
                 const params = new URLSearchParams(window.location.search);
-                customerSearchInput.value = params.has('search') ? String(params.get('search') || '') : '';
+                const hasExplicitSearch = params.has('search');
+                customerSearchInput.value = hasExplicitSearch ? String(params.get('search') || '') : '';
                 filterCustomerRows(customerSearchInput.value);
+
+                const enableCustomerSearch = () => {
+                    if (customerSearchInput.readOnly) {
+                        if (!hasExplicitSearch) {
+                            customerSearchInput.value = '';
+                            filterCustomerRows('');
+                        }
+                        customerSearchInput.readOnly = false;
+                    }
+                };
+                customerSearchInput.addEventListener('pointerdown', enableCustomerSearch, { once: true });
+                customerSearchInput.addEventListener('focus', enableCustomerSearch, { once: true });
             }
             updateLanguage(lang);
         }
