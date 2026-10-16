@@ -21,3 +21,10 @@
 #hotspotProfile360Modal .profile360-mac-lock{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border:1px solid #dbeafe;background:#eff6ff;border-radius:12px}
 #hotspotProfile360Modal .profile360-mac-lock strong{display:block;font-size:14px;color:#1e3a8a}#hotspotProfile360Modal .profile360-mac-lock small{display:block;color:#475569;font-size:12px}
 @media(max-width:767.98px){.hotspot-all-users-view .hotspot-live-table{min-width:780px}.hotspot-all-users-view .hotspot-live-table tbody tr[data-hotspot-row]>td{padding:10px}.hotspot-exact-expiry{min-width:140px}}
+
+/* Explicitly readable and keyboard-safe Profile 360 form controls. */
+#hotspotProfile360Modal{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+#hotspotProfile360Modal .modal-footer{gap:10px}
+#hotspotProfile360Modal #profile360Save{min-width:140px;min-height:44px;font-weight:800}
+#hotspotProfile360Modal .modal-footer [data-bs-dismiss="modal"]{min-height:44px;min-width:100px}
+#hotspotProfile360Modal .form-control,#hotspotProfile360Modal .form-select{border-color:#cbd5e1;border-radius:10px;line-height:1.45}

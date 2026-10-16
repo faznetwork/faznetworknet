@@ -41,5 +41,24 @@ test("All Hotspot Users renders a responsive master-detail Subscriber 360 worksp
  for(const id of ["hotspotMasterSearch","subscriberMasterList","hotspot-total-count","subscriberDetailCard","subscriberDetailBody","detailCustomerName","detailPhone","detailMac","detailIp","detailUptime","detailExpiry","detailRemaining","actionRenewBtn","actionEditBtn","actionKickBtn","actionDeleteBtn"]) assert.ok(js.includes(id), "missing workspace element: "+id);
  assert.match(js,/\/api\/hotspot\/users\/kick/);assert.match(js,/\/api\/hotspot\/users\/remove/);assert.ok(js.includes('encodeURIComponent(id)+"/profile"'));
  assert.match(js,/renewHotspotUser/);assert.match(js,/editHotspotUser/);assert.match(js,/active-subscriber-item/);assert.match(js,/scrollIntoView/);
- assert.match(css,/@media\s*\(max-width:\s*991\.98px\)/);assert.match(css,/position:\s*sticky/);
+ assert.match(css,/@media\s*\(max-width:\s*767\.98px\)/);assert.match(css,/position:\s*sticky/);
+});
+
+test("Profile 360 saves explicitly and opens Subscriber 360 in a mobile bottom sheet", () => {
+ const js=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8");
+ const master=fs.readFileSync(path.join(root,"public/js/hotspot-master-detail.js"),"utf8");
+ const masterCss=fs.readFileSync(path.join(root,"public/css/hotspot-master-detail.css"),"utf8");
+ const profileCss=fs.readFileSync(path.join(root,"public/css/hotspot-profile360.css"),"utf8");
+ assert.match(js,/profile360SubmitBound/);
+ assert.match(js,/method:"PUT"/);
+ assert.match(js,/Profile updated successfully!/);
+ assert.ok(js.includes("data.message||data.error"));
+ assert.match(master,/mobileSubscriberModal/);
+ assert.match(master,/mobile-subscriber-back/);
+ assert.match(master,/mobile-subscriber-close/);
+ assert.match(master,/max-width: 767\.98px/);
+ assert.match(masterCss,/#mobileSubscriberModal/);
+ assert.match(masterCss,/height:min\(94dvh,900px\)/);
+ assert.match(profileCss,/safe-area-inset-bottom/);
+ assert.match(profileCss,/min-height:46px/);
 });
