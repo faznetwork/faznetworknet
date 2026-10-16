@@ -7,6 +7,12 @@ const paymentController = require("../controllers/paymentController");
 
 const root = path.resolve(__dirname, "..");
 const source = fs.readFileSync(path.join(root, "controllers/paymentController.js"), "utf8");
+const portalSource = fs.readFileSync(path.join(root, "views/portal.ejs"), "utf8");
+
+test("Captive portal submits an explicit Hotspot type and package_id", () => {
+  assert.match(portalSource, /service_type:\s*"hotspot"/);
+  assert.match(portalSource, /package_id:selectedProfile/);
+});
 
 test("Hotspot-originated webhook payments never enter the PPPoE customer resolver", () => {
   const webhook = source.slice(source.indexOf("async function webhook"), source.indexOf("async function dynamicWebhook"));
