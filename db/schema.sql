@@ -264,12 +264,12 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS profile_id VARCHAR(100);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_address VARCHAR(17);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS transaction_id BIGINT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS renewal_stacked BOOLEAN NOT NULL DEFAULT FALSE;
-DO $
+DO $hotspot_fk$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hotspot_vouchers_transaction_id_fkey') THEN
     ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL;
   END IF;
-END $;
+END $hotspot_fk$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_transaction_id ON hotspot_vouchers(transaction_id) WHERE transaction_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS hotspot_voucher_payments (
   transaction_id BIGINT PRIMARY KEY REFERENCES transactions(id) ON DELETE RESTRICT,
