@@ -121,10 +121,11 @@ async function sendSms({to,phone,message,event="manual",variables={},token:overr
  const providerResponse=await requestProvider({url:endpoint,method,params,token:apiToken});
  return {success:true,mode,method,providerResponse};
 }
-async function sendNotification({to,phone,message,event,variables={},...extra}={}){
+async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
  const settings=await settingsService.getAllSettings();const config=EVENT_CONFIG[event];
  if(config&&!settingsService.bool(settings[config.enabled]))return {success:true,skipped:true,reason:"event_disabled"};
  const resolved={company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...extra,...variables};
- return sendSms({to,phone,message:eventTemplate(settings,event,resolved,message),event,variables:resolved,settings});
+ const rendered=useMessageDirectly?renderTemplate(message,resolved):eventTemplate(settings,event,resolved,message);
+ return sendSms({to,phone,message:rendered,event,variables:resolved,settings});
 }
 module.exports={sendSms,sendNotification,renderTemplate,eventTemplate,EVENT_CONFIG,parseMapping,DEFAULT_MAPPING};

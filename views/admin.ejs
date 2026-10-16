@@ -2062,6 +2062,8 @@
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="telegram">Telegram</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="messenger">Messenger</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="rules">Notification Rules</button></li>
+        <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="templates"><i class="bi bi-file-earmark-text me-1"></i>Message Templates</button></li>
+        <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="broadcast"><i class="bi bi-megaphone me-1"></i>Bulk Broadcast</button></li>
       </ul>
       <form id="systemSmsForm" novalidate>
         <section data-notify-panel="sms">
@@ -2111,6 +2113,45 @@
         </section>
         <div id="systemSmsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemSmsSaveBtn" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Notification Hub</button></div>
       </form>
+      <section data-notify-panel="templates" style="display:none">
+        <div class="card border-0 bg-light-subtle"><div class="card-body p-3 p-lg-4">
+          <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3"><div><h6 class="fw-bold mb-1">Custom Message Templates</h6><p class="small text-muted mb-0">Customize messages for each event and delivery channel. Unsaved templates continue to use the existing default messages.</p></div><span class="badge text-bg-success">Live variable preview</span></div>
+          <div class="row g-3">
+            <div class="col-md-7"><label class="form-label" for="notifyTemplateEvent">Notification Event</label><select id="notifyTemplateEvent" class="form-select">
+              <option value="pppoe_renewal">PPPoE Renewal</option><option value="pppoe_payment">PPPoE Payment Receipt</option><option value="pppoe_expiry_warning">PPPoE Expiry Warning</option><option value="hotspot_purchase">Hotspot Purchase</option><option value="hotspot_renewal">Hotspot Recharge / Renewal</option><option value="hotspot_expiry_warning">Hotspot Expiry Warning</option><option value="welcome_message">Welcome Message</option>
+            </select></div>
+            <div class="col-md-5"><label class="form-label" for="notifyTemplateChannel">Channel</label><select id="notifyTemplateChannel" class="form-select"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="telegram">Telegram</option><option value="messenger">Messenger</option></select></div>
+            <div class="col-12"><label class="form-label" for="notifyTemplateBody">Message Template</label><textarea id="notifyTemplateBody" class="form-control font-monospace" rows="5" maxlength="4000" placeholder="Dear {name}, your package {package} is renewed until {expiry_date}."></textarea><div class="d-flex justify-content-between gap-2 mt-1"><small class="text-muted">Click a variable to insert it at the cursor.</small><small id="notifyTemplateCharCount" class="text-muted">0 / 4000</small></div></div>
+            <div class="col-12"><div class="small fw-semibold mb-2">Available Variables</div><div class="d-flex flex-wrap gap-2" id="notifyTemplateVariables">
+              <button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{name}">+ {name}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{username}">+ {username}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{package}">+ {package}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{amount}">+ {amount}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{expiry_date}">+ {expiry_date}</button><button type="button" class="btn btn-sm btn-outline-success" data-template-variable="{company_name}">+ {company_name}</button>
+            </div></div>
+            <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" id="notifyTemplateActive" type="checkbox" checked><label class="form-check-label fw-semibold" for="notifyTemplateActive">Use this custom template for this event and channel</label></div></div>
+            <div class="col-12"><div class="border rounded-3 bg-white p-3"><div class="d-flex align-items-center justify-content-between gap-2 mb-2"><span class="small fw-bold text-muted">CUSTOMER PREVIEW</span><span id="notifyTemplatePreviewLength" class="small text-muted">0 characters</span></div><div id="notifyTemplatePreview" class="text-break" style="white-space:pre-wrap">Your message preview will appear here.</div></div></div>
+          </div>
+          <div id="notifyTemplateResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-3"><button type="button" id="notifyTemplateSaveBtn" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Templates</button></div>
+        </div></div>
+      </section>
+      <section data-notify-panel="broadcast" style="display:none">
+        <div class="card border-0 bg-light-subtle"><div class="card-body p-3 p-lg-4">
+          <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3"><div><h6 class="fw-bold mb-1">Promotional &amp; Service Broadcast</h6><p class="small text-muted mb-0">Messages are sent to saved, valid customer phone numbers only, with a randomized 1.5–3 second pause between recipients.</p></div><span class="badge text-bg-warning">Confirm before sending</span></div>
+          <div class="row g-3">
+            <div class="col-md-7"><label class="form-label" for="broadcastTitle">Broadcast Title</label><input id="broadcastTitle" class="form-control" maxlength="200" placeholder="Eid greetings / Planned maintenance" required></div>
+            <div class="col-md-5"><label class="form-label" for="broadcastAudience">Target Audience</label><select id="broadcastAudience" class="form-select"><option value="all">All Customers</option><option value="pppoe">PPPoE Only</option><option value="hotspot">Hotspot Only</option><option value="expired_due">Expired / Due Users Only</option></select></div>
+            <div class="col-12"><div class="border rounded-3 bg-white p-3 d-flex flex-wrap align-items-center justify-content-between gap-3"><div><div class="small text-muted">Eligible unique recipients</div><div class="fs-3 fw-bold text-success" id="broadcastRecipientCount">—</div><div class="small text-muted" id="broadcastRecipientNote">Counting valid phone numbers…</div></div><button type="button" id="broadcastRefreshCount" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise me-1"></i>Refresh count</button></div></div>
+            <div class="col-12"><span class="form-label d-block mb-2">Delivery Channels</span><div class="d-flex flex-wrap gap-4"><div class="form-check"><input class="form-check-input" type="checkbox" id="broadcastWhatsApp" value="whatsapp" checked><label class="form-check-label" for="broadcastWhatsApp"><i class="bi bi-whatsapp text-success me-1"></i>WhatsApp</label></div><div class="form-check"><input class="form-check-input" type="checkbox" id="broadcastSms" value="sms"><label class="form-check-label" for="broadcastSms"><i class="bi bi-chat-dots me-1"></i>SMS</label></div></div><div class="form-text">Enable the selected channel and configure its gateway in Notification Hub before sending.</div></div>
+            <div class="col-12"><label class="form-label" for="broadcastMessage">Message</label><textarea id="broadcastMessage" class="form-control" rows="5" maxlength="4000" placeholder="Dear {name}, FAZ NETWORK wishes you a joyful festival!"></textarea><div class="d-flex justify-content-between mt-1"><small class="text-muted">Personalization: {name}, {username}, {package}, {amount}, {expiry_date}, {company_name}</small><small id="broadcastMessageCount" class="text-muted">0 / 4000</small></div></div>
+            <div class="col-12"><div class="border rounded-3 bg-white p-3"><div class="small fw-bold text-muted mb-2">MESSAGE PREVIEW</div><div id="broadcastPreview" class="text-break" style="white-space:pre-wrap">Your broadcast preview will appear here.</div></div></div>
+          </div>
+          <div id="broadcastResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-3"><button type="button" id="broadcastStartBtn" class="btn btn-success"><i class="bi bi-megaphone me-1"></i>Start Broadcast</button></div>
+          <div id="broadcastProgressCard" class="card border mt-4" style="display:none"><div class="card-body">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2"><h6 class="fw-bold mb-0">Delivery Progress</h6><span id="broadcastStatusPill" class="badge text-bg-secondary">Queued</span></div>
+            <div class="progress mb-2" role="progressbar" aria-label="Broadcast delivery progress" aria-valuemin="0" aria-valuemax="100" id="broadcastProgressBarWrap"><div id="broadcastProgressBar" class="progress-bar bg-success progress-bar-striped progress-bar-animated" style="width:0%">0%</div></div>
+            <div class="d-flex flex-wrap justify-content-between gap-2 small mb-3"><span id="broadcastProgressSummary">Sent: 0 / 0</span><span id="broadcastProgressFailures" class="text-danger">Failed: 0</span></div>
+            <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Recipient</th><th>Phone</th><th>Status</th><th>Result</th></tr></thead><tbody id="broadcastDeliveryLog"><tr><td colspan="4" class="text-muted small">Waiting for the first delivery result…</td></tr></tbody></table></div>
+          </div></div>
+          <div class="mt-4"><div class="d-flex align-items-center justify-content-between gap-2 mb-2"><h6 class="fw-bold mb-0">Recent Broadcast History</h6><button type="button" id="broadcastHistoryRefresh" class="btn btn-sm btn-outline-secondary">Refresh history</button></div><div id="broadcastHistory" class="small text-muted">No history loaded.</div></div>
+        </div></div>
+      </section>
       <div class="modal fade" id="notificationTestLogModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="notificationTestLogTitle">Notification Test Response</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><pre id="notificationTestLogBody" class="small text-wrap mb-0" style="max-height:55vh;overflow:auto"></pre></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
     </div>
   </div>
@@ -4443,8 +4484,137 @@ async function deletePlan(id,name){
           notificationHubTab=tab;
           document.querySelectorAll('[data-notify-tab]').forEach(button=>button.classList.toggle('active',button.dataset.notifyTab===tab));
           document.querySelectorAll('[data-notify-panel]').forEach(panel=>panel.style.display=panel.dataset.notifyPanel===tab?'block':'none');
+          const saveButton=document.getElementById('systemSmsSaveBtn'),saveResult=document.getElementById('systemSmsResult');
+          if(saveButton)saveButton.style.display=['templates','broadcast'].includes(tab)?'none':'';
+          if(saveResult)saveResult.style.display=['templates','broadcast'].includes(tab)?'none':'';
           if(tab==='whatsapp')refreshWhatsAppStatus();
+          if(tab==='templates')loadNotificationTemplates();
+          if(tab==='broadcast'){loadBroadcastAudienceCount();loadBroadcastHistory();}
         }
+        let notificationTemplateCache=[];
+        let activeBroadcastId=null;
+        let broadcastPollTimer=null;
+        const notificationTemplateDefaults={
+          pppoe_renewal:'Dear {name}, your FAZ NETWORK service renewal is complete. New expiry: {expiry_date}.',
+          pppoe_payment:'Dear {name}, payment of Tk {amount} received. Your service is active until {expiry_date}. Thank you, {company_name}.',
+          pppoe_expiry_warning:'Dear {name}, your internet package expires on {expiry_date}. Please renew to avoid interruption. {company_name}.',
+          hotspot_purchase:'Dear {name}, your Hotspot package {package} purchase is confirmed for Tk {amount}.',
+          hotspot_renewal:'Dear {name}, your Hotspot package {package} has been renewed. Valid until {expiry_date}.',
+          hotspot_expiry_warning:'Dear {name}, your Hotspot package expires on {expiry_date}. Please recharge to continue.',
+          welcome_message:'Welcome to {company_name}, {name}! Your account {username} is ready.'
+        };
+        function notificationTemplatePreview(){
+          const body=document.getElementById('notifyTemplateBody'),preview=document.getElementById('notifyTemplatePreview'),length=document.getElementById('notifyTemplatePreviewLength'),count=document.getElementById('notifyTemplateCharCount');
+          if(!body||!preview)return;
+          const sample={name:'Alex Rahman',username:'alex017',package:'30 Mbps Package',amount:'525',expiry_date:'31/10/2026',company_name:'FAZ NETWORK'};
+          const rendered=body.value.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(all,key)=>Object.prototype.hasOwnProperty.call(sample,key)?sample[key]:all);
+          preview.textContent=rendered||'Your message preview will appear here.';
+          if(length)length.textContent=rendered.length+' characters';
+          if(count)count.textContent=body.value.length+' / 4000';
+        }
+        function selectedNotificationTemplate(){
+          const event=document.getElementById('notifyTemplateEvent')?.value||'pppoe_renewal',channel=document.getElementById('notifyTemplateChannel')?.value||'whatsapp';
+          const saved=notificationTemplateCache.find(t=>t.event_key===event&&t.channel===channel);
+          const body=document.getElementById('notifyTemplateBody'),active=document.getElementById('notifyTemplateActive');
+          if(body)body.value=saved?saved.template_body:(notificationTemplateDefaults[event]||'Dear {name}, {company_name} notification.');
+          if(active)active.checked=saved?Boolean(saved.is_active):true;
+          notificationTemplatePreview();
+        }
+        async function loadNotificationTemplates(){
+          const result=document.getElementById('notifyTemplateResult');
+          try{
+            const response=await fetch('/api/settings/notifications/templates',{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to load templates.');
+            notificationTemplateCache=Array.isArray(data.templates)?data.templates:[];
+            selectedNotificationTemplate();
+            if(result){result.className='small mt-3 text-muted';result.textContent='Loaded '+notificationTemplateCache.length+' saved template(s). Unsaved events use the default message until saved.';}
+          }catch(error){if(result){result.className='small mt-3 text-danger';result.textContent=error.message||'Unable to load templates.';}}
+        }
+        async function saveNotificationTemplate(){
+          const button=document.getElementById('notifyTemplateSaveBtn'),result=document.getElementById('notifyTemplateResult');
+          const payload={event_key:document.getElementById('notifyTemplateEvent').value,channel:document.getElementById('notifyTemplateChannel').value,template_body:document.getElementById('notifyTemplateBody').value,is_active:document.getElementById('notifyTemplateActive').checked};
+          if(button)button.disabled=true;
+          try{
+            const response=await fetch('/api/settings/notifications/templates',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload),cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to save template.');
+            notificationTemplateCache=notificationTemplateCache.filter(t=>!(t.event_key===payload.event_key&&t.channel===payload.channel));notificationTemplateCache.push(data.template);
+            if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Template saved.';}
+          }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save template.';}}
+          finally{if(button)button.disabled=false;}
+        }
+        function broadcastEscape(value){const node=document.createElement('span');node.textContent=value==null?'':String(value);return node.innerHTML;}
+        function broadcastPreview(){
+          const message=document.getElementById('broadcastMessage'),preview=document.getElementById('broadcastPreview'),count=document.getElementById('broadcastMessageCount');
+          if(!message||!preview)return;
+          const sample={name:'Alex Rahman',username:'alex017',package:'30 Mbps Package',amount:'525',expiry_date:'31/10/2026',company_name:'FAZ NETWORK'};
+          preview.textContent=message.value.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(all,key)=>Object.prototype.hasOwnProperty.call(sample,key)?sample[key]:all)||'Your broadcast preview will appear here.';
+          if(count)count.textContent=message.value.length+' / 4000';
+        }
+        async function loadBroadcastAudienceCount(){
+          const group=document.getElementById('broadcastAudience')?.value||'all',count=document.getElementById('broadcastRecipientCount'),note=document.getElementById('broadcastRecipientNote');
+          if(count)count.textContent='…';if(note)note.textContent='Counting unique valid phone numbers…';
+          try{const response=await fetch('/api/notifications/audience-count?group='+encodeURIComponent(group),{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to count recipients.');if(count)count.textContent=Number(data.count||0).toLocaleString();if(note)note.textContent='Unique recipients with valid Bangladesh mobile numbers.';}
+          catch(error){if(count)count.textContent='—';if(note)note.textContent=error.message||'Unable to count recipients.';}
+        }
+        function renderBroadcastHistory(rows){
+          const box=document.getElementById('broadcastHistory');if(!box)return;
+          if(!rows||!rows.length){box.textContent='No broadcasts recorded yet.';return;}
+          box.innerHTML='<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Created</th><th>Title</th><th>Audience</th><th>Delivery</th><th>Status</th></tr></thead><tbody>'+rows.map(row=>'<tr><td>'+broadcastEscape(row.created_at?new Date(row.created_at).toLocaleString():'—')+'</td><td>'+broadcastEscape(row.title)+'</td><td>'+broadcastEscape(row.audience)+'</td><td>'+Number(row.success_count||0)+' / '+Number(row.total_recipients||0)+' <span class="text-danger">('+Number(row.failed_count||0)+' failed)</span></td><td>'+broadcastEscape(row.status)+'</td></tr>').join('')+'</tbody></table></div>';
+        }
+        async function loadBroadcastHistory(){
+          try{const response=await fetch('/api/notifications/broadcast/history',{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to load history.');renderBroadcastHistory(data.broadcasts||[]);}
+          catch(error){const box=document.getElementById('broadcastHistory');if(box)box.textContent=error.message||'Unable to load broadcast history.';}
+        }
+        function renderBroadcastProgress(data){
+          const job=data.broadcast||{},card=document.getElementById('broadcastProgressCard'),bar=document.getElementById('broadcastProgressBar'),pill=document.getElementById('broadcastStatusPill'),summary=document.getElementById('broadcastProgressSummary'),failed=document.getElementById('broadcastProgressFailures'),log=document.getElementById('broadcastDeliveryLog');
+          if(card)card.style.display='block';
+          const percent=Number(job.progress||0);if(bar){bar.style.width=percent+'%';bar.textContent=percent+'%';bar.setAttribute('aria-valuenow',String(percent));bar.classList.toggle('progress-bar-animated',['queued','running'].includes(job.status));}
+          if(pill){pill.textContent=String(job.status||'queued').toUpperCase();pill.className='badge '+(job.status==='completed'?'text-bg-success':job.status==='failed'?'text-bg-danger':'text-bg-primary');}
+          if(summary)summary.textContent='Sent: '+Number(job.sent_count||0)+' / '+Number(job.total_recipients||0);
+          if(failed)failed.textContent='Failed: '+Number(job.failed_count||0);
+          if(log){const rows=data.recipients||[];log.innerHTML=rows.length?rows.map(row=>{const errors=Object.values(row.results||{}).filter(v=>v&&v.success===false).map(v=>v.error).join('; ')||row.error||'—';return '<tr><td>'+broadcastEscape(row.recipient_name||row.username||'—')+'</td><td>'+broadcastEscape(row.phone)+'</td><td>'+broadcastEscape(row.status)+'</td><td class="small text-break">'+broadcastEscape(errors)+'</td></tr>';}).join(''):'<tr><td colspan="4" class="text-muted small">Waiting for the first delivery result…</td></tr>';}
+        }
+        async function pollBroadcastProgress(id){
+          try{
+            const response=await fetch('/api/notifications/broadcast/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to read delivery progress.');
+            renderBroadcastProgress(data);
+            const status=data.broadcast?.status;
+            if(['completed','failed','cancelled'].includes(status)){activeBroadcastId=null;await loadBroadcastHistory();return;}
+            broadcastPollTimer=window.setTimeout(()=>pollBroadcastProgress(id),2200);
+          }catch(error){const result=document.getElementById('broadcastResult');if(result){result.className='small mt-3 text-danger';result.textContent=error.message||'Progress polling failed.';}broadcastPollTimer=window.setTimeout(()=>pollBroadcastProgress(id),5000);}
+        }
+        async function startBulkBroadcast(){
+          const button=document.getElementById('broadcastStartBtn'),result=document.getElementById('broadcastResult');
+          const channels=[];if(document.getElementById('broadcastWhatsApp').checked)channels.push('whatsapp');if(document.getElementById('broadcastSms').checked)channels.push('sms');
+          const title=document.getElementById('broadcastTitle').value.trim(),message=document.getElementById('broadcastMessage').value;
+          const count=Number(String(document.getElementById('broadcastRecipientCount').textContent||'').replace(/,/g,''));
+          if(!title||!message.trim()){if(result){result.className='small mt-3 text-danger';result.textContent='Enter a title and message before sending.';}return;}
+          if(!channels.length){if(result){result.className='small mt-3 text-danger';result.textContent='Select WhatsApp, SMS, or both.';}return;}
+          if(!Number.isFinite(count)||count<1){if(result){result.className='small mt-3 text-danger';result.textContent='No eligible recipients are available. Refresh the audience count.';}return;}
+          if(!window.confirm('Send this message to '+count+' unique recipients via '+channels.join(' + ').toUpperCase()+'? Delivery will be paced at 1.5–3 seconds between recipients. This may send real customer messages.'))return;
+          if(button)button.disabled=true;
+          if(result){result.className='small mt-3 text-muted';result.textContent='Creating broadcast queue…';}
+          try{
+            const response=await fetch('/api/notifications/broadcast',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title,message,audience:document.getElementById('broadcastAudience').value,channels}),cache:'no-store'}),data=await response.json();
+            if(!response.ok||!data.success)throw new Error(data.message||'Unable to queue broadcast.');
+            activeBroadcastId=data.broadcast.id;
+            if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Broadcast queued.';}
+            if(broadcastPollTimer)window.clearTimeout(broadcastPollTimer);
+            await pollBroadcastProgress(activeBroadcastId);
+          }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to start broadcast.';}}
+          finally{if(button)button.disabled=false;}
+        }
+        document.getElementById('notifyTemplateEvent')?.addEventListener('change',selectedNotificationTemplate);
+        document.getElementById('notifyTemplateChannel')?.addEventListener('change',selectedNotificationTemplate);
+        document.getElementById('notifyTemplateBody')?.addEventListener('input',notificationTemplatePreview);
+        document.querySelectorAll('[data-template-variable]').forEach(button=>button.addEventListener('click',()=>{const area=document.getElementById('notifyTemplateBody');if(!area)return;const value=button.dataset.templateVariable||'';area.setRangeText(value,area.selectionStart,area.selectionEnd,'end');area.dispatchEvent(new Event('input',{bubbles:true}));area.focus();}));
+        document.getElementById('notifyTemplateSaveBtn')?.addEventListener('click',saveNotificationTemplate);
+        document.getElementById('broadcastAudience')?.addEventListener('change',loadBroadcastAudienceCount);
+        document.getElementById('broadcastRefreshCount')?.addEventListener('click',loadBroadcastAudienceCount);
+        document.getElementById('broadcastHistoryRefresh')?.addEventListener('click',loadBroadcastHistory);
+        document.getElementById('broadcastMessage')?.addEventListener('input',broadcastPreview);
+        document.getElementById('broadcastStartBtn')?.addEventListener('click',startBulkBroadcast);
         async function loadSystemSettings(force=false){
           if(systemSettingsLoaded&&!force)return;
           try{
