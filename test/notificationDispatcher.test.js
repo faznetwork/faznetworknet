@@ -121,3 +121,40 @@ for(const scenario of [
   }
  });
 }
+
+
+test("Messenger delivery uses linked PSID and custom template replacement",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
+ const messengerService=require("../services/messengerService"),originalSend=messengerService.sendMessengerMessage;
+ const sent=[];
+ settingsService.getAllSettings=async()=>({
+  company_name:"FAZ NETWORK",
+  notification_channel_messenger_enabled:"true",
+  notification_rule_pppoe_expired_messenger_enabled:"true"
+ });
+ db.query=async(sql)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"Dear {name}, account {username} expired on {expiry_date}."}]}:{rows:[]};
+ messengerService.sendMessengerMessage=async(psid,message,tag)=>{sent.push({psid,message,tag});return {success:true};};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"pppoe_expired",customer:{username:"alice",full_name:"Alice",messenger_psid:"998877"},username:"alice",message:"Fallback",variables:{expiry_date:"2026-10-16"}});
+  assert.equal(result.success,true);
+  assert.deepEqual(sent,[{psid:"998877",message:"Dear Alice, account alice expired on 2026-10-16.",tag:undefined}]);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;messengerService.sendMessengerMessage=originalSend;}
+});
+
+test("Messenger dispatch skips customers without a linked PSID",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
+ const messengerService=require("../services/messengerService"),originalSend=messengerService.sendMessengerMessage;
+ let sent=0;
+ settingsService.getAllSettings=async()=>({
+  notification_channel_messenger_enabled:"true",
+  notification_rule_pppoe_payment_messenger_enabled:"true"
+ });
+ db.query=async()=>({rows:[]});
+ messengerService.sendMessengerMessage=async()=>{sent++;return {success:true};};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"payment",customer:{username:"unlinked-user"},username:"unlinked-user",message:"Payment received"});
+  assert.equal(result.success,true);
+  assert.equal(sent,0);
+  assert.equal(result.results.length,0);
+ }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;messengerService.sendMessengerMessage=originalSend;}
+});
