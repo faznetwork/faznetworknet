@@ -273,7 +273,7 @@ END $;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_transaction_id ON hotspot_vouchers(transaction_id) WHERE transaction_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS hotspot_voucher_payments (
   transaction_id BIGINT PRIMARY KEY REFERENCES transactions(id) ON DELETE RESTRICT,
-  voucher_id BIGINT NOT NULL REFERENCES hotspot_vouchers(id) ON DELETE RESTRICT,
+  voucher_id BIGINT REFERENCES hotspot_vouchers(id) ON DELETE SET NULL,
   phone VARCHAR(40) NOT NULL,
   amount NUMERIC(12,2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
