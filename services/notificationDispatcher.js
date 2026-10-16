@@ -66,7 +66,11 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
  const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
- const textFor=async channel=>formatMessage(settings,eventName,context,message,await getCustomTemplate(type,rawEvent,eventName,channel));
+ const escapeTelegramHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+ const textFor=async channel=>{
+  const variables=channel==="telegram"?Object.fromEntries(Object.entries(context).map(([key,value])=>[key,value===null||value===undefined?value:escapeTelegramHtml(value)])):context;
+  return formatMessage(settings,eventName,variables,message,await getCustomTemplate(type,rawEvent,eventName,channel));
+ };
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
