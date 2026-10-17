@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAZ NETWORK - Hotspot Portal Preview</title>
+    <title>FAZ NETWORK - Hotspot Portal</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
             --primary: #059669;
-            --primary-dark: #047857;
             --accent-gold: #f59e0b;
-            --accent-glow: #10b981;
-            --bg-dark: #021a13;
-            --card-bg: rgba(6, 32, 24, 0.96);
+            --bg-dark: #031b14;
+            --card-bg: rgba(6, 30, 23, 0.96);
             --text-main: #f0fdf4;
             --text-muted: #94a3b8;
         }
@@ -37,152 +36,78 @@
             color: var(--text-main);
         }
 
-        .glow-wrapper {
-            position: relative;
+        .portal-card {
             width: 100%;
             max-width: 440px;
-            border-radius: 20px;
-            padding: 2px;
-            background: linear-gradient(60deg, #f59e0b, #10b981, #047857, #d97706, #10b981, #f59e0b);
-            background-size: 300% 300%;
-            animation: rgbFlow 6s ease-in-out infinite;
-            box-shadow: 0 0 25px rgba(16, 185, 129, 0.25), 0 15px 35px rgba(0, 0, 0, 0.7);
-        }
-
-        @keyframes rgbFlow {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .main-card {
             background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-radius: 18px;
-            padding: 20px 16px;
+            border-radius: 20px;
+            padding: 22px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7), 0 0 25px rgba(16, 185, 129, 0.2);
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .bismillah {
             font-size: 18px;
             font-weight: 700;
             color: var(--accent-gold);
-            letter-spacing: 1px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             font-family: 'Amiri', 'Traditional Arabic', serif;
+        }
+
+        .logo-box {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .logo-img {
+            max-width: 80px;
+            height: auto;
+            filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.5));
         }
 
         .brand-title {
             font-size: 22px;
             font-weight: 900;
-            letter-spacing: 1px;
             color: #ffffff;
+            letter-spacing: 1px;
         }
 
         .brand-subtitle {
             font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
 
-        /* রিসেলার ডায়নামিক প্রমো ব্যানার প্রিভিউ */
-        .reseller-banner-box {
+        /* রিসেলার ডায়নামিক ব্যানার */
+        #reseller-banner-box {
+            display: none;
             margin-bottom: 14px;
             border-radius: 12px;
             overflow: hidden;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.4) 100%);
-            padding: 12px;
-            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }
 
-        .banner-tag {
-            font-size: 11px;
-            font-weight: 800;
-            color: var(--accent-gold);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .banner-text {
-            font-size: 13px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-top: 3px;
-        }
-
-        /* ওয়ান-ক্লিক কানেক্ট কার্ড */
-        .direct-connect-card {
-            background: rgba(16, 185, 129, 0.12);
-            border: 1.5px solid var(--accent-glow);
-            border-radius: 12px;
-            padding: 14px 12px;
-            margin-bottom: 16px;
-            text-align: center;
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
-        }
-
-        .direct-connect-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: #a7f3d0;
-            margin-bottom: 8px;
-        }
-
-        .btn-direct-connect {
+        #reseller-banner-box img {
             width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border: none;
-            color: #ffffff;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 800;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-            transition: all 0.25s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            height: auto;
+            display: block;
         }
 
-        .btn-direct-connect:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
-        }
-
-        .divider-label {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-muted);
-            margin: 14px 0 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .divider-label::before, .divider-label::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        /* ৩টি অ্যাকশন ট্যাব */
-        .tab-switcher {
-            display: flex;
-            background: rgba(0, 0, 0, 0.45);
-            border-radius: 10px;
+        /* পরিচ্ছন্ন কানেকশন মেথড সুইচ */
+        .method-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.4);
             padding: 4px;
+            border-radius: 10px;
             margin-bottom: 16px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            gap: 4px;
         }
 
-        .tab-btn {
-            flex: 1;
+        .method-btn {
             padding: 9px 4px;
             border: none;
             background: transparent;
@@ -191,31 +116,39 @@
             font-weight: 700;
             border-radius: 7px;
             cursor: pointer;
-            transition: all 0.25s ease;
-            white-space: nowrap;
+            transition: all 0.2s ease;
         }
 
-        .tab-btn.active {
+        .method-btn.active {
             background: linear-gradient(135deg, #059669 0%, #047857 100%);
             color: #ffffff;
             box-shadow: 0 2px 10px rgba(5, 150, 105, 0.4);
         }
 
-        .tab-content-panel {
-            display: none;
+        /* পেমেন্ট অ্যাকাউন্ট বক্স */
+        .payment-account-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 12px;
+            text-align: left;
         }
 
-        .tab-content-panel.active {
-            display: block;
-            animation: fadeIn 0.3s ease-in-out;
+        .account-number {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--accent-gold);
+            letter-spacing: 1.5px;
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.12);
+            padding: 2px 10px;
+            border-radius: 6px;
+            border: 1px dashed rgba(245, 158, 11, 0.4);
+            margin-top: 4px;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* প্যাকেজ গ্রিড */
+        /* লাইভ ডাইনামিক প্যাকেজ গ্রিড */
         .packages-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -234,14 +167,14 @@
             padding: 10px 4px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.25s ease;
             overflow: hidden;
             border: 1.5px solid transparent;
         }
 
         .pkg-card:hover {
             transform: translateY(-2px);
-            filter: brightness(1.2);
+            filter: brightness(1.15);
         }
 
         .pkg-card.selected {
@@ -257,7 +190,6 @@
             font-size: 11px;
             color: #ffffff;
             font-weight: 900;
-            text-shadow: 0 0 4px #000;
         }
 
         .pkg-card.selected .pkg-time,
@@ -267,9 +199,9 @@
         }
 
         .pkg-time {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
-            margin-bottom: 3px;
+            margin-bottom: 2px;
         }
 
         .pkg-price {
@@ -278,7 +210,7 @@
         }
 
         .selected-package-summary {
-            margin: -2px 0 14px;
+            margin: -4px 0 12px;
             color: #6ee7b7;
             font-size: 12px;
             font-weight: 600;
@@ -289,28 +221,7 @@
             border-radius: 4px;
         }
 
-        .payment-account-card {
-            background: rgba(0, 0, 0, 0.45);
-            border: 1px solid rgba(245, 158, 11, 0.4);
-            border-radius: 12px;
-            padding: 10px;
-            margin-bottom: 14px;
-            text-align: left;
-        }
-
-        .account-number {
-            font-size: 17px;
-            font-weight: 800;
-            color: var(--accent-gold);
-            letter-spacing: 1.5px;
-            display: inline-block;
-            background: rgba(245, 158, 11, 0.12);
-            padding: 3px 12px;
-            border-radius: 6px;
-            border: 1px dashed rgba(245, 158, 11, 0.5);
-            margin-top: 4px;
-        }
-
+        /* ইনপুট গ্রুপ */
         .input-group {
             margin-bottom: 12px;
             text-align: left;
@@ -333,42 +244,69 @@
             font-size: 14px;
             color: #ffffff;
             outline: none;
+            transition: all 0.2s;
         }
 
         .input-box input:focus, .input-box select:focus {
-            border-color: var(--accent-glow);
+            border-color: #10b981;
             box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
             background: rgba(3, 20, 15, 0.95);
         }
 
-        .btn-action {
+        /* একমাত্র মূল একশন বাটন */
+        .btn-main-action {
             width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            padding: 14px;
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
             border: 1px solid #10b981;
             color: #ffffff;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 700;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 800;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.35);
+            box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);
             transition: all 0.25s ease;
-            margin-top: 4px;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        .btn-action:hover {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            transform: translateY(-1px);
+        .btn-main-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 22px rgba(16, 185, 129, 0.6);
         }
 
-        .scanner-placeholder {
-            border: 2px dashed rgba(16, 185, 129, 0.5);
+        .btn-main-action:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ক্যামেরা স্ক্যানার কন্টেইনার */
+        #qr-reader-container {
+            display: none;
+            width: 100%;
             border-radius: 12px;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 30px 15px;
+            overflow: hidden;
+            border: 2px dashed rgba(16, 185, 129, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
             margin-bottom: 12px;
-            text-align: center;
         }
+
+        .alert-box {
+            display: none;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 12px;
+            text-align: left;
+            line-height: 1.4;
+        }
+        .alert-error { background: rgba(220, 38, 38, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+        .alert-success { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; }
 
         .card-footer {
             margin-top: 16px;
@@ -381,201 +319,442 @@
             color: var(--text-muted);
         }
 
-        .helpline {
-            color: var(--accent-gold);
-            font-weight: 700;
-            text-decoration: none;
-        }
+        .helpline { color: var(--accent-gold); font-weight: 700; text-decoration: none; }
     </style>
 </head>
 <body>
 
-<div class="glow-wrapper">
-    <div class="main-card">
-        <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+<div class="portal-card">
+    <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 
-        <!-- প্রমো ব্যানার প্রিভিউ -->
-        <div class="reseller-banner-box">
-            <div class="banner-tag">🔥 বিশেষ ধামাকা অফার</div>
-            <div class="banner-text">আনলিমিটেড হাই-স্পিড ইন্টারনেট উপভোগ করুন!</div>
+    <div id="reseller-banner-box">
+        <img id="reseller-banner-img" src="" alt="Banner">
+    </div>
+
+    <div class="logo-box">
+        <img id="reseller-logo" src="logo-Faznetwork.png" alt="Logo" class="logo-img">
+    </div>
+
+    <div class="brand-title" id="reseller-title">FAZ NETWORK</div>
+    <div class="brand-subtitle" id="reseller-subtitle">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</div>
+
+    <div id="status-box" class="alert-box"></div>
+
+    <!-- মেথড সিলেক্টর -->
+    <div class="method-selector">
+        <button type="button" class="method-btn active" id="m-btn-online" onclick="setAuthMethod('online')">💳 অনলাইন</button>
+        <button type="button" class="method-btn" id="m-btn-pin" onclick="setAuthMethod('pin')">🎟️ ভাউচার পিন</button>
+        <button type="button" class="method-btn" id="m-btn-qr" onclick="setAuthMethod('qr')">📷 QR স্ক্যান</button>
+    </div>
+
+    <!-- মেথড ১: অনলাইন পেমেন্ট ফিল্ডস -->
+    <div id="section-online">
+        <div class="payment-account-card">
+            <div style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Personal MFS (Send Money):</div>
+            <div id="payment-accounts-list"><span class="account-number">লোড হচ্ছে...</span></div>
         </div>
 
-        <div class="brand-title">FAZ NETWORK</div>
-        <div class="brand-subtitle">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</div>
+        <!-- ব্যাকএন্ড থেকে আসা সব প্যাকেজ এখানে সরাসরি বসবে -->
+        <div class="packages-grid" id="packages-grid">
+            <div style="grid-column: 1/-1; font-size: 12px; color: #a7f3d0; padding: 10px;">লাইভ প্যাকেজ তালিকা লোড হচ্ছে...</div>
+        </div>
+        <div id="selected-package-summary" class="selected-package-summary">একটি প্যাকেজ নির্বাচন করুন।</div>
 
-        <!-- বিদ্যমান গ্রাহক ওয়ান-ক্লিক কানেক্ট -->
-        <div class="direct-connect-card">
-            <div class="direct-connect-title">পূর্বে প্যাকেজ নেওয়া থাকলে সরাসরি যুক্ত হোন</div>
-            <button type="button" class="btn-direct-connect" onclick="alert('আলহামদুলিল্লাহ! আপনার ম্যাক ডিভাইসের মাধ্যমে সরাসরি ইন্টারনেট চালু হচ্ছে...')">
-                <span>⚡ ইন্টারনেট চালু করুন</span>
-            </button>
+        <div class="input-group">
+            <label for="cust_payment_method">পেমেন্ট মাধ্যম</label>
+            <div class="input-box">
+                <select id="cust_payment_method">
+                    <option value="">লোড হচ্ছে...</option>
+                </select>
+            </div>
         </div>
 
-        <div class="divider-label">অথবা নতুন প্যাকেজ কিনুন / রিচার্জ করুন</div>
-
-        <!-- ৩টি স্পষ্ট ট্যাব -->
-        <div class="tab-switcher">
-            <button type="button" class="tab-btn active" onclick="switchPreviewTab('online')">💳 অনলাইন পেমেন্ট</button>
-            <button type="button" class="tab-btn" onclick="switchPreviewTab('pin')">🎟️ ভাউচার পিন</button>
-            <button type="button" class="tab-btn" onclick="switchPreviewTab('qr')">📷 কিউআর স্ক্যান</button>
+        <div class="input-group">
+            <label for="cust_trx">TrxID দিন</label>
+            <div class="input-box">
+                <input type="text" id="cust_trx" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;">
+            </div>
         </div>
+    </div>
 
-        <!-- ট্যাব ১: অনলাইন পেমেন্ট -->
-        <div id="tab-online" class="tab-content-panel active">
-            <div class="payment-account-card">
-                <div style="font-size: 11px; color: #a7f3d0; font-weight: 700;">bKash / Nagad Send Money:</div>
-                <div class="account-number">01339932887</div>
+    <!-- মেথড ২: ভাউচার পিন ফিল্ডস -->
+    <div id="section-pin" style="display: none;">
+        <div class="input-group" style="margin-top: 10px;">
+            <label for="voucher_pin">ভাউচার কোড / পিন (Voucher PIN)</label>
+            <div class="input-box">
+                <input type="text" id="voucher_pin" placeholder="যেমন: FAZ-8921-X3" style="text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">
             </div>
-
-            <!-- বিভিন্ন রঙের প্যাকেজ গ্রিড -->
-            <div class="packages-grid" id="packages-container">
-                <!-- ডাইনামিক কালার কার্ডসমূহ -->
-            </div>
-            <div id="summary-text" class="selected-package-summary">একটি প্যাকেজ নির্বাচন করুন।</div>
-
-            <div class="input-group">
-                <label for="mfs_method">পেমেন্ট মাধ্যম</label>
-                <div class="input-box">
-                    <select id="mfs_method">
-                        <option value="bkash">bKash Personal</option>
-                        <option value="nagad">Nagad Personal</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <label for="trx_id">TrxID দিন</label>
-                <div class="input-box">
-                    <input type="text" id="trx_id" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;">
-                </div>
-            </div>
-
-            <button type="button" class="btn-action" onclick="alert('পেমেন্ট ও TrxID যাচাই হচ্ছে...')">
-                প্যাকেজ চালু করুন
-            </button>
         </div>
-
-        <!-- ট্যাব ২: ভাউচার পিন -->
-        <div id="tab-pin" class="tab-content-panel">
-            <div style="font-size: 12px; color: #a7f3d0; margin-bottom: 12px; text-align: left; line-height: 1.4;">
-                দোকান বা এজেন্ট থেকে ক্রয়কৃত ভাউচার কার্ডের গোপন পিন বা কোডটি নিচে দিয়ে ইন্টারনেট চালু করুন।
-            </div>
-
-            <div class="input-group">
-                <label for="voucher_code">ভাউচার পিন / কোড (Voucher PIN)</label>
-                <div class="input-box">
-                    <input type="text" id="voucher_code" placeholder="যেমন: FAZ-8921-X3" style="text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800;">
-                </div>
-            </div>
-
-            <button type="button" class="btn-action" onclick="alert('ভাউচার যাচাই হচ্ছে...')">
-                ভাউচার দিয়ে চালু করুন
-            </button>
+        <div style="font-size: 11px; color: #a7f3d0; text-align: left; margin-bottom: 12px;">
+            কার্ডের স্ক্র্যাচ পিনটি লিখে নিচের বাটনে চাপ দিন।
         </div>
+    </div>
 
-        <!-- ট্যাব ৩: কিউআর স্ক্যান -->
-        <div id="tab-qr" class="tab-content-panel">
-            <div style="font-size: 12px; color: #a7f3d0; margin-bottom: 10px; text-align: left; line-height: 1.4;">
-                ভাউচার কার্ডের কিউআর কোডটি ক্যামেরার সামনে ধরুন, স্বয়ংক্রিয়ভাবে রিচার্জ সম্পন্ন হবে।
-            </div>
-
-            <div class="scanner-placeholder">
-                <div style="font-size: 32px; margin-bottom: 6px;">📷</div>
-                <div style="font-size: 12px; color: #cbd5e1;">লাইভ ক্যামেরা স্ক্যানার ভিউপোর্ট</div>
-            </div>
-
-            <button type="button" class="btn-action" onclick="alert('ক্যামেরা সক্রিয় হচ্ছে...')">
-                📷 ক্যামেরা চালু করুন
-            </button>
+    <!-- মেথড ৩: কিউআর স্ক্যানার ভিউপোর্ট -->
+    <div id="section-qr" style="display: none;">
+        <div id="qr-reader-container">
+            <div id="qr-camera-viewport"></div>
         </div>
-
-        <div class="card-footer">
-            <span>ডিভাইস আইডি: <b style="color: #a7f3d0;">EE:5B:19:B2:22:EC</b></span>
-            <a href="tel:01339932887" class="helpline">01339932887</a>
+        <div style="font-size: 11px; color: #a7f3d0; text-align: center; margin-bottom: 12px;">
+            ভাউচার কার্ডের কিউআর কোডটি ক্যামেরার সামনে ধরুন।
         </div>
+    </div>
+
+    <!-- একমাত্র একক মেইন বাটন: পূর্বে মেয়াদ থাকলে সরাসরি কানেক্ট করবে, অথবা সিলেক্টেড মেথড অনুযায়ী রিচার্জ করবে -->
+    <button type="button" id="btn-master-action" class="btn-main-action" onclick="handleMasterAction()">
+        <span>🚀 ইন্টারনেট চালু করুন</span>
+    </button>
+
+    <div class="card-footer">
+        <span>ডিভাইস: <b id="display-mac" style="color: #a7f3d0;">$(mac)</b></span>
+        <a href="tel:01339932887" class="helpline" id="reseller-helpline">01339932887</a>
     </div>
 </div>
 
+<!-- মাইক্রোটিক স্ট্যান্ডার্ড হিডেন লগইন ফর্ম (Username=MAC, Password=MAC) -->
+<form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
+    <input type="hidden" name="username" id="mt-user" value="$(mac)" />
+    <input type="hidden" name="password" id="mt-pass" value="$(mac)" />
+    <input type="hidden" name="dst" value="$(link-orig)" />
+    <input type="hidden" name="popup" value="true" />
+</form>
+
+<input type="hidden" id="router-mac" value="$(mac)" />
+<input type="hidden" id="router-ip" value="$(ip)" />
+
 <script>
-    // ৮টি সম্পূর্ণ ভিন্ন ভাইব্রেন্ট কালার প্যালেট
+    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
+    const VERIFY_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
+    const ACTIVATE_API_URL = BACKEND_BASE_URL + '/api/hotspot-auth/activate';
+    const VOUCHER_CLAIM_URL = BACKEND_BASE_URL + '/api/hotspot/claim-voucher';
+    const PUBLIC_BRANDING_URL = BACKEND_BASE_URL + '/api/hotspot/public-branding';
+    const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
+
+    let currentMethod = 'online'; // 'online', 'pin', 'qr'
+    let selectedPackage = null;
+    let availablePaymentMethods = [];
+    let qrScanner = null;
+
+    // আনলিমিটেড প্যাকেজের জন্য রানিং ডাইনামিক প্যালেট লুপ
     const PALETTES = [
         { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.3)', timeColor: '#a7f3d0', priceColor: '#34d399', selBg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(4, 120, 87, 0.65) 100%)', selBorder: '#10b981', selGlow: '0 0 16px rgba(16, 185, 129, 0.55)' },
         { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.3)', timeColor: '#fde68a', priceColor: '#fbbf24', selBg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.4) 0%, rgba(180, 83, 9, 0.65) 100%)', selBorder: '#f59e0b', selGlow: '0 0 16px rgba(245, 158, 11, 0.55)' },
         { bg: 'rgba(6, 182, 212, 0.08)', border: 'rgba(6, 182, 212, 0.3)', timeColor: '#a5f3fc', priceColor: '#22d3ee', selBg: 'linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(14, 116, 144, 0.65) 100%)', selBorder: '#06b6d4', selGlow: '0 0 16px rgba(6, 182, 212, 0.55)' },
         { bg: 'rgba(99, 102, 241, 0.08)', border: 'rgba(99, 102, 241, 0.3)', timeColor: '#c7d2fe', priceColor: '#818cf8', selBg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.4) 0%, rgba(67, 56, 202, 0.65) 100%)', selBorder: '#6366f1', selGlow: '0 0 16px rgba(99, 102, 241, 0.55)' },
         { bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.3)', timeColor: '#fbcfe8', priceColor: '#f472b6', selBg: 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(190, 24, 93, 0.65) 100%)', selBorder: '#ec4899', selGlow: '0 0 16px rgba(236, 72, 153, 0.55)' },
-        { bg: 'rgba(168, 85, 247, 0.08)', border: 'rgba(168, 85, 247, 0.3)', timeColor: '#e9d5ff', priceColor: '#c084fc', selBg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.4) 0%, rgba(126, 34, 206, 0.65) 100%)', selBorder: '#a855f7', selGlow: '0 0 16px rgba(168, 85, 247, 0.55)' }
+        { bg: 'rgba(168, 85, 247, 0.08)', border: 'rgba(168, 85, 247, 0.3)', timeColor: '#e9d5ff', priceColor: '#c084fc', selBg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.4) 0%, rgba(126, 34, 206, 0.65) 100%)', selBorder: '#a855f7', selGlow: '0 0 16px rgba(168, 85, 247, 0.55)' },
+        { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', timeColor: '#fecaca', priceColor: '#f87171', selBg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.4) 0%, rgba(185, 28, 28, 0.65) 100%)', selBorder: '#ef4444', selGlow: '0 0 16px rgba(239, 68, 68, 0.55)' }
     ];
 
-    // স্যাম্পল প্যাকেজ তালিকা
-    const samplePackages = [
-        { time: '1-Hour', price: '৳ 10' },
-        { time: '1-Day', price: '৳ 30' },
-        { time: '3-Day', price: '৳ 80' },
-        { time: '7-Day', price: '৳ 150' },
-        { time: '15-Day', price: '৳ 250' },
-        { time: '30-Day', price: '৳ 500' }
-    ];
+    function routerDeviceDetails() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let mac = urlParams.get('mac') || document.getElementById('router-mac')?.value || '';
+        let ip = urlParams.get('ip') || document.getElementById('router-ip')?.value || '';
+        let linkLoginOnly = urlParams.get('link-login-only') || '';
 
-    function renderPreviewPackages() {
-        const container = document.getElementById('packages-container');
-        container.innerHTML = '';
-
-        samplePackages.forEach((pkg, index) => {
-            const pal = PALETTES[index % PALETTES.length];
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = 'pkg-card';
-            card.style.background = pal.bg;
-            card.style.borderColor = pal.border;
-
-            card.innerHTML = `
-                <div class="pkg-time" style="color: ${pal.timeColor}">${pkg.time}</div>
-                <div class="pkg-price" style="color: ${pal.priceColor}">${pkg.price}</div>
-            `;
-
-            card.onclick = () => {
-                document.querySelectorAll('.pkg-card').forEach((c, i) => {
-                    const p = PALETTES[i % PALETTES.length];
-                    c.classList.remove('selected');
-                    c.style.background = p.bg;
-                    c.style.borderColor = p.border;
-                    c.style.boxShadow = 'none';
-                    c.querySelector('.pkg-time').style.color = p.timeColor;
-                    c.querySelector('.pkg-price').style.color = p.priceColor;
-                });
-
-                card.classList.add('selected');
-                card.style.background = pal.selBg;
-                card.style.borderColor = pal.selBorder;
-                card.style.boxShadow = pal.selGlow;
-                card.querySelector('.pkg-time').style.color = '#fff';
-                card.querySelector('.pkg-price').style.color = '#fff';
-
-                document.getElementById('summary-text').innerText = `নির্বাচিত: ${pkg.time} — ${pkg.price}`;
-            };
-
-            container.appendChild(card);
-        });
+        if (linkLoginOnly) {
+            document.getElementById('mikrotik-auto-login').action = linkLoginOnly;
+        }
+        return { mac: mac.trim(), ip: ip.trim() };
     }
 
-    function switchPreviewTab(tab) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content-panel').forEach(p => p.classList.remove('active'));
+    function showStatus(text, isError = false) {
+        const box = document.getElementById('status-box');
+        box.style.display = 'block';
+        box.className = 'alert-box ' + (isError ? 'alert-error' : 'alert-success');
+        box.innerText = text;
+    }
 
-        if (tab === 'online') {
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
-            document.getElementById('tab-online').classList.add('active');
-        } else if (tab === 'pin') {
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
-            document.getElementById('tab-pin').classList.add('active');
-        } else if (tab === 'qr') {
-            document.querySelectorAll('.tab-btn')[2].classList.add('active');
-            document.getElementById('tab-qr').classList.add('active');
+    function setAuthMethod(method) {
+        currentMethod = method;
+        document.querySelectorAll('.method-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`m-btn-${method}`).classList.add('active');
+
+        document.getElementById('section-online').style.display = (method === 'online') ? 'block' : 'none';
+        document.getElementById('section-pin').style.display = (method === 'pin') ? 'block' : 'none';
+        document.getElementById('section-qr').style.display = (method === 'qr') ? 'block' : 'none';
+
+        if (method === 'qr') {
+            startQrScanner();
+        } else {
+            stopQrScanner();
         }
     }
 
-    renderPreviewPackages();
+    function submitMikrotikLogin(mac) {
+        const form = document.getElementById('mikrotik-auto-login');
+        document.getElementById('mt-user').value = mac;
+        document.getElementById('mt-pass').value = mac;
+        showStatus('আলহামদুলিল্লাহ! সংযোগ অনুমোদিত হয়েছে। ইন্টারনেট চালু হচ্ছে...');
+        setTimeout(() => form.submit(), 300);
+    }
+
+    // একক মূল বাটন হ্যান্ডলার (স্মার্টলি ডিসিশন নেবে)
+    async function handleMasterAction() {
+        const btn = document.getElementById('btn-master-action');
+        const device = routerDeviceDetails();
+
+        if (!device.mac || device.mac.includes('$')) {
+            showStatus('❌ ডিভাইসের MAC পাওয়া যায়নি। অনুগ্রহ করে ওয়াইফাই অফ করে অন করুন।', true);
+            return;
+        }
+
+        // ১. যদি গ্রাহক ভাউচার পিন মেথডে থাকে
+        if (currentMethod === 'pin') {
+            const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
+            if (!pin || pin.length < 4) {
+                showStatus('অনুগ্রহ করে সঠিক ভাউচার পিন কোডটি দিন।', true);
+                return;
+            }
+            btn.disabled = true;
+            btn.innerText = 'ভাউচার যাচাই হচ্ছে...';
+            try {
+                const res = await fetch(VOUCHER_CLAIM_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'omit',
+                    body: JSON.stringify({ voucher_code: pin, mac: device.mac, ip: device.ip })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showStatus(data.message || 'ভাউচার কোডটি সঠিক নয় বা ইতিমধ্যে ব্যবহৃত হয়েছে।', true);
+                    btn.disabled = false;
+                    btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+                    return;
+                }
+                submitMikrotikLogin(data.username || device.mac);
+            } catch (e) {
+                showStatus('ভাউচার যাচাই ব্যর্থ হয়েছে। ইন্টারনেট চেক করুন।', true);
+                btn.disabled = false;
+                btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+            }
+            return;
+        }
+
+        // ২. যদি গ্রাহক অনলাইন পেমেন্ট মেথডে থাকে
+        const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
+        const paymentMethod = document.getElementById('cust_payment_method').value;
+
+        // যদি TrxID দেওয়া থাকে, তবে রিচার্জ ট্রাই করবে
+        if (trxInput) {
+            if (!selectedPackage) {
+                showStatus('অনুগ্রহ করে একটি প্যাকেজ নির্বাচন করুন।', true);
+                return;
+            }
+            if (!paymentMethod) {
+                showStatus('পেমেন্ট মাধ্যম নির্বাচন করুন।', true);
+                return;
+            }
+            btn.disabled = true;
+            btn.innerText = 'পেমেন্ট যাচাই হচ্ছে...';
+            try {
+                const vRes = await fetch(VERIFY_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'omit',
+                    body: JSON.stringify({
+                        service_type: 'hotspot',
+                        username: device.mac,
+                        password: device.mac,
+                        trxId: trxInput,
+                        amount: selectedPackage.price,
+                        package_id: selectedPackage.profile,
+                        profile_id: selectedPackage.profile,
+                        paymentMethod,
+                        mac: device.mac,
+                        ip: device.ip
+                    })
+                });
+                const vData = await vRes.json().catch(() => ({}));
+                if (!vRes.ok || !vData.success) {
+                    showStatus(vData.message || 'ভেরিফিকেশন ব্যর্থ হয়েছে। TrxID সঠিক দিন।', true);
+                    btn.disabled = false;
+                    btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+                    return;
+                }
+                // অ্যাক্টিভেশন
+                const actRes = await fetch(ACTIVATE_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'omit',
+                    body: JSON.stringify({ mac: device.mac, ip: device.ip })
+                });
+                const actData = await actRes.json().catch(() => ({}));
+                submitMikrotikLogin(actData.username || device.mac);
+            } catch (e) {
+                showStatus('সার্ভার এরর। আবার চেষ্টা করুন।', true);
+                btn.disabled = false;
+                btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+            }
+            return;
+        }
+
+        // ৩. TrxID দেওয়া না থাকলে: বিদ্যমান সক্রিয় প্যাকেজ দিয়ে সরাসরি লগইন ট্রাই করবে
+        btn.disabled = true;
+        btn.innerText = 'সংযোগ যাচাই হচ্ছে...';
+        try {
+            const res = await fetch(ACTIVATE_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'omit',
+                body: JSON.stringify({ mac: device.mac, ip: device.ip })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                showStatus(data.message || '❌ আপনার কোনো সক্রিয় প্যাকেজ নেই। প্যাকেজ সিলেক্ট করে TrxID দিয়ে চালু করুন।', true);
+                btn.disabled = false;
+                btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+                return;
+            }
+            submitMikrotikLogin(data.username || device.mac);
+        } catch (e) {
+            showStatus('সার্ভারের সাথে সংযোগ করা যায়নি।', true);
+            btn.disabled = false;
+            btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+        }
+    }
+
+    // ক্যামেরা কিউআর স্ক্যানার
+    function startQrScanner() {
+        document.getElementById('qr-reader-container').style.display = 'block';
+        qrScanner = new Html5Qrcode("qr-camera-viewport");
+        qrScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 220, height: 220 } },
+            (decodedText) => {
+                stopQrScanner();
+                document.getElementById('voucher_pin').value = decodedText;
+                setAuthMethod('pin');
+                handleMasterAction();
+            },
+            (error) => {}
+        ).catch(() => {
+            showStatus('ক্যামেরা চালু করা যায়নি। ক্যামেরা পারমিশন দিন।', true);
+        });
+    }
+
+    function stopQrScanner() {
+        if (qrScanner) {
+            qrScanner.stop().then(() => {
+                document.getElementById('qr-reader-container').style.display = 'none';
+                qrScanner = null;
+            }).catch(() => {});
+        }
+    }
+
+    // ডাইনামিক লাইভ প্যাকেজ ফেচিং (প্যানেলের সব প্যাকেজ আনবে)
+    async function loadLivePackagesAndPortalData() {
+        const grid = document.getElementById('packages-grid');
+        const accountList = document.getElementById('payment-accounts-list');
+        const methodSelect = document.getElementById('cust_payment_method');
+
+        try {
+            const [homeRes, settingsRes, brandingRes] = await Promise.all([
+                fetch(BACKEND_BASE_URL + '/', { cache: 'no-store' }),
+                fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store' }).catch(() => null),
+                fetch(PUBLIC_BRANDING_URL, { cache: 'no-store' }).catch(() => null)
+            ]);
+
+            // ১. লাইভ প্যাকেজ ফেচ
+            const html = await homeRes.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const packageNodes = Array.from(doc.querySelectorAll('[data-buy-hotspot][data-profile][data-price]'));
+
+            if (!packageNodes.length) {
+                grid.innerHTML = '<div style="grid-column:1/-1; font-size:12px; color:#fca5a5;">কোনো সক্রিয় Hotspot প্যাকেজ পাওয়া যায়নি।</div>';
+            } else {
+                grid.replaceChildren();
+                packageNodes.forEach((btn, idx) => {
+                    const profile = btn.getAttribute('data-profile');
+                    const price = Number(btn.getAttribute('data-price'));
+                    const validity = btn.getAttribute('data-validity') || profile;
+                    const pal = PALETTES[idx % PALETTES.length];
+
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'pkg-card';
+                    card.style.background = pal.bg;
+                    card.style.borderColor = pal.border;
+
+                    card.innerHTML = `
+                        <div class="pkg-time" style="color: ${pal.timeColor}">${validity}</div>
+                        <div class="pkg-price" style="color: ${pal.priceColor}">৳ ${price}</div>
+                    `;
+
+                    card.onclick = () => {
+                        selectedPackage = { profile, price, validity };
+                        grid.querySelectorAll('.pkg-card').forEach((c, i) => {
+                            const p = PALETTES[i % PALETTES.length];
+                            c.classList.remove('selected');
+                            c.style.background = p.bg;
+                            c.style.borderColor = p.border;
+                            c.style.boxShadow = 'none';
+                            c.querySelector('.pkg-time').style.color = p.timeColor;
+                            c.querySelector('.pkg-price').style.color = p.priceColor;
+                        });
+                        card.classList.add('selected');
+                        card.style.background = pal.selBg;
+                        card.style.borderColor = pal.selBorder;
+                        card.style.boxShadow = pal.selGlow;
+                        card.querySelector('.pkg-time').style.color = '#ffffff';
+                        card.querySelector('.pkg-price').style.color = '#ffffff';
+
+                        document.getElementById('selected-package-summary').textContent = `নির্বাচিত: ${validity} — ৳ ${price}`;
+                    };
+
+                    grid.appendChild(card);
+                });
+            }
+
+            // ২. পেমেন্ট অ্যাকাউন্টস
+            if (settingsRes && settingsRes.ok) {
+                const sData = await settingsRes.json();
+                const accs = sData?.settings?.payment_accounts || {};
+                const labels = { bkash: 'bKash', nagad: 'Nagad', rocket: 'Rocket', upay: 'Upay' };
+                availablePaymentMethods = Object.keys(labels).filter(k => String(accs[k] || '').trim());
+                
+                accountList.replaceChildren();
+                methodSelect.replaceChildren();
+
+                availablePaymentMethods.forEach(k => {
+                    const row = document.createElement('div');
+                    row.innerHTML = `<span style="font-size:11px; color:#cbd5e1;">${labels[k]}:</span> <span class="account-number">${accs[k]}</span>`;
+                    accountList.appendChild(row);
+
+                    const opt = document.createElement('option');
+                    opt.value = k;
+                    opt.textContent = labels[k];
+                    methodSelect.appendChild(opt);
+                });
+            }
+
+            // ৩. ব্যানার ও ব্র্যান্ডিং
+            if (brandingRes && brandingRes.ok) {
+                const bData = await brandingRes.json();
+                if (bData.banner_url) {
+                    document.getElementById('reseller-banner-box').style.display = 'block';
+                    document.getElementById('reseller-banner-img').src = bData.banner_url;
+                }
+                if (bData.logo_url) document.getElementById('reseller-logo').src = bData.logo_url;
+                if (bData.brand_name) document.getElementById('reseller-title').innerText = bData.brand_name;
+                if (bData.brand_subtitle) document.getElementById('reseller-subtitle').innerText = bData.brand_subtitle;
+                if (bData.helpline_phone) {
+                    const hp = document.getElementById('reseller-helpline');
+                    hp.innerText = bData.helpline_phone;
+                    hp.href = 'tel:' + bData.helpline_phone;
+                }
+            }
+
+        } catch (e) {
+            grid.innerHTML = '<div style="grid-column:1/-1; font-size:12px; color:#fca5a5;">প্যাকেজ লোড করা যায়নি। পেজ রিফ্রেশ করুন।</div>';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const dev = routerDeviceDetails();
+        document.getElementById('display-mac').innerText = dev.mac || '$(mac)';
+        loadLivePackagesAndPortalData();
+    });
 </script>
 
 </body>
