@@ -52,7 +52,10 @@ test("Admin creates an unused first-login voucher without MAC, expiry, or Router
     assert.equal(res.body.pending_activation,true);
     assert.equal(res.body.user.status,"unused");
     assert.equal(res.body.user.phone,"01712345678");
-    assert.match(insertedSql,/first_login_at,expires_at,mac_lock/);\n    assert.equal(insertedParams[14],"unused");\n    assert.equal(insertedParams[15],null,"first-login voucher has no activation timestamp");\n    assert.equal(insertedParams[16],null,"first-login voucher has no expiry until activation");
+    assert.match(insertedSql,/first_login_at,expires_at,mac_lock/);
+    assert.equal(insertedParams[14],"unused");
+    assert.equal(insertedParams[15],null,"first-login voucher has no activation timestamp");
+    assert.equal(insertedParams[16],null,"first-login voucher has no expiry until activation");
     assert.equal(insertedParams[1],"01712345678","pending database password field stores the phone for verification");
     assert.equal(insertedParams[6],"01712345678","phone is stored as the stable customer lookup key");
     assert.equal(insertedParams[10],"pkg-1-hour");
