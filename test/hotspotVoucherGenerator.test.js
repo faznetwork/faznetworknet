@@ -49,38 +49,34 @@ function responseRecorder() {
   };
 }
 
-test("voucher generator rejects invalid quantity and validity before RouterOS calls", async () => {
+test("voucher generator refuses random credentials under MAC-based authentication", async () => {
   const { controller, state } = loadController();
   const res = responseRecorder();
   await controller.generate({ body: { quantity: 501, profile: "Gold", validity: "1d", price: 10 } }, res);
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.success, false);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.code, "MAC_REQUIRED");
   assert.equal(state.creates.length, 0);
+  assert.equal(state.queries.length, 0);
+});
 });
 
-test("voucher generator validates the profile, avoids existing RouterOS names, and returns generated batch", async () => {
+test("voucher generator refuses random credentials under MAC-based authentication", async () => {
   const { controller, state } = loadController();
   const res = responseRecorder();
-  await controller.generate({ body: { quantity: 2, profile: "Gold", validity: "1d", price: 10, userPrefix: "FAZ-", charLength: 6 } }, res);
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.count, 2);
-  assert.equal(state.creates.length, 2);
-  assert.ok(state.creates.every(user => user.profile === "Gold"));
-  assert.ok(state.creates.every(user => user.username.toLowerCase() !== "already-there"));
-  assert.equal(new Set(res.body.vouchers.map(v => v.username.toLowerCase())).size, 2);
+  await controller.generate({ body: { quantity: 2, profile: "Gold", validity: "1d", price: 10 } }, res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.code, "MAC_REQUIRED");
+  assert.equal(state.creates.length, 0);
+  assert.equal(state.queries.length, 0);
 });
 
-test("voucher generator compensates RouterOS users and preserves persisted batch history on partial DB failure", async () => {
+test("voucher generator refuses partial provisioning under MAC-based authentication", async () => {
   const { controller, state } = loadController({ failInsertAt: 2 });
   const res = responseRecorder();
-  await controller.generate({ body: { quantity: 3, profile: "Gold", validity: "1d", price: 10, userPrefix: "FAZ-", charLength: 6 } }, res);
-  assert.equal(res.statusCode, 502);
+  await controller.generate({ body: { quantity: 3, profile: "Gold", validity: "1d", price: 10 } }, res);
+  assert.equal(res.statusCode, 409);
   assert.equal(res.body.success, false);
-  assert.equal(res.body.partialBatch, 1);
-  assert.equal(state.creates.length, 2);
-  assert.equal(state.removes.length, 2);
-  const rollbackUpdates = state.queries.filter(q => q.sql.startsWith("UPDATE hotspot_vouchers SET status='expired'"));
-  assert.equal(rollbackUpdates.length, 1, "only rows inserted by this batch may be marked expired");
-  assert.equal(rollbackUpdates[0].params[1], "completed");
+  assert.equal(state.creates.length, 0);
+  assert.equal(state.removes.length, 0);
+});
 });
