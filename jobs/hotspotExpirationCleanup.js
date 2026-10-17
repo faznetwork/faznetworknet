@@ -263,19 +263,42 @@ function createHotspotExpirationCleanup(deps = {}) {
 
 async function runHotspotRetentionCleanup(deps = {}) {
   const database = deps.db || db;
+  const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
   try {
+    // Keep expired subscribers visible for 30 days. Only purge a row after the
+    // expired profile was applied successfully and the final RouterOS removal succeeds.
+    const candidates = await database.query(
+      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
+    );
+    const purgeIds = [];
+    for (const row of candidates.rows || []) {
+      try {
+        if (typeof router.cleanupExpiredHotspotUser !== "function") throw new Error("RouterOS cleanup operation is unavailable.");
+        await router.cleanupExpiredHotspotUser(row.username, row.mac_address);
+        purgeIds.push(row.id);
+      } catch (error) {
+        logger.warn("[HOTSPOT RETENTION] RouterOS purge failed; retaining subscriber " + row.id + " for retry: " + error.message);
+      }
+    }
+    if (!purgeIds.length) return { archivedTransactions: 0, deletedVouchers: 0, routerPurgeFailed: (candidates.rows || []).length };
     const archived = await database.query(
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
-      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
+      "SELECT DISTINCT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
       "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
-      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expires_at < NOW() - INTERVAL '30 days' " +
-      "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
+      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' " +
+      "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
+      [purgeIds]
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id"
+      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
+      [purgeIds]
     );
-    const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
+    const result = {
+      archivedTransactions: (archived.rows || []).length,
+      deletedVouchers: (deleted.rows || []).length,
+      routerPurgeFailed: (candidates.rows || []).length - purgeIds.length
+    };
     if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
     return result;
   } catch (error) {
@@ -283,25 +306,6 @@ async function runHotspotRetentionCleanup(deps = {}) {
     return { archivedTransactions: 0, deletedVouchers: 0, error: error.message };
   }
 }
-
-function startHotspotRetentionCleanup() {
-  runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Initial run failed:", error.message));
-  let lastRunDate = "";
-  return setInterval(() => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-    }).formatToParts(new Date()).reduce((acc, part) => { acc[part.type] = part.value; return acc; }, {});
-    const dateKey = parts.year + "-" + parts.month + "-" + parts.day;
-    if (parts.hour === "00" && parts.minute === "00" && lastRunDate !== dateKey) {
-      lastRunDate = dateKey;
-      runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Scheduled run failed:", error.message));
-    }
-  }, MINUTE_MS);
-}
-
-const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
-
 function startHotspotExpirationCleanup() {
   runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Initial run failed:", error.message));
   return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
