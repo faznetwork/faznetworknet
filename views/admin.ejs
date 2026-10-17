@@ -360,6 +360,9 @@
         @media(max-width:768px){.hotspot-enterprise-search{min-width:100%;width:100%}.hotspot-enterprise-table{min-width:900px}}
 
         #dynamicPageContent{width:100%;min-width:0}
+/* Static synchronization controls appear only on the All Hotspot Users screen. */
+#mainContent:has(.hotspot-all-users-view) #hotspotStaticSyncToolbar{display:flex!important}
+
         .table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0}
         .table-responsive>.table{min-width:max-content}
         @media (max-width:768px){
@@ -2020,7 +2023,17 @@
                 </div>
             </div>
         </nav>
-        
+
+        <!-- Static Hotspot sync toolbar: CSS reveals it only while All Hotspot Users is active. -->
+        <div id="hotspotStaticSyncToolbar" class="d-none align-items-center justify-content-end flex-wrap gap-2 mb-3" role="group" aria-label="Hotspot synchronization actions">
+            <button type="button" class="btn btn-outline-info btn-sm fw-bold d-inline-flex align-items-center gap-1" id="btnImportFromMikrotik">
+                <span>📥 Import from MikroTik</span>
+            </button>
+            <button type="button" class="btn btn-outline-success btn-sm fw-bold d-inline-flex align-items-center gap-1" id="btnPushToMikrotik">
+                <span>📤 Push to MikroTik</span>
+            </button>
+        </div>
+
         <div id="dynamicPageContent">
             <!-- VIEW 1: DASHBOARD — Enterprise NOC -->
             <section id="view-main-dashboard" class="admin-view dashboard-view">
@@ -3547,7 +3560,7 @@
  const search=u=>escapeHtml([u.username,u.profile,u.comment,u.session?.address,u.server].join(' ').toLowerCase());
  const desktop=all.map((u,i)=>{const s=u.session||{},p=String(u.profile||'').toLowerCase(),pkgClass=/(30\s*(day|d)|month|30d)/.test(p)?'pkg-30':/(15\s*(day|d)|15d)/.test(p)?'pkg-15':/(7\s*(day|d)|week|7d)/.test(p)?'pkg-7':/(1\s*(day|d)|1\s*(hour|hr)|1d|1h)/.test(p)?'pkg-1':'pkg-default';const exp=Number.isFinite(u.expiryTime)?'<span class="hotspot-exact-expiry" data-expiry-clock="'+u.expiryTime+'">'+escapeHtml(u.expiryLabel)+'</span>':escapeHtml(u.expiryLabel||'—');return '<tr class="hotspot-user-row" data-hotspot-row data-status="'+u.status+'" data-expiry-time="'+(Number.isFinite(u.expiryTime)?u.expiryTime:'')+'" data-search="'+search(u)+'"><td class="hotspot-serial-cell"><span class="hotspot-serial-pill">'+(i+1)+'</span></td><td class="hotspot-identity-cell"><strong class="d-block">'+escapeHtml(subscriberName(u))+'</strong>'+identityMeta(u,s)+'</td><td><span class="hotspot-package-badge '+pkgClass+'">'+escapeHtml(u.profile||'-')+'</span></td><td>'+statusMarkup(u)+'</td><td><span class="hotspot-ip">'+escapeHtml(s.address||u.address||'--')+'</span><span class="hotspot-uptime">Uptime '+escapeHtml(s.uptime||u.uptime||'--')+'</span></td><td class="hotspot-expiration-cell">'+exp+remainingMarkup(u)+'</td><td>'+actions(u)+'</td></tr>';}).join('');
  const mobile=all.map((u,i)=>{const s=u.session||{},p=String(u.profile||'').toLowerCase(),pkgClass=/(30\s*(day|d)|month|30d)/.test(p)?'pkg-30':/(15\s*(day|d)|15d)/.test(p)?'pkg-15':/(7\s*(day|d)|week|7d)/.test(p)?'pkg-7':/(1\s*(day|d)|1\s*(hour|hr)|1d|1h)/.test(p)?'pkg-1':'pkg-default',statusClass=u.status==='online'?'is-online':u.status==='expired'?'is-expired':'is-offline';return '<article class="hotspot-mobile-user-card" data-hotspot-card data-status="'+u.status+'" data-expiry-time="'+(Number.isFinite(u.expiryTime)?u.expiryTime:'')+'" data-search="'+search(u)+'"><div class="hotspot-mobile-card-top"><div class="hotspot-mobile-identity"><span class="hotspot-mobile-serial"># <span data-hotspot-serial>'+(i+1)+'</span></span><strong>👤 '+escapeHtml(subscriberName(u))+'</strong>'+identityMeta(u,s)+'<span class="hotspot-package-badge '+pkgClass+'">'+escapeHtml(u.profile||'No profile')+'</span><span class="hotspot-mobile-status '+statusClass+'"><span class="hotspot-status-dot"></span>'+(u.status==='online'?'Online':u.status==='expired'?'Expired':'Offline')+'</span></div></div><div class="hotspot-mobile-card-bottom"><span>🌐 IP: '+escapeHtml(s.address||u.address||'--')+'</span><span>⏱️ Uptime: '+escapeHtml(s.uptime||u.uptime||'--')+'</span><span>📅 Exp: '+escapeHtml(u.expiryLabel||'—')+remainingMarkup(u)+'</span></div><div class="hotspot-mobile-action-dock">'+actions(u)+'</div></article>';}).join('');
- appendHotspotView('<section class="hotspot-dynamic-view admin-view hotspot-all-users-view"><div class="card border-0 shadow-sm overflow-hidden" style="border-radius:18px"><div class="card-header bg-white p-3 p-md-4"><div class="d-flex flex-wrap align-items-center justify-content-between gap-3"><div><h4 class="mb-0 fw-bold">All Hotspot Users</h4><div class="small text-muted mt-1">Live accounts and expiry details synchronized from MikroTik.</div></div><div class="d-flex flex-wrap align-items-center gap-2"><button class="btn btn-success" onclick="event.stopPropagation();window.loadAddHotspotUserView()">Add Hotspot User</button><button type="button" id="btnImportFromMikrotik" class="btn btn-outline-info" onclick="event.stopPropagation();window.runHotspotSync(&#39;import&#39;,this)">📥 Import from MikroTik</button><button type="button" id="btnPushToMikrotik" class="btn btn-outline-success" onclick="event.stopPropagation();window.runHotspotSync(&#39;push&#39;,this)">📤 Push to MikroTik</button><button type="button" class="btn btn-outline-secondary" title="Refresh Users" aria-label="Refresh Users" onclick="event.stopPropagation();refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh</button></div></div><div class="hotspot-kpi-filter-bar mt-3">'+tabs+'</div></div><div class="card-body p-3"><div class="hotspot-controls-grid mb-3"><div class="hotspot-search-control"><input id="hotspotSearch" class="form-control" placeholder="Search phone, profile, IP or comment…" oninput="filterHotspotAdvanced()" aria-label="Search Hotspot users"></div><div class="hotspot-profile-control"><select id="hotspotProfileFilter" class="form-select" onchange="filterHotspotAdvanced()" aria-label="Filter by profile"><option value="">All Profiles</option>'+[...new Set(all.map(u=>u.profile).filter(Boolean))].map(p=>'<option value="'+escapeHtml(p)+'">'+escapeHtml(p)+'</option>').join('')+'</select></div><div class="hotspot-server-control"><select id="hotspotServerFilter" class="form-select" onchange="filterHotspotAdvanced()" aria-label="Filter by server"><option value="">All Servers</option>'+[...new Set(all.map(u=>u.server).filter(Boolean))].map(p=>'<option value="'+escapeHtml(p)+'">'+escapeHtml(p)+'</option>').join('')+'</select></div></div><div class="d-none d-md-block w-100 table-responsive hotspot-desktop-table-wrap"><table class="table table-hover align-middle hotspot-live-table"><thead class="hotspot-table-head hotspot-table-header"><tr><th>#</th><th>SUBSCRIBER / DEVICE</th><th>PACKAGE</th><th>STATUS</th><th>IP &amp; UPTIME</th><th>EXPIRATION</th><th>ACTIONS</th></tr></thead><tbody id="hotspotUserBody">'+(desktop||'<tr><td colspan="7">No Hotspot users match this filter.</td></tr>')+'</tbody></table></div><div id="hotspotMobileCards" class="d-block d-md-none w-100 hotspot-mobile-cards">'+(mobile||'<div class="text-muted">No Hotspot users match this filter.</div>')+'</div><div class="small text-muted pt-3" id="hotspotVisibleCount"></div></div></div></section>');
+ appendHotspotView('<section class="hotspot-dynamic-view admin-view hotspot-all-users-view"><div class="card border-0 shadow-sm overflow-hidden" style="border-radius:18px"><div class="card-header bg-white p-3 p-md-4"><div class="d-flex flex-wrap align-items-center justify-content-between gap-3"><div><h4 class="mb-0 fw-bold">All Hotspot Users</h4><div class="small text-muted mt-1">Live accounts and expiry details synchronized from MikroTik.</div></div><div class="d-flex flex-wrap align-items-center gap-2"><button class="btn btn-success" onclick="event.stopPropagation();window.loadAddHotspotUserView()">Add Hotspot User</button><button type="button" class="btn btn-outline-secondary" title="Refresh Users" aria-label="Refresh Users" onclick="event.stopPropagation();refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh</button></div></div><div class="hotspot-kpi-filter-bar mt-3">'+tabs+'</div></div><div class="card-body p-3"><div class="hotspot-controls-grid mb-3"><div class="hotspot-search-control"><input id="hotspotSearch" class="form-control" placeholder="Search phone, profile, IP or comment…" oninput="filterHotspotAdvanced()" aria-label="Search Hotspot users"></div><div class="hotspot-profile-control"><select id="hotspotProfileFilter" class="form-select" onchange="filterHotspotAdvanced()" aria-label="Filter by profile"><option value="">All Profiles</option>'+[...new Set(all.map(u=>u.profile).filter(Boolean))].map(p=>'<option value="'+escapeHtml(p)+'">'+escapeHtml(p)+'</option>').join('')+'</select></div><div class="hotspot-server-control"><select id="hotspotServerFilter" class="form-select" onchange="filterHotspotAdvanced()" aria-label="Filter by server"><option value="">All Servers</option>'+[...new Set(all.map(u=>u.server).filter(Boolean))].map(p=>'<option value="'+escapeHtml(p)+'">'+escapeHtml(p)+'</option>').join('')+'</select></div></div><div class="d-none d-md-block w-100 table-responsive hotspot-desktop-table-wrap"><table class="table table-hover align-middle hotspot-live-table"><thead class="hotspot-table-head hotspot-table-header"><tr><th>#</th><th>SUBSCRIBER / DEVICE</th><th>PACKAGE</th><th>STATUS</th><th>IP &amp; UPTIME</th><th>EXPIRATION</th><th>ACTIONS</th></tr></thead><tbody id="hotspotUserBody">'+(desktop||'<tr><td colspan="7">No Hotspot users match this filter.</td></tr>')+'</tbody></table></div><div id="hotspotMobileCards" class="d-block d-md-none w-100 hotspot-mobile-cards">'+(mobile||'<div class="text-muted">No Hotspot users match this filter.</div>')+'</div><div class="small text-muted pt-3" id="hotspotVisibleCount"></div></div></div></section>');
  window.__hotspotRenderedRows=all;window.__hotspotKpiFilter=['all','online','offline','expiring','expired'].includes(mode)?mode:'all';updateLanguage(lang);applyHotspotLocalFilters();if(window.renderHotspotMasterDetail)window.renderHotspotMasterDetail(all);
 }
         async function kickHotspotSession(id, username) {
@@ -3746,6 +3759,24 @@ window.editHotspotUser=async function(username,event){if(event)event.stopPropaga
             }catch(error){showHotspotSyncToast(error?.message||'Hotspot synchronization failed.',false);}
             finally{button.disabled=false;button.innerHTML=oldHtml;}
         };
+        function handleImportFromMikrotik() {
+            const btnImport = document.getElementById('btnImportFromMikrotik');
+            if (btnImport && typeof window.runHotspotSync === 'function') window.runHotspotSync('import', btnImport);
+            else console.error('[Hotspot Sync] Import handler is unavailable.');
+        }
+        function handlePushToMikrotik() {
+            const btnPush = document.getElementById('btnPushToMikrotik');
+            if (btnPush && typeof window.runHotspotSync === 'function') window.runHotspotSync('push', btnPush);
+            else console.error('[Hotspot Sync] Push handler is unavailable.');
+        }
+        const btnImport = document.getElementById('btnImportFromMikrotik');
+        if (btnImport) {
+            btnImport.onclick = handleImportFromMikrotik;
+        }
+        const btnPush = document.getElementById('btnPushToMikrotik');
+        if (btnPush) {
+            btnPush.onclick = handlePushToMikrotik;
+        }
 
         async function kickHotspotUser(username,event){if(event)event.stopPropagation();try{await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message);}}
         async function removeHotspotUser(username,event){if(event)event.stopPropagation();if(!confirm('Delete user '+username+' from MikroTik and Database?'))return;try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message||'Could not delete Hotspot user.');}}
