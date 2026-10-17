@@ -4,6 +4,7 @@ const assert=require("node:assert/strict");
 const {normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone,dispatchNow,testChannel}=require("../services/notificationDispatcher");
 const settingsService=require("../services/appSettings");
 const whatsappService=require("../services/whatsappService");
+const smsService=require("../services/smsService");
 const db=require("../db");
 const {ALLOWED_EVENTS}=require("../controllers/notificationTemplateController");
 test("notification dispatcher normalizes Bangladeshi mobile numbers for channel gateways",()=>{
@@ -85,6 +86,53 @@ test("custom PPPoE renewal template replaces runtime variables for WhatsApp",asy
  }finally{settingsService.getAllSettings=originalGetAllSettings;whatsappService.sendMessage=originalSendMessage;db.query=originalDbQuery;}
 });
 
+
+test("Hotspot direct-message hooks prefer active Notification Hub templates and dispatch both channels",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
+ const originalSendMessage=whatsappService.sendMessage,originalSendNotification=smsService.sendNotification,originalLog=console.log;
+ const sent=[],queries=[],logs=[];
+ const scenarios=[
+  {event:"hotspot_account_created",templateKey:"welcome_message"},
+  {event:"hotspot_first_login",templateKey:"welcome_message"},
+  {event:"hotspot_renewal",templateKey:"hotspot_renewal"},
+  {event:"hotspot_expiring_soon",templateKey:"hotspot_expiry_warning"}
+ ];
+ settingsService.getAllSettings=async()=>({company_name:"FAZ NETWORK",notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false"});
+ db.query=async(sql,params=[])=>{
+  if(sql.includes("FROM notification_templates")){
+   const candidates=params[0]||[];
+   queries.push({candidates,channel:params[1]});
+   return candidates.some(key=>["welcome_message","hotspot_renewal","hotspot_purchase","hotspot_expiry_warning"].includes(key))
+    ?{rows:[{template_body:"TEMPLATE {name} {profile} {expiry_date}"}]}
+    :{rows:[]};
+  }
+  return {rows:[]};
+ };
+ smsService.sendNotification=async payload=>{sent.push({channel:"sms",...payload});return {success:true};};
+ whatsappService.sendMessage=async payload=>{sent.push({channel:"whatsapp",...payload});return {success:true};};
+ console.log=(...args)=>logs.push(args);
+ try{
+  for(const scenario of scenarios){
+   const result=await dispatchNow({
+    userType:"hotspot",event:scenario.event,to:"01712345678",phone:"01712345678",
+    username:"AA:BB:CC:DD:EE:FF",customer:{username:"AA:BB:CC:DD:EE:FF",name:"Rahim",phone:"01712345678"},
+    customerName:"Rahim",message:"CONTROLLER FALLBACK MUST NOT WIN",useMessageDirectly:true,
+    channels:["sms","whatsapp"],variables:{name:"Rahim",profile:"1-Hour",expiry_date:"2026-10-18"}
+   });
+   assert.equal(result.success,true,scenario.event+" should dispatch successfully");
+   assert.deepEqual(result.results.map(item=>item.channel).sort(),["sms","whatsapp"]);
+   assert.ok(queries.some(query=>query.candidates.includes(scenario.templateKey)),scenario.event+" should query template key "+scenario.templateKey);
+  }
+  assert.equal(sent.length,scenarios.length*2);
+  assert.equal(sent.every(item=>item.message==="TEMPLATE Rahim 1-Hour 2026-10-18"),true);
+  assert.equal(sent.find(item=>item.channel==="sms").to,"01712345678");
+  assert.equal(sent.find(item=>item.channel==="whatsapp").to,"8801712345678");
+  assert.equal(logs.filter(([label,payload])=>label==="[Notification Pipeline] Sending:"&&payload?.templateFound===true).length,scenarios.length*2);
+ }finally{
+  settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;
+  whatsappService.sendMessage=originalSendMessage;smsService.sendNotification=originalSendNotification;console.log=originalLog;
+ }
+});
 
 test("template manager allows both dedicated expired events",()=>{
  assert.equal(ALLOWED_EVENTS.has("pppoe_expired"),true);
