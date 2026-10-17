@@ -3697,6 +3697,15 @@
                         });
                         resultEl.className = 'small mt-3 text-success';
                         resultEl.textContent = response.message || 'Renewal successful.';
+                        const newExpiry = response.new_expiry || response.expiry || response.voucher?.expires_at || null;
+                        if (newExpiry) {
+                            user.expires_at = newExpiry;
+                            user.expiryLabel = newExpiry;
+                            const matched = (window.__hotspotRenderedRows || []).find(x => String(x.voucherId || x.id || "") === String(user.voucherId || user.id || "") || String(x.username || "").toLowerCase() === String(user.username || "").toLowerCase());
+                            if (matched) { matched.expires_at = newExpiry; matched.expiryLabel = newExpiry; matched.profile = response.voucher?.profile || pkg.name || matched.profile; }
+                            const detailExpiry = document.querySelector('#detailExpiry');
+                            if (detailExpiry) detailExpiry.textContent = newExpiry;
+                        }
                         if (typeof refreshHotspotCurrent === 'function') await refreshHotspotCurrent();
                         window.setTimeout(function () {
                             try { window.bootstrap.Modal.getOrCreateInstance(modalEl).hide(); }
