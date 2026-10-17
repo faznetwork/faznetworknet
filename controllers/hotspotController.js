@@ -391,7 +391,7 @@ async function manualRenew(req,res){
   });
   hotspotListCache.expiresAt=0;
   if(notify)notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_renewal",to:renewed.phone,phone:renewed.phone,username:renewed.voucher.username,customer:{username:renewed.voucher.username,name:renewed.voucher.customer_name||renewed.voucher.username,phone:renewed.phone,profile:renewed.voucher.profile},variables:{package:renewed.packageName,profile:renewed.voucher.profile,expiry_date:renewed.expiryLabel||"Data quota"},channels:["sms","whatsapp"]});
-  return res.json({success:true,message:"Hotspot package renewed; RouterOS credentials remain MAC-based.",voucher:renewed.voucher,expiry:renewed.expiryLabel});
+  return res.json({success:true,message:"Hotspot package renewed; RouterOS credentials remain MAC-based.",voucher:renewed.voucher,expiry:renewed.expiryLabel,new_expiry:renewed.expiryLabel});
  }catch(e){return errorResponse(res,e);}
 }
 
