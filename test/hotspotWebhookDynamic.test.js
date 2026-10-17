@@ -23,7 +23,7 @@ function paymentTransaction(id=5,amount=10){
   return {id,trx_id:"TXN-TEST-5",channel:"bkash",sender_phone:"01712345678",amount,status:"unmatched",used:false,matched_username:null};
 }
 
-test("Admin creates a phone + package pending account without MAC or RouterOS provisioning",async()=>{
+test("Admin creates an unused first-login voucher without MAC, expiry, or RouterOS provisioning",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction;
   const oldProfiles=mikrotik.getHotspotProfiles,oldCreate=mikrotik.createHotspotUser,oldRecharge=mikrotik.rechargeHotspotUser;
   let insertedSql="",insertedParams=[],routerWrites=0;
@@ -38,7 +38,7 @@ test("Admin creates a phone + package pending account without MAC or RouterOS pr
       if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[]};
       if(sql.startsWith("INSERT INTO hotspot_vouchers")){
         insertedSql=sql;insertedParams=params;
-        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:"pending_claim",mac_address:params[11]}]};
+        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:params[14],mac_address:params[11],expires_at:params[16]}]};
       }
       throw new Error("Unexpected transactional query: "+sql);
     }});
@@ -50,9 +50,9 @@ test("Admin creates a phone + package pending account without MAC or RouterOS pr
     assert.equal(res.statusCode,201);
     assert.equal(res.body.success,true);
     assert.equal(res.body.pending_activation,true);
-    assert.equal(res.body.user.status,"pending_claim");
+    assert.equal(res.body.user.status,"unused");
     assert.equal(res.body.user.phone,"01712345678");
-    assert.match(insertedSql,/VALUES\(\$1,\$2,\$3,\$4,\$5,'pending_claim'/);
+    assert.match(insertedSql,/first_login_at,expires_at,mac_lock/);\n    assert.equal(insertedParams[14],"unused");\n    assert.equal(insertedParams[15],null,"first-login voucher has no activation timestamp");\n    assert.equal(insertedParams[16],null,"first-login voucher has no expiry until activation");
     assert.equal(insertedParams[1],"01712345678","pending database password field stores the phone for verification");
     assert.equal(insertedParams[6],"01712345678","phone is stored as the stable customer lookup key");
     assert.equal(insertedParams[10],"pkg-1-hour");
