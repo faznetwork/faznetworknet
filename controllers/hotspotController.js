@@ -94,8 +94,6 @@ async function refreshHotspotListCache(){
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
   const [ledger,sessionRows]=await Promise.all([ledgerPromise,sessionsPromise]);
   const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(row=>String(row?.username||"").trim()&&String(row.username).toLowerCase()!=="default-trial").map(row=>({user:row.username,username:row.username,address:row.address||"",macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||""),uptime:row.uptime||"",sessionTimeLeft:row.sessionTimeLeft||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),server:row.server||"",profile:row.profile||""}));
-  const activeMacs=new Set(activeUsers.map(row=>normalizeHotspotMac(row.macAddress||row.username)).filter(Boolean));
-  const activeNames=new Set(activeUsers.map(row=>String(row.username||"").trim().toLowerCase()).filter(Boolean));
   const now=Date.now();
   const users=(ledger.rows||[]).map(row=>{
    const mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username);
@@ -424,4 +422,4 @@ async function manualRenew(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;}};
+module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
