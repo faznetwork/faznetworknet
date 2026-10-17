@@ -266,6 +266,7 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS profile_id VARCHAR(100);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_address VARCHAR(17);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS transaction_id BIGINT;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS renewal_stacked BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS pre_expiry_notified BOOLEAN NOT NULL DEFAULT FALSE;
 DO $hotspot_fk$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hotspot_vouchers_transaction_id_fkey') THEN
