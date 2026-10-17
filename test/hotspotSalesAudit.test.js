@@ -15,10 +15,11 @@ test("Hotspot sales origin migration preserves independent transaction history",
  assert.doesNotMatch(sql,/DELETE\s+FROM\s+transactions/i);
 });
 
-test("Hotspot expiry deletes voucher rows only after completed router cleanup",()=>{
+test("Hotspot expiry retains rows in expired_profile for 30 days and purges only after RouterOS cleanup",()=>{
  const source=read("jobs/hotspotExpirationCleanup.js");
- assert.match(source,/DELETE FROM hotspot_vouchers WHERE id=\$1 AND status='expired' AND cleanup_status='completed'/);
- assert.match(source,/DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '30 days'/);
+ assert.match(source,/profile='expired_profile'/);
+ assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '30 days'/);
+ assert.match(source,/DELETE FROM hotspot_vouchers WHERE id = ANY\(\$1::bigint\[\]\) AND status='expired' AND cleanup_status='completed'/);
  assert.doesNotMatch(source,/DELETE\s+FROM\s+transactions/i);
 });
 
