@@ -416,7 +416,7 @@ async function connect(options = {}) {
     socketForEvents.ev.on("connection.update", async update => {
       // Ignore delayed events from a socket that has already been replaced.
       if (socket !== socketForEvents) return;
-      if (update.qr) {
+      if (update.qr && connection !== "connected") {
         qrText = update.qr;
         try {
           qrDataUrl = await qrcode.toDataURL(update.qr, { margin: 2, width: 280 });
@@ -427,9 +427,13 @@ async function connect(options = {}) {
       if (update.connection === "open") {
         reconnectAttempt = 0;
         lastError = null;
+        // Remove the stale QR as soon as the socket reports an open handshake.
+        qrDataUrl = null;
+        qrText = null;
+        const connectedSocket = socketForEvents;
+        console.log("[WhatsApp] Handshake open! Connected as:", connectedSocket.user?.id || "(user not populated yet)");
 
-        // Flush the latest credential snapshot before advertising readiness.
-        // Keep the QR visible unless pairing really registered the account.
+        // Persist the final Baileys credential snapshot before exposing readiness.
         try {
           await saveCreds();
           authConfigured = state.creds?.registered === true;
@@ -438,11 +442,8 @@ async function connect(options = {}) {
           console.error("[WhatsApp] Final credential persistence failed:", error.message);
         }
 
-        const connectedSocket = socket;
-        if (isSocketReady(connectedSocket, state.creds, "connected")) {
+        if (isSocketReady(connectedSocket, state.creds, "connected") && !lastError) {
           connection = "connected";
-          qrDataUrl = null;
-          qrText = null;
           try {
             await persistConnectedAccount(connectedSocket.user);
           } catch (error) {
@@ -450,7 +451,7 @@ async function connect(options = {}) {
           }
         } else {
           connection = "reconnect_required";
-          lastError = "WhatsApp socket opened without registered Baileys credentials. Re-link this device using the QR code.";
+          if (!lastError) lastError = "WhatsApp socket opened without registered Baileys credentials. Re-link this device using the QR code.";
           console.warn("[WhatsApp] Socket opened but is not ready: user/registered credentials missing.");
         }
       }
