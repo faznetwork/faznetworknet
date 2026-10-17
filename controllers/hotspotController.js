@@ -278,7 +278,7 @@ async function createUser(req,res){
       const params=[mac,mac,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,mac,customerName,note,now,expiresAt, true];
       if(reusable){
         previousRecord=reusable;
-        const result=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status='active',comment=$6,phone=$7,server=$8,time_limit=$9,data_limit=$10,profile_id=$11,mac_address=$12,customer_name=$13,note=$14,first_login_at=$15,expires_at=$16,mac_lock=$17,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$18 RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at",[...params,reusable.id]);
+        const result=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status='active',comment=$6,phone=COALESCE(NULLIF($7,''),phone),server=$8,time_limit=$9,data_limit=$10,profile_id=$11,mac_address=$12,customer_name=$13,note=$14,first_login_at=$15,expires_at=$16,mac_lock=$17,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$18 RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at",[...params,reusable.id]);
         if(!result.rows?.length)throw new Error("Expired Hotspot subscriber could not be reactivated in PostgreSQL.");
         return result.rows[0];
       }
@@ -290,7 +290,7 @@ async function createUser(req,res){
     savedId=stored.id;
     await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment,server,macAddress:mac,previousUsername:previousRecord?.username});
     routerProvisioned=true;
-    await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=$3,comment=$4,expires_at=$5,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1",[stored.id,mac,phone,comment,expiresAt]);
+    await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=COALESCE(NULLIF($3,''),phone),comment=$4,expires_at=$5,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1",[stored.id,mac,phone,comment,expiresAt]);
     if(phone){
       const customerLabel=String(stored.customer_name||customerName||"গ্রাহক").trim()||"গ্রাহক";
       const expiryStr=expiresAt?new Date(expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
