@@ -336,7 +336,8 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
     assert.equal(routerUserReads,0);
     assert.equal(result.users.length,3);
     assert.equal(result.users.find(row=>row.id===1).is_online,true);
-    assert.equal(result.users.find(row=>row.id===2).is_online,false);\n    assert.equal(result.users.find(row=>row.id===1).ip,"10.10.0.11");
+    assert.equal(result.users.find(row=>row.id===2).is_online,false); 
+    assert.equal(result.users.find(row=>row.id===1).ip,"10.10.0.11");
     assert.equal(result.users.find(row=>row.id===3).status,"expired");
   }finally{
     db.query=oldQuery;mikrotik.getActiveHotspotSessions=oldSessions;mikrotik.getHotspotUsers=oldRouterUsers;hotspotController.invalidateListCache();
