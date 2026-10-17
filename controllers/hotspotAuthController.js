@@ -173,4 +173,34 @@ async function activate(req,res){
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");
   }
 }
-module.exports={activate,normalizePhone,normalizeMac};
+
+async function claimVoucher(req,res){
+  const fail=(status,code,message)=>res.status(status).json({success:false,code,message,error:message});
+  if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
+  const pin=String(req.body?.voucher_code||req.body?.pin||"").trim().toUpperCase();
+  const password=String(req.body?.voucher_password||req.body?.password||"").trim();
+  const mac=normalizeMac(req.body?.mac||req.body?.device_mac||"");
+  if(!pin||pin.length<4||pin.length>100)return fail(400,"INVALID_VOUCHER_PIN","Enter the voucher PIN printed on your card.");
+  if(!password||password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Enter the voucher card password.");
+  if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  try{
+    const claimed=await db.withTransaction(async client=>{
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
+      const row=result.rows[0],status=String(row.status||"").toLowerCase();
+      if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
+      const known=normalizeMac(row.mac_address)||(normalizeMac(row.username));
+      if(known&&known!==mac)throw makeError("VOUCHER_MAC_LOCKED",403,"This voucher is already bound to another device.");
+      const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
+      if(status==="active"&&expiry&&expiry.getTime()<=Date.now())throw makeError("PACKAGE_EXPIRED",410,"This voucher package has expired.");
+      await client.query("UPDATE hotspot_vouchers SET mac_address=$1,updated_at=NOW() WHERE id=$2",[mac,row.id]);
+      return {id:row.id,phone:""};
+    });
+    return activate({...req,body:{...(req.body||{}),mac,phone:""}},res);
+  }catch(error){
+    return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
+  }
+}
+module.exports={activate,claimVoucher,normalizePhone,normalizeMac};
