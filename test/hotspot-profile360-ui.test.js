@@ -50,3 +50,22 @@ test("Mobile All Hotspot Users keeps subscriber list and Subscriber 360 visible 
  assert.match(css,/subscriber-mobile-detail-open \.hotspot-master-detail-container>\.col-lg-5\{display:block!important\}/);
  assert.match(css,/hotspot-all-users-view #subscriberDetailColumn\{display:block!important\}/);
 });
+
+
+test("Hotspot lifecycle supports first-login and pre-assigned activation plus manual overrides", () => {
+ const controller=fs.readFileSync(path.join(root,"controllers/hotspotController.js"),"utf8");
+ const profileController=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
+ const addView=fs.readFileSync(path.join(root,"views/admin.ejs"),"utf8");
+ const editJs=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8");
+ assert.match(controller,/activation_type|activationType/);assert.match(controller,/preassigned\?"active":"unused"/);assert.match(controller,/firstLoginAt=preassigned\?new Date\(\):null/);assert.match(controller,/rechargeHotspotUser/);assert.match(controller,/mac_address/);
+ assert.match(profileController,/async function updateProfile/);assert.match(profileController,/expires_at/);assert.match(profileController,/rechargeHotspotUser/);assert.match(profileController,/Profile updated successfully!/);assert.match(profileController,/mac_lock/);
+ assert.match(addView,/name="activation_type"/);assert.match(addView,/id="hsDeviceMac"/);assert.match(addView,/id="hsPassword"/);assert.match(addView,/id="hsCustomExpiry"/);
+ assert.match(editJs,/profile360Expiry/);assert.match(editJs,/profile360Profile/);assert.match(editJs,/expires_at:f\.elements\.expires_at\.value/);assert.match(editJs,/addEventListener\("submit"/);
+});
+
+test("Mobile Subscriber 360 opens a modal while desktop retains detail workspace", () => {
+ const js=fs.readFileSync(path.join(root,"public/js/hotspot-master-detail.js"),"utf8");
+ const css=fs.readFileSync(path.join(root,"public/css/hotspot-master-detail.css"),"utf8");
+ assert.match(js,/id="mobileSubscriberModal"/);assert.match(js,/getOrCreateInstance\(modal\)\.show\(\)/);assert.match(js,/detailPackageName/);assert.match(js,/detailStatus/);
+ assert.match(css,/@media\(max-width:991\.98px\)/);assert.match(css,/#mobileSubscriberModal \.modal-body/);assert.match(css,/body:not\(\.sidebar-open\) \.sidebar/);
+});
