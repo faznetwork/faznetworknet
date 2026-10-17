@@ -23,55 +23,52 @@ function paymentTransaction(id=5,amount=10){
   return {id,trx_id:"TXN-TEST-5",channel:"bkash",sender_phone:"01712345678",amount,status:"unmatched",used:false,matched_username:null};
 }
 
-test("Admin creates an unused first-login voucher without MAC, expiry, or RouterOS provisioning",async()=>{
+test("Admin creates a direct active subscriber, provisions RouterOS, and reuses an expired phone record",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction;
-  const oldProfiles=mikrotik.getHotspotProfiles,oldCreate=mikrotik.createHotspotUser,oldRecharge=mikrotik.rechargeHotspotUser;
-  let insertedSql="",insertedParams=[],routerWrites=0;
+  const oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
+  let insertedSql="",insertedParams=[],updatedSql="",updatedParams=[],routerWrites=0;
+  const expired={id:41,username:"AA:BB:CC:DD:EE:FF",password:"AA:BB:CC:DD:EE:FF",profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"expired",phone:"01712345678",server:"all",time_limit:"1h",data_limit:null,mac_address:"AA:BB:CC:DD:EE:FF",customer_name:"Old Name",note:"old",first_login_at:new Date(Date.now()-7200000),expires_at:new Date(Date.now()-3600000),expired_at:new Date(Date.now()-3500000),cleanup_status:"done",cleanup_error:null,router_removed_at:new Date(Date.now()-3400000),mac_lock:true};
   try{
-    db.query=async sql=>{
+    db.query=async(sql)=> {
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
-      if(sql.startsWith("SELECT price FROM hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("SELECT price FROM hotspot_vouchers"))return {rows:[{price:10}]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[]};
       throw new Error("Unexpected database query: "+sql);
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
-      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[]};
-      if(sql.startsWith("INSERT INTO hotspot_vouchers")){
-        insertedSql=sql;insertedParams=params;
-        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[11],phone:params[7],status:params[5],mac_address:params[12],expires_at:params[16]}]};
+      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[expired]};
+      if(sql.startsWith("SELECT phone FROM hotspot_vouchers"))return {rows:[{phone:"01712345678"}]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")) {
+        updatedSql=sql;updatedParams=params;
+        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:"active",mac_address:params[11],customer_name:params[12],note:params[13],expires_at:params[15]}]};
       }
+      if(sql.startsWith("INSERT INTO hotspot_vouchers")){insertedSql=sql;insertedParams=params;return {rows:[{id:42,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:"active",mac_address:params[11],customer_name:params[12],note:params[13],expires_at:params[15]}]};}
       throw new Error("Unexpected transactional query: "+sql);
     }});
     mikrotik.getHotspotProfiles=async()=>oneHourProfile();
-    mikrotik.createHotspotUser=async()=>{routerWrites++;throw new Error("Admin create must not write RouterOS");};
-    mikrotik.rechargeHotspotUser=async()=>{routerWrites++;throw new Error("Admin create must not write RouterOS");};
+    mikrotik.rechargeHotspotUser=async options=>{routerWrites++;assert.equal(options.username,"AA:BB:CC:DD:EE:FF");assert.equal(options.password,"AA:BB:CC:DD:EE:FF");assert.equal(options.profile,"1-Hour");assert.match(options.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);};
     const res=responseRecorder();
-    await hotspotController.createUser({body:{phone:"01712345678",profile_id:"pkg-1-hour",customer_name:"  "+"R".repeat(250)+"  ",password:"  "+"P".repeat(220)+"  ",note:"  "+"N".repeat(1200)+"  "}},res);
+    await hotspotController.createUser({body:{phone:"01712345678",mac:"aa-bb-cc-dd-ee-ff",profile_id:"pkg-1-hour",customer_name:"New Customer"}},res);
     assert.equal(res.statusCode,201);
     assert.equal(res.body.success,true);
-    assert.equal(res.body.pending_activation,true);
-    assert.equal(res.body.user.status,"unused");
-    assert.equal(res.body.user.phone,"01712345678");
-    assert.match(insertedSql,/first_login_at,expires_at,mac_lock/);
-    assert.equal(insertedParams[5],"unused","status is the sixth INSERT value and must satisfy hotspot_vouchers_status_check");
-    assert.equal(insertedParams[15],null,"first-login voucher has no activation timestamp");
-    assert.equal(insertedParams[16],null,"first-login voucher has no expiry until activation");
-    assert.equal(insertedParams[1],"P".repeat(160),"explicit password is trimmed and bounded before storage");
-    assert.equal(insertedParams[7],"01712345678","phone is stored as the stable customer lookup key");
-    assert.equal(insertedParams[11],"pkg-1-hour");
-    assert.equal(insertedParams[12],null,"admin cannot supply a device MAC");
-    assert.equal(insertedParams[0],"PENDING-01712345678");
-    assert.ok(insertedParams[0].length<=160,"synthetic username must fit the widened database column");
-    assert.equal(insertedParams[1],"P".repeat(160),"password is trimmed and bounded before INSERT");
-    assert.equal(insertedParams[13],"R".repeat(200),"customer name is trimmed and bounded before INSERT");
-    assert.equal(insertedParams[14],"N".repeat(1000),"note is trimmed and bounded before INSERT");
-    assert.equal(routerWrites,0,"pending accounts must not be provisioned on RouterOS before first login");
+    assert.equal(res.body.pending_activation,false);
+    assert.equal(res.body.user.status,"active");
+    assert.equal(res.body.user.username,"AA:BB:CC:DD:EE:FF");
+    assert.equal(updatedSql.startsWith("UPDATE hotspot_vouchers"),true,"expired record is reactivated instead of creating a voucher row");
+    assert.match(updatedSql,/status='active'/);
+    assert.match(updatedSql,/expired_at=NULL/);
+    assert.equal(updatedParams[0],"AA:BB:CC:DD:EE:FF");
+    assert.equal(updatedParams[1],"AA:BB:CC:DD:EE:FF");
+    assert.equal(updatedParams[6],"01712345678");
+    assert.ok(new Date(updatedParams[15]).getTime()>Date.now());
+    assert.equal(insertedSql,"","a previous expired phone record should be reused");
+    assert.equal(routerWrites,1,"direct account must be provisioned immediately");
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
-    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.createHotspotUser=oldCreate;mikrotik.rechargeHotspotUser=oldRecharge;
+    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
   }
 });
-
 test("verifyTrx validates payment and stages a pending phone package without RouterOS writes",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles;
   const oldRecharge=mikrotik.rechargeHotspotUser,oldCreate=mikrotik.createHotspotUser,oldUpdate=mikrotik.updateHotspotProfile;
