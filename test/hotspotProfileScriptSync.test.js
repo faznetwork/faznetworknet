@@ -24,21 +24,18 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
     logger:{log(){},warn(...args){throw new Error(args.join(" "));}}
   };
   const result=await syncHotspotProfileScripts(deps);
-  assert.deepEqual(result,{checked:4,updated:4,skipped:1,unchanged:0,ineligible:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0}});
+  assert.deepEqual(result,{checked:4,updated:4,skipped:1,unchanged:0,ineligible:1,failed:0,serverAuth:{checked:0,updated:0,skipped:0,failed:0},schedulerCleanup:{checked:0,removed:0,failed:0}});
   assert.equal(updates.length,4);
   assert.deepEqual(updates.map(x=>Object.keys(x).sort()),[["name","onLogin"],["name","onLogin"],["name","onLogin"],["name","onLogin"]]);
   const thirty=updates.find(x=>x.name==="30-Day").onLogin;
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
   const manual=updates.find(x=>x.name==="Manual-1h").onLogin;
-  assert.match(thirty,/get .*uid comment/); assert.match(thirty,/start-time=\$expTime/); assert.doesNotMatch(thirty,/interval=30d/);
-  assert.match(hour,/get .*uid comment/); assert.match(hour,/start-time=\$expTime/); assert.doesNotMatch(hour,/interval=1h/);
-  assert.doesNotMatch(thirty,/FAZ\\|PROFILE=|comment=/);
-  assert.doesNotMatch(hour,/FAZ\\|EXP=|FIRST_LOGIN=|comment=/);
-  assert.match(custom,/get .*uid comment/); assert.match(custom,/start-time=\$expTime/); assert.doesNotMatch(custom,/interval=7d/);
-  assert.match(manual,/get .*uid comment/); assert.match(manual,/start-time=\$expTime/); assert.doesNotMatch(manual,/interval=1h/);
+  assert.match(thirty,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(thirty,/mac-address/); assert.doesNotMatch(thirty,/system scheduler|scheduler add|EXP_|get .*uid comment/i);
+  assert.match(hour,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(hour,/mac-address/); assert.doesNotMatch(hour,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
+  assert.match(custom,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(custom,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(custom,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
+  assert.match(manual,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(manual,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(manual,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
   assert.match(manual,/CUSTOM_PROFILE_HOOK/);
-  assert.match(custom,/FAZ_CUSTOM_ON_LOGIN_HOOK_START/);
   assert.match(custom,/CUSTOM_PROFILE_HOOK/);
   for(const update of updates){
     assert.equal(Object.keys(update).includes("sessionTimeout"),false);
@@ -66,7 +63,7 @@ test("startup sync enforces auth settings on active Hotspot server profiles", as
   };
   const result = await syncHotspotProfileScripts(deps);
   assert.deepEqual(checked, ["hsprof1", "guest-profile"], "each active server profile is synced once");
-  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, unchanged: 0, ineligible: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 } });
+  assert.deepEqual(result, { checked: 0, updated: 0, skipped: 0, unchanged: 0, ineligible: 0, failed: 0, serverAuth: { checked: 2, updated: 1, skipped: 1, failed: 0 }, schedulerCleanup: { checked: 0, removed: 0, failed: 0 } });
 });
 
 test("RouterOS server-profile auth requires phone/password login and prevents MAC-only bypass", async () => {
