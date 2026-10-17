@@ -759,10 +759,59 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).map((item) => ({
         id: this._str(item[".id"]), username: this._str(item.name), password: this._str(item.password),
         profile: this._str(item.profile), disabled: this._bool(item.disabled), server: this._str(item.server),
-        comment: this._str(item.comment), uptime: this._str(item.uptime),
+        comment: this._str(item.comment), comment_phone: ((this._str(item.comment).match(/\\bphone\\s*[:=]\\s*(\\+?[0-9][0-9\\s-]{7,})/i) || [])[1] || "").trim(), uptime: this._str(item.uptime),
         limitUptime: this._str(item["limit-uptime"]), limitBytesTotal: this._number(item["limit-bytes-total"]),
         bytesIn: this._number(item["bytes-in"]), bytesOut: this._number(item["bytes-out"]), raw: item
       })).filter((item) => item.username);
+    });
+  }
+
+
+  async syncHotspotUsers(vouchers) {
+    const candidates = Array.isArray(vouchers) ? vouchers : [];
+    return this._withConnection("Hotspot two-way push sync", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/user/print");
+      const routerUsers = Array.isArray(rows) ? rows : [];
+      const byName = new Map();
+      for (const row of routerUsers) {
+        const name = this._str(row?.name).trim().toUpperCase();
+        if (name && row[".id"] && !byName.has(name)) byName.set(name, row);
+      }
+      const expiredNames = new Set(candidates.filter(v => v?.expired).map(v => normalizeHotspotMac(v?.macAddress || v?.mac_address)).filter(Boolean));
+      const activeRows = expiredNames.size ? await connection.write("/ip/hotspot/active/print") : [];
+      const activeSessions = Array.isArray(activeRows) ? activeRows : [];
+      let provisioned = 0, refreshed = 0, skipped = 0, disconnected = 0;
+      for (const voucher of candidates) {
+        const macAddress = normalizeHotspotMac(voucher?.macAddress || voucher?.mac_address);
+        const profile = this._str(voucher?.profile).trim();
+        const comment = this._str(voucher?.comment).trim();
+        if (!macAddress || !profile || !/^Exp: \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(comment)) {
+          skipped++;
+          continue;
+        }
+        const existing = byName.get(macAddress);
+        if (existing) {
+          await connection.write("/ip/hotspot/user/set", this._writeParams({
+            ".id": existing[".id"], profile, comment
+          }));
+          refreshed++;
+        } else {
+          await connection.write("/ip/hotspot/user/add", this._writeParams({
+            name: macAddress, password: macAddress, profile, comment,
+            "mac-address": macAddress, server: this._str(voucher?.server).trim() || "all"
+          }));
+          provisioned++;
+        }
+        if (voucher?.expired) {
+          for (const session of activeSessions.filter(item =>
+            this._str(item.user).trim().toUpperCase() === macAddress && item[".id"]
+          )) {
+            await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
+            disconnected++;
+          }
+        }
+      }
+      return { provisioned, refreshed, skipped, disconnected };
     });
   }
 
