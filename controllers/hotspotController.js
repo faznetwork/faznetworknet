@@ -362,18 +362,34 @@ async function voucherStats(req,res){
 }
 async function voucherRecords(req,res){
  try{
-  const allowed=new Set(["all","unused","active","expired","cleanup"]);
+  const allowed=new Set(["all","unused","active","online","offline","expired","cleanup"]);
   const filter=String(req.query.status||"all").trim().toLowerCase();
-  if(!allowed.has(filter))return res.status(400).json({success:false,message:"Invalid voucher status filter."});
-  const params=[];let where="";
-  if(filter==="unused"||filter==="active"||filter==="expired"){params.push(filter);where="WHERE status=$1";}
-  else if(filter==="cleanup"){where="WHERE status='expired' AND cleanup_status IN ('pending','failed')";}
-  const result=await db.query(
-   "SELECT id,username,password,profile,validity,price,status,phone,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,created_at,updated_at FROM hotspot_vouchers "+where+" ORDER BY created_at DESC,id DESC LIMIT 500",
-   params
-  );
-  const rows=result.rows||[];
-  return res.json({success:true,filter,count:rows.length,vouchers:rows.map(v=>({...v,price:Number(v.price||0)}))});
+  if(!allowed.has(filter))return res.status(400).json({success:false,message:"Invalid Hotspot user status filter."});
+  const [result,sessionRows]=await Promise.all([
+   db.query("SELECT id,username,password,profile,profile_id,validity,price,status,phone,customer_name,mac_address,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY created_at DESC,id DESC LIMIT 2000"),
+   mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot users] Live-session enrichment unavailable:",error.message);return [];})
+  ]);
+  const sessions=(Array.isArray(sessionRows)?sessionRows:[]).map(row=>({...row,username:String(row.user||row.username||"").trim(),macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||"")}));
+  const byUsername=new Map(),byMac=new Map();
+  for(const session of sessions){if(session.username)byUsername.set(session.username.toLowerCase(),session);if(session.macAddress)byMac.set(session.macAddress,session);}
+  const now=Date.now();
+  const all=(result.rows||[]).map(row=>{
+   const username=String(row.username||"").trim(),mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(username);
+   const session=byUsername.get(username.toLowerCase())||(mac?byMac.get(mac):null)||null;
+   const expiry=row.expires_at?new Date(row.expires_at):null;
+   const expired=String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
+   const online=Boolean(session&&String(session.address||session.ip||"").trim())&&!expired;
+   const status=expired?"expired":online?"online":String(row.status||"").toLowerCase()==="pending_claim"?"pending_claim":String(row.status||"").toLowerCase()==="unused"?"unused":"offline";
+   return {...row,mac_address:mac||row.mac_address||"",is_online:online,online,live_status:online?"online":"offline",status,db_status:row.status,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",session_ip:session?.address||session?.ip||"",session_uptime:session?.uptime||"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),price:Number(row.price||0)};
+  });
+  let rows=all;
+  if(filter==="cleanup")rows=all.filter(row=>row.db_status==="expired"&&["pending","failed"].includes(row.cleanup_status));
+  else if(filter==="unused")rows=all.filter(row=>row.db_status==="unused");
+  else if(filter==="expired")rows=all.filter(row=>row.status==="expired");
+  else if(filter==="online")rows=all.filter(row=>row.is_online);
+  else if(filter==="active")rows=all.filter(row=>!row.is_online&&row.status!=="expired"&&row.expires_at&&new Date(row.expires_at).getTime()>now);
+  else if(filter==="offline")rows=all.filter(row=>!row.is_online);
+  return res.json({success:true,filter,count:rows.length,vouchers:rows,users:rows,activeUsers:sessions.map(row=>({id:row.id||row.sessionId||"",user:row.username,username:row.username,address:row.address||row.ip||"",macAddress:row.macAddress||"",uptime:row.uptime||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),profile:row.profile||""}))});
  }catch(e){return errorResponse(res,e);}
 }
 async function voucherSales(req,res){
