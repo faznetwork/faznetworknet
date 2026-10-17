@@ -788,12 +788,37 @@ class MikroTikService {
     });
   }
 
+  async cleanupHotspotExpirationSchedulers() {
+    return this._withConnection("legacy Hotspot expiry scheduler cleanup", async (connection) => {
+      const rows = await connection.write("/system/scheduler/print");
+      const matches = (Array.isArray(rows) ? rows : []).filter(item => {
+        const name = this._str(item?.name).trim();
+        return item?.[".id"] && (/^EXP_/i.test(name) || /^faz-exp-/i.test(name));
+      });
+      let removed = 0, failed = 0;
+      for (const scheduler of matches) {
+        try {
+          await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
+          removed++;
+        } catch (error) {
+          if (/no such item|not found|does not exist|no item/i.test(String(error?.message || error))) {
+            console.info("[Hotspot scheduler cleanup] Scheduler already absent:", scheduler.name);
+            continue;
+          }
+          failed++;
+          console.warn("[Hotspot scheduler cleanup] Could not remove " + scheduler.name + ":", error?.message || error);
+        }
+      }
+      return { checked: (Array.isArray(rows) ? rows : []).length, removed, failed };
+    });
+  }
+
   async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
     const username = this._str(usernameValue).trim();
     if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
     let storedMac = this._str(macAddressValue).trim().toUpperCase();
-    if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(storedMac)) storedMac = "";
-    // The PostgreSQL identity survives deletion of the RouterOS user itself.
+    const macLike = value => /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(value).trim().toUpperCase());
+    if (!macLike(storedMac)) storedMac = "";
     if (!storedMac) {
       try {
         const database = require("../db");
@@ -802,12 +827,12 @@ class MikroTikService {
           [username]
         );
         const candidate = this._str(result.rows?.[0]?.mac_address).trim().toUpperCase();
-        if (/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(candidate)) storedMac = candidate;
+        if (macLike(candidate)) storedMac = candidate;
       } catch (error) {
         console.warn("[Hotspot cleanup] Could not retrieve PostgreSQL MAC binding; continuing with RouterOS identity:", error.message);
       }
     }
-    return this._withConnection("expired Hotspot user cleanup", async (connection) => {
+    return this._withConnection("Hotspot user hard purge", async (connection) => {
       const [userRows, activeRows, cookieRows, hostRows, schedulerRows] = await Promise.all([
         connection.write("/ip/hotspot/user/print"),
         connection.write("/ip/hotspot/active/print"),
@@ -816,44 +841,49 @@ class MikroTikService {
         connection.write("/system/scheduler/print")
       ]);
       const lower = value => this._str(value).trim().toLowerCase();
-      const macLike = value => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(this._str(value).trim());
-      const userMatches = (Array.isArray(userRows) ? userRows : []).filter(item =>
-        lower(item.name) === lower(username) && item[".id"]);
-      const activeMatches = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
-        lower(item.user) === lower(username) && item[".id"]);
-      const knownMacs = new Set([...(macLike(username) ? [lower(username)] : []),
-        ...(macLike(storedMac) ? [lower(storedMac)] : []),
-        ...activeMatches.map(item => lower(item["mac-address"])).filter(Boolean)]);
+      const usernameLower = lower(username), storedMacLower = lower(storedMac);
+      const identityMacs = new Set([...(macLike(username) ? [usernameLower] : []), ...(storedMac ? [storedMacLower] : [])]);
+      const users = Array.isArray(userRows) ? userRows : [];
+      const sessions = Array.isArray(activeRows) ? activeRows : [];
+      const cookies = Array.isArray(cookieRows) ? cookieRows : [];
+      const hosts = Array.isArray(hostRows) ? hostRows : [];
+      const schedulers = Array.isArray(schedulerRows) ? schedulerRows : [];
+      const activeMatches = sessions.filter(item => item?.[".id"] &&
+        (lower(item.user) === usernameLower || identityMacs.has(lower(item["mac-address"]))));
+      const knownMacs = new Set([...identityMacs, ...activeMatches.map(item => lower(item["mac-address"])).filter(Boolean)]);
       const knownIps = new Set(activeMatches.map(item => lower(item.address)).filter(Boolean));
-      for (const host of (Array.isArray(hostRows) ? hostRows : [])) {
-        if (knownMacs.has(lower(host["mac-address"]))) {
-          if (host[".id"] && host.address) knownIps.add(lower(host.address));
+      for (const host of hosts) if (host?.[".id"] && knownMacs.has(lower(host["mac-address"])) && host.address) knownIps.add(lower(host.address));
+      const cookieMatches = cookies.filter(item => item?.[".id"] &&
+        (lower(item.user) === usernameLower || knownMacs.has(lower(item["mac-address"]))));
+      const hostMatches = hosts.filter(item => item?.[".id"] &&
+        (knownMacs.has(lower(item["mac-address"])) || (item.address && knownIps.has(lower(item.address)))));
+      const userMatches = users.filter(item => item?.[".id"] &&
+        (lower(item.name) === usernameLower || (storedMac && lower(item.name) === storedMacLower)));
+      const schedulerNames = new Set([
+        ("EXP_" + username).toLowerCase(), ("faz-exp-" + username).toLowerCase(),
+        ...(storedMac ? [("EXP_" + storedMac).toLowerCase(), ("faz-exp-" + storedMac).toLowerCase()] : [])
+      ]);
+      const schedulerMatches = schedulers.filter(item => item?.[".id"] && schedulerNames.has(lower(item.name)));
+      const remove = async (path, item, kind) => {
+        try { await connection.write(path, ["=.id=" + item[".id"]]); return true; }
+        catch (error) {
+          if (/no such item|not found|does not exist|no item/i.test(String(error?.message || error))) {
+            console.info("[Hotspot hard purge] " + kind + " already absent for " + username);
+            return false;
+          }
+          throw error;
         }
-      }
-      const cookieMatches = (Array.isArray(cookieRows) ? cookieRows : []).filter(item =>
-        item[".id"] && (lower(item.user) === lower(username) || knownMacs.has(lower(item["mac-address"]))));
-      const hostMatches = (Array.isArray(hostRows) ? hostRows : []).filter(item =>
-        item[".id"] && (knownMacs.has(lower(item["mac-address"])) || knownIps.has(lower(item.address))));
-      const schedulerNames = new Set([("faz-exp-" + username).toLowerCase(), ("EXP_" + username).toLowerCase()]);
-      const schedulerMatches = (Array.isArray(schedulerRows) ? schedulerRows : []).filter(item =>
-        schedulerNames.has(lower(item.name)) && item[".id"]);
-
-      for (const session of activeMatches) await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
-      for (const cookie of cookieMatches) await connection.write("/ip/hotspot/cookie/remove", ["=.id=" + cookie[".id"]]);
-      for (const host of hostMatches) await connection.write("/ip/hotspot/host/remove", ["=.id=" + host[".id"]]);
-      for (const user of userMatches) await connection.write("/ip/hotspot/user/remove", ["=.id=" + user[".id"]]);
-      for (const scheduler of schedulerMatches) await connection.write("/system/scheduler/remove", ["=.id=" + scheduler[".id"]]);
-      return {
-        username,
-        sessionsRemoved: activeMatches.length,
-        cookiesRemoved: cookieMatches.length,
-        hostsRemoved: hostMatches.length,
-        usersRemoved: userMatches.length,
-        schedulersRemoved: schedulerMatches.length,
-        alreadyAbsent: userMatches.length === 0
       };
+      let sessionsRemoved=0, cookiesRemoved=0, hostsRemoved=0, usersRemoved=0, schedulersRemoved=0;
+      for (const item of activeMatches) if (await remove("/ip/hotspot/active/remove", item, "session")) sessionsRemoved++;
+      for (const item of cookieMatches) if (await remove("/ip/hotspot/cookie/remove", item, "cookie")) cookiesRemoved++;
+      for (const item of hostMatches) if (await remove("/ip/hotspot/host/remove", item, "host")) hostsRemoved++;
+      for (const item of userMatches) if (await remove("/ip/hotspot/user/remove", item, "user")) usersRemoved++;
+      for (const item of schedulerMatches) if (await remove("/system/scheduler/remove", item, "scheduler")) schedulersRemoved++;
+      return { username, sessionsRemoved, cookiesRemoved, hostsRemoved, usersRemoved, schedulersRemoved, alreadyAbsent: usersRemoved === 0 };
     });
   }
+
   async setHotspotUserComment(usernameValue, commentValue) {
     const username = this._str(usernameValue).trim();
     const comment = this._str(commentValue).slice(0, 500);
