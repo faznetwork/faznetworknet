@@ -11,18 +11,23 @@ function response(){
   return {statusCode:200,body:null,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
 }
 
-test("Import sync updates router-owned fields only and preserves existing subscriber metadata",async()=>{
-  const originalQuery=db.query,originalGetUsers=mikrotik.getHotspotUsers;
+test("Import sync avoids schema-dependent ON CONFLICT and preserves subscriber metadata",async()=>{
+  const originalQuery=db.query,originalTransaction=db.withTransaction,originalGetUsers=mikrotik.getHotspotUsers;
   const queries=[];
   db.query=async(sql,params=[])=>{
-    queries.push({sql,params});
-    if(sql.startsWith("SELECT id FROM hotspot_vouchers")) {
-      return {rows:String(params[0]).toLowerCase()===MAC_A.toLowerCase()?[{id:17}]:[]};
-    }
+    queries.push({sql,params,scope:"pool"});
+    if(sql.startsWith("SELECT id FROM hotspot_vouchers"))return {rows:[]};
+    if(sql.startsWith("UPDATE hotspot_vouchers SET profile="))return {rowCount:1,rows:[]};
+    throw new Error("Unexpected pool database query: "+sql);
+  };
+  db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+    queries.push({sql,params,scope:"transaction"});
+    if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+    if(sql.startsWith("SELECT id FROM hotspot_vouchers"))return {rows:String(params[0]).toLowerCase()===MAC_A.toLowerCase()?[{id:17}]:[]};
     if(sql.startsWith("UPDATE hotspot_vouchers SET profile="))return {rowCount:1,rows:[]};
     if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:22}]};
-    throw new Error("Unexpected database query: "+sql);
-  };
+    throw new Error("Unexpected transactional database query: "+sql);
+  }});
   mikrotik.getHotspotUsers=async()=>[
     {username:MAC_A.toLowerCase(),password:MAC_A,profile:"Gold",comment:"Exp: 2030-01-02 03:04:05"},
     {username:MAC_B,password:MAC_B,profile:"Silver",comment:"Exp: 2030-01-03 04:05:06"},
@@ -33,11 +38,16 @@ test("Import sync updates router-owned fields only and preserves existing subscr
     await controller.importFromMikrotik({},res);
     assert.equal(res.statusCode,200);
     assert.deepEqual(res.body,{success:true,imported:1,updated:1,skipped:1});
+    const locks=queries.filter(q=>q.sql.startsWith("SELECT pg_advisory_xact_lock"));
+    assert.equal(locks.length,2,"valid MAC imports should serialize per identity");
+    const lookups=queries.filter(q=>q.sql.startsWith("SELECT id FROM hotspot_vouchers"));
+    assert.equal(lookups.length,2);
+    assert.ok(lookups.every(q=>q.sql.includes("LOWER(mac_address)=LOWER($1)")&&q.sql.includes("LOWER(username)=LOWER($1)")));
     const update=queries.find(q=>q.sql.startsWith("UPDATE hotspot_vouchers SET profile="));
     assert.ok(update,"existing identity should be updated");
-    assert.match(update.sql,/profile=/);
     assert.match(update.sql,/expires_at=COALESCE/);
     assert.match(update.sql,/status='active'/);
+    assert.match(update.sql,/updated_at=NOW\(\)/);
     for(const protectedColumn of ["customer_name","phone","note","created_at"])assert.ok(!update.sql.includes(protectedColumn),"must not overwrite "+protectedColumn);
     assert.equal(update.params[0],17);
     assert.equal(update.params[1],"Gold");
@@ -51,9 +61,43 @@ test("Import sync updates router-owned fields only and preserves existing subscr
     assert.equal(insert.params[5],"all");
     assert.equal(insert.params[7],MAC_B);
     assert.match(insert.sql,/Imported Subscriber/);
-    assert.match(insert.sql,/ON CONFLICT\(username\) DO NOTHING/);
+    assert.doesNotMatch(insert.sql,/ON CONFLICT/i,"import must not assume a username unique constraint");
   }finally{
     db.query=originalQuery;
+    db.withTransaction=originalTransaction;
+    mikrotik.getHotspotUsers=originalGetUsers;
+  }
+});
+
+test("Import sync recovers a concurrent unique-key race without overwriting subscriber metadata",async()=>{
+  const originalQuery=db.query,originalTransaction=db.withTransaction,originalGetUsers=mikrotik.getHotspotUsers;
+  const queries=[];
+  db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+    queries.push({sql,params,scope:"transaction"});
+    if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+    if(sql.startsWith("SELECT id FROM hotspot_vouchers"))return {rows:[]};
+    if(sql.startsWith("INSERT INTO hotspot_vouchers")){const error=new Error("duplicate key");error.code="23505";throw error;}
+    throw new Error("Unexpected transactional database query: "+sql);
+  }});
+  db.query=async(sql,params=[])=>{
+    queries.push({sql,params,scope:"pool"});
+    if(sql.startsWith("SELECT id FROM hotspot_vouchers"))return {rows:[{id:99}]};
+    if(sql.startsWith("UPDATE hotspot_vouchers SET profile="))return {rowCount:1,rows:[]};
+    throw new Error("Unexpected pool database query: "+sql);
+  };
+  mikrotik.getHotspotUsers=async()=>[{username:MAC_A,profile:"Gold",comment:"Exp: 2030-01-02 03:04:05"}];
+  try{
+    const res=response();
+    await controller.importFromMikrotik({},res);
+    assert.equal(res.statusCode,200);
+    assert.deepEqual(res.body,{success:true,imported:0,updated:1,skipped:0});
+    assert.ok(queries.some(q=>q.scope==="pool"&&q.sql.startsWith("SELECT id FROM hotspot_vouchers")));
+    const update=queries.find(q=>q.sql.startsWith("UPDATE hotspot_vouchers SET profile="));
+    assert.equal(update.params[0],99);
+    assert.doesNotMatch(update.sql,/customer_name|phone|note|created_at/i);
+  }finally{
+    db.query=originalQuery;
+    db.withTransaction=originalTransaction;
     mikrotik.getHotspotUsers=originalGetUsers;
   }
 });
