@@ -241,7 +241,7 @@ async function createUser(req,res){
     const mac=normalizeHotspotMac(rawMac);
     const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
     const server=clean(body.server||"all",100)||"all";
-    const mode=String(body.activation_type||body.activationMode||"first_login").trim().toLowerCase();
+    const mode=String(body.activation_type||body.activationMode||(rawMac?"preassigned":"first_login")).trim().toLowerCase();
     const preassigned=mode==="preassigned";
     const customerName=clean(body.customer_name||body.name,160);
     const note=clean(body.note||body.address,1000);
