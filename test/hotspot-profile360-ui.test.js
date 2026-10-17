@@ -13,7 +13,7 @@ test("Admin loads only the clean Subscriber 360 assets for All Hotspot Users", (
   assert.doesNotMatch(view, /hotspot-profile360\.js|hotspot-master-detail\.js|hotspot-profile360\.css|hotspot-master-detail\.css/);
   assert.doesNotMatch(view, /const getExp=u=>|window\.renderHotspotMasterDetail/);
   const js = read("public/js/hotspot-users-clean.js");
-  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "✏️ Edit", "Archive voucher", "count-all", "count-online", "count-active", "count-offline", "count-expired", "hs-executive-table"]) {
+  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "✏️ Edit", "Delete / Archive", "count-all", "count-online", "count-active", "count-offline", "count-expired", "hs-executive-table"]) {
     assert.ok(js.includes(token), "missing UI feature: " + token);
   }
   assert.match(js, /response\.ok && data\.success === true/);
