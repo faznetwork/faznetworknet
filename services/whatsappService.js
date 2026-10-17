@@ -28,7 +28,7 @@ function normalizePhone(value) {
   if (digits.startsWith("00880")) digits = digits.slice(2);
   if (digits.startsWith("01") && digits.length === 11) digits = "88" + digits;
   if (digits.startsWith("1") && digits.length === 10) digits = "880" + digits;
-  if (!/^8801\d{9}$/.test(digits)) {
+  if (!/^8801[3-9]\d{8}$/.test(digits)) {
     throw new Error("Enter a valid Bangladesh mobile number (01XXXXXXXXX or 8801XXXXXXXXX).");
   }
   return digits;
@@ -437,12 +437,16 @@ function getStatus() {
   };
 }
 
+function normalizeWhatsAppJid(value) {
+  return normalizePhone(value) + "@s.whatsapp.net";
+}
+
 async function sendMessage({ to, message } = {}) {
   if (!socket || connection !== "connected") {
     throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
   }
-  const digits = normalizePhone(to);
-  const result = await socket.sendMessage(digits + "@s.whatsapp.net", {
+  const jid = normalizeWhatsAppJid(to);
+  const result = await socket.sendMessage(jid, {
     text: String(message || "").slice(0, 4000)
   });
   return { success: true, messageId: result?.key?.id || null };
@@ -484,8 +488,9 @@ module.exports = {
   restoreSession,
   getStatus,
   sendMessage,
-  unlink,
   normalizePhone,
+  normalizeWhatsAppJid,
+  unlink,
   extractConnectedAccount,
   createDatabaseAuthState,
   _handleConnectionClose: handleConnectionClose,
