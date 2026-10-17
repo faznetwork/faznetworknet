@@ -43,3 +43,10 @@ test("All Hotspot Users renders a responsive master-detail Subscriber 360 worksp
  assert.match(js,/renewHotspotUser/);assert.match(js,/editHotspotUser/);assert.match(js,/active-subscriber-item/);assert.match(js,/scrollIntoView/);
  assert.match(css,/@media\s*\(max-width:\s*991\.98px\)/);assert.match(css,/position:\s*sticky/);
 });
+
+test("Mobile All Hotspot Users keeps subscriber list and Subscriber 360 visible together", () => {
+ const css=fs.readFileSync(path.join(root,"public/css/hotspot-master-detail.css"),"utf8");
+ assert.match(css,/Keep the same list \+ Subscriber 360 composition on phones/);
+ assert.match(css,/subscriber-mobile-detail-open \.hotspot-master-detail-container>\.col-lg-5\{display:block!important\}/);
+ assert.match(css,/hotspot-all-users-view #subscriberDetailColumn\{display:block!important\}/);
+});
