@@ -21,7 +21,7 @@
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   }
-  function statusLabel(user) { return user.is_online ? "Online" : String(user.status || "offline").replace(/^./, c => c.toUpperCase()); }
+  function statusLabel(user) { if (String(user.status).toLowerCase() === "archived") return "Archived"; if (String(user.status).toLowerCase() === "expired") return "Expired"; return user.is_online ? "Online" : String(user.status || "offline").replace(/^./, c => c.toUpperCase()); }
   function renderList() {
     const host = $("#freshHotspotUserList"), query = ($("#freshHotspotSearch")?.value || "").trim().toLowerCase();
     if (!host) return;
