@@ -1,22 +1,17 @@
 const { Pool } = require("pg");
 
-const DEFAULT_DATABASE_URL = "postgresql://faznetwork_db_user:yzIAqmOwHF7iTgmgILod5BYc1PE5Qs3A@dpg-db3arnajnfac7398sp0g-a/faznetwork_db";
 let pool;
 let dbConnected = false;
 let warnedDatabaseFailure = false;
-let warnedFallbackDatabase = false;
 
 function getDatabaseUrl() {
   const configured = String(process.env.DATABASE_URL || "").trim();
-  if (configured) return configured;
-  // Never print the fallback URL or credentials.
-  if (!warnedFallbackDatabase) {
-    warnedFallbackDatabase = true;
-    console.error("[Database] CRITICAL: DATABASE_URL is not set; using the legacy fallback database. Verify Render environment configuration.");
+  if (!configured) {
+    throw new Error("DATABASE_URL environment variable is required; refusing to connect without explicit configuration.");
   }
-  return DEFAULT_DATABASE_URL;
+  return configured;
 }
-function isConfigured() { return Boolean(getDatabaseUrl()); }
+function isConfigured() { return Boolean(String(process.env.DATABASE_URL || "").trim()); }
 
 function getPool() {
   if (pool) return pool;
@@ -52,7 +47,7 @@ async function testConnection() {
 }
 
 function getStatus() {
-  return { connected: dbConnected, configured: isConfigured(), source: process.env.DATABASE_URL ? "environment" : "fallback" };
+  return { connected: dbConnected, configured: isConfigured(), source: isConfigured() ? "environment" : "missing" };
 }
 
 async function query(text, params = []) {
