@@ -367,12 +367,12 @@ async function deleteHotspotUser({ username: usernameValue, database = db, route
 async function remove(req,res){try{const result=await deleteHotspotUser({username:req.body?.username});hotspotListCache.expiresAt=0;return res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 
 async function manualRenew(req,res){
- const body=req.body&&typeof req.body==="object"?req.body:{},username=clean(body.username,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.notify!==false;
+ const body=req.body&&typeof body==="object"?body:{},requestedId=clean(body.id,100),requestedMac=normalizeHotspotMac(body.mac||body.mac_address||""),username=clean(body.username||requestedMac||requestedId,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.send_notification!==false&&body.notify!==false;
  if(!username||!requestedProfile)return res.status(400).json({success:false,message:"Username and package profile are required."});
  try{
   const renewed=await db.withTransaction(async client=>{
    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-renew:"+username.toLowerCase()]);
-   const found=await client.query("SELECT * FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1 FOR UPDATE",[username]),voucher=found.rows?.[0];
+   const found=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND id::text=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY id DESC LIMIT 1 FOR UPDATE",[requestedId,username,requestedMac]),voucher=found.rows?.[0];
    if(!voucher)throw hotspotError("HOTSPOT_VOUCHER_NOT_FOUND",404,"The Hotspot voucher was not found in PostgreSQL.");
    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
@@ -385,7 +385,7 @@ async function manualRenew(req,res){
    const comment=expiry?"Exp: "+stamp(expiry):"FAZ|DATA_ONLY",phone=normalizeHotspotPhone(voucher.phone||voucher.password||""),mac=normalizeHotspotMac(voucher.mac_address)||normalizeHotspotMac(voucher.username)||"";if(!mac)throw hotspotError("HOTSPOT_MAC_REQUIRED",409,"MAC-based Hotspot renewal requires a bound device MAC. Bind the device before renewing.");
    if(!/^01\d{9}$/.test(phone))throw hotspotError("HOTSPOT_PHONE_INVALID",400,"Voucher has no valid customer phone number.");
    await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,expiryDate:expiry?stamp(expiry).slice(0,10):"",comment,macAddress:mac,previousUsername:voucher.username!==mac?voucher.username:"",server:voucher.server||"all"});
-   const saved=await client.query("UPDATE hotspot_vouchers SET username=$11,profile=$2,validity=$3,price=$4,status='active',password=$11,phone=$5,mac_address=$11,customer_name=COALESCE(NULLIF($7,''),customer_name),comment=$8,expires_at=$9,renewal_stacked=$10,first_login_at=COALESCE(first_login_at,NOW()),updated_at=NOW() WHERE id=$1 RETURNING id,username,profile,validity,price,status,phone,customer_name,mac_address,expires_at,comment,transaction_id",[voucher.id,profile,validity,Number(pm.price??voucher.price??0),phone,phone,clean(body.customer_name||voucher.customer_name,160),comment,expiry,Boolean(oldExpiry&&oldExpiry>now),mac]);
+   const saved=await client.query("UPDATE hotspot_vouchers SET username=$10,profile=$2,validity=$3,price=$4,status='active',password=$10,phone=$5,mac_address=$10,customer_name=COALESCE(NULLIF($6,''),customer_name),comment=$7,expires_at=$8,renewal_stacked=$9,first_login_at=COALESCE(first_login_at,NOW()),updated_at=NOW() WHERE id=$1 RETURNING id,username,profile,validity,price,status,phone,customer_name,mac_address,expires_at,comment,transaction_id",[voucher.id,profile,validity,Number(pm.price??voucher.price??0),phone,clean(body.customer_name||voucher.customer_name,160),comment,expiry,Boolean(oldExpiry&&oldExpiry>now),mac]);
    if(!saved.rows?.length)throw new Error("RouterOS was renewed but PostgreSQL could not finalize the voucher.");
    return {voucher:saved.rows[0],expiryLabel:expiry?stamp(expiry):null,packageName:pm.packageName||pm.package_name||profile,phone};
   });
