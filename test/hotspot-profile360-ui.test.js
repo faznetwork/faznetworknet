@@ -7,6 +7,7 @@ const root = path.join(__dirname, "..");
 test("Hotspot Profile 360 routes and customer fields are wired", () => {
  const routes=fs.readFileSync(path.join(root,"routes/hotspotRoutes.js"),"utf8");
  const controller=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
+ const hotspotController=fs.readFileSync(path.join(root,"controllers/hotspotController.js"),"utf8");
  assert.match(routes,/\/users\/:id\/profile/);assert.match(controller,/normalizePhone/);assert.match(controller,/normalizeMac/);assert.match(controller,/mac_lock/);assert.match(controller,/rechargeHotspotUser|updateHotspotUser/);
 });
 test("Admin has Profile 360 and professional subscriber rows without General Settings engine controls", () => {
@@ -74,7 +75,7 @@ test("Hotspot Profile 360 persists edits by database ID or username/MAC and refr
  const controller=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
  const edit=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8");
  const master=fs.readFileSync(path.join(root,"public/js/hotspot-master-detail.js"),"utf8");
- assert.match(controller,/invalidateListCache:\(\)=>\{hotspotListCache\.expiresAt=0;\}/);
+ assert.match(hotspotController,/invalidateListCache:\(\)=>\{hotspotListCache\.expiresAt=0;\}/);
  assert.match(controller,/Update request/);
  assert.match(controller,/LOWER\(username\)=LOWER\(\$2\) OR LOWER\(mac_address\)=LOWER\(\$2\)/);
  assert.match(controller,/SET username=\$1,password=\$2,customer_name=\$3,phone=\$4,mac_address=\$5,note=\$6/);
