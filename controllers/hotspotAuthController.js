@@ -81,7 +81,7 @@ async function deviceLookup(req,res){
   if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit phone number when supplied.");
   try{
     const result=await db.query(
-      "SELECT id,status,profile,expires_at,first_login_at,mac_address,subscriber_type,activation_type FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
+      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
       [mac,phone]
     );
     const rows=result.rows||[];
@@ -187,7 +187,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1 AND mac_address=$2",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=$4,comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=COALESCE(NULLIF($4,''),phone),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -215,7 +215,7 @@ async function claimVoucher(req,res){
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
