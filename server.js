@@ -1,5 +1,9 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
+if (!String(process.env.DATABASE_URL || "").trim()) {
+  console.error("[Fatal Error] DATABASE_URL environment variable is missing!");
+  process.exit(1);
+}
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const {startNetworkDiscovery}=require("./jobs/networkDiscovery");const {startHotspotExpirationCleanup,startHotspotRetentionCleanup}=require("./jobs/hotspotExpirationCleanup");const {syncHotspotProfileScripts}=require("./jobs/hotspotProfileScriptSync");const ipPoolRoutes=require("./routes/ipPoolRoutes");const devicesRoutes=require("./routes/devicesRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const {requireRole,requireStaffReadOnly}=require("./middleware/rbac");
