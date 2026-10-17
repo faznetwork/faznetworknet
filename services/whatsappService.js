@@ -230,6 +230,34 @@ async function inspectStoredSession() {
     : { registered: false, reason: "unlinked" };
 }
 
+/** Remove only stale auth material after confirming the stored creds are not registered.
+ * Linked-account metadata and any registered session are never touched here.
+ */
+async function resetUnregisteredAuthRows(database = db, baileys = getBaileys()) {
+  await ensureSessionTable(database);
+  const result = await database.query(
+    "SELECT value FROM whatsapp_sessions WHERE key = $1 LIMIT 1",
+    ["creds"]
+  );
+  const raw = result.rows?.[0]?.value;
+  const stored = raw ? deserialize(raw, baileys.BufferJSON) : null;
+  if (stored?.registered === true) {
+    return { reset: false, reason: "registered" };
+  }
+  const purge = async tx => {
+    await tx.query("DELETE FROM whatsapp_sessions WHERE key = $1 OR key LIKE $2", ["creds", "key:%"]);
+  };
+  if (typeof database.withTransaction === "function") await database.withTransaction(purge);
+  else {
+    await database.query("BEGIN");
+    try { await purge(database); await database.query("COMMIT"); }
+    catch (error) { try { await database.query("ROLLBACK"); } catch (_) {} throw error; }
+  }
+  activeCreds = null;
+  authConfigured = false;
+  return { reset: true, reason: raw ? "unregistered" : "missing_creds" };
+}
+
 async function acquireSocketOwnership() {
   if (socketLockClient && socketOwner) return;
   const pool = typeof db.getPool === "function" ? db.getPool() : null;
@@ -313,7 +341,7 @@ function scheduleReconnect() {
   if (typeof reconnectTimer.unref === "function") reconnectTimer.unref();
 }
 
-async function connect() {
+async function connect(options = {}) {
   if (connection === "connected" && socket) return getStatus();
   if (connectPromise) return connectPromise;
   reconnectAllowed = true;
@@ -344,6 +372,22 @@ async function connect() {
       qrText = null;
       connection = "disconnected";
       await releaseSocketOwnership();
+    }
+
+    if (options.freshQr === true) {
+      // Manual pairing is a clean path only for unregistered/missing credentials.
+      // Registered sessions are preserved and must reconnect silently.
+      const reset = await resetUnregisteredAuthRows(db, baileys);
+      if (reset.reason === "registered") {
+        console.log("[WhatsApp] Fresh-QR request found registered credentials; preserving auth and restoring existing session.");
+      } else {
+        console.log("[WhatsApp] Fresh pairing auth reset:", reset.reason);
+        if (socket) { try { socket.end(undefined); } catch (_) {} socket = null; }
+        activeCreds = null;
+        qrDataUrl = null;
+        qrText = null;
+        connection = "disconnected";
+      }
     }
 
     await acquireSocketOwnership();
@@ -471,9 +515,15 @@ function isSocketReady(sock, creds, state = connection) {
 function getStatus() {
   const live = isSocketReady(socket, activeCreds);
   const reportedConnection = live ? "connected" : (connection === "connected" ? "reconnect_required" : connection);
+  const user = socket?.user ? { id: socket.user.id || null, name: socket.user.name || null } : null;
+  const status = live ? "connected" : (reportedConnection === "connecting" ? "connecting" : "disconnected");
   return {
     connection: reportedConnection,
     connected: live,
+    status,
+    isLinked: Boolean(live),
+    user,
+    hasQr: Boolean(qrDataUrl),
     qrDataUrl,
     qrText: Boolean(qrText),
     lastError,
@@ -551,6 +601,7 @@ module.exports = {
   unlink,
   extractConnectedAccount,
   createDatabaseAuthState,
+  _resetUnregisteredAuthRows: resetUnregisteredAuthRows,
   _handleConnectionClose: handleConnectionClose,
   _inspectStoredSession: inspectStoredSession,
   _isSocketReady: isSocketReady

@@ -39,6 +39,12 @@ function fakeDatabase() {
         rows.set(params[0], JSON.parse(params[1]));
         return { rows: [] };
       }
+      if (sql.includes("DELETE FROM whatsapp_sessions WHERE key = $1 OR key LIKE $2")) {
+        for (const key of rows.keys()) {
+          if (key === params[0] || (params[1] === "key:%" && key.startsWith("key:"))) rows.delete(key);
+        }
+        return { rows: [] };
+      }
       if (sql.includes("DELETE FROM whatsapp_sessions WHERE key = $1")) {
         rows.delete(params[0]);
         return { rows: [] };
@@ -198,4 +204,31 @@ test("live WhatsApp readiness requires an open socket user and registered creden
   assert.equal(_isSocketReady(null, { registered: true }, "connected"), false);
   assert.equal(_isSocketReady({ user: null }, { registered: true }, "connected"), false);
   assert.equal(_isSocketReady(sock, { registered: true }, "disconnected"), false);
+});
+
+
+test("fresh QR reset purges only unregistered auth rows and preserves account metadata", async () => {
+  const { _resetUnregisteredAuthRows } = require("../services/whatsappService");
+  const database = fakeDatabase();
+  database.rows.set("creds", { registered: false, stale: true });
+  database.rows.set("key:pre-key:old", { key: "stale" });
+  database.rows.set("metadata", { phone: "+8801712345678" });
+  const result = await _resetUnregisteredAuthRows(database, fakeBaileys());
+  assert.deepEqual(result, { reset: true, reason: "unregistered" });
+  assert.equal(database.rows.has("creds"), false);
+  assert.equal(database.rows.has("key:pre-key:old"), false);
+  assert.deepEqual(database.rows.get("metadata"), { phone: "+8801712345678" });
+  assert.ok(database.queries.includes("BEGIN"));
+  assert.ok(database.queries.includes("COMMIT"));
+});
+
+test("fresh QR reset never purges a registered PostgreSQL session", async () => {
+  const { _resetUnregisteredAuthRows } = require("../services/whatsappService");
+  const database = fakeDatabase();
+  database.rows.set("creds", { registered: true, token: "keep" });
+  database.rows.set("key:session:abc", { key: "keep" });
+  const before = [...database.rows];
+  const result = await _resetUnregisteredAuthRows(database, fakeBaileys());
+  assert.deepEqual(result, { reset: false, reason: "registered" });
+  assert.deepEqual([...database.rows], before);
 });

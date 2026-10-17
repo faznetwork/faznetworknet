@@ -20,6 +20,7 @@ router.get("/all",controller.getAllSettings);
 router.post("/update",controller.updateSettings);
 router.post("/notifications/test",controller.testNotification);
 router.get("/notifications/whatsapp/status",controller.whatsappStatus);
+router.get("/notifications/whatsapp/qr",controller.whatsappQr);
 router.post("/notifications/whatsapp/test",controller.testWhatsApp);
 router.post("/notifications/email/test",controller.testEmail);
 router.post("/notifications/whatsapp/connect",controller.whatsappConnect);
