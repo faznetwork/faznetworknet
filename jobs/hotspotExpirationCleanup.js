@@ -109,6 +109,7 @@ function createHotspotExpirationCleanup(deps = {}) {
       // Database expiry must continue even during a temporary RouterOS outage.
       // In that case, persist expired/pending state and let the targeted router
       // cleanup fail safely so the next hourly run can retry it.
+      if (typeof router.ensureExpiredProfile === "function") { try { await router.ensureExpiredProfile(); } catch (error) { logger.warn("[HOTSPOT EXPIRY] Could not ensure expired_profile:", error.message); } }
       let snapshot = { users: [], schedulerNames: [] };
       let snapshotAvailable = true;
       try {
