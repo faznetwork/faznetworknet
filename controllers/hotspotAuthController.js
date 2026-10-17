@@ -83,16 +83,17 @@ async function activate(req,res){
       const allRows=found.rows||[];
       const phoneRows=allRows.filter(row=>normalizePhone(row.phone)===phone);
       const macRows=allRows.filter(row=>getKnownMac(row)===mac);
-      if(macRows.some(row=>normalizePhone(row.phone)!==phone))throw makeError("MAC_ALREADY_BOUND",403,"This device MAC is already bound to a different Hotspot phone number.");
-      if(!phoneRows.length)throw makeError("NO_ELIGIBLE_PACKAGE",404,"No pending or active Hotspot package was found for this phone. Purchase a package first.");
-      const knownMacs=[...new Set(phoneRows.map(getKnownMac).filter(Boolean))];
+      // Device MAC is the stable account key; a SIM/shop-phone change must not orphan the voucher.
+      const accountRows=macRows.length?macRows:phoneRows;
+      if(!accountRows.length)throw makeError("NO_ELIGIBLE_PACKAGE",404,"No pending or active Hotspot package was found for this phone or device MAC. Purchase a package first.");
+      const knownMacs=[...new Set(accountRows.map(getKnownMac).filter(Boolean))];
       if(knownMacs.length>1)throw makeError("ACCOUNT_MAC_CONFLICT",409,"This phone has conflicting saved MAC bindings. Contact FAZ NETWORK support.");
       const boundMac=knownMacs[0]||null;
       if(boundMac&&boundMac!==mac)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device. Contact support to request a device change.");
       const priority={pending_claim:0,active:1,unused:2,expired:3};
-       const candidates=phoneRows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","active","unused"].includes(status))return false;if(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now())return false;return true;}).sort((a,b)=>(priority[String(a.status).toLowerCase()]??9)-(priority[String(b.status).toLowerCase()]??9)||Number(b.id||0)-Number(a.id||0));
+       const candidates=accountRows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","active","unused"].includes(status))return false;if(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now())return false;return true;}).sort((a,b)=>(priority[String(a.status).toLowerCase()]??9)-(priority[String(b.status).toLowerCase()]??9)||Number(b.id||0)-Number(a.id||0));
       if(!candidates.length){
-        const isExpired=phoneRows.some(row=>String(row.status||"").toLowerCase()==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+        const isExpired=accountRows.some(row=>String(row.status||"").toLowerCase()==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
         throw makeError(isExpired?"PACKAGE_EXPIRED":"NO_ELIGIBLE_PACKAGE",isExpired?410:404,isExpired?"This Hotspot package has expired. Purchase a new package to continue.":"No pending or active Hotspot package was found for this phone.");
       }
       if(candidates.length>1)throw makeError("MULTIPLE_LIVE_PACKAGES",409,"Multiple live Hotspot packages are linked to this phone. Contact support before signing in.");
@@ -124,7 +125,7 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3,first_login_at=COALESCE(first_login_at,$4),expires_at=CASE WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5) END,comment=$6,updated_at=NOW() WHERE id=$7 AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,row.id]);
+      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3,first_login_at=COALESCE(first_login_at,$4),expires_at=CASE WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5) END,comment=$6,phone=$7,updated_at=NOW() WHERE id=$8 AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
       if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
       const account=locked.rows[0];
       return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
@@ -154,7 +155,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1 AND mac_address=$2",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=$4,comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
