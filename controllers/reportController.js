@@ -28,11 +28,20 @@ async function due(req,res){try{
  res.json({success:true,summary:summary.rows[0],packages:packages.rows.map(r=>r.package_name),rows:result.rows});
  }catch(e){console.error("[Reports:due]",e);res.status(500).json({success:false,message:"Unable to load due summary."})}}
 async function hotspot(req,res){try{
+ const from=dateOrNull(req.query.from),to=dateOrNull(req.query.to);
+ const allowedSaleTypes=new Set(["all","online_mfs","scratch_card","manual","other"]);
+ const saleType=allowedSaleTypes.has(clean(req.query.sale_type,24).toLowerCase())?clean(req.query.sale_type,24).toLowerCase():"all";
+ const params=[],where=["t.status IN ('processed','PAID')"];
+ if(from){params.push(from);where.push(`t.created_at >= $${params.length}::date`)}
+ if(to){params.push(to);where.push(`t.created_at < ($${params.length}::date + INTERVAL '1 day')`)}
+ if(saleType!=="all"){params.push(saleType);where.push(`COALESCE(t.sale_type,'other') = $${params.length}`)}
+ const filter=where.join(" AND ");
  const [profiles,transactions,summary]=await Promise.all([
- db.query("SELECT profile profile_name,COALESCE(price,0)::numeric(14,2) price,COUNT(*)::int quantity,COALESCE(SUM(price),0)::numeric(14,2) revenue FROM hotspot_vouchers GROUP BY profile,price ORDER BY revenue DESC,quantity DESC"),
- db.query("SELECT t.sender_phone,v.profile,t.trx_id,t.created_at,t.amount FROM transactions t LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE t.status IN ('processed','PAID') AND (v.username IS NOT NULL OR t.matched_username IS NULL) ORDER BY t.created_at DESC LIMIT 300"),
- db.query("SELECT COALESCE(SUM(price),0)::numeric(14,2) earnings,COUNT(*)::int users,(SELECT profile FROM hotspot_vouchers GROUP BY profile ORDER BY COUNT(*) DESC,profile LIMIT 1) popular FROM hotspot_vouchers")]);
- res.json({success:true,summary:summary.rows[0],profiles:profiles.rows,transactions:transactions.rows});
+  db.query(`SELECT COALESCE(hp.profile,v.profile,'Unknown package') profile_name,COALESCE(SUM(hp.amount),0)::numeric(14,2) price,COUNT(*)::int quantity,COALESCE(SUM(hp.amount),0)::numeric(14,2) revenue FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE ${filter} AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) GROUP BY COALESCE(hp.profile,v.profile,'Unknown package') ORDER BY revenue DESC,quantity DESC`,params),
+  db.query(`SELECT t.sender_phone,COALESCE(hp.profile,v.profile,'Hotspot') profile,t.trx_id,t.created_at,t.amount,COALESCE(t.sale_type,'other') sale_type,t.channel FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE ${filter} AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) ORDER BY t.created_at DESC,t.id DESC LIMIT 1000`,params),
+  db.query(`SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) earnings,COUNT(*)::int sales,COUNT(DISTINCT t.matched_username) FILTER(WHERE t.matched_username IS NOT NULL)::int users,COUNT(*) FILTER(WHERE COALESCE(t.sale_type,'other')='online_mfs')::int online_mfs_sales,COUNT(*) FILTER(WHERE COALESCE(t.sale_type,'other')='scratch_card')::int scratch_card_sales FROM transactions t WHERE ${filter}`,params)
+ ]);
+ res.json({success:true,filters:{from,to,sale_type:saleType},summary:summary.rows[0],profiles:profiles.rows,transactions:transactions.rows});
  }catch(e){console.error("[Reports:hotspot]",e);res.status(500).json({success:false,message:"Unable to load hotspot revenue."})}}
 async function expenses(req,res){try{
  const [rows,summary,collection]=await Promise.all([
