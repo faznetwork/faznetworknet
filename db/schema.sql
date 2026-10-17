@@ -840,3 +840,23 @@ INSERT INTO app_settings(key,value) VALUES
 ON CONFLICT(key) DO NOTHING;
 
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_lock BOOLEAN NOT NULL DEFAULT TRUE;
+-- Keep deployed Hotspot voucher identity columns compatible with MACs, synthetic usernames, and customer names.
+ALTER TABLE hotspot_vouchers
+  ALTER COLUMN username TYPE VARCHAR(160),
+  ALTER COLUMN password TYPE VARCHAR(160),
+  ALTER COLUMN mac_address TYPE VARCHAR(32),
+  ALTER COLUMN status TYPE VARCHAR(32),
+  ALTER COLUMN cleanup_status TYPE VARCHAR(32);
+DO $faz_hotspot_voucher_customer_name_length$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'hotspot_vouchers'
+      AND column_name = 'customer_name'
+  ) THEN
+    ALTER TABLE hotspot_vouchers ALTER COLUMN customer_name TYPE VARCHAR(200);
+  END IF;
+END;
+$faz_hotspot_voucher_customer_name_length$;
+
