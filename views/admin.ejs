@@ -3066,15 +3066,16 @@
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
+                            <label class="hs-create-label d-block">Activation Type</label><div class="d-flex flex-wrap gap-3 mb-3"><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="first_login" checked> On First Login</label><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="preassigned"> Pre-Assigned (Instant MAC Bind)</label></div>
                             <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim">
                             <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
-                            <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX). Device MAC is automatically bound upon first login.</p>
+                            <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
                               <i class="bi bi-telephone hs-create-input-icon" aria-hidden="true"></i>
                               <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
                               <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
                             </div>
-                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div>
+                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div><label class="hs-create-label mt-3" for="hsDeviceMac">Device MAC Address <span class="text-muted fw-normal">(Required for Pre-Assigned)</span></label><input id="hsDeviceMac" name="mac" type="text" class="hs-create-input mb-3 font-monospace" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off"><label class="hs-create-label" for="hsPassword">Password <span class="text-muted fw-normal">(Defaults to phone)</span></label><input id="hsPassword" name="password" type="text" class="hs-create-input mb-2" maxlength="128" autocomplete="new-password" placeholder="Leave blank to use phone number">
                           </div>
                         </div>
 
@@ -3094,6 +3095,7 @@
                           </div>
                         </div>
 
+                        <div class="hs-create-step"><span class="hs-create-step-number" aria-hidden="true">+</span><div class="hs-create-step-content"><label class="hs-create-label" for="hsCustomExpiry">Custom Expiry Date &amp; Time <span class="text-muted fw-normal">(Optional override)</span></label><input id="hsCustomExpiry" name="expires_at" type="datetime-local" class="hs-create-input"><p class="hs-create-help">Used for Pre-Assigned accounts; first-login vouchers start their validity at activation.</p></div></div>
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">3</span>
                           <div class="hs-create-step-content">
@@ -3200,6 +3202,11 @@
             const phoneFeedback = document.getElementById('hsPhoneFeedback');
             const profile = document.getElementById('hsProfile');
             const server = document.getElementById('hsServer');
+            const macInput = document.getElementById('hsDeviceMac');
+            const passwordInput = document.getElementById('hsPassword');
+            const expiryInput = document.getElementById('hsCustomExpiry');
+            const activationInputs = [...form.querySelectorAll('input[name="activation_type"]')];
+            const activationMode = () => activationInputs.find(input => input.checked)?.value || 'first_login';
             const button = document.getElementById('hsSaveButton');
             const result = document.getElementById('hotspotCreateResult');
             const validityLabel = document.getElementById('hsValidityLabel');
@@ -3264,19 +3271,22 @@
                 const validity = validityText(p);
                 const selectedServer = server.value || 'all';
                 if (validityLabel) validityLabel.textContent = p ? validity + ' — starts at first captive login' : 'Select a profile';
-                putText('hsPreviewUsername', 'Assigned at first login (Device MAC)');
-                putText('hsPreviewPassword', phone.value.trim() || 'Customer phone number');
+                const preassigned = activationMode() === 'preassigned';
+                putText('hsPreviewUsername', preassigned ? (macInput.value.trim().toUpperCase() || 'Enter device MAC') : 'Assigned at first login (Device MAC)');
+                putText('hsPreviewPassword', (passwordInput.value.trim() || phone.value.trim()) || 'Customer phone number');
                 putText('hsPreviewProfile', p ? String(p.name || '—') : '—');
                 putText('hsPreviewPrice', p ? priceText(p) : '—');
                 putText('hsPreviewValidity', p ? validity : '—');
                 putText('hsPreviewServer', selectedServer === 'all' ? 'All Hotspot servers (default)' : selectedServer);
-                putText('hsPreviewExpiry', 'Starts at first login (Continuous clock)');
-                putText('hsPreviewComment', 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
+                putText('hsPreviewExpiry', preassigned && expiryInput.value ? expiryInput.value.replace('T',' ') : preassigned ? 'Package validity starts now' : 'Starts at first login (Continuous clock)');
+                putText('hsPreviewComment', preassigned ? 'Exp: ' + (expiryInput.value ? expiryInput.value.replace('T',' ') + ':00' : 'calculated from package') : 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
             };
 
             const updateButton = () => {
                 const validPhone = updatePhoneFeedback();
-                button.disabled = !(validPhone && profile.value && profileReady);
+                const preassigned = activationMode() === 'preassigned';
+                const validMac = !preassigned || /^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test((macInput.value || '').trim().replace(/-/g, ':'));
+                button.disabled = !(validPhone && profile.value && profileReady && validMac);
             };
 
             const toast = message => {
@@ -3300,6 +3310,8 @@
             };
 
             phone.addEventListener('input', () => { updatePreview(); updateButton(); });
+            [macInput,passwordInput,expiryInput].forEach(el => el?.addEventListener('input',()=>{updatePreview();updateButton();}));
+            activationInputs.forEach(el=>el.addEventListener('change',()=>{macInput.required=activationMode()==='preassigned';expiryInput.disabled=activationMode()!=='preassigned';updatePreview();updateButton();}));
             profile.addEventListener('change', () => { updatePreview(); updateButton(); });
             server.addEventListener('change', updatePreview);
 
@@ -3361,6 +3373,7 @@
                 resetButton.addEventListener('click', () => {
                     form.reset();
                     profile.value = '';
+                    macInput.value='';passwordInput.value='';expiryInput.value='';activationInputs.forEach(el=>el.checked=el.value==='first_login');macInput.required=false;expiryInput.disabled=true;
                     server.value = 'all';
                     server.dataset.selected = 'all';
                     if (result) result.innerHTML = '';
@@ -3386,7 +3399,7 @@
                 }
 
                 button.disabled = true;
-                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving pending account…';
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving Hotspot account…';
                 if (result) result.innerHTML = '';
                 try {
                     const response = await jsonFetch('/api/hotspot/users', {
@@ -3394,6 +3407,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             phone: value,
+                            activation_type: activationMode(),
+                            mac: macInput.value.trim(),
+                            password: passwordInput.value.trim(),
+                            expires_at: expiryInput.value || '',
                             customer_name: document.getElementById('hsCustomerName')?.value.trim() || '',
                             note: document.getElementById('hsCustomerNote')?.value.trim() || '',
                             profile_id: chosen.profile_id || chosen.name,
@@ -3401,7 +3418,7 @@
                         })
                     });
                     if (!response || response.success !== true) throw new Error(response?.message || 'The pending account was not saved.');
-                    const successMessage = 'Pending Hotspot package saved for ' + value + '. The MAC will bind when this customer first logs in through the captive portal.';
+                    const successMessage = response.instant_provisioned ? 'Pre-assigned Hotspot user provisioned immediately for ' + value + '.' : 'First-login Hotspot package saved for ' + value + '. MAC binding and countdown start on captive-portal activation.';
                     toast(successMessage);
                     if (result) result.innerHTML = '<div class="alert alert-success mb-0">' + escapeHtml(successMessage) + '</div>';
                     if (typeof window.refreshHotspotVoucherStats === 'function') {
@@ -3410,7 +3427,7 @@
                 } catch (error) {
                     if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error?.message || 'Unable to save pending account.') + '</div>';
                 } finally {
-                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Pending Account';
+                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Hotspot Account';
                     updateButton();
                 }
             });
