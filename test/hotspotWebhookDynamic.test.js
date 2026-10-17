@@ -320,6 +320,7 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
   const now=Date.now();
   try{
     db.query=async sql=>{
+      if(sql.startsWith("UPDATE hotspot_vouchers SET status='expired'"))return {rows:[]};
       ledgerSql=sql;
       return {rows:[
         {id:1,username:"AA:BB:CC:DD:EE:01",status:"active",expires_at:new Date(now+3600000),mac_address:"AA:BB:CC:DD:EE:01",phone:"01711111111",profile:"1-Hour",price:10},
