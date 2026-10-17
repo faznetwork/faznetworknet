@@ -31,23 +31,24 @@ function safeProfile(row) {
     profile:row.profile||"", profile_id:row.profile_id||"", status:row.status||"", expires_at:row.expires_at||null, server:row.server||"all" };
 }
 async function getProfile(req,res) {
-  const id=Number(req.params.id);
-  if(!Number.isSafeInteger(id)||id<1)return fail(res,400,"A valid hotspot customer ID is required.");
+  const identifier=String(req.params.id??"").trim(),numericId=Number(identifier),hasNumericId=Number.isSafeInteger(numericId)&&numericId>0;
+  if(!identifier)return fail(res,400,"A hotspot customer ID, username, or MAC address is required.");
   try {
-    const result=await db.query("SELECT id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock FROM hotspot_vouchers WHERE id=$1 LIMIT 1",[id]);
+    const result=await db.query("SELECT id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR LOWER(mac_address)=LOWER($2) ORDER BY id DESC LIMIT 1",[hasNumericId?numericId:null,identifier]);
     if(!result.rows?.length)return fail(res,404,"Hotspot customer was not found.");
     return res.json({success:true,profile:safeProfile(result.rows[0])});
   } catch(error) { console.error("[Hotspot Profile API] Read failed:",error);return fail(res,503,"Unable to load hotspot customer profile."); }
 }
 async function updateProfile(req,res) {
-  const id=Number(req.params.id);
-  if(!Number.isSafeInteger(id)||id<1)return fail(res,400,"A valid hotspot customer ID is required.");
+  const identifier=String(req.params.id??"").trim(),numericId=Number(identifier),hasNumericId=Number.isSafeInteger(numericId)&&numericId>0;
+  if(!identifier)return fail(res,400,"A hotspot customer ID, username, or MAC address is required.");
   const body=req.body&&typeof req.body==="object"?req.body:{};
   const name=String(body.name??body.customer_name??"").trim().slice(0,160);
   const phone=normalizePhone(body.phone??body.customer_phone);
   const rawMac=String(body.mac??body.mac_address??"").trim(),mac=rawMac?normalizeMac(rawMac):"";
   const password=String(body.password??"").trim().slice(0,128);
   const notes=String(body.note??body.notes??"").trim().slice(0,1000);
+  console.info("[Hotspot Profile API] Update request", { identifier, name, phone:phone?phone.slice(0,3)+"******"+phone.slice(-2):"", mac:rawMac, notePresent:Boolean(notes), noteLength:notes.length });
   const macLock=body.mac_lock===undefined?Boolean(mac):body.mac_lock===true;
   const rawExpiry=body.expires_at??body.expiresAt??"";
   const customExpiry=parseExpiry(rawExpiry);
@@ -58,7 +59,7 @@ async function updateProfile(req,res) {
   if(customExpiry===undefined)return fail(res,400,"Enter a valid custom expiry date and time.");
   if(customExpiry&&customExpiry.getTime()<=Date.now())return fail(res,400,"Expiry must be in the future.");
   try {
-    const found=await db.query("SELECT id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,validity,time_limit,data_limit,price,comment,first_login_at,expires_at,server,mac_lock FROM hotspot_vouchers WHERE id=$1 LIMIT 1",[id]);
+    const found=await db.query("SELECT id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,validity,time_limit,data_limit,price,comment,first_login_at,expires_at,server,mac_lock FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR LOWER(mac_address)=LOWER($2) ORDER BY id DESC LIMIT 1",[hasNumericId?numericId:null,identifier]);
     const row=found.rows?.[0];
     if(!row)return fail(res,404,"Hotspot customer was not found.");
     const oldUsername=String(row.username||"").trim(),oldMac=normalizeMac(row.mac_address)||normalizeMac(oldUsername);
@@ -101,7 +102,7 @@ async function updateProfile(req,res) {
     const commentSaved=macLock?(expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|PROFILE="+profile;
     const saved=await db.query(
       "UPDATE hotspot_vouchers SET username=$1,password=$2,customer_name=$3,phone=$4,mac_address=$5,note=$6,mac_lock=$7,profile=$8,profile_id=$9,expires_at=$10,first_login_at=$11,status=$12,comment=$13,server=$14,validity=$15,time_limit=$15,data_limit=$16,updated_at=NOW() WHERE id=$17 RETURNING id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
-      [username,nextPassword,name,phone,macLock?mac:null,notes,macLock,profile,profileId,macLock?expiresAt:null,firstLogin,status,commentSaved,server,validity||null,quota?String(quota):null,id]);
+      [username,nextPassword,name,phone,macLock?mac:null,notes,macLock,profile,profileId,macLock?expiresAt:null,firstLogin,status,commentSaved,server,validity||null,quota?String(quota):null,row.id]);
     try{require("../controllers/hotspotController").invalidateListCache?.();}catch(_){}
     return res.json({success:true,message:"Profile updated successfully!",profile:safeProfile(saved.rows[0]),routerSync});
   } catch(error) {
