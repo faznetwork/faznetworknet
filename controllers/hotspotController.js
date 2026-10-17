@@ -116,29 +116,45 @@ async function importFromMikrotik(req,res) {
    const profile=clean(routerUser?.profile,100)||"default";
    const expiry=parseHotspotExpiry(routerUser?.comment);
    const comment=clean(routerUser?.comment,500);
-   const match=await db.query("SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1",[routerName]);
-   const existing=match.rows?.[0];
-   if(existing) {
-    await db.query("UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active' WHERE id=$1",[existing.id,profile,expiry]);
+   const phone=clean(routerUser?.comment_phone,40)||"Unlinked";
+   const server=clean(routerUser?.server,100)||"all";
+   try {
+    const outcome=await db.withTransaction(async client=>{
+     // Serialize imports of the same MAC without relying on a schema-specific ON CONFLICT target.
+     await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-import:"+mac]);
+     const match=await client.query(
+      "SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1 FOR UPDATE",
+      [mac]
+     );
+     const existing=match.rows?.[0];
+     if(existing) {
+      await client.query(
+       "UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active',updated_at=NOW() WHERE id=$1",
+       [existing.id,profile,expiry]
+      );
+      return "updated";
+     }
+     await client.query(
+      "INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,customer_name,server,expires_at,mac_address,first_login_at) VALUES($1,$2,$3,'imported',0,'active',$4,$5,'Imported Subscriber',$6,$7,$8,NOW()) RETURNING id",
+      [mac,clean(routerUser?.password,100)||mac,profile,comment,phone,server,expiry,mac]
+     );
+     return "imported";
+    });
+    if(outcome==="updated")updated++;else imported++;
+   } catch(error) {
+    // A concurrent provisioning path may win the unique username/MAC index race.
+    // The failed transaction is rolled back before re-reading; only router-owned fields are updated.
+    if(error?.code!=="23505")throw error;
+    const raced=await db.query(
+     "SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1",
+     [mac]
+    );
+    if(!raced.rows?.[0])throw error;
+    await db.query(
+     "UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active',updated_at=NOW() WHERE id=$1",
+     [raced.rows[0].id,profile,expiry]
+    );
     updated++;
-    continue;
-   }
-   const inserted=await db.query(
-    "INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,customer_name,server,expires_at,mac_address,first_login_at) VALUES($1,$2,$3,'imported',0,'active',$4,$5,'Imported Subscriber',$6,$7,$8,NOW()) ON CONFLICT(username) DO NOTHING RETURNING id",
-    [mac,clean(routerUser?.password,100)||mac,profile,comment,clean(routerUser?.comment_phone,40)||"Unlinked",clean(routerUser?.server,100)||"all",expiry,mac]
-   );
-   if(inserted.rows?.length) {
-    imported++;
-    continue;
-   }
-   // Another request may have inserted this username after our identity lookup.
-   // Re-read by the same strict identity keys, then update only router-owned fields.
-   const raced=await db.query("SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1",[routerName]);
-   if(raced.rows?.[0]) {
-    await db.query("UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active' WHERE id=$1",[raced.rows[0].id,profile,expiry]);
-    updated++;
-   } else {
-    throw new Error("Unable to safely import Hotspot identity "+mac+".");
    }
   }
   hotspotListCache.expiresAt=0;
