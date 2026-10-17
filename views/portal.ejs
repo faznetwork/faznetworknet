@@ -24,6 +24,7 @@ document.querySelectorAll(".copy-mfs-number").forEach(button=>button.addEventLis
 document.getElementById("verify-form").onsubmit=async e=>{
   e.preventDefault();
   const phone=normalizePhoneInput(document.getElementById("phone").value),trxId=document.getElementById("trx").value.trim(),box=document.getElementById("result"),deviceMac=normalizePortalMac(document.getElementById("portal-router-mac").value);
+  if(!deviceMac){box.className="mt-4 rounded-2xl p-4 bg-amber-50 text-amber-800";box.textContent="RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে captive login page থেকে পেমেন্ট যাচাই করুন।";return;}
   if(!/^01[0-9]{9}$/.test(phone)){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।";return;}
   if(!selected||!selectedProfile){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="আগে একটি প্যাকেজ নির্বাচন করুন।";return;}
   document.getElementById("phone").value=phone;box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="পেমেন্ট যাচাই হচ্ছে…";
