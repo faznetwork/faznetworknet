@@ -507,8 +507,13 @@ async function connect(options = {}) {
     return getStatus();
   })().catch(async error => {
     lastError = String(error.message || error);
-    connection = error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE" ? "owned_elsewhere" : "error";
+    const ownershipConflict = error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
+    connection = ownershipConflict ? "owned_elsewhere" : "error";
     if (!socket) await releaseSocketOwnership();
+    // PostgreSQL releases a session-level advisory lock when its owning
+    // connection dies. Retry after a conflict, but never terminate an unknown
+    // backend or erase auth rows: the current owner may still be healthy.
+    if (ownershipConflict) scheduleReconnect();
     throw error;
   }).finally(() => {
     connectPromise = null;
@@ -517,7 +522,8 @@ async function connect(options = {}) {
 }
 
 async function restoreSession() {
-  for (let attempt = 0; attempt <= RESTORE_RETRY_DELAYS.length; attempt += 1) {
+  const ownershipRetryDelays = [1000, 3000, 10000];
+  for (let attempt = 0; attempt <= Math.max(RESTORE_RETRY_DELAYS.length, ownershipRetryDelays.length); attempt += 1) {
     try {
       const stored = await inspectStoredSession();
       if (stored.reason === "missing_creds") {
@@ -533,17 +539,23 @@ async function restoreSession() {
       return { restored: true, status };
     } catch (error) {
       lastError = String(error.message || error);
-      if (error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE") {
-        console.warn("[WhatsApp] Startup restore skipped: another application instance owns the socket.");
-        return { restored: false, reason: "owned_elsewhere" };
-      }
-      if (attempt < RESTORE_RETRY_DELAYS.length) {
-        const delay = RESTORE_RETRY_DELAYS[attempt];
-        console.warn("[WhatsApp] Session restore attempt failed; retrying after transient startup delay.", {
-          attempt: attempt + 1, nextDelayMs: delay, error: lastError
-        });
+      const ownershipConflict = error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
+      const retryDelays = ownershipConflict ? ownershipRetryDelays : RESTORE_RETRY_DELAYS;
+      if (attempt < retryDelays.length) {
+        const delay = retryDelays[attempt];
+        console.warn(
+          ownershipConflict
+            ? "[WhatsApp] Another instance currently owns the socket; retrying ownership acquisition."
+            : "[WhatsApp] Session restore attempt failed; retrying after transient startup delay.",
+          { attempt: attempt + 1, nextDelayMs: delay, error: lastError }
+        );
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
+      }
+      if (ownershipConflict) {
+        scheduleReconnect();
+        console.warn("[WhatsApp] Ownership is still held elsewhere; automatic takeover retries remain scheduled.");
+        return { restored: false, reason: "owned_elsewhere", retryScheduled: true };
       }
       console.warn("[WhatsApp] Automatic session restore failed after bounded retries:", lastError);
       return { restored: false, error: lastError };
@@ -652,5 +664,7 @@ module.exports = {
   _resetUnregisteredAuthRows: resetUnregisteredAuthRows,
   _handleConnectionClose: handleConnectionClose,
   _inspectStoredSession: inspectStoredSession,
-  _isSocketReady: isSocketReady
+  _isSocketReady: isSocketReady,
+  _acquireSocketOwnership: acquireSocketOwnership,
+  _releaseSocketOwnership: releaseSocketOwnership
 };

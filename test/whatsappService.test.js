@@ -232,3 +232,32 @@ test("fresh QR reset never purges a registered PostgreSQL session", async () => 
   assert.deepEqual(result, { reset: false, reason: "registered" });
   assert.deepEqual([...database.rows], before);
 });
+
+
+test("socket ownership conflict releases the candidate DB client without touching saved auth", async () => {
+  const db = require("../db");
+  const whatsappService = require("../services/whatsappService");
+  const originalGetPool = db.getPool;
+  let released = false;
+  let lockQuery = false;
+  const client = {
+    async query(sql) {
+      lockQuery = sql.includes("pg_try_advisory_lock");
+      return { rows: [{ locked: false }] };
+    },
+    release() { released = true; },
+    on() {}
+  };
+  db.getPool = () => ({ connect: async () => client });
+  try {
+    await assert.rejects(
+      whatsappService._acquireSocketOwnership(),
+      error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
+    );
+    assert.equal(lockQuery, true);
+    assert.equal(released, true, "a non-owner client must be returned to the pool");
+  } finally {
+    db.getPool = originalGetPool;
+    await whatsappService._releaseSocketOwnership();
+  }
+});
