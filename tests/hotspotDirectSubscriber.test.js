@@ -11,7 +11,7 @@ test("Add User implements distinct direct-subscriber creation modes",()=>{
  assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
  assert.match(source,/activation_type/);
  assert.match(source,/subscriber_type='direct_subscriber'/);
- assert.match(source,/status='pending_claim'/);
+ assert.match(source,/preassigned\?"active":"pending_claim"/);
  assert.match(source,/preassigned\?mac:null/);
  assert.match(source,/first_login_at/);
  assert.match(source,/db\.withTransaction\(async client=>/);
