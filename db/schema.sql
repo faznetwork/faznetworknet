@@ -867,3 +867,36 @@ $faz_hotspot_voucher_customer_name_length$;
 CREATE TABLE IF NOT EXISTS hotspot_portal_settings (id SERIAL PRIMARY KEY,tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',display_mode VARCHAR(32) NOT NULL DEFAULT 'default',banner_url VARCHAR(500),custom_html TEXT,notice_text TEXT,brand_title VARCHAR(120) NOT NULL DEFAULT 'FAZ NETWORK',brand_subtitle VARCHAR(255) NOT NULL DEFAULT 'স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন',helpline_number VARCHAR(32) NOT NULL DEFAULT '01339932887',redirect_url VARCHAR(500),enable_online_payment BOOLEAN NOT NULL DEFAULT true,enable_voucher_pin BOOLEAN NOT NULL DEFAULT true,enable_qr_scan BOOLEAN NOT NULL DEFAULT true,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),CONSTRAINT hotspot_portal_settings_display_mode_check CHECK(display_mode IN ('default','banner','custom_code')),CONSTRAINT hotspot_portal_settings_tenant_unique UNIQUE(tenant_id));
 INSERT INTO hotspot_portal_settings(id,tenant_id) VALUES(1,'default') ON CONFLICT(id) DO NOTHING;
 SELECT setval(pg_get_serial_sequence('hotspot_portal_settings','id'),GREATEST((SELECT COALESCE(MAX(id),1) FROM hotspot_portal_settings),1));
+
+
+-- Hotspot sale-origin audit metadata. Historical sales stay on transactions even when
+-- an expired subscriber/voucher row is hard-deleted after successful router cleanup.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sale_type VARCHAR(24);
+UPDATE transactions
+SET sale_type = CASE
+  WHEN claim_flow IN ('hotspot','manual_hotspot') THEN 'online_mfs'
+  WHEN channel = 'cash' THEN 'scratch_card'
+  WHEN claim_flow = 'pppoe' THEN 'online_mfs'
+  ELSE 'other'
+END
+WHERE sale_type IS NULL OR BTRIM(sale_type) = '';
+ALTER TABLE transactions ALTER COLUMN sale_type SET DEFAULT 'other';
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_sale_type_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_sale_type_check
+  CHECK (sale_type IN ('online_mfs','scratch_card','manual','other'));
+CREATE INDEX IF NOT EXISTS idx_transactions_sales_type_created
+  ON transactions(sale_type, created_at DESC) WHERE status IN ('processed','PAID');
+
+ALTER TABLE hotspot_voucher_payments ADD COLUMN IF NOT EXISTS profile VARCHAR(100);
+ALTER TABLE hotspot_voucher_payments ADD COLUMN IF NOT EXISTS sale_type VARCHAR(24);
+UPDATE hotspot_voucher_payments hp
+SET profile = COALESCE(hp.profile, (SELECT v.profile FROM hotspot_vouchers v WHERE v.id=hp.voucher_id)),
+    sale_type = COALESCE(hp.sale_type, (SELECT t.sale_type FROM transactions t WHERE t.id=hp.transaction_id), 'other')
+WHERE hp.profile IS NULL OR hp.sale_type IS NULL;
+UPDATE hotspot_voucher_payments SET sale_type='other' WHERE sale_type IS NULL;
+ALTER TABLE hotspot_voucher_payments ALTER COLUMN sale_type SET DEFAULT 'other';
+ALTER TABLE hotspot_voucher_payments DROP CONSTRAINT IF EXISTS hotspot_voucher_payments_sale_type_check;
+ALTER TABLE hotspot_voucher_payments ADD CONSTRAINT hotspot_voucher_payments_sale_type_check
+  CHECK (sale_type IN ('online_mfs','scratch_card','manual','other'));
+CREATE INDEX IF NOT EXISTS idx_hotspot_voucher_payments_sales_type_created
+  ON hotspot_voucher_payments(sale_type, created_at DESC);

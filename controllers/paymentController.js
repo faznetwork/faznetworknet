@@ -349,7 +349,7 @@ async function verifyTrx(req,res){
   try{validityConfig=metadata.validityValue?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}catch(_){validityConfig=hc.parseStoredValidity(profile);}
   const validity=String(validityConfig.validity||"").trim(),quota=Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0);
   if(!validity&&!quota)return fail(400,"PROFILE_INVALID","The selected Hotspot package has no usable validity or data quota configured.");
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1 WHERE UPPER(TRIM(trx_id))=$2 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[phone,cleanTrx]);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1,sale_type='online_mfs' WHERE UPPER(TRIM(trx_id))=$2 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[phone,cleanTrx]);
   if(!claim.rows.length){const latest=await db.query("SELECT status FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);const ls=String(latest.rows[0]?.status||"").toLowerCase();return fail(409,ls==="processing"?"TRANSACTION_IN_PROCESS":"TRANSACTION_ALREADY_USED","Another request has claimed this TrxID. No package was staged.");}
   claimedTransactionId=claim.rows[0].id??tx.id;
   const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
@@ -383,7 +383,7 @@ async function verifyTrx(req,res){
     row=inserted.rows?.[0];
    }
    if(!row)throw new Error("The paid Hotspot package could not be saved in PostgreSQL.");
-   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount) VALUES($1,$2,$3,$4) ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount",[claimedTransactionId,row.id,phone,amount]);
+   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[claimedTransactionId,row.id,phone,amount,row.profile]);
    const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[username,claimedTransactionId]);
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
    provisioningVoucher={...row,username,phone,mac_address:boundMac||null,expires_at:nextExpiry,first_login_at:firstLoginAt,comment:stagedComment,profile:profile.name,server:row.server||"all",id:row.id};

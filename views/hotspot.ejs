@@ -1,11 +1,28 @@
 <%
 const body=`
 <section class="space-y-6">
-<div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><p class="text-sm font-bold text-cyan-600">HOTSPOT</p><h2 class="text-3xl font-black">Voucher Management</h2><p class="text-slate-500">Generate, export and print MikroTik Hotspot vouchers.</p></div><div class="flex flex-wrap gap-2"><button id="generate-voucher-btn" class="btn-primary">＋ Generate Vouchers</button><button id="print-voucher-btn" class="btn-secondary">🖨 Print Vouchers</button></div></div>
+<div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><p class="text-sm font-bold text-cyan-600">HOTSPOT</p><h2 class="text-3xl font-black">Voucher Management</h2><p class="text-slate-500">Generate, export and print MikroTik Hotspot vouchers.</p></div><div class="flex flex-wrap gap-2"><button id="generate-voucher-btn" class="btn-primary">＋ Generate Vouchers</button><button id="print-voucher-btn" class="btn-secondary">🖨 Print Vouchers</button><button type="button" class="btn-secondary" onclick="document.getElementById('manual-bind-modal').classList.remove('hidden')">Bind MAC Manually</button></div></div>
 <div id="hotspot-result" class="hidden rounded-xl px-4 py-3 text-sm font-semibold"></div>
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><div class="p-2 md:p-4 table-wrap overflow-x-auto"><table class="data-table w-full min-w-[680px]"><thead><tr><th>Username</th><th>Password</th><th>Profile</th><th>Validity</th><th>Price</th><th>Status</th><th>Created</th></tr></thead><tbody id="vouchers-body"><tr><td colspan="7" class="empty-cell">Loading...</td></tr></tbody></table></div></div>
 </section>
 <div id="voucher-modal" class="modal hidden"><div class="modal-card max-w-lg"><div class="flex justify-between mb-5"><div><h3 class="text-xl font-black">Generate Vouchers</h3><p class="text-sm text-slate-500">Users are created directly on MikroTik.</p></div><button class="modal-close text-2xl" data-modal="voucher-modal">&times;</button></div><form id="voucher-form" class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="field"><span>Quantity *</span><input id="voucher-quantity" type="number" min="1" max="500" value="10" required></label><label class="field"><span>Profile *</span><select id="voucher-profile" required></select></label><label class="field"><span>Validity *</span><input id="voucher-validity" value="1 Day" required></label><label class="field"><span>Price *</span><input id="voucher-price" type="number" min="0" step="0.01" value="20" required></label><div id="voucher-form-result" class="hidden md:col-span-2 text-sm font-semibold"></div><div class="md:col-span-2 flex justify-end gap-3"><button type="button" class="btn-secondary modal-close" data-modal="voucher-modal">Cancel</button><button class="btn-primary">Generate</button></div></form></div></div>
+<div id="manual-bind-modal" class="modal hidden"><div class="modal-card max-w-lg"><div class="flex justify-between mb-5"><div><h3 class="text-xl font-black">Manual MAC Provisioning</h3><p class="text-sm text-slate-500">Admin fallback when automated activation fails. RouterOS provisioning will occur when submitted.</p></div><button type="button" class="modal-close text-2xl" onclick="document.getElementById('manual-bind-modal').classList.add('hidden')">&times;</button></div><form id="manual-bind-form" class="grid grid-cols-1 gap-4" onsubmit="submitManualMacBind(event)"><label class="field"><span>Device MAC *</span><input id="manual-bind-mac" placeholder="AA:BB:CC:DD:EE:FF" required maxlength="17" autocomplete="off"></label><label class="field"><span>Hotspot profile / package *</span><input id="manual-bind-profile" placeholder="Exact saved profile name" required maxlength="100"></label><div id="manual-bind-result" class="hidden text-sm font-semibold"></div><div class="flex justify-end gap-3"><button type="button" class="btn-secondary" onclick="document.getElementById('manual-bind-modal').classList.add('hidden')">Cancel</button><button id="manual-bind-submit" class="btn-primary">Provision & Bind MAC</button></div></form></div></div>
+<script>
+async function submitManualMacBind(event){
+ event.preventDefault();
+ const result=document.getElementById('manual-bind-result'),button=document.getElementById('manual-bind-submit');
+ const mac=document.getElementById('manual-bind-mac').value.trim(),profile=document.getElementById('manual-bind-profile').value.trim();
+ result.classList.remove('hidden');result.textContent='Provisioning…';button.disabled=true;
+ try{
+  const response=await fetch('/api/hotspot/manual-bind',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({mac,profile})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw new Error(data.message||data.error||'Manual MAC provisioning failed.');
+  result.textContent='MAC bound and provisioned successfully.';result.className='text-sm font-semibold text-emerald-700';
+  setTimeout(()=>{document.getElementById('manual-bind-modal').classList.add('hidden');location.reload()},600);
+ }catch(error){result.textContent=error.message;result.className='text-sm font-semibold text-red-700'}
+ finally{button.disabled=false}
+}
+</script>
 <div id="print-area" class="print-area"></div>
 `;
 %><%- include("layout",{body,title,page}) %>

@@ -7,6 +7,7 @@ router.get("/users/:id/profile",userController.getProfile);
 router.put("/users/:id/profile",userController.updateProfile);
 router.post("/users/:id/renew",userController.renew);
 router.delete("/users/:id",userController.archive);
+router.post("/manual-bind",controller.createUser);
 router.post("/users",controller.createUser);
 router.post("/users/create",controller.createUser);
 router.post("/users/update",userController.updateFromBody);

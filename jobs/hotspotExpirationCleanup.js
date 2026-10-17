@@ -219,6 +219,13 @@ function createHotspotExpirationCleanup(deps = {}) {
             "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,$1),updated_at=NOW() WHERE id=$2",
             [now(), voucher.id]
           );
+          // Hard-delete the expired subscriber row only after RouterOS confirms cleanup.
+          // Sales transactions and hotspot_voucher_payments are independent audit records;
+          // their transaction FK is RESTRICT and voucher_id is SET NULL on voucher deletion.
+          await database.query(
+            "DELETE FROM hotspot_vouchers WHERE id=$1 AND status='expired' AND cleanup_status='completed'",
+            [voucher.id]
+          );
           removed++;
         } catch (error) {
           failed++;
@@ -254,7 +261,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE status='expired' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id"
+      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id"
     );
     const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
     if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);

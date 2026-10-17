@@ -5,5 +5,7 @@ const controller=require("../controllers/hotspotAuthController");
 const router=express.Router();
 const openCors=cors({origin:"*",methods:["POST","OPTIONS"],allowedHeaders:["Content-Type","Authorization"]});
 router.options("/activate",openCors);
+router.options("/claim-voucher",openCors);
+router.post("/claim-voucher",openCors,controller.claimVoucher);
 router.post("/activate",openCors,controller.activate);
 module.exports=router;
