@@ -89,6 +89,8 @@ let hotspotListCache={expiresAt:0,users:null,activeUsers:[]},hotspotListRefresh=
 async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
  hotspotListRefresh=(async()=>{
+  // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
+  await db.query("UPDATE hotspot_vouchers SET status='expired',updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
   // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
   const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
