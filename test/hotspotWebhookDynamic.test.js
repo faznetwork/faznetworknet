@@ -202,7 +202,7 @@ test("manually generated unused voucher activates from phone number and captive-
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.username,"AA:BB:CC:DD:EE:FF");
-    assert.equal(routerPayload.password,"01712345678");
+    assert.equal(routerPayload.password,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.profile,"1-Hour");
     assert.equal(routerPayload.macAddress,"AA:BB:CC:DD:EE:FF");
     assert.match(routerPayload.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
