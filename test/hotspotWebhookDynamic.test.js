@@ -229,9 +229,11 @@ test("manually generated unused voucher activates from phone number and captive-
         assert.match(sql,/unused/);
         assert.match(sql,/status,''\) IN \('pending_claim','unused','active','expired'\)/);
         assert.doesNotMatch(sql,/expires_at IS NULL OR expires_at > NOW\(\)/,"unstarted vouchers must not be filtered by expiry");
-        return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:null,first_login_at:null})]};
+        return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:new Date(Date.now()-86400000),first_login_at:null})]};
       }
       if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")){
+        assert.match(sql,/status,''\) IN \('unused','pending_claim'\) THEN \$5::timestamptz/,"first login must overwrite stale expiry");
+        assert.ok(new Date(params[4]).getTime()>Date.now(),"first-login expiry must start from the current activation time");
         return {rows:[pendingVoucher({username:params[0],password:params[1],mac_address:params[2],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
       }
       throw new Error("Unexpected transactional query: "+sql);
