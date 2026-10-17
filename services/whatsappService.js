@@ -365,10 +365,27 @@ async function connect() {
         qrDataUrl = null;
         qrText = null;
         lastError = null;
+
+        // Persist a final credential snapshot when the socket opens. The
+        // creds.update event is intentionally asynchronous and may otherwise
+        // leave PostgreSQL with an older registered=false snapshot.
+        try {
+          await saveCreds();
+          authConfigured = Boolean(state.creds && state.creds.registered);
+          if (!authConfigured) {
+            console.warn("[WhatsApp] Socket opened, but Baileys credentials are not registered; session may require re-linking.");
+          }
+        } catch (error) {
+          lastError = "WhatsApp is connected, but its session could not be saved to PostgreSQL.";
+          console.error("[WhatsApp] Final credential persistence failed:", error.message);
+        }
+
         const connectedSocket = socket;
-        persistConnectedAccount(connectedSocket?.user).catch(error => {
+        try {
+          await persistConnectedAccount(connectedSocket?.user);
+        } catch (error) {
           console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
-        });
+        }
       }
       if (update.connection === "connecting") connection = "connecting";
       if (update.connection === "close") {
