@@ -18,6 +18,8 @@ let socketLockClient = null;
 let socketOwner = false;
 const SOCKET_ADVISORY_LOCK_KEY = 20261017;
 const RESTORE_RETRY_DELAYS = [500, 1500];
+const INITIAL_HANDSHAKE_GRACE_MS = 10000;
+let handshakeGraceTimer = null;
 const tableReadyByDatabase = new WeakMap();
 
 function getBaileys() {
@@ -427,32 +429,73 @@ async function connect(options = {}) {
       if (update.connection === "open") {
         reconnectAttempt = 0;
         lastError = null;
-        // Remove the stale QR as soon as the socket reports an open handshake.
+        // A successful QR scan can emit creds.update and connection.update in
+        // quick succession. Do not assert registration until the initial
+        // post-scan credential/key flush has had a 10-second grace window.
         qrDataUrl = null;
         qrText = null;
         const connectedSocket = socketForEvents;
         console.log("[WhatsApp] Handshake open! Connected as:", connectedSocket.user?.id || "(user not populated yet)");
 
-        // Persist the final Baileys credential snapshot before exposing readiness.
-        try {
-          await saveCreds();
-          authConfigured = state.creds?.registered === true;
-        } catch (error) {
-          lastError = "WhatsApp connected, but credentials could not be saved to PostgreSQL.";
-          console.error("[WhatsApp] Final credential persistence failed:", error.message);
+        if (handshakeGraceTimer) {
+          clearTimeout(handshakeGraceTimer);
+          handshakeGraceTimer = null;
         }
 
-        if (isSocketReady(connectedSocket, state.creds, "connected") && !lastError) {
-          connection = "connected";
+        // A populated Baileys user is authoritative evidence that pairing
+        // succeeded. Mark the in-memory auth state registered and synchronously
+        // flush the credential snapshot before reporting the device as linked.
+        if (connectedSocket.user) {
+          state.creds.registered = true;
           try {
-            await persistConnectedAccount(connectedSocket.user);
+            await saveCreds();
+            authConfigured = true;
+            connection = "connected";
+            lastError = null;
+            try {
+              await persistConnectedAccount(connectedSocket.user);
+            } catch (error) {
+              console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+            }
           } catch (error) {
-            console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+            lastError = "WhatsApp opened, but credential persistence to PostgreSQL failed.";
+            connection = "error";
+            authConfigured = false;
+            console.error("[WhatsApp] Final credential persistence failed:", error.message);
           }
         } else {
-          connection = "reconnect_required";
-          if (!lastError) lastError = "WhatsApp socket opened without registered Baileys credentials. Re-link this device using the QR code.";
-          console.warn("[WhatsApp] Socket opened but is not ready: user/registered credentials missing.");
+          // Keep the handshake alive while Baileys finishes populating user and
+          // registration fields. The timer performs strict checks only after
+          // the initial post-scan grace period; it does not close the socket.
+          connection = "connecting";
+          handshakeGraceTimer = setTimeout(async () => {
+            handshakeGraceTimer = null;
+            if (socket !== connectedSocket || connection === "connected") return;
+            if (connectedSocket.user) {
+              state.creds.registered = true;
+              try {
+                await saveCreds();
+                authConfigured = true;
+                connection = "connected";
+                lastError = null;
+                try { await persistConnectedAccount(connectedSocket.user); }
+                catch (error) {
+                  console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+                }
+                return;
+              } catch (error) {
+                lastError = "WhatsApp opened, but credential persistence to PostgreSQL failed.";
+                connection = "error";
+                authConfigured = false;
+                console.error("[WhatsApp] Grace-period credential persistence failed:", error.message);
+                return;
+              }
+            }
+            connection = "reconnect_required";
+            lastError = "WhatsApp handshake did not expose a registered user within 10 seconds. Re-link this device using the QR code.";
+            console.warn("[WhatsApp] Registration assertion failed after initial handshake grace period.");
+          }, INITIAL_HANDSHAKE_GRACE_MS);
+          if (typeof handshakeGraceTimer.unref === "function") handshakeGraceTimer.unref();
         }
       }
       if (update.connection === "connecting") connection = "connecting";
@@ -569,6 +612,10 @@ async function clearStoredAuth(database = db) {
 async function unlink(options = {}) {
   const database = options.database || db;
   reconnectAllowed = false;
+  if (handshakeGraceTimer) {
+    clearTimeout(handshakeGraceTimer);
+    handshakeGraceTimer = null;
+  }
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
