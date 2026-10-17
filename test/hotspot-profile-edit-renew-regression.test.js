@@ -31,7 +31,9 @@ test("Profile 360 and Quick Renew only show success after explicit API confirmat
   const admin = read("views/admin.ejs");
   assert.match(profileJs, /if\(!d\|\|d\.success!==true\)throw new Error\(d\?\.message\|\|d\?\.error\|\|"Update failed"\)/);
   assert.match(admin, /if \(!response \|\| response\.success !== true\)\s*\{\s*throw new Error\(response && \(response\.message \|\| response\.error\) \|\| 'Renewal failed\.'\);\s*\}/);
-  assert.ok(admin.indexOf("response.success !== true") < admin.indexOf("if (typeof refreshHotspotCurrent === 'function') await refreshHotspotCurrent();"));
+  const renewHandler = admin.slice(admin.indexOf("form.addEventListener('submit', async function (submitEvent)"), admin.indexOf("                modal.show();", admin.indexOf("form.addEventListener('submit', async function (submitEvent)")));
+  assert.ok(renewHandler.indexOf("response.success !== true") >= 0);
+  assert.ok(renewHandler.indexOf("response.success !== true") < renewHandler.indexOf("if (typeof refreshHotspotCurrent === 'function') await refreshHotspotCurrent();"));
 });
 
 test("Legacy RouterOS-only editor no longer posts profile edits", () => {
