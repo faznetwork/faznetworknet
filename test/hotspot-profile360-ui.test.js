@@ -18,7 +18,8 @@ test("Admin loads only the clean Subscriber 360 assets for All Hotspot Users", (
   }
   assert.match(js, /response\.ok && data\.success === true/);
   assert.match(js, /max-width:991\.98px|991\.98px/);
-  assert.match(js, /data-row-action="disconnect"/);\n  assert.match(js, /data-filter/);
+  assert.match(js, /data-row-action="disconnect"/);
+  assert.match(js, /data-filter/);
 });
 
 test("Unified routes direct list, edit, renew and archive to the safe controller", () => {
