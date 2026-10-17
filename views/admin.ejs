@@ -5123,7 +5123,15 @@ async function deletePlan(id,name){
         document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
         document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
         document.getElementById('whatsappConnectBtn')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/connect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'WhatsApp connection failed.');await refreshWhatsAppStatus();window.setTimeout(refreshWhatsAppStatus,1500);window.setTimeout(refreshWhatsAppStatus,3500);}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'WhatsApp connection failed.';}finally{b.disabled=false;}});
-        document.getElementById('whatsappStatusBtn')?.addEventListener('click',refreshWhatsAppStatus);
+        document.getElementById('whatsappStatusBtn')?.addEventListener('click',async e=>{
+          const button=e.currentTarget,originalText=button.textContent;
+          button.disabled=true;button.textContent='Refreshing…';
+          const message=document.getElementById('whatsappStatusMessage');
+          if(message){message.className='small mt-2 text-muted';message.textContent='Checking live WhatsApp connection and saved account details…';}
+          try{await refreshWhatsAppStatus();}
+          catch(_){}
+          finally{button.disabled=false;button.textContent=originalText;}
+        });
         document.getElementById('whatsappTestBtn')?.addEventListener('click',async e=>{
           const button=e.currentTarget,resultEl=document.getElementById('whatsappTestResult');
           const to=String(document.getElementById('whatsappTestTo')?.value||'').trim();
