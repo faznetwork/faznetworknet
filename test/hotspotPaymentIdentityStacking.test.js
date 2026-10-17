@@ -80,7 +80,7 @@ test("verifyTrx persists the voucher foreign key and a durable payment-to-vouche
   assert.equal(stats().associationCount,1);
  });
  assert.match(staged.sql,/transaction_id/);
- assert.equal(staged.params[11],905,"new voucher stores the claimed transaction ID");
+ assert.equal(staged.params[13],905,"new voucher stores the claimed transaction ID after first-login and expiry fields");
 });
 
 test("active Hotspot renewal stacks new duration from the saved future expires_at",async()=>{

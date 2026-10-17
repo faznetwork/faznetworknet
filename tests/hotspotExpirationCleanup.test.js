@@ -264,7 +264,7 @@ test("retention archives transaction history before purging expired vouchers", a
   assert.equal(result.archivedTransactions,1);
   assert.equal(result.deletedVouchers,1);
   assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
-  assert.ok(calls[1].includes("INTERVAL '3 days'"));
+  assert.ok(calls[1].includes("status='expired' AND expires_at < NOW() - INTERVAL '30 days'"));
 });
 
 

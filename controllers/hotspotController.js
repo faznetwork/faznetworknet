@@ -88,7 +88,27 @@ async function deleteProfile(req,res){try{const name=clean(req.body.name,100);if
 let hotspotListCache={expiresAt:0,users:null,activeUsers:[]},hotspotListRefresh=null;
 async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
- hotspotListRefresh=(async()=>{const [routerRows,sessionRows,ledger]=await Promise.all([mikrotikService.getHotspotUsers(),mikrotikService.getActiveHotspotSessions(),db.query("SELECT id,username,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock FROM hotspot_vouchers ORDER BY id DESC").catch(()=>({rows:[]}))]);const byName=new Map();for(const r of ledger.rows||[]){const k=String(r.username||"").trim().toLowerCase();if(k&&!byName.has(k))byName.set(k,r);}const users=(Array.isArray(routerRows)?routerRows:[]).filter(u=>String(u?.username||"").trim()&&String(u.username).toLowerCase()!=="default-trial").map(u=>{const d=byName.get(String(u.username).toLowerCase())||{};return {id:u.id,voucherId:d.id||null,macLock:d.mac_lock!==false,username:u.username,name:d.customer_name||"",customer_name:d.customer_name||"",phone:d.phone||"",macAddress:d.mac_address||"",transaction_id:d.transaction_id||null,price:Number(d.price||0),profile:u.profile||d.profile||"",uptime:u.uptime||"",limitUptime:u.limitUptime||"",bytesIn:Number(u.bytesIn||0),bytesOut:Number(u.bytesOut||0),comment:u.comment||d.comment||"",disabled:Boolean(u.disabled),status:d.status||"",expires_at:d.expires_at||null,first_login_at:d.first_login_at||null,validity:d.validity||"",server:d.server||"all"};});const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(s=>String(s.username||"").toLowerCase()!=="default-trial").map(s=>({user:s.username,username:s.username,address:s.address||"",macAddress:s.macAddress||"",uptime:s.uptime||"",sessionTimeLeft:s.sessionTimeLeft||"",bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0),server:s.server||"",profile:s.profile||""}));hotspotListCache={expiresAt:Date.now()+8000,users,activeUsers};return hotspotListCache;})().finally(()=>{hotspotListRefresh=null;});return hotspotListRefresh;
+ hotspotListRefresh=(async()=>{
+  // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
+  await db.query("UPDATE hotspot_vouchers SET status='expired',updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
+  // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
+  const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
+  const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
+  const [ledger,sessionRows]=await Promise.all([ledgerPromise,sessionsPromise]);
+  const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(row=>String(row?.username||"").trim()&&String(row.username).toLowerCase()!=="default-trial").map(row=>({user:row.username,username:row.username,address:row.address||"",macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||""),uptime:row.uptime||"",sessionTimeLeft:row.sessionTimeLeft||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),server:row.server||"",profile:row.profile||""}));
+  const now=Date.now();
+  const users=(ledger.rows||[]).map(row=>{
+   const mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username);
+   const session=activeUsers.find(item=>(mac&&normalizeHotspotMac(item.macAddress)===mac)||String(item.username||"").trim().toLowerCase()===String(row.username||"").trim().toLowerCase())||null;
+   const expiry=row.expires_at?new Date(row.expires_at):null;
+   const isExpired=Boolean(expiry&&!Number.isNaN(expiry.getTime())&&expiry.getTime()<now);
+   const status=isExpired?"expired":String(row.status||"").toLowerCase();
+   return {id:row.id,voucherId:row.id,username:row.username||mac||"",password:row.password||"",name:row.customer_name||"",customer_name:row.customer_name||"",phone:row.phone||"",macAddress:mac||row.mac_address||"",transaction_id:row.transaction_id||null,price:Number(row.price||0),profile:row.profile||"",uptime:session?.uptime||"",limitUptime:"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),comment:row.comment||"",disabled:status==="expired"||status==="archived",status,expires_at:row.expires_at||null,first_login_at:row.first_login_at||null,validity:row.validity||"",server:row.server||"all",macLock:row.mac_lock!==false,is_online:Boolean(session),online:Boolean(session),created_at:row.created_at||null,updated_at:row.updated_at||null};
+  });
+  hotspotListCache={expiresAt:Date.now()+8000,users,activeUsers};
+  return hotspotListCache;
+ })().finally(()=>{hotspotListRefresh=null;});
+ return hotspotListRefresh;
 }
 
 function parseHotspotExpiry(comment) {
@@ -404,4 +424,4 @@ async function manualRenew(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;}};
+module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
