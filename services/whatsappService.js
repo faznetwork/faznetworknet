@@ -333,6 +333,19 @@ async function connect() {
       throw new Error("WhatsApp gateway could not load its socket implementation.");
     }
 
+    // A previous QR attempt can leave an open-but-unregistered socket behind.
+    // Replace that socket before creating a fresh QR; never create parallel sockets
+    // against the same PostgreSQL auth state.
+    if (socket && connection !== "connected") {
+      const staleSocket = socket;
+      socket = null;
+      try { staleSocket.end(undefined); } catch (_) {}
+      qrDataUrl = null;
+      qrText = null;
+      connection = "disconnected";
+      await releaseSocketOwnership();
+    }
+
     await acquireSocketOwnership();
     const { state, saveCreds } = await createDatabaseAuthState({ database: db, baileys });
     activeCreds = state.creds;
@@ -344,18 +357,21 @@ async function connect() {
       logger: pino({ level: "silent" }),
       browser: ["FAZ NETWORK", "Chrome", "1.0.0"]
     });
+    const socketForEvents = socket;
     connection = "connecting";
     lastError = null;
     qrDataUrl = null;
     qrText = null;
 
-    socket.ev.on("creds.update", () => {
+    socketForEvents.ev.on("creds.update", () => {
       saveCreds().catch(error => {
         lastError = "Could not persist WhatsApp credentials to PostgreSQL.";
         console.error("[WhatsApp] Credential persistence failed:", error.message);
       });
     });
-    socket.ev.on("connection.update", async update => {
+    socketForEvents.ev.on("connection.update", async update => {
+      // Ignore delayed events from a socket that has already been replaced.
+      if (socket !== socketForEvents) return;
       if (update.qr) {
         qrText = update.qr;
         try {
@@ -366,11 +382,10 @@ async function connect() {
       }
       if (update.connection === "open") {
         reconnectAttempt = 0;
-        qrDataUrl = null;
-        qrText = null;
         lastError = null;
 
         // Flush the latest credential snapshot before advertising readiness.
+        // Keep the QR visible unless pairing really registered the account.
         try {
           await saveCreds();
           authConfigured = state.creds?.registered === true;
@@ -382,6 +397,8 @@ async function connect() {
         const connectedSocket = socket;
         if (isSocketReady(connectedSocket, state.creds, "connected")) {
           connection = "connected";
+          qrDataUrl = null;
+          qrText = null;
           try {
             await persistConnectedAccount(connectedSocket.user);
           } catch (error) {
