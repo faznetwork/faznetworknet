@@ -385,8 +385,14 @@
                 <input type="text" id="voucher_pin" placeholder="যেমন: FAZ-8921-X3" style="text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">
             </div>
         </div>
+        <div class="input-group" style="margin-top: 10px;">
+            <label for="voucher_password">কার্ড পাসওয়ার্ড (Voucher Password)</label>
+            <div class="input-box">
+                <input type="password" id="voucher_password" autocomplete="off" placeholder="কার্ডের পাসওয়ার্ড লিখুন">
+            </div>
+        </div>
         <div style="font-size: 11px; color: #a7f3d0; text-align: left; margin-bottom: 12px;">
-            কার্ডের স্ক্র্যাচ পিনটি লিখে নিচের বাটনে চাপ দিন।
+            কার্ডের PIN ও Password লিখুন। QR কার্ডে দুটো থাকলে স্ক্যান করলেই পূরণ হবে।
         </div>
     </div>
 
@@ -513,7 +519,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'omit',
-                    body: JSON.stringify({ voucher_code: pin, mac: device.mac, ip: device.ip })
+                    body: JSON.stringify({ voucher_code: pin, voucher_password: document.getElementById('voucher_password').value, mac: device.mac, ip: device.ip })
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) {
@@ -623,8 +629,25 @@
             { fps: 10, qrbox: { width: 220, height: 220 } },
             (decodedText) => {
                 stopQrScanner();
-                document.getElementById('voucher_pin').value = decodedText;
+                let pin = decodedText.trim(), password = '';
+                try {
+                    const payload = JSON.parse(decodedText);
+                    if (payload && typeof payload === 'object') {
+                        pin = String(payload.pin || payload.voucher_code || payload.username || pin);
+                        password = String(payload.password || payload.voucher_password || '');
+                    }
+                } catch (_) {
+                    const pair = decodedText.trim().match(/^([^:|\s]+)[:|]([^:|\s]+)$/);
+                    if (pair) { pin = pair[1]; password = pair[2]; }
+                }
+                document.getElementById('voucher_pin').value = pin.trim().toUpperCase();
+                if (password) document.getElementById('voucher_password').value = password;
                 setAuthMethod('pin');
+                if (!password) {
+                    showStatus('QR থেকে PIN পাওয়া গেছে। নিরাপত্তার জন্য কার্ডের Password লিখুন।', false);
+                    document.getElementById('voucher_password').focus();
+                    return;
+                }
                 handleMasterAction();
             },
             (error) => {}
