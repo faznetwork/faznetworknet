@@ -982,14 +982,10 @@ class MikroTikService {
     if (!name) throw new Error("Hotspot server profile name is required.");
     // RouterOS has no mac-as-username boolean on a HotSpot Server Profile.
     // MAC-cookie lifetime belongs to the HotSpot User Profile.
-    const modes = {
-      seamless: ["mac", "http-pap", "http-chap", "mac-cookie"],
-      credentials: ["http-pap", "http-chap"],
-      chap_only: ["http-chap"]
-    };
-    const mode = this._str(modeValue || "seamless").trim().toLowerCase();
-    const expectedLoginBy = modes[mode];
-    if (!expectedLoginBy) throw new Error("Unsupported Hotspot engine mode.");
+    // The unified Hotspot credential model always uses MAC login plus PAP/CHAP and MAC-cookie.
+    // Ignore legacy per-server mode values so a sync cannot silently reintroduce a conflicting auth model.
+    const mode = "seamless";
+    const expectedLoginBy = ["mac", "http-pap", "http-chap", "mac-cookie"];
     const normalizeLoginBy = value => this._str(value).split(",").map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(",");
     return this._withConnection("Hotspot server profile authentication sync", async (connection) => {
       const rows = await connection.write("/ip/hotspot/profile/print");
