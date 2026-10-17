@@ -82,7 +82,15 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
  const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
- const textFor=async channel=>formatMessage(settings,eventName,context,message,await getCustomTemplate(type,rawEvent,eventName,channel));
+ context.expiry=context.expiry||context.expiry_date||"নির্ধারিত হয়নি";
+ const textFor=async channel=>{
+  const custom=await getCustomTemplate(type,rawEvent,eventName,channel);
+  if(channel==="whatsapp"&&type==="hotspot"&&eventName==="renewal"){
+   const template=typeof custom==="string"&&custom.trim()?custom:"FAZ NETWORK: আপনার হটস্পট প্যাকেজ সফলভাবে রিনিউ হয়েছে। মেয়াদ: {expiry} পর্যন্ত। ধন্যবাদ!";
+   return smsService.renderTemplate(template,{...context,expiry:context.expiry_date||"নির্ধারিত হয়নি",package:context.package||"হটস্পট প্যাকেজ",price:context.price??""});
+  }
+  return formatMessage(settings,eventName,context,message,custom);
+ };
  const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
@@ -100,7 +108,8 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
- if(whatsappChannelEnabled&&whatsappRuleEnabled&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
+ const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
+ if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("email")&&ruleEnabled("email")){
   let recipientEmail=String(customer?.email||"").trim();
   if(!recipientEmail&&customerUsername!=="unknown"){
@@ -119,8 +128,13 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
    return emailService.sendEmail({to:recipientEmail,subject,html,text});
   }]);
  }
- const results=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
- return {success:results.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:results.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}))};
+ const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
+ const channelResults=settled.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}));
+ if(type==="hotspot"&&eventName==="renewal"){
+  const whatsappResult=channelResults.find(result=>result.channel==="whatsapp")||{status:"skipped",reason:!validWhatsAppPhone?"invalid_phone":!whatsappChannelEnabled?"channel_disabled":"rule_disabled"};
+  console.log("[Hotspot WhatsApp Alert] Status:",whatsappResult);
+ }
+ return {success:settled.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:channelResults};
 }
 function dispatchNotification(payload={}){
  // Intentionally detached from request lifecycles: delivery cannot delay or roll back billing.
