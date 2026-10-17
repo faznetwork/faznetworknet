@@ -239,29 +239,37 @@ test("an already-bound phone rejects a different device MAC before touching Rout
   }
 });
 
-test("the same MAC cannot be rebound to a different phone",async()=>{
-  const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
-  let routerWrites=0;
+test("the same MAC resolves and updates the phone when a customer changes SIM",async()=>{
+  const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser,oldGetUser=mikrotik.getHotspotUser;
+  let routerWrites=0,updatedPhone="";
   try{
     db.query=async sql=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:41,username:"AA:BB:CC:DD:EE:FF",status:"active",expires_at:new Date(Date.now()+3600000),transaction_id:5}]};
       throw new Error("Unexpected database query: "+sql);
     };
-    db.withTransaction=async callback=>callback({query:async sql=>{
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
-      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[pendingVoucher({username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF",phone:"01711111111",status:"active"})]};
+      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[pendingVoucher({username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF",phone:"01711111111",status:"unused",first_login_at:null,expires_at:new Date(Date.now()+3600000)})]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3")){
+        updatedPhone=params[6];
+        return {rows:[pendingVoucher({id:41,username:params[0],password:params[1],mac_address:params[2],phone:params[6],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
+      }
       throw new Error("Unexpected transactional query: "+sql);
     }});
     mikrotik.getHotspotProfiles=async()=>oneHourProfile();
-    mikrotik.rechargeHotspotUser=async()=>{routerWrites++;return {};};
+    mikrotik.rechargeHotspotUser=async payload=>{routerWrites++;assert.equal(payload.username,"AA:BB:CC:DD:EE:FF");return {};};
+    mikrotik.getHotspotUser=async()=>null;
     const res=responseRecorder();
-    await hotspotAuthController.activate({ip:"wrong-phone-same-mac-test",body:{mac:"aa:bb:cc:dd:ee:ff",phone:"01712345678"}},res);
-    assert.equal(res.statusCode,403);
-    assert.equal(res.body.code,"MAC_ALREADY_BOUND");
-    assert.equal(routerWrites,0);
+    await hotspotAuthController.activate({ip:"same-mac-new-phone-test",body:{mac:"aa:bb:cc:dd:ee:ff",phone:"01712345678"}},res);
+    assert.equal(res.statusCode,200);
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.phone,"01712345678");
+    assert.equal(updatedPhone,"01712345678","the canonical voucher phone is updated to the submitted SIM");
+    assert.equal(routerWrites,1,"the MAC-bound account is provisioned for the new phone");
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
-    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
+    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;mikrotik.getHotspotUser=oldGetUser;
   }
 });
 
