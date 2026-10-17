@@ -73,6 +73,7 @@ test("Mobile Subscriber 360 opens a modal while desktop retains detail workspace
 
 test("Hotspot Profile 360 persists edits by database ID or username/MAC and refreshes subscriber labels", () => {
  const controller=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
+ const hotspotController=fs.readFileSync(path.join(root,"controllers/hotspotController.js"),"utf8");
  const edit=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8");
  const master=fs.readFileSync(path.join(root,"public/js/hotspot-master-detail.js"),"utf8");
  assert.match(hotspotController,/invalidateListCache:\(\)=>\{hotspotListCache\.expiresAt=0;\}/);
