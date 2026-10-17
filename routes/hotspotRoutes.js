@@ -11,7 +11,7 @@ router.delete("/users/:id",userController.archive);
 router.post("/users",controller.createUser);
 router.post("/users/create",controller.createUser);
 router.post("/users/update",userController.updateFromBody);
-router.post("/manual-renew",controller.manualRenew);
+router.post("/manual-renew",userController.renewFromBody);
 router.get("/dashboard-metrics",controller.dashboardMetrics);
 router.get("/voucher-stats",controller.voucherStats);
 router.get("/voucher-records",controller.voucherRecords);
