@@ -53,7 +53,7 @@ async function list(req, res) {
     const [routerUsers, sessions, ledgerResult] = await Promise.all([
       mikrotikService.getHotspotUsers(),
       mikrotikService.getActiveHotspotSessions(),
-      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,status,server,mac_lock,price,validity FROM hotspot_vouchers WHERE COALESCE(status,'') <> 'archived' ORDER BY id DESC")
+      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,status,server,mac_lock,price,validity FROM hotspot_vouchers ORDER BY id DESC")
     ]);
     const ledger = ledgerResult.rows || [];
     const byUsername = new Map(), byMac = new Map();
@@ -104,6 +104,16 @@ async function list(req, res) {
     console.error("[Hotspot Subscriber 360] Read failed:", e?.message || e);
     return error(res, 503, "Unable to load Hotspot users. No RouterOS state was changed.");
   }
+}
+
+async function getProfile(req, res) {
+  const identifier = clean(req.params.id, 255);
+  if (!identifier) return error(res, 400, "A voucher ID, username, or MAC address is required.");
+  try {
+    const result = await db.query("SELECT id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,mac_lock FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR LOWER(mac_address)=LOWER($2) ORDER BY CASE WHEN ($1::bigint IS NOT NULL AND id=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1", [/^\d+$/.test(identifier) && Number.isSafeInteger(Number(identifier)) ? Number(identifier) : null, identifier]);
+    if (!result.rows?.length) return error(res, 404, "Subscriber was not found in PostgreSQL.");
+    return res.json({ success: true, subscriber: result.rows[0] });
+  } catch (e) { return error(res, 503, "Unable to load the PostgreSQL subscriber profile."); }
 }
 
 async function updateProfile(req, res) {
@@ -207,4 +217,4 @@ async function archive(req, res) {
   }
 }
 
-module.exports = { list, updateProfile, renew, archive, normalizeMac, normalizePhone, validityMs };
+module.exports = { list, getProfile, updateProfile, renew, archive, normalizeMac, normalizePhone, validityMs };
