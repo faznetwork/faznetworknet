@@ -8,8 +8,8 @@ const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
 test("Add User implements distinct direct-subscriber creation modes",()=>{
  const source=read("controllers/hotspotController.js");
- assert.match(source,/mode==="preassigned"/);
- assert.match(source,/mode==="first_login"/);
+ assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
+ assert.match(source,/activation_type/);
  assert.match(source,/subscriber_type='direct_subscriber'/);
  assert.match(source,/status='pending_claim'/);
  assert.match(source,/preassigned\?mac:null/);
