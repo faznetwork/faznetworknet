@@ -323,6 +323,7 @@ async function verifyTrx(req,res){
   if(serviceType!=="hotspot")return fail(400,"SERVICE_TYPE_REQUIRED","Hotspot checkout must send service_type='hotspot' or a Hotspot package_id/MAC.");
   const phone=normalizePhone(body.phone||body.account_phone||body.customer_phone||body.username||"");
   if(!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi customer phone number.");
+  const submittedMac=macFromBody(body);
   const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
   if(!cleanTrx)return fail(400,"TRXID_REQUIRED","TrxID/TxnID is required.");
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
@@ -353,39 +354,57 @@ async function verifyTrx(req,res){
   claimedTransactionId=claim.rows[0].id??tx.id;
   const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
   const pendingComment="FAZ|PENDING|PROFILE="+profile.name;
-  let wasRecharge=false;
+  let wasRecharge=false,provisioningVoucher=null;
   await db.withTransaction(async client=>{
    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
-   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
-   const rows=records.rows||[],boundMacs=[...new Set(rows.map(row=>normalizeMac(row.mac_address)||normalizeMac(row.username)).filter(Boolean))];
-   if(boundMacs.length>1)throw Object.assign(new Error("This phone has conflicting MAC bindings; an administrator must reconcile the account."),{statusCode:409,code:"ACCOUNT_MAC_CONFLICT"});
-   const boundMac=boundMacs[0]||null,live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
-   if(live.length>1)throw Object.assign(new Error("Multiple live Hotspot packages are linked to this phone. Contact support before purchasing again."),{statusCode:409,code:"MULTIPLE_LIVE_PACKAGES"});
-   const target=(boundMac?rows.find(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===boundMac):null)||live[0]||rows[0]||null;
-   wasRecharge=live.length>0;
+   if(submittedMac)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-mac:"+submittedMac]);
+   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) OR ($2<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(COALESCE(username,''))=LOWER($2))) ORDER BY id DESC FOR UPDATE",[phone,submittedMac]);
+   const rows=records.rows||[];
+   const macOf=row=>normalizeMac(row?.mac_address)||normalizeMac(row?.username);
+   const macRows=submittedMac?rows.filter(row=>macOf(row)===submittedMac):[];
+   const phoneRows=rows.filter(row=>normalizePhone(row.phone)===phone);
+   const target=macRows[0]||phoneRows.find(row=>macOf(row))||phoneRows[0]||rows[0]||null;
+   const boundMac=submittedMac||macOf(target)||"";
+   const live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+   wasRecharge=Boolean(target&&(["active","expired"].includes(String(target.status||"").toLowerCase())||target.expires_at&&new Date(target.expires_at).getTime()<=Date.now()));
    const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+phone);
    const priorExpiry=target?.expires_at?new Date(target.expires_at):null,packageDuration=hotspotDurationMs(validity);
-   const stackedExpiry=Boolean(target&&["active","pending_claim"].includes(String(target.status||"").toLowerCase())&&priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now()&&packageDuration>0);
-   const nextExpiry=stackedExpiry?new Date(priorExpiry.getTime()+packageDuration):null,stagedComment=nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
-   const params=[username,phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac];
+   const priorStillValid=Boolean(priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now());
+   const nextExpiry=packageDuration?(priorStillValid?new Date(priorExpiry.getTime()+packageDuration):new Date(Date.now()+packageDuration)):null;
+   const stagedComment=boundMac&&nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
+   const firstLoginAt=boundMac?new Date():null;
+   const params=[username,phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac||null];
    let row;
    if(target){
-    const updated=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status='pending_claim',comment=$6,phone=$7,server=COALESCE(NULLIF(server,''),'all'),time_limit=$8,data_limit=$9,profile_id=$10,mac_address=$11,first_login_at=$12,expires_at=$13,expired_at=NULL,pre_expiry_notified=false,transaction_id=$14,renewal_stacked=$15,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$16 RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[...params,stackedExpiry?target.first_login_at:null,nextExpiry,claimedTransactionId,stackedExpiry,target.id]);
+    const updated=await client.query("UPDATE hotspot_vouchers SET username=$1,password=CASE WHEN $11::text IS NOT NULL THEN $1 ELSE password END,profile=$3,validity=$4,price=$5,status='pending_claim',comment=$6,phone=$7,server=COALESCE(NULLIF(server,''),'all'),time_limit=$8,data_limit=$9,profile_id=$10,mac_address=$11,first_login_at=CASE WHEN $12::timestamptz IS NULL THEN first_login_at ELSE $12 END,expires_at=$13,expired_at=NULL,pre_expiry_notified=false,transaction_id=$14,renewal_stacked=$15,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$16 RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[...params,firstLoginAt,nextExpiry,claimedTransactionId,Boolean(boundMac&&priorStillValid),target.id]);
     row=updated.rows?.[0];
    }else{
-    const inserted=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,cleanup_status,transaction_id,renewal_stacked) VALUES($1,$2,$3,$4,$5,'pending_claim',$6,$7,'all',$8,$9,$10,$11,'not_required',$12,false) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[...params,claimedTransactionId]);
+    const inserted=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,first_login_at,expires_at,cleanup_status,transaction_id,renewal_stacked) VALUES($1,$2,$3,$4,$5,'pending_claim',$6,$7,'all',$8,$9,$10,$11,$12,$13,'not_required',$14,false) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[...params,firstLoginAt,nextExpiry,claimedTransactionId]);
     row=inserted.rows?.[0];
    }
    if(!row)throw new Error("The paid Hotspot package could not be saved in PostgreSQL.");
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount) VALUES($1,$2,$3,$4) ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount",[claimedTransactionId,row.id,phone,amount]);
-   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,claimedTransactionId]);
+   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[username,claimedTransactionId]);
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
+   provisioningVoucher={...row,username,phone,mac_address:boundMac||null,expires_at:nextExpiry,first_login_at:firstLoginAt,comment:stagedComment,profile:profile.name,server:row.server||"all",id:row.id};
   });
   claimedTransactionId=null;
+  let activated=false,activationPending=false,accountUsername=provisioningVoucher?.username||("PENDING-"+phone),expiration=provisioningVoucher?.expires_at||null;
+  const mac=normalizeMac(provisioningVoucher?.mac_address||submittedMac);
+  if(mac){
+   try{
+    await mikrotikService.rechargeHotspotUser({username:mac,previousUsername:provisioningVoucher?.username,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment:provisioningVoucher?.comment||pendingComment,server:provisioningVoucher?.server||"all"});
+    const final=await db.query("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active',comment=$2,first_login_at=COALESCE(first_login_at,NOW()),expires_at=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$4 RETURNING id,username,status,expires_at",[mac,provisioningVoucher?.comment||pendingComment,expiration,provisioningVoucher.id]);
+    activated=Boolean(final.rows?.length);accountUsername=mac;
+   }catch(routerError){
+    activationPending=true;
+    console.error("[VERIFY-TRX] Payment recorded; MAC-bound RouterOS activation needs retry:",{mac,error:routerError?.message||String(routerError)});
+   }
+  }else activationPending=true;
   const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
   const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:phone,customer:{username:phone,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
-  return res.json({success:true,pending_activation:true,message:"Payment verified. Connect to the FAZ NETWORK Wi-Fi captive login page and enter this same 11-digit phone number. Your device MAC will bind on first login, when package validity starts.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:null,username:null,password:null});
+  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
+  return res.json({success:true,pending_activation:!activated,activation_pending:activationPending,message:activated?"Payment verified and the existing MAC-bound Hotspot account has been recharged.":activationPending?"Payment verified and saved; RouterOS activation is pending. Reconnect or contact support if it does not activate automatically.":"Payment verified.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:expiration?new Date(expiration).toISOString():null,username:mac||null,password:mac||null,mac:mac||null});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
   return fail(e?.statusCode||500,e?.code||(e?.message?.toLowerCase().includes("profile")?"PROFILE_ERROR":"PACKAGE_STAGE_FAILED"),e?.message||"Payment verification failed.");
