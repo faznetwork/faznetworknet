@@ -86,3 +86,16 @@ test("Hotspot Profile 360 persists edits by database ID or username/MAC and refr
  assert.match(edit,/\.subscriber-master-name/);assert.match(edit,/\.subscriber-master-phone/);
  assert.match(master,/Number\(u\.voucherId\)>0\?String\(Number\(u\.voucherId\)\):String\(u\.username/);
 });
+
+
+test("Quick Renew resolves by voucher ID, username, or MAC and uses contiguous SQL parameters", () => {
+ const controller=fs.readFileSync(path.join(root,"controllers/hotspotController.js"),"utf8");
+ const view=fs.readFileSync(path.join(root,"views/admin.ejs"),"utf8");
+ assert.match(controller,/requestedId=clean\(body\.id,100\)/);
+ assert.match(controller,/requestedMac=normalizeHotspotMac\(body\.mac\|\|body\.mac_address\|\|""\)/);
+ assert.match(controller,/id::text=\$1\) OR LOWER\(username\)=LOWER\(\$2\) OR \(\$3<>'' AND LOWER\(mac_address\)=LOWER\(\$3\)\)/);
+ assert.match(controller,/customer_name=COALESCE\(NULLIF\(\$6,''\),customer_name\),comment=\$7,expires_at=\$8,renewal_stacked=\$9/);
+ assert.match(controller,/new_expiry:renewed\.expiryLabel/);
+ assert.match(view,/send_notification: notifyEl\.checked/);
+ assert.match(view,/response\.new_expiry \|\| response\.expiry/);
+});
