@@ -94,7 +94,7 @@ async function updateProfile(req,res) {
       routerSync={removed:true,username:oldUsername};
       expiresAt=null;
     }
-    const status=macLock?"active":(wasActivated?"unused":String(row.status||"unused")==="pending_claim"?"unused":String(row.status||"unused"));
+    const status=macLock?"active":"unused";
     const username=macLock?mac:(mac?"PENDING-"+phone:(oldUsername&&!oldMac?oldUsername:"PENDING-"+phone));
     const firstLogin=macLock?(row.first_login_at||new Date()):null;
     const commentSaved=macLock?(expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|PROFILE="+profile;
