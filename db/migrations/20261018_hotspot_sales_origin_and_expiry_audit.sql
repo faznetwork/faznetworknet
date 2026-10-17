@@ -19,11 +19,9 @@ CREATE INDEX IF NOT EXISTS idx_transactions_sales_type_created
 ALTER TABLE hotspot_voucher_payments ADD COLUMN IF NOT EXISTS profile VARCHAR(100);
 ALTER TABLE hotspot_voucher_payments ADD COLUMN IF NOT EXISTS sale_type VARCHAR(24);
 UPDATE hotspot_voucher_payments hp
-SET profile = COALESCE(hp.profile, v.profile),
-    sale_type = COALESCE(hp.sale_type, t.sale_type, 'other')
-FROM transactions t
-LEFT JOIN hotspot_vouchers v ON v.id = hp.voucher_id
-WHERE t.id = hp.transaction_id AND (hp.profile IS NULL OR hp.sale_type IS NULL);
+SET profile = COALESCE(hp.profile, (SELECT v.profile FROM hotspot_vouchers v WHERE v.id=hp.voucher_id)),
+    sale_type = COALESCE(hp.sale_type, (SELECT t.sale_type FROM transactions t WHERE t.id=hp.transaction_id), 'other')
+WHERE hp.profile IS NULL OR hp.sale_type IS NULL;
 UPDATE hotspot_voucher_payments SET sale_type='other' WHERE sale_type IS NULL;
 ALTER TABLE hotspot_voucher_payments ALTER COLUMN sale_type SET DEFAULT 'other';
 ALTER TABLE hotspot_voucher_payments DROP CONSTRAINT IF EXISTS hotspot_voucher_payments_sale_type_check;
