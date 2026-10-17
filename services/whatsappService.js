@@ -437,12 +437,16 @@ function getStatus() {
   };
 }
 
+function normalizeWhatsAppJid(value) {
+  return normalizePhone(value) + "@s.whatsapp.net";
+}
+
 async function sendMessage({ to, message } = {}) {
   if (!socket || connection !== "connected") {
     throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
   }
-  const digits = normalizePhone(to);
-  const result = await socket.sendMessage(digits + "@s.whatsapp.net", {
+  const jid = normalizeWhatsAppJid(to);
+  const result = await socket.sendMessage(jid, {
     text: String(message || "").slice(0, 4000)
   });
   return { success: true, messageId: result?.key?.id || null };
@@ -484,6 +488,8 @@ module.exports = {
   restoreSession,
   getStatus,
   sendMessage,
+  normalizePhone,
+  normalizeWhatsAppJid,
   unlink,
   normalizePhone,
   extractConnectedAccount,
