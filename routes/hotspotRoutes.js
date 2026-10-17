@@ -1,6 +1,8 @@
 const express=require("express");const controller=require("../controllers/hotspotController");const router=express.Router();
 router.get("/",controller.page);
 router.get("/users",controller.list);
+router.post("/sync/import-from-mikrotik",controller.importFromMikrotik);
+router.post("/sync/push-to-mikrotik",controller.pushToMikrotik);
 const profileController=require("../controllers/hotspotProfileController");
 router.get("/users/:id/profile",profileController.getProfile);
 router.put("/users/:id/profile",profileController.updateProfile);
