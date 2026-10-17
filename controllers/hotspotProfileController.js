@@ -68,7 +68,7 @@ async function updateProfile(req,res) {
     const targetUsername=macLock?mac:(oldUsername&&!oldMac?oldUsername:"PENDING-"+phone);
     const nextPassword=macLock?mac:phone;
     const wasActivated=String(row.status||"").toLowerCase()==="active"||Boolean(oldMac);
-    let expiresAt=customExpiry|| (row.expires_at?new Date(row.expires_at):null);
+    let expiresAt=customExpiry||(row.expires_at?new Date(row.expires_at):null);
     const profileMetaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1").catch(()=>({rows:[]}));
     const metadata=profileMetaResult.rows?.[0]?.value||{};
     const profileMeta=metadata[profile]||{};
@@ -77,10 +77,8 @@ async function updateProfile(req,res) {
       const config=require("../services/hotspotProfileConfig").normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit);
       validity=config.validity||validity;quota=Number(config.limitBytesTotal||quota);
     }
-    const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
     const profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||profile);
     const server=String(body.server??row.server??"all").trim()||"all";
-    let routerSync={skipped:true,reason:"unassigned-first-login-account"};
     if(macLock) {
       if(!validity&&!quota&&!customExpiry)return fail(res,400,"Selected package has no configured validity or data quota.");
       if(!expiresAt&&validity) {
@@ -88,26 +86,48 @@ async function updateProfile(req,res) {
         if(m){const unit=m[2].toLowerCase();const ms=unit.startsWith("s")?1000:unit.startsWith("m")?60000:unit.startsWith("h")?3600000:unit.startsWith("w")?604800000:86400000;expiresAt=new Date(Date.now()+Number(m[1])*ms);}
       }
       if(expiresAt&&expiresAt.getTime()<=Date.now())return fail(res,400,"Expiry must be in the future.");
-      const exactComment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"");
-      await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment:exactComment,server,macAddress:mac,previousUsername:oldUsername!==mac?oldUsername:""});
-      routerSync={synced:true,username:mac,comment:exactComment};
     } else if(wasActivated&&oldUsername) {
-      await mikrotikService.removeHotspotUser(oldUsername);
-      routerSync={removed:true,username:oldUsername};
+      // The account is being unbound; persist the cleared expiry before attempting RouterOS removal.
       expiresAt=null;
     }
+    const exactComment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"");
     const status=macLock?"active":"unused";
     const username=macLock?mac:(mac?"PENDING-"+phone:(oldUsername&&!oldMac?oldUsername:"PENDING-"+phone));
     const firstLogin=macLock?(row.first_login_at||new Date()):null;
     const commentSaved=macLock?(expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|PROFILE="+profile;
+
+    // Persist the subscriber profile and binding state first. RouterOS availability must not
+    // determine whether Name, Phone, Notes, or the selected package are retained in PostgreSQL.
     const saved=await db.query(
       "UPDATE hotspot_vouchers SET username=$1,password=$2,customer_name=$3,phone=$4,mac_address=$5,note=$6,mac_lock=$7,profile=$8,profile_id=$9,expires_at=$10,first_login_at=$11,status=$12,comment=$13,server=$14,validity=$15,time_limit=$15,data_limit=$16,updated_at=NOW() WHERE id=$17 RETURNING id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
       [username,nextPassword,name,phone,macLock?mac:null,notes,macLock,profile,profileId,macLock?expiresAt:null,firstLogin,status,commentSaved,server,validity||null,quota?String(quota):null,row.id]);
+    if(!saved.rows?.length)return fail(res,404,"Hotspot customer was not found.");
     try{require("../controllers/hotspotController").invalidateListCache?.();}catch(_){}
-    return res.json({success:true,message:"Profile updated successfully!",profile:safeProfile(saved.rows[0]),routerSync});
+
+    let routerSync={skipped:true,reason:"unassigned-first-login-account"};
+    try {
+      if(macLock) {
+        await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment:exactComment,server,macAddress:mac,previousUsername:oldUsername!==mac?oldUsername:""});
+        routerSync={synced:true,username:mac,comment:exactComment};
+      } else if(wasActivated&&oldUsername) {
+        await mikrotikService.removeHotspotUser(oldUsername);
+        routerSync={removed:true,username:oldUsername};
+      }
+    } catch(syncError) {
+      routerSync={synced:false,warning:"PostgreSQL profile saved, but MikroTik synchronization failed."};
+      console.warn("[Hotspot Profile API] PostgreSQL profile saved; MikroTik synchronization failed.", {
+        id:row.id,username:macLock?mac:oldUsername,error:syncError?.message||syncError
+      });
+    }
+    return res.json({
+      success:true,
+      message:routerSync.warning||"Profile updated successfully!",
+      profile:safeProfile(saved.rows[0]),
+      routerSync
+    });
   } catch(error) {
     console.error("[Hotspot Profile API] Update failed:",error);
-    return fail(res,error.statusCode||502,"Profile update or MikroTik synchronization failed. "+String(error.message||"").slice(0,180));
+    return fail(res,error.statusCode||503,"Profile update failed. "+String(error.message||"").slice(0,180));
   }
 }
 module.exports={getProfile,updateProfile,normalizePhone,normalizeMac};
