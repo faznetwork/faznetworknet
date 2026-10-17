@@ -156,7 +156,7 @@ async function createUser(req,res){
     const dhakaStamp=date=>{const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(date).reduce((o,x)=>(o[x.type]=x.value,o),{});return p.year+"-"+p.month+"-"+p.day+" "+p.hour+":"+p.minute+":"+p.second;};
     const comment=preassigned?(expiresAt?"Exp: "+dhakaStamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|PROFILE="+profile;
     const priceResult=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1",[profile]).catch(()=>({rows:[]}));
-    const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0),username=clean(preassigned?mac:"PENDING-"+phone,160),accountPassword=preassigned?mac:phone;
+    const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0),username=clean(preassigned?mac:"PENDING-"+phone,160),accountPassword=preassigned?mac:clean(password||phone,160);
     const stored=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
       if(preassigned)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-mac:"+mac]);
