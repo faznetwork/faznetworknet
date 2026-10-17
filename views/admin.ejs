@@ -2808,7 +2808,7 @@
         };
         window.deleteHotspotVoucher = async function(encodedUsername){
             const username=decodeURIComponent(String(encodedUsername||''));
-            if(!username||!confirm('Remove Hotspot credentials for '+username+' from MikroTik?'))return;
+            if(!username||!confirm('Archive this voucher in the panel database only? The MikroTik user and sessions will remain untouched.'))return;
             try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await window.loadHotspotVoucherRecords('all','Voucher Management');}
             catch(error){alert(error.message||'Unable to remove Hotspot credentials.');}
         };
@@ -3550,7 +3550,7 @@
 }
 async function kickHotspotSession(id, username) {
             if(!id && !username) return;
-            if(!confirm('Disconnect '+(username||'this device')+'?')) return;
+            if(!confirm('Disconnect is disabled during the safety-scoped Subscriber 360 rebuild. RouterOS sessions remain untouched.')) return;
             try {
                 await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,username:username})});
                 await refreshHotspotCurrent();
@@ -3780,7 +3780,7 @@ window.editHotspotUser=function(username,event){
         }
 
         async function kickHotspotUser(username,event){if(event)event.stopPropagation();try{await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message);}}
-        async function removeHotspotUser(username,event){if(event)event.stopPropagation();if(!confirm('Delete user '+username+' from MikroTik and Database?'))return;try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message||'Could not delete Hotspot user.');}}
+        async function removeHotspotUser(username,event){if(event)event.stopPropagation();if(!confirm('Archive this voucher in the panel database only? The MikroTik user and sessions will remain untouched.'))return;try{await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});await refreshHotspotCurrent();}catch(e){alert(e.message||'Could not delete Hotspot user.');}}
         async function loadHotspotProfiles(titleKey) {
             purgeStuckBackdrops();
             currentHotspotMode = 'profiles';
