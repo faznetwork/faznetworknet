@@ -46,7 +46,7 @@ test("Admin creates an unused first-login voucher without MAC, expiry, or Router
     mikrotik.createHotspotUser=async()=>{routerWrites++;throw new Error("Admin create must not write RouterOS");};
     mikrotik.rechargeHotspotUser=async()=>{routerWrites++;throw new Error("Admin create must not write RouterOS");};
     const res=responseRecorder();
-    await hotspotController.createUser({body:{phone:"01712345678",profile_id:"pkg-1-hour"}},res);
+    await hotspotController.createUser({body:{phone:"01712345678",profile_id:"pkg-1-hour",customer_name:"  "+"R".repeat(250)+"  ",password:"  "+"P".repeat(220)+"  ",note:"  "+"N".repeat(1200)+"  "}},res);
     assert.equal(res.statusCode,201);
     assert.equal(res.body.success,true);
     assert.equal(res.body.pending_activation,true);
@@ -60,6 +60,11 @@ test("Admin creates an unused first-login voucher without MAC, expiry, or Router
     assert.equal(insertedParams[6],"01712345678","phone is stored as the stable customer lookup key");
     assert.equal(insertedParams[10],"pkg-1-hour");
     assert.equal(insertedParams[11],null,"admin cannot supply a device MAC");
+    assert.equal(insertedParams[0],"PENDING-01712345678");
+    assert.ok(insertedParams[0].length<=160,"synthetic username must fit the widened database column");
+    assert.equal(insertedParams[1],"P".repeat(160),"password is trimmed and bounded before INSERT");
+    assert.equal(insertedParams[12],"R".repeat(200),"customer name is trimmed and bounded before INSERT");
+    assert.equal(insertedParams[13],"N".repeat(1000),"note is trimmed and bounded before INSERT");
     assert.equal(routerWrites,0,"pending accounts must not be provisioned on RouterOS before first login");
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
