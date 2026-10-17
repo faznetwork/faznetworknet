@@ -38,7 +38,7 @@ test("Admin creates an unused first-login voucher without MAC, expiry, or Router
       if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[]};
       if(sql.startsWith("INSERT INTO hotspot_vouchers")){
         insertedSql=sql;insertedParams=params;
-        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:params[14],mac_address:params[11],expires_at:params[16]}]};
+        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[11],phone:params[7],status:params[5],mac_address:params[12],expires_at:params[16]}]};
       }
       throw new Error("Unexpected transactional query: "+sql);
     }});
@@ -53,18 +53,18 @@ test("Admin creates an unused first-login voucher without MAC, expiry, or Router
     assert.equal(res.body.user.status,"unused");
     assert.equal(res.body.user.phone,"01712345678");
     assert.match(insertedSql,/first_login_at,expires_at,mac_lock/);
-    assert.equal(insertedParams[14],"unused");
+    assert.equal(insertedParams[5],"unused","status is the sixth INSERT value and must satisfy hotspot_vouchers_status_check");
     assert.equal(insertedParams[15],null,"first-login voucher has no activation timestamp");
     assert.equal(insertedParams[16],null,"first-login voucher has no expiry until activation");
     assert.equal(insertedParams[1],"P".repeat(160),"explicit password is trimmed and bounded before storage");
-    assert.equal(insertedParams[6],"01712345678","phone is stored as the stable customer lookup key");
-    assert.equal(insertedParams[10],"pkg-1-hour");
-    assert.equal(insertedParams[11],null,"admin cannot supply a device MAC");
+    assert.equal(insertedParams[7],"01712345678","phone is stored as the stable customer lookup key");
+    assert.equal(insertedParams[11],"pkg-1-hour");
+    assert.equal(insertedParams[12],null,"admin cannot supply a device MAC");
     assert.equal(insertedParams[0],"PENDING-01712345678");
     assert.ok(insertedParams[0].length<=160,"synthetic username must fit the widened database column");
     assert.equal(insertedParams[1],"P".repeat(160),"password is trimmed and bounded before INSERT");
-    assert.equal(insertedParams[12],"R".repeat(200),"customer name is trimmed and bounded before INSERT");
-    assert.equal(insertedParams[13],"N".repeat(1000),"note is trimmed and bounded before INSERT");
+    assert.equal(insertedParams[13],"R".repeat(200),"customer name is trimmed and bounded before INSERT");
+    assert.equal(insertedParams[14],"N".repeat(1000),"note is trimmed and bounded before INSERT");
     assert.equal(routerWrites,0,"pending accounts must not be provisioned on RouterOS before first login");
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
