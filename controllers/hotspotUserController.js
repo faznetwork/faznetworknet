@@ -217,8 +217,24 @@ async function archive(req, res) {
   }
 }
 
+async function updateFromBody(req, res) {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const id = clean(body.voucher_id || body.username || body.mac_address || body.id);
+  return updateProfile({ params: { id }, body }, res);
+}
+async function renewFromBody(req, res) {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const id = clean(body.voucher_id || body.username || body.mac_address || body.id);
+  return renew({ params: { id }, body }, res);
+}
+async function archiveFromBody(req, res) {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const id = clean(body.voucher_id || body.username || body.mac_address || body.id);
+  return archive({ params: { id } }, res);
+}
+
 function blockRouterMutation(req, res) {
   return res.status(409).json({ success: false, message: "This action is disabled in the safety-scoped Subscriber 360 rebuild. RouterOS users and active sessions remain untouched." });
 }
 
-module.exports = { list, getProfile, updateProfile, renew, archive, blockRouterMutation, normalizeMac, normalizePhone, validityMs };
+module.exports = { list, getProfile, updateProfile, renew, archive, updateFromBody, renewFromBody, archiveFromBody, blockRouterMutation, normalizeMac, normalizePhone, validityMs };
