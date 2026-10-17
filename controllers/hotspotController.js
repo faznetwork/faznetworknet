@@ -249,8 +249,11 @@ async function createUser(req,res){
       if(rows.some(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now())))throw hotspotError("ACTIVE_PACKAGE_EXISTS",409,"This phone already has a pending or active Hotspot package.");
       if(preassigned){const bound=await client.query("SELECT phone FROM hotspot_vouchers WHERE LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC FOR UPDATE",[mac]);if((bound.rows||[]).some(row=>normalizeHotspotPhone(row.phone)!==phone))throw hotspotError("MAC_ALREADY_BOUND",409,"This MAC address is already bound to another phone.");}
       const profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||requestedProfile);
-      const status=preassigned?"active":"unused",firstLoginAt=preassigned?new Date():null;
-      const params=[username,accountPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,status,firstLoginAt,expiresAt,Boolean(preassigned)];
+      // Persist only canonical database lifecycle values; never pass UI activation labels such as "assigned" or "pending" to PostgreSQL.
+      const requestedVoucherStatus=preassigned?"active":"unused";
+      const voucherStatus=["unused","active"].includes(requestedVoucherStatus)?requestedVoucherStatus:"unused";
+      const firstLoginAt=preassigned?new Date():null;
+      const params=[username,accountPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,voucherStatus,firstLoginAt,expiresAt,Boolean(preassigned)];
       const result=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,first_login_at,expires_at,mac_lock) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'not_required',$16,$17,$18) RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at",params);
       if(!result.rows?.length)throw new Error("Hotspot account could not be saved.");
       return result.rows[0];

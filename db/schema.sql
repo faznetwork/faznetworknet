@@ -296,7 +296,7 @@ WHERE t.claim_flow IN ('hotspot','manual_hotspot') AND t.status IN ('processed',
   AND NULLIF(BTRIM(t.matched_username),'') IS NOT NULL
 ON CONFLICT(transaction_id) DO NOTHING;
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_status_check;
-ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_status_check CHECK (status IN ('pending_claim','unused','active','expired'));
+ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_status_check CHECK (status IN ('pending_claim','unused','active','expired','disabled','assigned'));
 -- Permit repeat purchases after expiry while preventing simultaneous live vouchers for one phone.
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_username_key;
 DROP INDEX IF EXISTS uq_hotspot_vouchers_live_username_ci;
