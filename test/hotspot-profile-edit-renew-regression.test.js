@@ -19,7 +19,7 @@ test("Subscriber profile is persisted before RouterOS synchronization", () => {
 
 test("Quick Renew supports second-based validity and returns new_expiry", () => {
   const source = read("controllers/hotspotController.js");
-  assert.match(source, /function validityMs\(value\)[\s\S]*?\(s\|sec\|secs\|second\|seconds\)/);
+  assert.match(source, /function validityMs\(value\)[\s\S]*?\(s\|sec\|secs\|second\|seconds\|m\|min/);
   assert.match(source, /u\.startsWith\("s"\)\?1000/);
   assert.match(source, /success:true[\s\S]*?new_expiry:renewed\.expiryLabel/);
 });
