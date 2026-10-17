@@ -69,3 +69,17 @@ test("Mobile Subscriber 360 opens a modal while desktop retains detail workspace
  assert.match(js,/id="mobileSubscriberModal"/);assert.match(js,/getOrCreateInstance\(modal\)\.show\(\)/);assert.match(js,/detailPackageName/);assert.match(js,/detailStatus/);
  assert.match(css,/@media\(max-width:991\.98px\)/);assert.match(css,/#mobileSubscriberModal \.modal-body/);assert.match(css,/body:not\(\.sidebar-open\) \.sidebar/);
 });
+
+test("Hotspot Profile 360 persists edits by database ID or username/MAC and refreshes subscriber labels", () => {
+ const controller=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
+ const edit=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8");
+ const master=fs.readFileSync(path.join(root,"public/js/hotspot-master-detail.js"),"utf8");
+ assert.match(controller,/Update request/);
+ assert.match(controller,/LOWER\(username\)=LOWER\(\$2\) OR LOWER\(mac_address\)=LOWER\(\$2\)/);
+ assert.match(controller,/SET username=\$1,password=\$2,customer_name=\$3,phone=\$4,mac_address=\$5,note=\$6/);
+ assert.match(controller,/quota\?String\(quota\):null,row\.id/);
+ assert.match(edit,/Number\(row\.voucherId\)>0\?String\(Number\(row\.voucherId\)\):String\(row\.username/);
+ assert.match(edit,/#detailCustomerName/);assert.match(edit,/#detailPhone/);
+ assert.match(edit,/\.subscriber-master-name/);assert.match(edit,/\.subscriber-master-phone/);
+ assert.match(master,/String\(u\.voucherId\)>0\?String\(Number\(u\.voucherId\)\):String\(u\.username/);
+});
