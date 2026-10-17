@@ -454,6 +454,17 @@ function getStatus() {
   };
 }
 
+async function getStatusSnapshot() {
+  // Refresh the account metadata from PostgreSQL as well as in-memory socket
+  // state so the Refresh button never depends on a previous Connect response.
+  try {
+    await loadConnectedAccount();
+  } catch (error) {
+    console.warn("[WhatsApp] Could not reload linked-account metadata:", error.message);
+  }
+  return getStatus();
+}
+
 function normalizeWhatsAppJid(value) {
   return normalizePhone(value) + "@s.whatsapp.net";
 }
@@ -504,6 +515,7 @@ module.exports = {
   connect,
   restoreSession,
   getStatus,
+  getStatusSnapshot,
   sendMessage,
   normalizePhone,
   normalizeWhatsAppJid,
