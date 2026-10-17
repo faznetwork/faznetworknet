@@ -5,7 +5,7 @@ const mikrotikService = require("../services/mikrotikService");
 const { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript } = require("../services/hotspotProfileConfig");
 
 const LEGACY_HOTSPOT_HOOK = /FAZ\|(?:EXP|PROFILE|INIT)=|FIRST_LOGIN=/i;
-const MANAGED_HOTSPOT_HOOK = /FAZ_HOTSPOT_EXPIRY_V[23]/i;
+const MANAGED_HOTSPOT_HOOK = /FAZ_HOTSPOT_(?:EXPIRY_V[23]|SESSION_BINDING_V4)/i;
 const CUSTOM_HOOK_MARKER = "FAZ_CUSTOM_ON_LOGIN_HOOK_START";
 
 function parseMetadata(value) {
@@ -108,6 +108,22 @@ async function syncHotspotProfileScripts(deps = {}) {
     }
   }
 
+  // Remove all legacy per-user expiry schedulers; PostgreSQL is the expiry authority.
+  const schedulerCleanup = { checked: 0, removed: 0, failed: 0 };
+  if (typeof router.cleanupHotspotExpirationSchedulers === "function") {
+    try {
+      const cleanup = await router.cleanupHotspotExpirationSchedulers();
+      schedulerCleanup.checked = Number(cleanup?.checked) || 0;
+      schedulerCleanup.removed = Number(cleanup?.removed) || 0;
+      schedulerCleanup.failed = Number(cleanup?.failed) || 0;
+      failed += schedulerCleanup.failed;
+    } catch (error) {
+      schedulerCleanup.failed++;
+      failed++;
+      logger.warn("[HOTSPOT SCHEDULER CLEANUP] Could not remove legacy expiry schedulers:", error?.message || error);
+    }
+  }
+
   // A Hotspot Server Profile is separate from the User Profile above.
   // Normalize auth only on profiles referenced by enabled Hotspot servers.
   const authResult = { checked: 0, updated: 0, skipped: 0, failed: 0 };
@@ -136,7 +152,7 @@ async function syncHotspotProfileScripts(deps = {}) {
   }
   logger.log("[HOTSPOT SERVER AUTH SYNC] Completed.", authResult);
 
-  const result = { checked, updated, skipped, unchanged, ineligible, failed, serverAuth: authResult };
+  const result = { checked, updated, skipped, unchanged, ineligible, failed, serverAuth: authResult, schedulerCleanup };
   logger.log("[HOTSPOT PROFILE SYNC] Completed.", result);
   return result;
 }

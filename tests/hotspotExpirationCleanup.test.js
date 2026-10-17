@@ -266,3 +266,9 @@ test("retention archives transaction history before purging expired vouchers", a
   assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
   assert.ok(calls[1].includes("INTERVAL '3 days'"));
 });
+
+
+test("does not let a legacy RouterOS scheduler suppress centralized expiry", () => {
+  const expiredComment = "FAZ|PROFILE=Gold|EXP: 2020-01-01 00:00:00";
+  assert.equal(routerUserExpired({ username: "OLD-SCHEDULER-USER", comment: expiredComment, disabled: false }, new Set(["faz-exp-OLD-SCHEDULER-USER"])), true);
+});

@@ -48,7 +48,7 @@ function previewProfileScript(req,res){
   if(!Number.isSafeInteger(sharedUsers)||sharedUsers<1)return res.status(400).json({success:false,message:"Shared users must be a positive whole number."});
   const validity=normalizeProfileValidity(body.validityValue??1,body.validityUnit||"days");
   const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:validity.value,validityUnit:validity.unit});
-  return res.json({success:true,scriptVersion:"FAZ_HOTSPOT_EXPIRY_V3",onLogin});
+  return res.json({success:true,scriptVersion:"FAZ_HOTSPOT_SESSION_BINDING_V4",onLogin});
  }catch(error){
   return res.status(400).json({success:false,message:error?.message||"Unable to generate the RouterOS on-login preview."});
  }
@@ -340,7 +340,25 @@ async function voucherSales(req,res){
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function updateUser(req,res){try{const username=clean(req.body.username,100),profile=clean(req.body.profile,100),comment=clean(req.body.comment,500),password=String(req.body.password??"").slice(0,128);if(!username)return res.status(400).json({success:false,message:"Username is required."});if(!profile)return res.status(400).json({success:false,message:"Profile is required."});const result=await mikrotikService.updateHotspotUser(username,profile,comment,password);hotspotListCache.expiresAt=0;return res.json({success:true,message:"Hotspot user updated on MikroTik.",...result});}catch(e){return errorResponse(res,e);}}
-async function remove(req,res){try{const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,message:"Username is required."});await mikrotikService.cleanupExpiredHotspotUser(username);await db.query("DELETE FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1)",[username]);hotspotListCache.expiresAt=0;return res.json({success:true,username,deleted:true});}catch(e){return errorResponse(res,e);}}
+async function deleteHotspotUser({ username: usernameValue, database = db, router = mikrotikService, logger = console } = {}) {
+ const requestedUsername=clean(usernameValue,100);
+ if(!requestedUsername)throw hotspotError("HOTSPOT_USERNAME_REQUIRED",400,"Username is required.");
+ const identityResult=await database.query("SELECT id,username,mac_address FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) OR LOWER(mac_address)=LOWER($1) ORDER BY id DESC LIMIT 1",[requestedUsername]);
+ const identity=identityResult.rows?.[0]||null;
+ const username=clean(identity?.username||requestedUsername,100);
+ const macAddress=normalizeHotspotMac(identity?.mac_address||requestedUsername);
+ let purge;
+ try {
+  purge=await router.cleanupExpiredHotspotUser(username,macAddress);
+  if(purge?.alreadyAbsent)logger.info("[Hotspot delete] RouterOS user already absent; finishing PostgreSQL deletion for "+username);
+ } catch(error) {
+  logger.error("[Hotspot delete] MikroTik hard purge failed; PostgreSQL record retained for retry for "+username+":",error?.message||error);
+  throw hotspotError("HOTSPOT_ROUTER_PURGE_FAILED",502,"MikroTik cleanup failed; the database record was retained so cleanup can be retried.");
+ }
+ const deletion=await database.query("DELETE FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1)",[username]);
+ return {username,macAddress,deleted:true,deletedRows:deletion.rowCount??null,purge:purge||null};
+}
+async function remove(req,res){try{const result=await deleteHotspotUser({username:req.body?.username});hotspotListCache.expiresAt=0;return res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 
 async function manualRenew(req,res){
  const body=req.body&&typeof req.body==="object"?req.body:{},username=clean(body.username,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.notify!==false;
@@ -371,4 +389,4 @@ async function manualRenew(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser};
+module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser};

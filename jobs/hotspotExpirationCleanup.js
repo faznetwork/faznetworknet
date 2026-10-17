@@ -54,9 +54,6 @@ function parseValidityMs(value) {
 
 function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
-  const username = String(user?.username || "");
-  const schedulerName = "faz-exp-" + username;
-  const hasExpiryScheduler = schedulerNames.has(schedulerName.toLowerCase());
   const managed = /FAZ\|PROFILE=/i.test(comment);
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
   const expValue = comment.match(/(?:^|\|)EXP(?::|=)\s*([^|]+)/i)?.[1]?.trim();
@@ -67,12 +64,10 @@ function routerUserExpired(user, schedulerNames) {
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
       : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
-    // When a first-login scheduler exists, its exact duration-based deadline
-    // takes precedence over the date-only purchase comment.
-    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now() && !hasExpiryScheduler) return true;
+    // RouterOS schedulers are not authoritative; expiry is reconciled centrally.
+    if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
   if (!managed) return false;
-  if (user.disabled && !hasExpiryScheduler) return true;
 
   const byteLimit = Math.max(0, Number(user.limitBytesTotal) || 0);
   const usedBytes = Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0);
