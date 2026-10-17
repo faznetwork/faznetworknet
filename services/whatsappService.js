@@ -13,6 +13,10 @@ let reconnectAttempt = 0;
 let authConfigured = false;
 let reconnectAllowed = true;
 let accountMetadata = null;
+let socketLockClient = null;
+let socketOwner = false;
+const SOCKET_ADVISORY_LOCK_KEY = 20261017;
+const RESTORE_RETRY_DELAYS = [500, 1500];
 const tableReadyByDatabase = new WeakMap();
 
 function getBaileys() {
@@ -59,9 +63,8 @@ function serialize(value, BufferJSON) {
 }
 
 /**
- * PostgreSQL-backed Baileys AuthenticationState.
- * Each credential/key record is independently upserted, so restarts do not
- * depend on Render's ephemeral filesystem.
+ * PostgreSQL-backed Baileys AuthenticationState. Credential writes are queued
+ * in event order and Signal-key batches commit atomically.
  */
 async function createDatabaseAuthState(options = {}) {
   const database = options.database || db;
@@ -78,6 +81,7 @@ async function createDatabaseAuthState(options = {}) {
   );
   const storedCreds = credsResult.rows && credsResult.rows[0] ? credsResult.rows[0].value : null;
   const creds = storedCreds ? deserialize(storedCreds, BufferJSON) : baileys.initAuthCreds();
+  let credentialWriteQueue = Promise.resolve();
 
   const keys = {
     async get(type, ids) {
@@ -110,32 +114,50 @@ async function createDatabaseAuthState(options = {}) {
           else entries.push({ key, value: serialize(value, BufferJSON) });
         }
       }
-      for (const key of removals) {
-        await database.query("DELETE FROM whatsapp_sessions WHERE key = $1", [key]);
+      const persistBatch = async transaction => {
+        for (const key of removals) {
+          await transaction.query("DELETE FROM whatsapp_sessions WHERE key = $1", [key]);
+        }
+        for (const entry of entries) {
+          await transaction.query(
+            `INSERT INTO whatsapp_sessions(key, value, updated_at)
+             VALUES ($1, $2::jsonb, NOW())
+             ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [entry.key, entry.value]
+          );
+        }
+      };
+      if (typeof database.withTransaction === "function") {
+        await database.withTransaction(persistBatch);
+        return;
       }
-      for (const entry of entries) {
-        await database.query(
-          `INSERT INTO whatsapp_sessions(key, value, updated_at)
-           VALUES ($1, $2::jsonb, NOW())
-           ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [entry.key, entry.value]
-        );
+      await database.query("BEGIN");
+      try {
+        await persistBatch(database);
+        await database.query("COMMIT");
+      } catch (error) {
+        try { await database.query("ROLLBACK"); } catch (_) {}
+        throw error;
       }
     }
   };
 
-  return {
-    state: { creds, keys },
-    saveCreds: async () => {
+  const saveCreds = () => {
+    const snapshot = serialize(creds, BufferJSON);
+    const write = credentialWriteQueue.then(async () => {
       await database.query(
         `INSERT INTO whatsapp_sessions(key, value, updated_at)
          VALUES ($1, $2::jsonb, NOW())
          ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-        ["creds", serialize(creds, BufferJSON)]
+        ["creds", snapshot]
       );
       authConfigured = Boolean(creds.registered);
-    }
+    });
+    credentialWriteQueue = write.catch(() => {});
+    return write;
   };
+
+  return { state: { creds, keys }, saveCreds };
 }
 
 function extractConnectedAccount(user, linkedSince = new Date().toISOString()) {
@@ -185,7 +207,7 @@ async function persistConnectedAccount(user) {
   return accountMetadata;
 }
 
-async function hasRegisteredSession() {
+async function inspectStoredSession() {
   const baileys = getBaileys();
   await ensureSessionTable();
   await loadConnectedAccount();
@@ -194,10 +216,84 @@ async function hasRegisteredSession() {
     ["creds"]
   );
   const row = result.rows && result.rows[0];
-  if (!row) return false;
+  if (!row) {
+    authConfigured = false;
+    return { registered: false, reason: "missing_creds" };
+  }
   const creds = deserialize(row.value, baileys.BufferJSON);
   authConfigured = Boolean(creds && creds.registered);
-  return authConfigured;
+  return authConfigured
+    ? { registered: true, reason: "registered" }
+    : { registered: false, reason: "unlinked" };
+}
+
+async function acquireSocketOwnership() {
+  if (socketLockClient && socketOwner) return;
+  const pool = typeof db.getPool === "function" ? db.getPool() : null;
+  if (!pool || typeof pool.connect !== "function") return;
+  const client = await pool.connect();
+  try {
+    const result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
+    if (!result.rows?.[0]?.locked) {
+      const error = new Error("WhatsApp socket is owned by another application instance.");
+      error.code = "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
+      throw error;
+    }
+    socketLockClient = client;
+    socketOwner = true;
+    if (typeof client.on === "function") {
+      client.on("error", error => {
+        if (socketLockClient !== client) return;
+        socketLockClient = null;
+        socketOwner = false;
+        try { client.release(true); } catch (_) {}
+        lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
+        const activeSocket = socket;
+        socket = null;
+        if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
+        connection = "error";
+        console.warn("[WhatsApp] Socket ownership lock lost:", error.message);
+        scheduleReconnect();
+      });
+    }
+  } catch (error) {
+    if (socketLockClient !== client) {
+      try { client.release(); } catch (_) {}
+    }
+    throw error;
+  }
+}
+
+async function releaseSocketOwnership() {
+  const client = socketLockClient;
+  socketLockClient = null;
+  socketOwner = false;
+  if (!client) return;
+  try { await client.query("SELECT pg_advisory_unlock($1)", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
+  try { client.release(); } catch (_) {}
+}
+
+async function handleConnectionClose(update, baileys, closedSocket) {
+  if (socket === closedSocket) socket = null;
+  const code = update?.lastDisconnect?.error?.output?.statusCode;
+  if (code === baileys.DisconnectReason?.loggedOut && reconnectAllowed) {
+    connection = "reconnect_required";
+    lastError = "WhatsApp session was logged out remotely. PostgreSQL auth rows were preserved; reconnect or explicitly unlink from Notification Hub.";
+    authConfigured = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    console.warn("[WhatsApp] Session requires re-linking; preserving PostgreSQL auth rows.");
+  } else if (!reconnectAllowed) {
+    connection = "disconnected";
+  } else {
+    connection = "disconnected";
+    lastError = "WhatsApp connection closed; reconnecting automatically.";
+    scheduleReconnect();
+  }
+  try { closedSocket?.end?.(undefined); } catch (_) {}
+  return getStatus();
 }
 
 function scheduleReconnect() {
@@ -234,6 +330,7 @@ async function connect() {
       throw new Error("WhatsApp gateway could not load its socket implementation.");
     }
 
+    await acquireSocketOwnership();
     const { state, saveCreds } = await createDatabaseAuthState({ database: db, baileys });
     authConfigured = Boolean(state.creds && state.creds.registered);
     socket = makeWASocket({
@@ -276,24 +373,14 @@ async function connect() {
       if (update.connection === "connecting") connection = "connecting";
       if (update.connection === "close") {
         const closedSocket = socket;
-        socket = null;
-        connection = "disconnected";
-        const code = update.lastDisconnect?.error?.output?.statusCode;
-        if (code === baileys.DisconnectReason?.loggedOut) {
-          lastError = "WhatsApp session logged out. Link the device again.";
-          authConfigured = false;
-          await clearStoredAuth().catch(error => console.error("[WhatsApp] Could not clear logged-out credentials:", error.message));
-        } else {
-          lastError = "WhatsApp connection closed; reconnecting automatically.";
-          if (reconnectAllowed) scheduleReconnect();
-        }
-        try { closedSocket?.end?.(undefined); } catch (_) {}
+        await handleConnectionClose(update, baileys, closedSocket);
       }
     });
     return getStatus();
-  })().catch(error => {
+  })().catch(async error => {
     lastError = String(error.message || error);
-    connection = "error";
+    connection = error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE" ? "owned_elsewhere" : "error";
+    if (!socket) await releaseSocketOwnership();
     throw error;
   }).finally(() => {
     connectPromise = null;
@@ -302,20 +389,39 @@ async function connect() {
 }
 
 async function restoreSession() {
-  try {
-    const registered = await hasRegisteredSession();
-    if (!registered) {
-      console.log("[WhatsApp] No registered PostgreSQL session to restore.");
-      return { restored: false, reason: "no_saved_session" };
+  for (let attempt = 0; attempt <= RESTORE_RETRY_DELAYS.length; attempt += 1) {
+    try {
+      const stored = await inspectStoredSession();
+      if (stored.reason === "missing_creds") {
+        console.log("[WhatsApp] PostgreSQL session restore skipped: credentials row is missing.");
+        return { restored: false, reason: "missing_creds" };
+      }
+      if (stored.reason === "unlinked") {
+        console.log("[WhatsApp] PostgreSQL credentials exist but are not registered; rows are preserved and manual linking may be required.");
+        return { restored: false, reason: "unlinked" };
+      }
+      console.log("[WhatsApp] Restoring registered session from PostgreSQL.");
+      const status = await connect();
+      return { restored: true, status };
+    } catch (error) {
+      lastError = String(error.message || error);
+      if (error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE") {
+        console.warn("[WhatsApp] Startup restore skipped: another application instance owns the socket.");
+        return { restored: false, reason: "owned_elsewhere" };
+      }
+      if (attempt < RESTORE_RETRY_DELAYS.length) {
+        const delay = RESTORE_RETRY_DELAYS[attempt];
+        console.warn("[WhatsApp] Session restore attempt failed; retrying after transient startup delay.", {
+          attempt: attempt + 1, nextDelayMs: delay, error: lastError
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      console.warn("[WhatsApp] Automatic session restore failed after bounded retries:", lastError);
+      return { restored: false, error: lastError };
     }
-    console.log("[WhatsApp] Restoring saved session from PostgreSQL.");
-    const status = await connect();
-    return { restored: true, status };
-  } catch (error) {
-    lastError = String(error.message || error);
-    console.warn("[WhatsApp] Automatic session restore failed:", lastError);
-    return { restored: false, error: lastError };
   }
+  return { restored: false, reason: "restore_attempts_exhausted" };
 }
 
 function getStatus() {
@@ -342,13 +448,14 @@ async function sendMessage({ to, message } = {}) {
   return { success: true, messageId: result?.key?.id || null };
 }
 
-async function clearStoredAuth() {
-  await ensureSessionTable();
-  await db.query("DELETE FROM whatsapp_sessions");
+async function clearStoredAuth(database = db) {
+  await ensureSessionTable(database);
+  await database.query("DELETE FROM whatsapp_sessions");
   accountMetadata = null;
 }
 
-async function unlink() {
+async function unlink(options = {}) {
+  const database = options.database || db;
   reconnectAllowed = false;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -367,7 +474,8 @@ async function unlink() {
   lastError = null;
   authConfigured = false;
   reconnectAttempt = 0;
-  await clearStoredAuth();
+  await clearStoredAuth(database);
+  await releaseSocketOwnership();
   return getStatus();
 }
 
@@ -379,5 +487,7 @@ module.exports = {
   unlink,
   normalizePhone,
   extractConnectedAccount,
-  createDatabaseAuthState
+  createDatabaseAuthState,
+  _handleConnectionClose: handleConnectionClose,
+  _inspectStoredSession: inspectStoredSession
 };
