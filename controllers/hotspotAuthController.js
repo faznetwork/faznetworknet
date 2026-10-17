@@ -64,6 +64,15 @@ function getPackageDuration(row,metadata,profile){
   return {validity:ms?validity:"",duration:ms,quota:Math.max(0,Number(quota)||0)};
 }
 function getKnownMac(row){return normalizeMac(row?.mac_address)||normalizeMac(row?.username);}
+function parseSavedExpiry(value){
+  if(value===null||value===undefined||value==="")return null;
+  if(typeof value==="string"){
+    const dateOnly=value.trim().match(/^\d{4}-\d{2}-\d{2}$/);
+    if(dateOnly)return new Date(dateOnly[0]+"T23:59:59.999+06:00");
+  }
+  const parsed=new Date(value);
+  return Number.isNaN(parsed.getTime())?null:parsed;
+}
 async function activate(req,res){
   const fail=(status,code,message,extra={})=>res.status(status).json({success:false,code,message,error:message,...extra});
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
@@ -79,7 +88,7 @@ async function activate(req,res){
     reservation=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-phone:"+phone]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-       const found=await client.query("SELECT * FROM hotspot_vouchers WHERE (REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active') AND (expires_at IS NULL OR expires_at > NOW())) OR (REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND (LOWER(COALESCE(status,''))='expired' OR expires_at <= NOW())) OR LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(username)=LOWER($2) ORDER BY id DESC FOR UPDATE",[phone,mac]);
+       const found=await client.query("SELECT * FROM hotspot_vouchers WHERE (REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired')) OR LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(username)=LOWER($2) ORDER BY id DESC FOR UPDATE",[phone,mac]);
       const allRows=found.rows||[];
       const phoneRows=allRows.filter(row=>normalizePhone(row.phone)===phone);
       const macRows=allRows.filter(row=>getKnownMac(row)===mac);
@@ -91,9 +100,9 @@ async function activate(req,res){
       const boundMac=knownMacs[0]||null;
       if(boundMac&&boundMac!==mac)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device. Contact support to request a device change.");
       const priority={pending_claim:0,active:1,unused:2,expired:3};
-       const candidates=accountRows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","active","unused"].includes(status))return false;if(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now())return false;return true;}).sort((a,b)=>(priority[String(a.status).toLowerCase()]??9)-(priority[String(b.status).toLowerCase()]??9)||Number(b.id||0)-Number(a.id||0));
+       const candidates=accountRows.filter(row=>{const status=String(row.status||"").toLowerCase();if(!["pending_claim","active","unused"].includes(status))return false;if(status==="unused"||status==="pending_claim")return true;const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);return !expiry||expiry.getTime()>Date.now();}).sort((a,b)=>(priority[String(a.status).toLowerCase()]??9)-(priority[String(b.status).toLowerCase()]??9)||Number(b.id||0)-Number(a.id||0));
       if(!candidates.length){
-        const isExpired=accountRows.some(row=>String(row.status||"").toLowerCase()==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+        const isExpired=accountRows.some(row=>{const status=String(row.status||"").toLowerCase();if(status==="expired")return true;if(status!=="active")return false;const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);return Boolean(expiry&&expiry.getTime()<=Date.now());});
         throw makeError(isExpired?"PACKAGE_EXPIRED":"NO_ELIGIBLE_PACKAGE",isExpired?410:404,isExpired?"This Hotspot package has expired. Purchase a new package to continue.":"No pending or active Hotspot package was found for this phone.");
       }
       if(candidates.length>1)throw makeError("MULTIPLE_LIVE_PACKAGES",409,"Multiple live Hotspot packages are linked to this phone. Contact support before signing in.");
@@ -106,21 +115,16 @@ async function activate(req,res){
       const now=new Date();
       let firstLoginAt=null,expiresAt=null;
       if(status==="active"){
-        expiresAt=row.expires_at?new Date(row.expires_at):parseCommentExpiry(row.comment);
+        expiresAt=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
         if(!expiresAt&&row.first_login_at&&packageInfo.duration)expiresAt=new Date(new Date(row.first_login_at).getTime()+packageInfo.duration);
         if(packageInfo.duration&&!expiresAt)throw makeError("EXPIRY_NOT_RECORDED",409,"This existing active account has no reliable saved expiry. Contact support; validity will not be reset automatically.");
         if(expiresAt&&Number.isNaN(expiresAt.getTime()))throw makeError("EXPIRY_NOT_RECORDED",409,"The saved expiry is invalid. Contact support.");
         if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This Hotspot package has expired. Purchase a new package to continue.");
         firstLoginAt=row.first_login_at?new Date(row.first_login_at):(expiresAt&&packageInfo.duration?new Date(expiresAt.getTime()-packageInfo.duration):now);
-      }else if(status==="pending_claim"&&row.first_login_at){
-        firstLoginAt=new Date(row.first_login_at);
-        expiresAt=row.expires_at?new Date(row.expires_at):(packageInfo.duration?new Date(firstLoginAt.getTime()+packageInfo.duration):null);
-        if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This package expired during an earlier activation attempt. Purchase or assign a new package.");
       }else{
         firstLoginAt=now;
-        expiresAt=row.expires_at?new Date(row.expires_at):(packageInfo.duration?new Date(now.getTime()+packageInfo.duration):null);
+        expiresAt=packageInfo.duration?new Date(now.getTime()+packageInfo.duration):parseSavedExpiry(row.expires_at);
         if(expiresAt&&Number.isNaN(expiresAt.getTime()))throw makeError("EXPIRY_NOT_RECORDED",409,"The saved expiry is invalid. Contact support.");
-        if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This Hotspot package has expired. Purchase a new package to continue.");
       }
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
