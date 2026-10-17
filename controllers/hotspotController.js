@@ -259,7 +259,7 @@ async function createUser(req,res){
       const requestedVoucherStatus=preassigned?"active":"unused";
       const voucherStatus=["unused","active"].includes(requestedVoucherStatus)?requestedVoucherStatus:"unused";
       const firstLoginAt=preassigned?new Date():null;
-      const params=[username,accountPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,voucherStatus,firstLoginAt,expiresAt,Boolean(preassigned)];
+      const params=[username,accountPassword,profile,validity,price,voucherStatus,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,firstLoginAt,expiresAt,Boolean(preassigned)];
       const result=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,first_login_at,expires_at,mac_lock) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'not_required',$16,$17,$18) RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at",params);
       if(!result.rows?.length)throw new Error("Hotspot account could not be saved.");
       return result.rows[0];
