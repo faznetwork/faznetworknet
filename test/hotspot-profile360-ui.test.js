@@ -82,5 +82,5 @@ test("Hotspot Profile 360 persists edits by database ID or username/MAC and refr
  assert.match(edit,/Number\(row\.voucherId\)>0\?String\(Number\(row\.voucherId\)\):String\(row\.username/);
  assert.match(edit,/#detailCustomerName/);assert.match(edit,/#detailPhone/);
  assert.match(edit,/\.subscriber-master-name/);assert.match(edit,/\.subscriber-master-phone/);
- assert.match(master,/String\(u\.voucherId\)>0\?String\(Number\(u\.voucherId\)\):String\(u\.username/);
+ assert.match(master,/Number\(u\.voucherId\)>0\?String\(Number\(u\.voucherId\)\):String\(u\.username/);
 });
