@@ -373,7 +373,7 @@ async function verifyTrx(req,res){
    const nextExpiry=packageDuration?(priorStillValid?new Date(priorExpiry.getTime()+packageDuration):new Date(Date.now()+packageDuration)):null;
    const stagedComment=boundMac&&nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
    const firstLoginAt=boundMac?new Date():null;
-   const params=[username,phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac||null];
+   const params=[username,boundMac||phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac||null];
    let row;
    if(target){
     const updated=await client.query("UPDATE hotspot_vouchers SET username=$1,password=CASE WHEN $11::text IS NOT NULL THEN $1 ELSE password END,profile=$3,validity=$4,price=$5,status='pending_claim',comment=$6,phone=$7,server=COALESCE(NULLIF(server,''),'all'),time_limit=$8,data_limit=$9,profile_id=$10,mac_address=$11,first_login_at=CASE WHEN $12::timestamptz IS NULL THEN first_login_at ELSE $12 END,expires_at=$13,expired_at=NULL,pre_expiry_notified=false,transaction_id=$14,renewal_stacked=$15,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$16 RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[...params,firstLoginAt,nextExpiry,claimedTransactionId,Boolean(boundMac&&priorStillValid),target.id]);
