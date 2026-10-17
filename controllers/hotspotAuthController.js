@@ -187,7 +187,7 @@ async function claimVoucher(req,res){
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
@@ -196,9 +196,23 @@ async function claimVoucher(req,res){
       const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
       if(status==="active"&&expiry&&expiry.getTime()<=Date.now())throw makeError("PACKAGE_EXPIRED",410,"This voucher package has expired.");
       await client.query("UPDATE hotspot_vouchers SET mac_address=$1,updated_at=NOW() WHERE id=$2",[mac,row.id]);
-      return {id:row.id,phone:""};
+      return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim"};
     });
-    return activate({...req,body:{...(req.body||{}),mac,phone:""}},res);
+    let statusCode=200;
+    const responseProxy={
+      status(code){statusCode=code;return this;},
+      async json(body){
+        if(body?.success&&statusCode<400&&claimed.firstUse){
+          try{
+            const trxId="SCRATCH-"+claimed.id+"-"+Date.now();
+            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot','scratch_card',NOW(),$6) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,"Scratch-card redemption for voucher "+claimed.id,"scratch-card:"+claimed.id]);
+            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
+          }catch(auditError){console.error("[Scratch voucher sales audit] Failed to record sale:",auditError.message);body.sale_audit_warning=true;}
+        }
+        return res.status(statusCode).json(body);
+      }
+    };
+    return activate({...req,body:{...(req.body||{}),mac,phone:""}},responseProxy);
   }catch(error){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
