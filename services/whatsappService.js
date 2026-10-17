@@ -18,7 +18,7 @@ let socketLockClient = null;
 let socketOwner = false;
 const SOCKET_ADVISORY_LOCK_KEY = 20261017;
 const RESTORE_RETRY_DELAYS = [500, 1500];
-const INITIAL_HANDSHAKE_GRACE_MS = 10000;
+const INITIAL_HANDSHAKE_GRACE_MS = 15000;
 let handshakeGraceTimer = null;
 const tableReadyByDatabase = new WeakMap();
 
@@ -492,8 +492,8 @@ async function connect(options = {}) {
               }
             }
             connection = "reconnect_required";
-            lastError = "WhatsApp handshake did not expose a registered user within 10 seconds. Re-link this device using the QR code.";
-            console.warn("[WhatsApp] Registration assertion failed after initial handshake grace period.");
+            lastError = "WhatsApp handshake did not expose a registered user within 15 seconds. Re-link this device using the QR code.";
+            console.warn("[WhatsApp] Registration assertion failed after the 15-second initial handshake grace period.");
           }, INITIAL_HANDSHAKE_GRACE_MS);
           if (typeof handshakeGraceTimer.unref === "function") handshakeGraceTimer.unref();
         }
