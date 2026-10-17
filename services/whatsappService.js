@@ -491,7 +491,6 @@ module.exports = {
   normalizePhone,
   normalizeWhatsAppJid,
   unlink,
-  normalizePhone,
   extractConnectedAccount,
   createDatabaseAuthState,
   _handleConnectionClose: handleConnectionClose,
