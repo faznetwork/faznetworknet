@@ -152,5 +152,8 @@ initializeDatabase().then(()=>{require("./controllers/broadcastController").resu
   startUsageCollector();
   startHotspotExpirationCleanup();
   startHotspotRetentionCleanup();
+  // WhatsApp restore has its own bounded PostgreSQL retry policy and should
+  // still be attempted after transient schema/database startup failures.
+  require("./services/whatsappService").restoreSession().catch(error=>console.warn("[WhatsApp] Startup restore skipped:",error.message));
 });
 module.exports=app;

@@ -20,10 +20,13 @@ function fakeBaileys() {
 
 function fakeDatabase() {
   const rows = new Map();
-  return {
-    rows,
+  const queries = [];
+  const database = {
+    rows, queries, failInsertKey: null,
     async query(sql, params = []) {
+      queries.push(sql.trim().replace(/\s+/g, " "));
       if (sql.includes("CREATE TABLE IF NOT EXISTS whatsapp_sessions")) return { rows: [] };
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql.trim())) return { rows: [] };
       if (sql.includes("SELECT value FROM whatsapp_sessions WHERE key = $1")) {
         const value = rows.get(params[0]);
         return { rows: value === undefined ? [] : [{ value }] };
@@ -32,6 +35,7 @@ function fakeDatabase() {
         return { rows: params[0].filter(key => rows.has(key)).map(key => ({ key, value: rows.get(key) })) };
       }
       if (sql.includes("INSERT INTO whatsapp_sessions")) {
+        if (database.failInsertKey && params[0] === database.failInsertKey) throw new Error("simulated insert failure");
         rows.set(params[0], JSON.parse(params[1]));
         return { rows: [] };
       }
@@ -39,9 +43,28 @@ function fakeDatabase() {
         rows.delete(params[0]);
         return { rows: [] };
       }
+      if (sql.includes("DELETE FROM whatsapp_sessions")) {
+        rows.clear();
+        return { rows: [] };
+      }
       throw new Error("Unexpected query: " + sql);
+    },
+    async withTransaction(callback) {
+      const snapshot = new Map(rows);
+      queries.push("BEGIN");
+      try {
+        const result = await callback({ query: database.query.bind(database) });
+        queries.push("COMMIT");
+        return result;
+      } catch (error) {
+        rows.clear();
+        for (const [key, value] of snapshot) rows.set(key, value);
+        queries.push("ROLLBACK");
+        throw error;
+      }
     }
   };
+  return database;
 }
 
 test("database auth adapter persists and restores Baileys credentials and Buffer values", async () => {
@@ -94,4 +117,61 @@ test("does not invent a phone number when the connected JID is not a BD mobile",
   const account = extractConnectedAccount({ id: "123456789:4@s.whatsapp.net", name: "Device" }, "2026-10-16T08:00:00.000Z");
   assert.equal(account.phone, null);
   assert.equal(account.name, "Device");
+});
+
+
+test("loggedOut disconnect preserves PostgreSQL session rows and requests re-linking", async () => {
+  const { _handleConnectionClose } = require("../services/whatsappService");
+  const database = fakeDatabase();
+  database.rows.set("creds", { registered: true, token: "preserve-me" });
+  database.rows.set("key:session:abc", { key: "preserve-me-too" });
+  const before = new Map(database.rows);
+  const status = await _handleConnectionClose(
+    { lastDisconnect: { error: { output: { statusCode: 401 } } } },
+    { DisconnectReason: { loggedOut: 401 } },
+    { end() {} }
+  );
+  assert.equal(status.connection, "reconnect_required");
+  assert.equal(database.queries.length, 0, "loggedOut handling must not query/delete session rows");
+  assert.deepEqual([...database.rows], [...before]);
+});
+
+test("Notification Hub manual unlink endpoint delegates to unlink and deletes stored session rows", async () => {
+  const whatsappService = require("../services/whatsappService");
+  const settingsController = require("../controllers/settingsController");
+  const database = fakeDatabase();
+  database.rows.set("creds", { registered: true });
+  database.rows.set("key:session:abc", { key: true });
+  const originalUnlink = whatsappService.unlink;
+  let response;
+  whatsappService.unlink = () => originalUnlink({ database });
+  try {
+    const res = {
+      set() { return this; },
+      json(body) { response = body; return this; },
+      status(code) { this.statusCode = code; return this; }
+    };
+    await settingsController.whatsappUnlink({}, res);
+    assert.equal(response.success, true);
+    assert.equal(database.rows.size, 0);
+    assert.ok(database.queries.some(sql => sql.includes("DELETE FROM whatsapp_sessions")));
+  } finally {
+    whatsappService.unlink = originalUnlink;
+  }
+});
+
+test("Signal key batches use BEGIN/COMMIT and roll back all changes on failure", async () => {
+  const database = fakeDatabase();
+  const auth = await createDatabaseAuthState({ database, baileys: fakeBaileys() });
+  await auth.state.keys.set({ session: { existing: { old: true } } });
+  database.queries.length = 0;
+  database.failInsertKey = "key:session:explode";
+  await assert.rejects(
+    auth.state.keys.set({ session: { existing: null, explode: { new: true } } }),
+    /simulated insert failure/
+  );
+  assert.ok(database.queries.includes("BEGIN"));
+  assert.ok(database.queries.includes("ROLLBACK"));
+  assert.ok(!database.queries.includes("COMMIT"));
+  assert.deepEqual(await auth.state.keys.get("session", ["existing"]), { existing: { old: true } });
 });
