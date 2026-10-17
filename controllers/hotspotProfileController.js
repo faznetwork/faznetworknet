@@ -57,25 +57,56 @@ async function updateProfile(req, res) {
     );
     const row = found.rows?.[0];
     if (!row) return fail(res, 404, "Hotspot customer was not found.");
+
     const username = String(row.username || "").trim();
-    if (!username) return fail(res, 409, "This customer has no MikroTik username; profile sync was not attempted.");
-    // Keep the existing RouterOS profile and expiry comment intact; phone is the account password.
-    const routerUser = await mikrotikService.getHotspotUser(username);
-    if (!routerUser) return fail(res, 409, "The matching MikroTik Hotspot user was not found; database changes were not saved.");
     const chosenMac = mac || normalizeMac(row.mac_address) || normalizeMac(username);
     if (macLock && !chosenMac) return fail(res, 400, "A valid MAC address is required when MAC lock is enabled.");
-    const sync = await mikrotikService.updateHotspotUser(
-      username, routerUser.profile, routerUser.comment, phone, macLock ? chosenMac : "__CLEAR__"
-    );
+
+    // Persist customer-owned fields before any RouterOS network operation. RouterOS may be
+    // offline; that must never discard a valid Name, Phone, MAC, or Notes edit.
     const saved = await db.query(
       "UPDATE hotspot_vouchers SET customer_name=$1,phone=$2,mac_address=$3,note=$4,mac_lock=$5,updated_at=NOW() WHERE id=$6 RETURNING id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
       [name, phone, chosenMac || null, notes, macLock, id]
     );
+    if (!saved.rows?.length) return fail(res, 404, "Hotspot customer was not found.");
     try { require("../controllers/hotspotController").invalidateListCache?.(); } catch (_) {}
-    return res.json({ success: true, message: "Customer profile saved and MikroTik credentials synchronized.", profile: safeProfile(saved.rows[0]), routerSync: sync });
+
+    let routerSync = { success: false, warning: "Profile saved to PostgreSQL; MikroTik synchronization was skipped." };
+    if (!username) {
+      console.warn("[Hotspot Profile API] Profile saved to PostgreSQL, but RouterOS sync was skipped because the voucher has no username.", { id });
+    } else {
+      try {
+        const routerUser = await mikrotikService.getHotspotUser(username);
+        if (!routerUser) {
+          routerSync = { success: false, warning: "Profile saved to PostgreSQL, but the matching MikroTik Hotspot user was not found." };
+          console.warn("[Hotspot Profile API] Profile saved to PostgreSQL, but matching RouterOS user was not found.", { id, username });
+        } else {
+          // Preserve the existing RouterOS profile and expiry comment; phone is the account password.
+          const result = await mikrotikService.updateHotspotUser(
+            username, routerUser.profile, routerUser.comment, phone, macLock ? chosenMac : "__CLEAR__"
+          );
+          routerSync = { success: true, result };
+        }
+      } catch (syncError) {
+        routerSync = { success: false, warning: "Profile saved to PostgreSQL, but MikroTik synchronization failed." };
+        console.warn("[Hotspot Profile API] PostgreSQL profile saved; MikroTik synchronization failed.", {
+          id, username, error: syncError?.message || syncError
+        });
+      }
+    }
+
+    const syncSucceeded = routerSync.success === true;
+    return res.json({
+      success: true,
+      message: syncSucceeded
+        ? "Customer profile saved and MikroTik credentials synchronized."
+        : "Customer profile saved to PostgreSQL. MikroTik synchronization needs retry.",
+      profile: safeProfile(saved.rows[0]),
+      routerSync
+    });
   } catch (error) {
     console.error("[Hotspot Profile API] Update failed:", error);
-    return fail(res, error.statusCode || 502, "Profile update or MikroTik synchronization failed; database profile was not changed. " + String(error.message || "").slice(0, 220));
+    return fail(res, error.statusCode || 503, "Profile update failed. " + String(error.message || "").slice(0, 220));
   }
 }
 module.exports = { getProfile, updateProfile };
