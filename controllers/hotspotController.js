@@ -244,10 +244,10 @@ async function createUser(req,res){
     const stored=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
       if(preassigned)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-mac:"+mac]);
-      const existing=await client.query("SELECT id,status,mac_address,username,expires_at FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) OR ($2::text<>'' AND LOWER(COALESCE(mac_address,''))=LOWER($2)) ORDER BY id DESC FOR UPDATE",[phone,mac||""]);
+      const existing=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
       const rows=existing.rows||[];
       if(rows.some(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now())))throw hotspotError("ACTIVE_PACKAGE_EXISTS",409,"This phone already has a pending or active Hotspot package.");
-      if(preassigned&&rows.some(row=>normalizeHotspotMac(row.mac_address||row.username)===mac&&normalizeHotspotPhone(row.phone)!==phone))throw hotspotError("MAC_ALREADY_BOUND",409,"This MAC address is already bound to another phone.");
+      if(preassigned){const bound=await client.query("SELECT phone FROM hotspot_vouchers WHERE LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC FOR UPDATE",[mac]);if((bound.rows||[]).some(row=>normalizeHotspotPhone(row.phone)!==phone))throw hotspotError("MAC_ALREADY_BOUND",409,"This MAC address is already bound to another phone.");}
       const profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||requestedProfile);
       const status=preassigned?"active":"unused",firstLoginAt=preassigned?new Date():null;
       const params=[username,accountPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,status,firstLoginAt,expiresAt,Boolean(preassigned)];
