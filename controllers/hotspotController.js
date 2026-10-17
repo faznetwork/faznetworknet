@@ -380,7 +380,7 @@ async function voucherRecords(req,res){
    const expired=String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
    const online=Boolean(session&&String(session.address||session.ip||"").trim())&&!expired;
    const status=expired?"expired":online?"online":String(row.status||"").toLowerCase()==="pending_claim"?"pending_claim":String(row.status||"").toLowerCase()==="unused"?"unused":"offline";
-   return {...row,mac_address:mac||row.mac_address||"",is_online:online,online,live_status:online?"online":"offline",status,db_status:row.status,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",session_ip:session?.address||session?.ip||"",session_uptime:session?.uptime||"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),price:Number(row.price||0)};
+   return {...row,mac_address:mac||row.mac_address||"",is_online:online,online,live_status:online?"online":"offline",status,display_status:expired?"Expired":online?"Online":String(row.status||"").toLowerCase()==="pending_claim"?"Pending first login":expiry&&expiry.getTime()>now?"Active · Offline":"Offline",db_status:row.status,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",session_ip:session?.address||session?.ip||"",session_uptime:session?.uptime||"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),price:Number(row.price||0)};
   });
   let rows=all;
   if(filter==="cleanup")rows=all.filter(row=>row.db_status==="expired"&&["pending","failed"].includes(row.cleanup_status));
