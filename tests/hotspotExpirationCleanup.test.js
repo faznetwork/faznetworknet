@@ -252,7 +252,7 @@ test("recognizes UNIX epoch expiry metadata and ignores initial zero marker", ()
   assert.equal(routerUserExpired({username:"DHAKA-EXP",disabled:false,comment:"FAZ|EXP: "+dhakaExpiry+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
 });
 
-test("retention archives transaction history before purging expired vouchers", async () => {
+test("retention archives transaction history before purging expired vouchers after 30 days", async () => {
   const calls=[];
   const database={async query(sql){
     calls.push(sql);
@@ -272,3 +272,5 @@ test("does not let a legacy RouterOS scheduler suppress centralized expiry", () 
   const expiredComment = "FAZ|PROFILE=Gold|EXP: 2020-01-01 00:00:00";
   assert.equal(routerUserExpired({ username: "OLD-SCHEDULER-USER", comment: expiredComment, disabled: false }, new Set(["faz-exp-OLD-SCHEDULER-USER"])), true);
 });
+
+test("expired Hotspot profile has strict rate and session limits",()=>{const {EXPIRED_HOTSPOT_PROFILE}=require("../services/hotspotProfileConfig");assert.deepEqual(EXPIRED_HOTSPOT_PROFILE,{name:"expired_profile",rateLimit:"1k/1k",sessionTimeout:"1m",sharedUsers:1});});

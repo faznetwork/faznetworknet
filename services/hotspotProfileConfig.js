@@ -61,4 +61,5 @@ function buildHotspotOnLoginScript(config = {}) {
     bindMac
   ].filter(Boolean).join('; ') + ';';
 }
-module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
+const EXPIRED_HOTSPOT_PROFILE = Object.freeze({ name: "expired_profile", rateLimit: "1k/1k", sessionTimeout: "1m", sharedUsers: 1 });
+module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript, EXPIRED_HOTSPOT_PROFILE };
