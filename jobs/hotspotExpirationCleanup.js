@@ -306,6 +306,8 @@ async function runHotspotRetentionCleanup(deps = {}) {
     return { archivedTransactions: 0, deletedVouchers: 0, error: error.message };
   }
 }
+const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
+
 function startHotspotExpirationCleanup() {
   runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Initial run failed:", error.message));
   return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
