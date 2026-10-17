@@ -13,7 +13,7 @@ test("Admin loads only the clean Subscriber 360 assets for All Hotspot Users", (
   assert.doesNotMatch(view, /hotspot-profile360\.js|hotspot-master-detail\.js|hotspot-profile360\.css|hotspot-master-detail\.css/);
   assert.doesNotMatch(view, /const getExp=u=>|window\.renderHotspotMasterDetail/);
   const js = read("public/js/hotspot-users-clean.js");
-  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "✏️ Edit", "Delete / Archive", "count-all", "count-online", "count-active", "count-offline", "count-expired", "hs-executive-table"]) {
+  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "✏️ Edit", "Delete / Archive", "count-all", "count-online", "count-active", "count-offline", "count-expired", "hs-executive-table", "Offline (Active Plan)", "btn-hotspot-action", "btn-action-renew"]) {
     assert.ok(js.includes(token), "missing UI feature: " + token);
   }
   assert.match(js, /response\.ok && data\.success === true/);
@@ -44,3 +44,6 @@ test("Subscriber 360 uses guarded session disconnect and keeps archive database-
   assert.match(ui, /user\.sessionId/);
   assert.match(ui, /The MikroTik user and sessions will remain untouched/);
 });
+
+test("Hotspot subscriber UI uses a softened slate header and readable action styles",()=>{const css=read("public/css/hotspot-users-clean.css");assert.match(css,/#1e293b/);assert.match(css,/\.hotspot-table-header th/);assert.match(css,/\.hs-subscriber-name\{[^}]*15px/);assert.match(css,/\.btn-action-renew/);});
+test("Hotspot API requires an active session with an assigned IP to mark a subscriber online",()=>{const controller=read("controllers/hotspotController.js");assert.match(controller,/is_online:Boolean\(session&&String\(session\.address\|\|\"\"\)\.trim\(\)\)/);assert.match(controller,/getTime\(\)<=now/);});

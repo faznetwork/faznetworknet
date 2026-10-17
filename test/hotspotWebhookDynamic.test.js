@@ -328,7 +328,7 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
         {id:3,username:"AA:BB:CC:DD:EE:03",status:"active",expires_at:new Date(now-1000),mac_address:"AA:BB:CC:DD:EE:03",phone:"01733333333",profile:"1-Hour",price:10}
       ]};
     };
-    mikrotik.getActiveHotspotSessions=async()=>[{username:"AA:BB:CC:DD:EE:01",macAddress:"AA:BB:CC:DD:EE:01",uptime:"2m",bytesIn:10,bytesOut:20}];
+    mikrotik.getActiveHotspotSessions=async()=>[{username:"AA:BB:CC:DD:EE:01",macAddress:"AA:BB:CC:DD:EE:01",address:"10.10.0.11",uptime:"2m",bytesIn:10,bytesOut:20},{username:"AA:BB:CC:DD:EE:02",macAddress:"AA:BB:CC:DD:EE:02",address:"",uptime:"1m",bytesIn:5,bytesOut:5}];
     mikrotik.getHotspotUsers=async()=>{routerUserReads++;throw new Error("The subscriber list must not depend on RouterOS user inventory");};
     hotspotController.invalidateListCache();
     const result=await hotspotController.refreshHotspotListCache();
@@ -336,7 +336,8 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
     assert.equal(routerUserReads,0);
     assert.equal(result.users.length,3);
     assert.equal(result.users.find(row=>row.id===1).is_online,true);
-    assert.equal(result.users.find(row=>row.id===2).is_online,false);
+    assert.equal(result.users.find(row=>row.id===2).is_online,false); 
+    assert.equal(result.users.find(row=>row.id===1).ip,"10.10.0.11");
     assert.equal(result.users.find(row=>row.id===3).status,"expired");
   }finally{
     db.query=oldQuery;mikrotik.getActiveHotspotSessions=oldSessions;mikrotik.getHotspotUsers=oldRouterUsers;hotspotController.invalidateListCache();
