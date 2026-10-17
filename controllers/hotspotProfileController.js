@@ -100,8 +100,8 @@ async function updateProfile(req,res) {
     const firstLogin=macLock?(row.first_login_at||new Date()):null;
     const commentSaved=macLock?(expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|PROFILE="+profile;
     const saved=await db.query(
-      "UPDATE hotspot_vouchers SET username=$1,password=$2,customer_name=$3,phone=$4,mac_address=$5,note=$6,mac_lock=$7,profile=$8,profile_id=$9,expires_at=$10,first_login_at=$11,status=$12,comment=$13,server=$14,validity=$15,time_limit=$15,updated_at=NOW() WHERE id=$16 RETURNING id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
-      [username,nextPassword,name,phone,macLock?mac:null,notes,macLock,profile,profileId,macLock?expiresAt:null,firstLogin,status,commentSaved,server,validity||null,id]);
+      "UPDATE hotspot_vouchers SET username=$1,password=$2,customer_name=$3,phone=$4,mac_address=$5,note=$6,mac_lock=$7,profile=$8,profile_id=$9,expires_at=$10,first_login_at=$11,status=$12,comment=$13,server=$14,validity=$15,time_limit=$15,data_limit=$16,updated_at=NOW() WHERE id=$17 RETURNING id,username,password,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,server,mac_lock",
+      [username,nextPassword,name,phone,macLock?mac:null,notes,macLock,profile,profileId,macLock?expiresAt:null,firstLogin,status,commentSaved,server,validity||null,quota?String(quota):null,id]);
     try{require("../controllers/hotspotController").invalidateListCache?.();}catch(_){}
     return res.json({success:true,message:"Profile updated successfully!",profile:safeProfile(saved.rows[0]),routerSync});
   } catch(error) {
