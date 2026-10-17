@@ -391,8 +391,14 @@
                 <input type="password" id="voucher_password" autocomplete="off" placeholder="কার্ডের পাসওয়ার্ড লিখুন">
             </div>
         </div>
+        <div class="input-group" style="margin-top: 10px;">
+            <label for="direct_subscriber_phone">প্রি-রেজিস্টার্ড গ্রাহকের ফোন (ঐচ্ছিক)</label>
+            <div class="input-box">
+                <input type="tel" id="direct_subscriber_phone" inputmode="numeric" maxlength="11" autocomplete="tel" placeholder="প্রথম লগইনের জন্য 01XXXXXXXXX">
+            </div>
+        </div>
         <div style="font-size: 11px; color: #a7f3d0; text-align: left; margin-bottom: 12px;">
-            কার্ডের PIN ও Password লিখুন। QR কার্ডে দুটো থাকলে স্ক্যান করলেই পূরণ হবে।
+            Scratch Card ব্যবহার করতে PIN ও Password দিন। অ্যাডমিন আগে অ্যাকাউন্ট তৈরি করে থাকলে PIN ফাঁকা রেখে ফোন দিন; আগে MAC bind হয়ে থাকলে ফোনও প্রয়োজন নেই।
         </div>
     </div>
 
@@ -432,7 +438,8 @@
     const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
     const VERIFY_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const ACTIVATE_API_URL = BACKEND_BASE_URL + '/api/hotspot-auth/activate';
-    const VOUCHER_CLAIM_URL = BACKEND_BASE_URL + '/api/hotspot/claim-voucher';
+    const VOUCHER_CLAIM_URL = BACKEND_BASE_URL + '/api/hotspot-auth/claim-voucher';
+    const DEVICE_LOOKUP_URL = BACKEND_BASE_URL + '/api/hotspot-auth/device-lookup';
     const PUBLIC_BRANDING_URL = BACKEND_BASE_URL + '/api/hotspot/public-branding';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
 
@@ -508,13 +515,36 @@
         // ১. যদি গ্রাহক ভাউচার পিন মেথডে থাকে
         if (currentMethod === 'pin') {
             const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
-            if (!pin || pin.length < 4) {
-                showStatus('অনুগ্রহ করে সঠিক ভাউচার পিন কোডটি দিন।', true);
-                return;
-            }
+            const directPhone = document.getElementById('direct_subscriber_phone').value.trim().replace(/\D/g, '');
             btn.disabled = true;
-            btn.innerText = 'ভাউচার যাচাই হচ্ছে...';
+            btn.innerText = pin ? 'ভাউচার যাচাই হচ্ছে...' : 'সাবস্ক্রাইবার যাচাই হচ্ছে...';
             try {
+                if (!pin) {
+                    const lookupRes = await fetch(DEVICE_LOOKUP_URL, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+                        body: JSON.stringify({ mac: device.mac, phone: directPhone })
+                    });
+                    const lookup = await lookupRes.json().catch(() => ({}));
+                    if (!lookupRes.ok || !lookup.success || !lookup.found) {
+                        showStatus(lookup.message || 'এই MAC-এ কোনো active subscriber পাওয়া যায়নি। প্রথম লগইনের জন্য রেজিস্টার্ড ফোন দিন অথবা Scratch Card PIN ব্যবহার করুন।', true);
+                        btn.disabled = false; btn.innerText = '🚀 ইন্টারনেট চালু করুন'; return;
+                    }
+                    const activationRes = await fetch(ACTIVATE_API_URL, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+                        body: JSON.stringify({ phone: directPhone, mac: device.mac, ip: device.ip })
+                    });
+                    const activation = await activationRes.json().catch(() => ({}));
+                    if (!activationRes.ok || !activation.success) {
+                        showStatus(activation.message || 'Subscriber activation failed. Please retry.', true);
+                        btn.disabled = false; btn.innerText = '🚀 ইন্টারনেট চালু করুন'; return;
+                    }
+                    submitMikrotikLogin(activation.username || device.mac);
+                    return;
+                }
+                if (pin.length < 4) {
+                    showStatus('অনুগ্রহ করে সঠিক ভাউচার পিন কোডটি দিন।', true);
+                    btn.disabled = false; btn.innerText = '🚀 ইন্টারনেট চালু করুন'; return;
+                }
                 const res = await fetch(VOUCHER_CLAIM_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -524,15 +554,12 @@
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) {
                     showStatus(data.message || 'ভাউচার কোডটি সঠিক নয় বা ইতিমধ্যে ব্যবহৃত হয়েছে।', true);
-                    btn.disabled = false;
-                    btn.innerText = '🚀 ইন্টারনেট চালু করুন';
-                    return;
+                    btn.disabled = false; btn.innerText = '🚀 ইন্টারনেট চালু করুন'; return;
                 }
                 submitMikrotikLogin(data.username || device.mac);
             } catch (e) {
-                showStatus('ভাউচার যাচাই ব্যর্থ হয়েছে। ইন্টারনেট চেক করুন।', true);
-                btn.disabled = false;
-                btn.innerText = '🚀 ইন্টারনেট চালু করুন';
+                showStatus('ভাউচার / subscriber যাচাই ব্যর্থ হয়েছে। ইন্টারনেট চেক করুন।', true);
+                btn.disabled = false; btn.innerText = '🚀 ইন্টারনেট চালু করুন';
             }
             return;
         }

@@ -73,6 +73,33 @@ function parseSavedExpiry(value){
   const parsed=new Date(value);
   return Number.isNaN(parsed.getTime())?null:parsed;
 }
+async function deviceLookup(req,res){
+  const fail=(status,code,message)=>res.status(status).json({success:false,code,message});
+  const mac=normalizeMac(req.body?.mac||req.body?.device_mac||req.body?.macAddress||"");
+  const phone=normalizePhone(req.body?.phone||req.body?.account_phone||"");
+  if(!mac)return fail(400,"INVALID_MAC","A valid captive-portal device MAC is required.");
+  if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit phone number when supplied.");
+  try{
+    const result=await db.query(
+      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
+      [mac,phone]
+    );
+    const rows=result.rows||[];
+    const macBound=rows.filter(row=>normalizeMac(row.mac_address)===mac||normalizeMac(row.username)===mac);
+    const phoneMatched=phone?rows.filter(row=>normalizePhone(row.phone)===phone):[];
+    const candidates=macBound.length?macBound:phoneMatched;
+    if(candidates.length>1)return fail(409,"AMBIGUOUS_SUBSCRIBER","Multiple direct subscriber records match. Contact FAZ NETWORK support.");
+    if(!candidates.length)return res.json({success:true,found:false,requires_phone:true,message:"No direct subscriber is bound to this MAC. A staged subscriber must be identified by its registered phone number or existing payment/voucher credentials."});
+    const row=candidates[0],status=String(row.status||"").toLowerCase();
+    if(normalizeMac(row.mac_address)&&normalizeMac(row.mac_address)!==mac)return fail(403,"MAC_ALREADY_BOUND","This subscriber is permanently bound to another device.");
+    if(status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()))return fail(410,"PACKAGE_EXPIRED","This subscriber package has expired. Purchase a new package to continue.");
+    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status,profile:row.profile||"",expires_at:row.expires_at||null});
+  }catch(error){
+    console.error("[Hotspot device lookup]",error.message);
+    return fail(503,"DEVICE_LOOKUP_FAILED","Unable to check the subscriber record right now.");
+  }
+}
+
 async function activate(req,res){
   const fail=(status,code,message,extra={})=>res.status(status).json({success:false,code,message,error:message,...extra});
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
@@ -93,7 +120,8 @@ async function activate(req,res){
       const phoneRows=phone?allRows.filter(row=>normalizePhone(row.phone)===phone):[];
       const macRows=allRows.filter(row=>getKnownMac(row)===mac);
       // Device MAC is the stable account key; a SIM/shop-phone change must not orphan the voucher.
-      const accountRows=macRows.length?macRows:phoneRows;
+      const stagedDirect=phoneRows.filter(row=>String(row.subscriber_type||"legacy")==="direct_subscriber"&&String(row.status||"").toLowerCase()==="pending_claim");
+      const accountRows=macRows.length?macRows:stagedDirect.length?stagedDirect:phoneRows;
       if(!accountRows.length)throw makeError("NO_ELIGIBLE_PACKAGE",404,"No pending or active Hotspot package was found for this phone or device MAC. Purchase a package first.");
       const knownMacs=[...new Set(accountRows.map(getKnownMac).filter(Boolean))];
       if(knownMacs.length>1)throw makeError("ACCOUNT_MAC_CONFLICT",409,"This phone has conflicting saved MAC bindings. Contact FAZ NETWORK support.");
@@ -159,7 +187,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1 AND mac_address=$2",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=$4,comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=COALESCE(NULLIF($4,''),phone),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -187,7 +215,7 @@ async function claimVoucher(req,res){
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
@@ -217,4 +245,4 @@ async function claimVoucher(req,res){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
 }
-module.exports={activate,claimVoucher,normalizePhone,normalizeMac};
+module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac};

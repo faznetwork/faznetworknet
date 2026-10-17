@@ -61,7 +61,7 @@ test("promotes a used voucher and records first-login expiry without expiring it
   assert.ok(database.calls.some(call => call.sql.includes("status='active'") && call.params[0] instanceof Date));
 });
 
-test("expires marked users, removes RouterOS access, and hard-deletes the active voucher row", async () => {
+test("expires marked users, moves them to expired_profile, and retains rows for 30-day visibility", async () => {
   const rows = [{ id: 2, username: "VOUCHER2", status: "active", cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const cleaned = [];
@@ -78,7 +78,8 @@ test("expires marked users, removes RouterOS access, and hard-deletes the active
   assert.deepEqual(cleaned, ["VOUCHER2"]);
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
-  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
+  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
@@ -121,7 +122,8 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   const expireUpdate = database.calls.find(call => call.sql.startsWith("UPDATE hotspot_vouchers SET status='expired'"));
   assert.ok(expireUpdate);
   assert.equal(expireUpdate.params[1].toISOString(), expiredAt.toISOString());
-  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
+  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
@@ -191,7 +193,8 @@ test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler re
   assert.deepEqual(cleaned, ["AA:BB:CC:DD:EE:FF"]);
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
-  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
+  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())), "sales transaction audit rows must be retained");
 });
 
@@ -255,19 +258,24 @@ test("recognizes UNIX epoch expiry metadata and ignores initial zero marker", ()
   assert.equal(routerUserExpired({username:"DHAKA-EXP",disabled:false,comment:"FAZ|EXP: "+dhakaExpiry+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
 });
 
-test("retention archives transaction history before purging expired vouchers after 30 days", async () => {
-  const calls=[];
-  const database={async query(sql){
-    calls.push(sql);
+test("retention purges RouterOS first, archives sales, then deletes only 30-day expired rows", async () => {
+  const calls=[],routerCalls=[];
+  const database={async query(sql,params){
+    calls.push({sql,params});
+    if(sql.startsWith("SELECT id,username,mac_address")) return {rows:[{id:9,username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF"}]};
     if(sql.startsWith("INSERT INTO hotspot_voucher_sales_archive")) return {rows:[{transaction_id:1}]};
     if(sql.startsWith("DELETE FROM hotspot_vouchers")) return {rows:[{id:9}]};
     return {rows:[]};
   }};
-  const result=await runHotspotRetentionCleanup({db:database,logger:quietLogger()});
+  const router={async cleanupExpiredHotspotUser(username){routerCalls.push(username);return {usersRemoved:1};}};
+  const result=await runHotspotRetentionCleanup({db:database,mikrotikService:router,logger:quietLogger()});
   assert.equal(result.archivedTransactions,1);
   assert.equal(result.deletedVouchers,1);
-  assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
-  assert.ok(calls[1].includes("status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days'"));
+  assert.deepEqual(routerCalls,["AA:BB:CC:DD:EE:FF"]);
+  assert.ok(calls[1].sql.includes("ON CONFLICT(transaction_id) DO NOTHING"));
+  assert.ok(calls[2].sql.includes("expires_at < NOW() - INTERVAL '30 days'"));
+  assert.deepEqual(calls[1].params,[[9]]);
+  assert.deepEqual(calls[2].params,[[9]]);
 });
 
 

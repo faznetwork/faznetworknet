@@ -27,7 +27,7 @@ test("Admin creates a direct active subscriber, provisions RouterOS, and reuses 
   const oldQuery=db.query,oldTransaction=db.withTransaction;
   const oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
   let insertedSql="",insertedParams=[],updatedSql="",updatedParams=[],routerWrites=0;
-  const expired={id:41,username:"AA:BB:CC:DD:EE:FF",password:"AA:BB:CC:DD:EE:FF",profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"expired",phone:"01712345678",server:"all",time_limit:"1h",data_limit:null,mac_address:"AA:BB:CC:DD:EE:FF",customer_name:"Old Name",note:"old",first_login_at:new Date(Date.now()-7200000),expires_at:new Date(Date.now()-3600000),expired_at:new Date(Date.now()-3500000),cleanup_status:"done",cleanup_error:null,router_removed_at:new Date(Date.now()-3400000),mac_lock:true};
+  const expired={id:41,username:"AA:BB:CC:DD:EE:FF",password:"AA:BB:CC:DD:EE:FF",profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"expired",phone:"01712345678",server:"all",time_limit:"1h",data_limit:null,mac_address:"AA:BB:CC:DD:EE:FF",customer_name:"Old Name",note:"old",first_login_at:new Date(Date.now()-7200000),expires_at:new Date(Date.now()-3600000),expired_at:new Date(Date.now()-3500000),cleanup_status:"done",cleanup_error:null,router_removed_at:new Date(Date.now()-3400000),mac_lock:true,subscriber_type:"direct_subscriber",activation_type:"preassigned"};
   try{
     db.query=async(sql)=> {
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
@@ -56,7 +56,10 @@ test("Admin creates a direct active subscriber, provisions RouterOS, and reuses 
     assert.equal(res.body.user.status,"active");
     assert.equal(res.body.user.username,"AA:BB:CC:DD:EE:FF");
     assert.equal(updatedSql.startsWith("UPDATE hotspot_vouchers"),true,"expired record is reactivated instead of creating a voucher row");
-    assert.match(updatedSql,/status='active'/);
+    assert.match(updatedSql,/status=\$18/);
+    assert.equal(updatedParams[17],"active");
+    assert.equal(updatedParams[18],"preassigned");
+    assert.equal(updatedParams[19],41);
     assert.match(updatedSql,/expired_at=NULL/);
     assert.equal(updatedParams[0],"AA:BB:CC:DD:EE:FF");
     assert.equal(updatedParams[1],"AA:BB:CC:DD:EE:FF");

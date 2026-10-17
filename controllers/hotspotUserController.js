@@ -50,62 +50,102 @@ function rowLookup(rows, identifier) {
  */
 async function list(req, res) {
   try {
-    const [routerUsers, sessions, ledgerResult] = await Promise.all([
-      mikrotikService.getHotspotUsers(),
-      mikrotikService.getActiveHotspotSessions(),
-      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,status,server,mac_lock,price,validity FROM hotspot_vouchers ORDER BY id DESC")
+    const [sessionsResult, ledgerResult] = await Promise.all([
+      mikrotikService.getActiveHotspotSessions().catch(error => {
+        console.warn("[Hotspot Subscriber 360] Active-session lookup unavailable; showing DB subscribers offline:", error?.message || error);
+        return [];
+      }),
+      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,first_login_at,validity,status,server,mac_lock,price,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC")
     ]);
     const ledger = ledgerResult.rows || [];
-    const byUsername = new Map(), byMac = new Map();
-    for (const row of ledger) {
-      const u = lower(row.username), m = lower(row.mac_address);
-      if (u && !byUsername.has(u)) byUsername.set(u, row);
-      if (m && !byMac.has(m)) byMac.set(m, row);
+    const sessions = (Array.isArray(sessionsResult) ? sessionsResult : []).map(session => ({
+      ...session,
+      username: clean(session.user || session.username),
+      mac_address: normalizeMac(session.macAddress || session.mac_address || session["mac-address"] || "")
+    }));
+    const byUsername = new Map();
+    const byMac = new Map();
+    for (const session of sessions) {
+      if (lower(session.username)) byUsername.set(lower(session.username), session);
+      if (lower(session.mac_address)) byMac.set(lower(session.mac_address), session);
     }
-    const online = new Map();
-    for (const session of (Array.isArray(sessions) ? sessions : [])) {
-      const user = lower(session.user || session.username);
-      if (user) online.set(user, session);
-    }
-    const users = (Array.isArray(routerUsers) ? routerUsers : [])
-      .filter(user => clean(user.username) && lower(user.username) !== "default-trial")
-      .map(user => {
-        const username = clean(user.username);
-        const mac = normalizeMac(user.macAddress || user.mac_address || user.mac || "");
-        const voucher = byUsername.get(lower(username)) || (mac && byMac.get(lower(mac))) || byMac.get(lower(username)) || null;
-        const session = online.get(lower(username)) || null;
-        const expiry = voucher?.expires_at || null;
-        const expired = expiry && Number.isFinite(new Date(expiry).getTime()) && new Date(expiry).getTime() <= Date.now();
-        const status = String(voucher?.status || "").toLowerCase() === "archived" ? "archived" : expired ? "expired" : session ? "online" : String(voucher?.status || "offline").toLowerCase();
-        return {
-          id: voucher?.id ?? username,
-          voucher_id: voucher?.id ?? null,
-          router_id: user.id ?? null,
-          username,
-          customer_name: clean(voucher?.customer_name, 160),
-          phone: clean(voucher?.phone, 32),
-          mac_address: clean(voucher?.mac_address) || mac || normalizeMac(username),
-          profile: clean(user.profile || voucher?.profile, 100),
-          comment: clean(user.comment || voucher?.comment, 500),
-          expires_at: expiry,
-          status,
-          is_online: Boolean(session),
-          ip: clean(session?.address || session?.ip || user.address, 100),
-          uptime: clean(session?.uptime || user.uptime, 100),
-          note: clean(voucher?.note, 1000),
-          mac_lock: voucher?.mac_lock !== false,
-          server: clean(user.server || voucher?.server || "all", 100),
-          price: Number(voucher?.price || 0),
-          profile_id: clean(voucher?.profile_id, 100)
-        };
-      });
-    return res.set("Cache-Control", "no-store").json({ success: true, count: users.length, users });
+    const now = Date.now();
+    const users = ledger.map(row => {
+      const username = clean(row.username);
+      const mac = normalizeMac(row.mac_address) || normalizeMac(username);
+      const session = byUsername.get(lower(username)) || (mac && byMac.get(lower(mac))) || null;
+      const expiry = row.expires_at ? new Date(row.expires_at) : null;
+      const expired = String(row.status || "").toLowerCase() === "expired" ||
+        String(row.profile || "").toLowerCase() === "expired_profile" ||
+        Boolean(expiry && Number.isFinite(expiry.getTime()) && expiry.getTime() <= now);
+      const online = Boolean(session && String(session.address || session.ip || "").trim());
+      const dbStatus = String(row.status || "").toLowerCase();
+      const status = expired ? "expired" : online ? "online" :
+        dbStatus === "pending_claim" ? "pending_claim" :
+        dbStatus === "unused" ? "unused" : "offline";
+      return {
+        id: row.id,
+        voucher_id: row.id,
+        username,
+        customer_name: clean(row.customer_name, 160),
+        phone: clean(row.phone, 32),
+        mac_address: mac || clean(row.mac_address),
+        profile: clean(row.profile, 100),
+        profile_id: clean(row.profile_id, 100),
+        comment: clean(row.comment, 500),
+        note: clean(row.note, 1000),
+        expires_at: row.expires_at || null,
+        first_login_at: row.first_login_at || null,
+        validity: clean(row.validity, 50),
+        status,
+        db_status: dbStatus,
+        live_status: online ? "online" : "offline",
+        is_online: online,
+        online,
+        ip: clean(session?.address || session?.ip || "", 100),
+        uptime: clean(session?.uptime || "", 100),
+        bytesIn: Number(session?.bytesIn || 0),
+        bytesOut: Number(session?.bytesOut || 0),
+        note: clean(row.note, 1000),
+        mac_lock: row.mac_lock !== false,
+        server: clean(row.server || "all", 100),
+        price: Number(row.price || 0),
+        subscriber_type: row.subscriber_type || "legacy",
+        activation_type: row.activation_type || "legacy",
+        created_at: row.created_at || null,
+        updated_at: row.updated_at || null
+      };
+    });
+    const filter = String(req.query.filter || "all").trim().toLowerCase();
+    const allowed = new Set(["all", "online", "active", "offline", "expired"]);
+    if (!allowed.has(filter)) return error(res, 400, "Invalid Hotspot subscriber filter.");
+    const filtered = users.filter(user => {
+      if (filter === "online") return user.is_online && user.status !== "expired";
+      if (filter === "expired") return user.status === "expired";
+      if (filter === "active") return !user.is_online && user.status !== "expired" &&
+        user.expires_at && new Date(user.expires_at).getTime() > now;
+      if (filter === "offline") return !user.is_online;
+      return true;
+    });
+    return res.set("Cache-Control", "no-store").json({
+      success: true, filter, count: filtered.length, users: filtered,
+      activeUsers: sessions.map(session => ({
+        id: session.id || session.sessionId || "",
+        user: session.username,
+        username: session.username,
+        address: session.address || session.ip || "",
+        macAddress: session.mac_address || "",
+        uptime: session.uptime || "",
+        bytesIn: Number(session.bytesIn || 0),
+        bytesOut: Number(session.bytesOut || 0),
+        profile: session.profile || ""
+      }))
+    });
   } catch (e) {
     console.error("[Hotspot Subscriber 360] Read failed:", e?.message || e);
-    return error(res, 503, "Unable to load Hotspot users. No RouterOS state was changed.");
+    return error(res, 503, "Unable to load PostgreSQL Hotspot subscribers. Live-session enrichment may be unavailable; no RouterOS state was changed.");
   }
 }
-
 async function getProfile(req, res) {
   const identifier = clean(req.params.id, 255);
   if (!identifier) return error(res, 400, "A voucher ID, username, or MAC address is required.");

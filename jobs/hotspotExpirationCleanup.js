@@ -74,6 +74,25 @@ function routerUserExpired(user, schedulerNames) {
   return byteLimit > 0 && usedBytes >= byteLimit;
 }
 
+async function applyExpiredProfile(router, username, macAddress) {
+  const mac = String(macAddress || username || "").trim().replace(/[:-]/g, "").toUpperCase();
+  const isMac = /^[0-9A-F]{12}$/.test(mac);
+  if (isMac && typeof router.getHotspotUser === "function" && typeof router.updateHotspotUser === "function") {
+    const existing = await router.getHotspotUser(username);
+    if (!existing) return { alreadyAbsent: true };
+    const comment = String(existing.comment || "");
+    await router.updateHotspotUser(username, "expired_profile", comment, username, mac);
+    if (typeof router.kickActiveHotspotUser === "function") await router.kickActiveHotspotUser(username);
+    return { profileApplied: true };
+  }
+  // Legacy non-MAC usernames cannot be safely normalized into the direct-subscriber model.
+  // Remove their access rather than leave an expired legacy credential usable.
+  if (typeof router.cleanupExpiredHotspotUser === "function") {
+    return await router.cleanupExpiredHotspotUser(username, macAddress);
+  }
+  throw new Error("RouterOS does not expose a safe expired-profile or cleanup operation.");
+}
+
 function createHotspotExpirationCleanup(deps = {}) {
   const database = deps.db || db;
   const router = deps.mikrotikService || mikrotikService;
@@ -128,9 +147,9 @@ function createHotspotExpirationCleanup(deps = {}) {
         const pendingCleanup = voucher.status === "expired" && ["pending", "not_required", "failed"].includes(voucher.cleanup_status);
         if (pendingCleanup) {
           try {
-            await router.cleanupExpiredHotspotUser(username, voucher.mac_address);
+            await applyExpiredProfile(router, username, voucher.mac_address);
             await database.query(
-              "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,NOW()),updated_at=NOW() WHERE id=$1",
+              "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
               [voucher.id]
             );
             removed++;
@@ -206,7 +225,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
         await database.query(
-          "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
+          "UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',first_login_at=COALESCE(first_login_at,$1),expires_at=COALESCE(expires_at,$2),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
           [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
         );
         expired++;
@@ -214,16 +233,9 @@ function createHotspotExpirationCleanup(deps = {}) {
         const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
         if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
         try {
-          await router.cleanupExpiredHotspotUser(username, voucher.mac_address);
+          await applyExpiredProfile(router, username, voucher.mac_address);
           await database.query(
-            "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,router_removed_at=COALESCE(router_removed_at,$1),updated_at=NOW() WHERE id=$2",
-            [now(), voucher.id]
-          );
-          // Hard-delete the expired subscriber row only after RouterOS confirms cleanup.
-          // Sales transactions and hotspot_voucher_payments are independent audit records;
-          // their transaction FK is RESTRICT and voucher_id is SET NULL on voucher deletion.
-          await database.query(
-            "DELETE FROM hotspot_vouchers WHERE id=$1 AND status='expired' AND cleanup_status='completed'",
+            "UPDATE hotspot_vouchers SET profile='expired_profile',cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
             [voucher.id]
           );
           removed++;
@@ -251,19 +263,42 @@ function createHotspotExpirationCleanup(deps = {}) {
 
 async function runHotspotRetentionCleanup(deps = {}) {
   const database = deps.db || db;
+  const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
   try {
+    // Keep expired subscribers visible for 30 days. Only purge a row after the
+    // expired profile was applied successfully and the final RouterOS removal succeeds.
+    const candidates = await database.query(
+      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
+    );
+    const purgeIds = [];
+    for (const row of candidates.rows || []) {
+      try {
+        if (typeof router.cleanupExpiredHotspotUser !== "function") throw new Error("RouterOS cleanup operation is unavailable.");
+        await router.cleanupExpiredHotspotUser(row.username, row.mac_address);
+        purgeIds.push(row.id);
+      } catch (error) {
+        logger.warn("[HOTSPOT RETENTION] RouterOS purge failed; retaining subscriber " + row.id + " for retry: " + error.message);
+      }
+    }
+    if (!purgeIds.length) return { archivedTransactions: 0, deletedVouchers: 0, routerPurgeFailed: (candidates.rows || []).length };
     const archived = await database.query(
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
-      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
+      "SELECT DISTINCT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
       "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
-      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expires_at < NOW() - INTERVAL '30 days' " +
-      "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
+      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' " +
+      "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
+      [purgeIds]
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id"
+      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
+      [purgeIds]
     );
-    const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
+    const result = {
+      archivedTransactions: (archived.rows || []).length,
+      deletedVouchers: (deleted.rows || []).length,
+      routerPurgeFailed: (candidates.rows || []).length - purgeIds.length
+    };
     if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
     return result;
   } catch (error) {
@@ -271,28 +306,17 @@ async function runHotspotRetentionCleanup(deps = {}) {
     return { archivedTransactions: 0, deletedVouchers: 0, error: error.message };
   }
 }
-
-function startHotspotRetentionCleanup() {
-  runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Initial run failed:", error.message));
-  let lastRunDate = "";
-  return setInterval(() => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-    }).formatToParts(new Date()).reduce((acc, part) => { acc[part.type] = part.value; return acc; }, {});
-    const dateKey = parts.year + "-" + parts.month + "-" + parts.day;
-    if (parts.hour === "00" && parts.minute === "00" && lastRunDate !== dateKey) {
-      lastRunDate = dateKey;
-      runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Scheduled run failed:", error.message));
-    }
-  }, MINUTE_MS);
-}
-
 const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
 
 function startHotspotExpirationCleanup() {
   runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Initial run failed:", error.message));
   return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
+}
+
+function startHotspotRetentionCleanup() {
+  runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Initial run failed:", error.message));
+  const interval = 60 * 60 * 1000;
+  return setInterval(() => runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Scheduled run failed:", error.message)), interval);
 }
 
 module.exports = {
