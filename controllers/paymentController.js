@@ -372,7 +372,7 @@ async function verifyTrx(req,res){
    const priorStillValid=Boolean(priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now());
    const nextExpiry=packageDuration?(priorStillValid?new Date(priorExpiry.getTime()+packageDuration):new Date(Date.now()+packageDuration)):null;
    const stagedComment=boundMac&&nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
-   const firstLoginAt=boundMac?new Date():null;
+   const firstLoginAt=boundMac?(priorStillValid&&target?.first_login_at?target.first_login_at:new Date()):null;
    const params=[username,boundMac||phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac||null];
    let row;
    if(target){
