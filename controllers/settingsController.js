@@ -216,6 +216,7 @@ async function testEmail(req,res){
  }catch(error){return errorResponse(res,error,502);}
 }
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").getStatusSnapshot()});}catch(error){return errorResponse(res,error,503);}}
+async function whatsappQr(req,res){try{const status=await require("../services/whatsappService").getStatusSnapshot();return res.set("Cache-Control","no-store, no-cache, must-revalidate").json({success:true,hasQr:Boolean(status.qrDataUrl),qrDataUrl:status.qrDataUrl||null,status:status.status,isLinked:status.isLinked});}catch(error){return errorResponse(res,error,503);}}
 async function testWhatsApp(req,res){
  try{
   const to=String(req.body?.to||req.body?.phone||"").trim();
@@ -227,7 +228,7 @@ async function testWhatsApp(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:"WhatsApp test message sent to the gateway successfully.",result});
  }catch(error){return errorResponse(res,error,502);}
 }
-async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect()});}catch(error){return errorResponse(res,error,502);}}
+async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect({freshQr:true})});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
