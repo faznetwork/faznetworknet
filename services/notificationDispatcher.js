@@ -48,11 +48,11 @@ function normalizePhone(value){
  return digits;
 }
 function normalizeSmsPhone(value){
- let digits=String(value||"").replace(/[^\\d]/g,"");
+ let digits=String(value||"").replace(/[^\d]/g,"");
  if(digits.startsWith("00880"))digits=digits.slice(2);
  if(digits.startsWith("8801")&&digits.length===13)digits="0"+digits.slice(3);
  else if(digits.startsWith("1")&&digits.length===10)digits="0"+digits;
- return /^01[3-9]\\d{8}$/.test(digits)?digits:"";
+ return /^01[3-9]\d{8}$/.test(digits)?digits:"";
 }
 
 function formatMessage(settings,event,variables,message,customTemplate){
