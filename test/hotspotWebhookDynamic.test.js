@@ -120,7 +120,7 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
   }
 });
 
-test("first captive login normalizes and binds MAC, then provisions RouterOS with MAC username and phone password",async()=>{
+test("first captive login normalizes and binds MAC, then provisions RouterOS with MAC username and password",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles;
   const oldRecharge=mikrotik.rechargeHotspotUser,oldCreate=mikrotik.createHotspotUser;
   let routerPayload=null,activeUpdate=null;
@@ -153,14 +153,14 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
     assert.equal(res.statusCode,200);
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
-    assert.equal(res.body.password,"01712345678");
+    assert.equal(res.body.password,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.username,"AA:BB:CC:DD:EE:FF");
-    assert.equal(routerPayload.password,"01712345678");
+    assert.equal(routerPayload.password,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.macAddress,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.profile,"1-Hour");
     assert.match(routerPayload.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     assert.equal(activeUpdate.params[1],"AA:BB:CC:DD:EE:FF");
-    assert.equal(activeUpdate.params[2],"01712345678");
+    assert.equal(activeUpdate.params[2],routerPayload.comment);
     const firstLoginAt=new Date(routerPayload.comment.slice(5).replace(" ","T")+"+06:00").getTime();
     assert.ok(Number.isFinite(firstLoginAt));
   }finally{
