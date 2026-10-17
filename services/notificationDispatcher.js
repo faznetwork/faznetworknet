@@ -93,15 +93,22 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||customerName||username||customerUsername,phone:smsPhone||recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
  context.expiry=context.expiry||context.expiry_date||"নির্ধারিত হয়নি";
  const textFor=async channel=>{
-  if(useMessageDirectly&&String(message||"").trim())return smsService.renderTemplate(String(message),{...context,...variables,name:context.name,customer_name:context.name});
+  // Notification Hub templates must take precedence over a controller-provided fallback message.
+  // Controllers may still pass useMessageDirectly for legacy compatibility; it is only a fallback
+  // when no active database template exists for this event/channel.
   const custom=await getCustomTemplate(type,rawEvent,eventName,channel);
+  const template=typeof custom==="string"&&custom.trim()?custom:null;
+  console.log("[Notification Pipeline] Sending:",{event:rawEvent,phone:rawPhone,templateFound:!!template});
+  if(template){
+   return smsService.renderTemplate(template,{...context,...variables,name:context.name,customer_name:context.name,expiry:context.expiry_date||"নির্ধারিত হয়নি",package:context.package||"হটস্পট প্যাকেজ",price:context.price??""});
+  }
+  if(useMessageDirectly&&String(message||"").trim())return smsService.renderTemplate(String(message),{...context,...variables,name:context.name,customer_name:context.name});
   if(channel==="whatsapp"&&type==="hotspot"&&eventName==="renewal"){
-   const template=typeof custom==="string"&&custom.trim()?custom:"FAZ NETWORK: আপনার হটস্পট প্যাকেজ সফলভাবে রিনিউ হয়েছে। মেয়াদ: {expiry} পর্যন্ত। ধন্যবাদ!";
-   return smsService.renderTemplate(template,{...context,expiry:context.expiry_date||"নির্ধারিত হয়নি",package:context.package||"হটস্পট প্যাকেজ",price:context.price??""});
+   const fallback="FAZ NETWORK: আপনার হটস্পট প্যাকেজ সফলভাবে রিনিউ হয়েছে। মেয়াদ: {expiry} পর্যন্ত। ধন্যবাদ!";
+   return smsService.renderTemplate(fallback,{...context,expiry:context.expiry_date||"নির্ধারিত হয়নি",package:context.package||"হটস্পট প্যাকেজ",price:context.price??""});
   }
   return formatMessage(settings,eventName,context,message,custom);
  };
- const text=formatMessage(settings,eventName,context,message);
  const selected=Array.isArray(channels)?new Set(channels):null;
  const jobs=[];
  const channelEnabled=(name)=>selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
