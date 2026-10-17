@@ -2,6 +2,7 @@
 
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
+const notificationDispatcher=require("../services/notificationDispatcher");
 const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
 
 const attempts=new Map();
@@ -123,10 +124,10 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3,first_login_at=COALESCE(first_login_at,$4),expires_at=CASE WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5) END,comment=$6,updated_at=NOW() WHERE id=$7 AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,row.id]);
+      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3,first_login_at=COALESCE(first_login_at,$4),expires_at=CASE WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5) END,comment=$6,updated_at=NOW() WHERE id=$7 AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,row.id]);
       if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
       const account=locked.rows[0];
-      return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status!=="active",stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
+      return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
     });
     const account=reservation.account;
     const expiry=account.expires_at?new Date(account.expires_at):null;
@@ -156,6 +157,11 @@ async function activate(req,res){
     const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
+    if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
+      const customerName=String(account.customer_name||"গ্রাহক").trim()||"গ্রাহক";
+      const expiryStr=expiry?new Date(expiry).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
+      notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:mac,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
+    }
     return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity});
   }catch(error){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});

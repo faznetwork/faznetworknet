@@ -5,7 +5,7 @@ const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
 const emailService=require("./emailService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
  const raw=String(rawEvent||"").toLowerCase();
  if(raw==="welcome"||raw==="welcome_message"||eventName==="welcome")return ["welcome_message"];
@@ -47,6 +47,13 @@ function normalizePhone(value){
  if(digits.startsWith("1")&&digits.length===10)return "880"+digits;
  return digits;
 }
+function normalizeSmsPhone(value){
+ let digits=String(value||"").replace(/[^\d]/g,"");
+ if(digits.startsWith("00880"))digits=digits.slice(2);
+ if(digits.startsWith("8801")&&digits.length===13)digits="0"+digits.slice(3);
+ else if(digits.startsWith("1")&&digits.length===10)digits="0"+digits;
+ return /^01[3-9]\d{8}$/.test(digits)?digits:"";
+}
 
 function formatMessage(settings,event,variables,message,customTemplate){
  const templateKey={payment:"sms_template_payment_receipt",payment_receipt:"sms_template_payment_receipt",recharge:"sms_template_payment_receipt",renewal:"sms_template_payment_receipt",welcome:"sms_template_welcome",expiry_warning:"sms_template_expiry_warning",expired:"sms_template_line_block",line_expiry:"sms_template_line_block"}[event];
@@ -70,20 +77,23 @@ function defaultEmailTemplate(event,context){
  return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
 }
 
-async function dispatchNow({userType="pppoe",event="payment",to,phone,username,customer, message,variables={},channels}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,useMessageDirectly=false}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
- const rawPhone=extractCustomerPhone(customer)||phone||to;
+ const rawPhone=extractCustomerPhone(customer)||phone||to||recipient;
  const recipientPhone=normalizePhone(rawPhone);
+ const smsPhone=normalizeSmsPhone(rawPhone);
  const validWhatsAppPhone=isValidBdWhatsAppPhone(recipientPhone);
+ const explicitHotspotPipeline=type==="hotspot"&&["hotspot_payment_received","hotspot_account_created","hotspot_first_login","hotspot_renewal","hotspot_expiring_soon"].includes(rawEvent);
  const customerUsername=String(customer?.username||username||"unknown").trim()||"unknown";
  const isPppoeRenewal=type==="pppoe"&&["payment","renewal","recharge"].includes(eventName);
  if(isPppoeRenewal){
   if(validWhatsAppPhone)console.info("[Dispatcher] Triggering PPPoE renewal notification for "+customerUsername+" ("+recipientPhone+").");
   else console.warn("[Notification] No valid phone found for customer: "+customerUsername+".");
  }
- const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||username||customerUsername,phone:recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
+ const context={company_name:settings.company_name||"FAZ NETWORK",username:username||customerUsername,name:customer?.full_name||customer?.fullName||customer?.name||customerName||username||customerUsername,phone:smsPhone||recipientPhone,package:variables.package||variables.profile||customer?.package_name||customer?.profile||"",expiry_date:variables.expiry_date||variables.new_expiry_date||customer?.expiration_date||"",...variables};
  context.expiry=context.expiry||context.expiry_date||"নির্ধারিত হয়নি";
  const textFor=async channel=>{
+  if(useMessageDirectly&&String(message||"").trim())return smsService.renderTemplate(String(message),{...context,...variables,name:context.name,customer_name:context.name});
   const custom=await getCustomTemplate(type,rawEvent,eventName,channel);
   if(channel==="whatsapp"&&type==="hotspot"&&eventName==="renewal"){
    const template=typeof custom==="string"&&custom.trim()?custom:"FAZ NETWORK: আপনার হটস্পট প্যাকেজ সফলভাবে রিনিউ হয়েছে। মেয়াদ: {expiry} পর্যন্ত। ধন্যবাদ!";
@@ -107,9 +117,9 @@ async function dispatchNow({userType="pppoe",event="payment",to,phone,username,c
  if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
  if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&ruleEnabled("sms")&&recipientPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:recipientPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
+ if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
- if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
+ if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("email")&&ruleEnabled("email")){
   let recipientEmail=String(customer?.email||"").trim();
   if(!recipientEmail&&customerUsername!=="unknown"){
@@ -148,4 +158,4 @@ async function testChannel(channel,{to,message="FAZ NETWORK test notification"}=
  if(channel==="whatsapp")return whatsappService.sendMessage({to,message});
  throw new Error("Unsupported notification channel.");
 }
-module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone};
+module.exports={dispatchNotification,dispatchNow,testChannel,normalizePhone,normalizeSmsPhone,eventKey,renewalRuleEvents,extractCustomerPhone,isValidBdWhatsAppPhone};

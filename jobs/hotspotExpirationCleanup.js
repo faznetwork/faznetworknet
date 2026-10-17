@@ -78,6 +78,7 @@ function createHotspotExpirationCleanup(deps = {}) {
   const database = deps.db || db;
   const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
+  const notificationDispatcher = deps.notificationDispatcher || require("../services/notificationDispatcher");
   const now = deps.now || (() => new Date());
   let running = false;
 
@@ -85,8 +86,22 @@ function createHotspotExpirationCleanup(deps = {}) {
     if (running && !deps.allowConcurrent) return { skipped: true, reason: "already_running" };
     running = true;
     const startedAt = Date.now();
-    let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0;
+    let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0, preExpiryNotified = 0;
     try {
+      // Atomically claim due alerts so multiple application instances cannot send the same voucher alert twice.
+      try {
+        const dueAlerts = await database.query(
+          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at"
+        );
+        await Promise.all((dueAlerts.rows||[]).map(async voucher=>{
+          const phone=String(voucher.phone||'').trim();
+          if(!phone||phone.toLowerCase()==='unlinked'){ logger.warn('[HOTSPOT PRE-EXPIRY] Skipped voucher '+voucher.id+': no linked customer phone.'); return; }
+          const customerName=String(voucher.customer_name||'গ্রাহক').trim()||'গ্রাহক';
+          const notification=notificationDispatcher.dispatchNotification({userType:'hotspot',event:'hotspot_expiring_soon',to:phone,recipient:phone,phone,username:voucher.username,customerName,customer:{username:voucher.username,name:customerName,phone,profile:voucher.profile},message:`আসসালামু আলাইকুম ${customerName}, আপনার FAZ NETWORK হটস্পট প্যাকেজের মেয়াদ আগামী ৫ মিনিটের মধ্যে শেষ হতে যাচ্ছে। নিরবচ্ছিন্ন ইন্টারনেট সংযোগ বজায় রাখতে এখনই রিচার্জ করুন। হেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:['sms','whatsapp'],variables:{name:customerName,username:voucher.username,package:voucher.profile||'হটস্পট প্যাকেজ',profile:voucher.profile||'',amount:voucher.price,expiry_date:voucher.expires_at?new Date(voucher.expires_at).toISOString():''}});
+          if(notification?.task){ const delivery=await notification.task; if(!delivery?.success)logger.warn('[HOTSPOT PRE-EXPIRY] One or more notification channels failed for voucher '+voucher.id+'. The alert claim is retained to avoid duplicate SMS retries.'); }
+          preExpiryNotified++;
+        }));
+      } catch (alertError) { logger.error('[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:',alertError.message); }
       const result = await database.query(
         "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
@@ -214,7 +229,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         }
       }
 
-      const summary = { checked, activated, expired, removed, failed, durationMs: Date.now() - startedAt };
+      const summary = { checked, activated, expired, removed, failed, preExpiryNotified, durationMs: Date.now() - startedAt };
       if (checked || failed) logger.log("[HOTSPOT EXPIRY] Completed.", summary);
       return summary;
     } catch (error) {
