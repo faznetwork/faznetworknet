@@ -313,6 +313,12 @@ function startHotspotExpirationCleanup() {
   return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
 }
 
+function startHotspotRetentionCleanup() {
+  runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Initial run failed:", error.message));
+  const interval = 60 * 60 * 1000;
+  return setInterval(() => runHotspotRetentionCleanup().catch(error => console.error("[HOTSPOT RETENTION] Scheduled run failed:", error.message)), interval);
+}
+
 module.exports = {
   runHotspotExpirationCleanup,
   startHotspotExpirationCleanup,
