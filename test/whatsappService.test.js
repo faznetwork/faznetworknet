@@ -175,3 +175,27 @@ test("Signal key batches use BEGIN/COMMIT and roll back all changes on failure",
   assert.ok(!database.queries.includes("COMMIT"));
   assert.deepEqual(await auth.state.keys.get("session", ["existing"]), { existing: { old: true } });
 });
+
+
+test("credential snapshots are taken inside the write queue and persist registered=true", async () => {
+  const database = fakeDatabase();
+  const auth = await createDatabaseAuthState({ database, baileys: fakeBaileys() });
+  auth.state.creds.registered = false;
+  const firstWrite = auth.saveCreds();
+  auth.state.creds.registered = true;
+  const secondWrite = auth.saveCreds();
+  await Promise.all([firstWrite, secondWrite]);
+  assert.equal(database.rows.get("creds").registered, true);
+  const restored = await createDatabaseAuthState({ database, baileys: fakeBaileys() });
+  assert.equal(restored.state.creds.registered, true);
+});
+
+test("live WhatsApp readiness requires an open socket user and registered credentials", () => {
+  const { _isSocketReady } = require("../services/whatsappService");
+  const sock = { user: { id: "8801712345678@s.whatsapp.net" } };
+  assert.equal(_isSocketReady(sock, { registered: true }, "connected"), true);
+  assert.equal(_isSocketReady(sock, { registered: false }, "connected"), false);
+  assert.equal(_isSocketReady(null, { registered: true }, "connected"), false);
+  assert.equal(_isSocketReady({ user: null }, { registered: true }, "connected"), false);
+  assert.equal(_isSocketReady(sock, { registered: true }, "disconnected"), false);
+});
