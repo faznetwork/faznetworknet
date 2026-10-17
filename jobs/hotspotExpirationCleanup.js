@@ -249,11 +249,11 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
       "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
       "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
-      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expired_at <= NOW() - INTERVAL '3 days' " +
+      "WHERE v.status='expired' AND v.cleanup_status='completed' AND v.expires_at < NOW() - INTERVAL '30 days' " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id"
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expired_at <= NOW() - INTERVAL '3 days' RETURNING id"
+      "DELETE FROM hotspot_vouchers WHERE status='expired' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id"
     );
     const result = { archivedTransactions: (archived.rows || []).length, deletedVouchers: (deleted.rows || []).length };
     if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
