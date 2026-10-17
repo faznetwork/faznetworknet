@@ -3207,6 +3207,7 @@
             const expiryInput = document.getElementById('hsCustomExpiry');
             const activationInputs = [...form.querySelectorAll('input[name="activation_type"]')];
             const activationMode = () => activationInputs.find(input => input.checked)?.value || 'first_login';
+            if (expiryInput) expiryInput.disabled = true;
             const button = document.getElementById('hsSaveButton');
             const result = document.getElementById('hotspotCreateResult');
             const validityLabel = document.getElementById('hsValidityLabel');
