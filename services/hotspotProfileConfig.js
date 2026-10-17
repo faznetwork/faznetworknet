@@ -47,71 +47,18 @@ function parseStoredValidity(profile) {
  * backend-owned user comment or changes a user's phone-number password.
  */
 function buildHotspotOnLoginScript(config = {}) {
-  const validity = normalizeProfileValidity(config.validityValue || 1, config.validityUnit || "days");
+  // Validate package validity centrally, but never create or manage RouterOS schedulers.
+  normalizeProfileValidity(config.validityValue || 1, config.validityUnit || "days");
   const sharedUsers = Math.max(1, Number(config.sharedUsers) || 1);
   const bindMac = sharedUsers === 1
     ? ':if ([:len $uid] > 0 && [:len $uMac] > 0) do={ /ip hotspot user set $uid mac-address=$uMac; }'
     : '';
-  const prefix = [
-    ':local fazManaged "FAZ_HOTSPOT_EXPIRY_V3"',
+  return [
+    ':local fazManaged "FAZ_HOTSPOT_SESSION_BINDING_V4"',
     ':local uName $user',
     ':local uMac $"mac-address"',
     ':local uid [/ip hotspot user find where name=$uName]',
     bindMac
-  ].filter(Boolean).join('; ');
-
-  // Data-only packages have no calendar expiry and must not create a time scheduler.
-  if (validity.unit === "gb") return prefix + ';';
-
-  // The per-user RouterOS comment is authoritative: "Exp: YYYY-MM-DD".
-  // Recreate the one-shot scheduler on each login so renewal cannot leave a stale date.
-  const schedulerEvent =
-    '("/ip hotspot active remove [find where user=\\\"' + '" . $uName . "' +
-    '\\\"]; /ip hotspot cookie remove [find where user=\\\"' + '" . $uName . "' +
-    '\\\"]; /ip hotspot cookie remove [find where mac-address=\\\"' + '" . $uMac . "' +
-    '\\\"]; /ip hotspot user remove [find where name=\\\"' + '" . $uName . "' +
-    '\\\"]; /ip hotspot host remove [find where mac-address=\\\"' + '" . $uMac . "' +
-    '\\\"]; /system scheduler remove [find where name=\\\"EXP_' + '" . $uName . "' +
-    '\\\"];")';
-
-  const expiryScript = [
-    ':local sched ("EXP_" . $uName)',
-    ':foreach oldSched in=[/system scheduler find where name=$sched] do={ /system scheduler remove $oldSched; }',
-    ':local userComment ""',
-    ':if ([:len $uid] > 0) do={ :set userComment [/ip hotspot user get $uid comment]; }',
-    ':if (([:len $userComment] = 24) && ([:pick $userComment 0 5] = "Exp: ") && ([:pick $userComment 9 10] = "-") && ([:pick $userComment 12 13] = "-") && ([:pick $userComment 15 16] = " ") && ([:pick $userComment 18 19] = ":") && ([:pick $userComment 21 22] = ":")) do={',
-    ':local expIso [:pick $userComment 5 15]',
-    ':local expTime [:pick $userComment 16 24]',
-    ':local expHour [:tonum [:pick $expTime 0 2]]',
-    ':local expMinute [:tonum [:pick $expTime 3 5]]',
-    ':local expSecond [:tonum [:pick $expTime 6 8]]',
-    ':local expYear [:tonum [:pick $expIso 0 4]]',
-    ':local expMonth [:tonum [:pick $expIso 5 7]]',
-    ':local expDay [:tonum [:pick $expIso 8 10]]',
-    ':local months {"jan";"feb";"mar";"apr";"may";"jun";"jul";"aug";"sep";"oct";"nov";"dec"}',
-    ':local maxDay 31',
-    ':if (($expMonth = 4) || ($expMonth = 6) || ($expMonth = 9) || ($expMonth = 11)) do={ :set maxDay 30; }',
-    ':if ($expMonth = 2) do={ :set maxDay 28; :if ((($expYear % 4) = 0) && ((($expYear % 100) != 0) || (($expYear % 400) = 0))) do={ :set maxDay 29; } }',
-    ':if (([:typeof $expYear] = "num") && ([:typeof $expMonth] = "num") && ([:typeof $expDay] = "num") && ([:typeof $expHour] = "num") && ([:typeof $expMinute] = "num") && ([:typeof $expSecond] = "num") && ($expYear >= 2000) && ($expMonth >= 1) && ($expMonth <= 12) && ($expDay >= 1) && ($expDay <= $maxDay) && ($expHour >= 0) && ($expHour <= 23) && ($expMinute >= 0) && ($expMinute <= 59) && ($expSecond >= 0) && ($expSecond <= 59)) do={',
-    ':local currentDate [/system clock get date]',
-    ':local currentMonth [:pick $currentDate 0 3]',
-    ':local currentDay [:tonum [:pick $currentDate 4 6]]',
-    ':local currentYear [:tonum [:pick $currentDate 7 11]]',
-    ':local currentTime [/system clock get time]',
-    ':local currentHour [:tonum [:pick $currentTime 0 2]]',
-    ':local currentMinute [:tonum [:pick $currentTime 3 5]]',
-    ':local currentSecond [:tonum [:pick $currentTime 6 8]]',
-    ':local currentMonthIndex [:find $months $currentMonth]',
-    ':local isExpired false',
-    ':if ($expYear < $currentYear) do={ :set isExpired true; } else={ :if ($expYear = $currentYear) do={ :if ($expMonth < ($currentMonthIndex + 1)) do={ :set isExpired true; } else={ :if (($expMonth = ($currentMonthIndex + 1)) && ($expDay < $currentDay)) do={ :set isExpired true; } } } }',
-    ':if (($expYear = $currentYear) && ($expMonth = ($currentMonthIndex + 1)) && ($expDay = $currentDay)) do={ :if (($expHour < $currentHour) || (($expHour = $currentHour) && ($expMinute < $currentMinute)) || (($expHour = $currentHour) && ($expMinute = $currentMinute) && ($expSecond <= $currentSecond))) do={ :set isExpired true; } }',
-    ':if ($isExpired) do={ /ip hotspot active remove [find where user=$uName]; /ip hotspot cookie remove [find where user=$uName]; /ip hotspot cookie remove [find where mac-address=$uMac]; /ip hotspot user remove [find where name=$uName]; /ip hotspot host remove [find where mac-address=$uMac]; } else={',
-    ':local monthIndex ($expMonth - 1)',
-    ':local startDate (($months->$monthIndex) . "/" . [:pick $expIso 8 10] . "/" . [:tostr $expYear])',
-    '/system scheduler add name=$sched start-date=$startDate start-time=$expTime on-event=' + schedulerEvent,
-    '}; } else={ :log warning ("FAZ HotSpot expiry comment invalid for user " . $uName . "; expected Exp: YYYY-MM-DD HH:mm:ss"); }'
-  ].join('\n');
-
-  return prefix + ' ' + expiryScript + ';';
+  ].filter(Boolean).join('; ') + ';';
 }
 module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
