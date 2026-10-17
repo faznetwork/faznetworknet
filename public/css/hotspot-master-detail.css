@@ -20,3 +20,28 @@
  .hotspot-all-users-view .subscriber-list-scrollable{max-height:none;overflow:visible}
  .hotspot-all-users-view .subscriber-detail-card{position:static}
 }
+
+
+/* Mobile Subscriber 360 is a modal; desktop retains the sticky 40/60 workspace. */
+@media(max-width:991.98px){
+ .hotspot-all-users-view #subscriberDetailColumn{display:none!important}
+ .hotspot-all-users-view.subscriber-mobile-detail-open .hotspot-master-detail-container>.col-lg-5{display:block!important}
+ #mobileSubscriberModal .modal-content{border:0;border-radius:18px 18px 0 0;overflow:hidden}
+ #mobileSubscriberModal .modal-header{position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid #e2e8f0;padding:16px}
+ #mobileSubscriberModal .modal-title{font-size:18px;font-weight:850;color:#0f172a}
+ #mobileSubscriberModal .btn-close{width:38px;height:38px;padding:10px;background-color:#f1f5f9;border-radius:50%;opacity:1;flex:0 0 38px}
+ #mobileSubscriberModal .modal-body{padding:12px;background:#f8fafc}
+ #mobileSubscriberModal .subscriber-detail-body{padding:0;background:transparent}
+ #mobileSubscriberModal .subscriber-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #mobileSubscriberModal .subscriber-action-bar{display:grid;grid-template-columns:1fr;gap:9px}
+ #mobileSubscriberModal .subscriber-action-bar .btn{width:100%;min-height:46px;justify-content:flex-start}
+ #mobileSubscriberModal .subscriber-action-section{margin-top:14px;padding-top:14px}
+ #mobileSubscriberModal .subscriber-stat-tile{background:#fff}
+}
+@media(min-width:992px){#mobileSubscriberModal{display:none!important}}
+@media(max-width:991.98px){
+ body:not(.sidebar-open) .sidebar{transform:translateX(-100%)}
+ body:not(.sidebar-open) .main-content{margin-left:0!important;width:100%!important;max-width:100%!important}
+ body.sidebar-open .sidebar{transform:translateX(0)}
+ body.sidebar-open .main-content{margin-left:0!important;width:100%!important}
+}
