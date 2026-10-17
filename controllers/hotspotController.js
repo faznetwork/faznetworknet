@@ -220,8 +220,8 @@ async function createUser(req,res){
     const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
     const server=clean(body.server||"all",100)||"all";
     const activationType=String(body.activation_type||body.activationType||"first_login").toLowerCase();
-    preassigned=["preassigned","pre_assigned","instant","instant_mac_bind"].includes(activationType);
     const rawMac=String(body.mac||body.mac_address||"").trim();
+    preassigned=["assigned","preassigned","pre_assigned","instant","instant_mac_bind"].includes(activationType)||Boolean(rawMac);
     const mac=rawMac?normalizeHotspotMac(rawMac):"";
     const customRaw=String(body.expires_at||body.custom_expiry||"").trim();
     const customExpiry=customRaw?new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(customRaw)?customRaw+":00+06:00":customRaw):null;
@@ -229,8 +229,8 @@ async function createUser(req,res){
     const customerName=clean(body.customer_name||body.name,200),note=clean(body.note||body.address,1000);
     if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi phone number (01XXXXXXXXX)."});
     if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",message:"Select a Hotspot package/profile."});
-    if(preassigned&&!mac)return res.status(400).json({success:false,code:"MAC_REQUIRED",message:"Device MAC is required for Pre-Assigned activation."});
     if(rawMac&&!mac)return res.status(400).json({success:false,code:"INVALID_MAC",message:"Enter a valid MAC address (AA:BB:CC:DD:EE:FF)."});
+    if(preassigned&&!mac)return res.status(400).json({success:false,code:"MAC_REQUIRED",message:"Device MAC is required for Pre-Assigned activation."});
     if(customRaw&&(!customExpiry||Number.isNaN(customExpiry.getTime())||customExpiry.getTime()<=Date.now()))return res.status(400).json({success:false,code:"INVALID_EXPIRY",message:"Custom expiry must be a valid future date and time."});
     const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);
     let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
@@ -268,6 +268,11 @@ async function createUser(req,res){
     if(preassigned){
       await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment,server,macAddress:mac});
       routerProvisioned=true;
+      if(phone&&phone!=="Unlinked"){
+        const customerLabel=String(stored.customer_name||customerName||"গ্রাহক").trim()||"গ্রাহক";
+        const expiryStr=expiresAt?new Date(expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
+        notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_account_created",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerLabel,phone,profile},customerName:customerLabel,message:`আসসালামু আলাইকুম ${customerLabel}, FAZ NETWORK-এ আপনার হটস্পট অ্যাকাউন্ট সফলভাবে চালু করা হয়েছে।\nপ্যাকেজ: ${profile}\nমেয়াদ: ${expiryStr} পর্যন্ত।\nধন্যবাদ!`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerLabel,username:mac,profile,package:profile,expiry_date:expiryStr}});
+      }
     }
     hotspotListCache.expiresAt=0;
     return res.status(201).json({success:true,pending_activation:!preassigned,instant_provisioned:preassigned,message:preassigned?"Pre-assigned Hotspot user created and provisioned immediately.":"First-login Hotspot account saved. No RouterOS user or expiry countdown is created until captive-portal activation.",user:{id:stored.id,username:stored.username,phone,profile:stored.profile,profile_id:stored.profile_id,status:stored.status,mac_address:stored.mac_address||null,expires_at:stored.expires_at||null}});
@@ -385,12 +390,16 @@ async function manualRenew(req,res){
    const comment=expiry?"Exp: "+stamp(expiry):"FAZ|DATA_ONLY",phone=normalizeHotspotPhone(voucher.phone||voucher.password||""),mac=normalizeHotspotMac(voucher.mac_address)||normalizeHotspotMac(voucher.username)||"";if(!mac)throw hotspotError("HOTSPOT_MAC_REQUIRED",409,"MAC-based Hotspot renewal requires a bound device MAC. Bind the device before renewing.");
    if(!/^01\d{9}$/.test(phone))throw hotspotError("HOTSPOT_PHONE_INVALID",400,"Voucher has no valid customer phone number.");
    await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,expiryDate:expiry?stamp(expiry).slice(0,10):"",comment,macAddress:mac,previousUsername:voucher.username!==mac?voucher.username:"",server:voucher.server||"all"});
-   const saved=await client.query("UPDATE hotspot_vouchers SET username=$10,profile=$2,validity=$3,price=$4,status='active',password=$10,phone=$5,mac_address=$10,customer_name=COALESCE(NULLIF($6,''),customer_name),comment=$7,expires_at=$8,renewal_stacked=$9,first_login_at=COALESCE(first_login_at,NOW()),updated_at=NOW() WHERE id=$1 RETURNING id,username,profile,validity,price,status,phone,customer_name,mac_address,expires_at,comment,transaction_id",[voucher.id,profile,validity,Number(pm.price??voucher.price??0),phone,clean(body.customer_name||voucher.customer_name,160),comment,expiry,Boolean(oldExpiry&&oldExpiry>now),mac]);
+   const saved=await client.query("UPDATE hotspot_vouchers SET username=$10,profile=$2,validity=$3,price=$4,status='active',password=$10,phone=$5,mac_address=$10,customer_name=COALESCE(NULLIF($6,''),customer_name),comment=$7,expires_at=$8,renewal_stacked=$9,first_login_at=COALESCE(first_login_at,NOW()),pre_expiry_notified=false,updated_at=NOW() WHERE id=$1 RETURNING id,username,profile,validity,price,status,phone,customer_name,mac_address,expires_at,comment,transaction_id",[voucher.id,profile,validity,Number(pm.price??voucher.price??0),phone,clean(body.customer_name||voucher.customer_name,160),comment,expiry,Boolean(oldExpiry&&oldExpiry>now),mac]);
    if(!saved.rows?.length)throw new Error("RouterOS was renewed but PostgreSQL could not finalize the voucher.");
    return {voucher:saved.rows[0],expiryLabel:expiry?stamp(expiry):null,packageName:pm.packageName||pm.package_name||profile,phone};
   });
   hotspotListCache.expiresAt=0;
-  if(notify)notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_renewal",to:renewed.phone,phone:renewed.phone,username:renewed.voucher.username,customer:{username:renewed.voucher.username,name:renewed.voucher.customer_name||renewed.voucher.username,phone:renewed.phone,profile:renewed.voucher.profile},variables:{package:renewed.packageName,profile:renewed.voucher.profile,expiry_date:renewed.expiryLabel||"Data quota"},channels:["sms","whatsapp"]});
+  if(notify&&renewed.phone&&renewed.phone!=="Unlinked"){
+   const customerLabel=String(renewed.voucher.customer_name||"গ্রাহক").trim()||"গ্রাহক";
+   const newExpiryStr=renewed.expiryLabel||"Data quota";
+   notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_renewal",to:renewed.phone,recipient:renewed.phone,phone:renewed.phone,username:renewed.voucher.username,customer:{username:renewed.voucher.username,name:customerLabel,phone:renewed.phone,profile:renewed.voucher.profile},customerName:customerLabel,message:`আসসালামু আলাইকুম ${customerLabel}, আপনার হটস্পট প্যাকেজটি সফলভাবে রিনিউ করা হয়েছে।\nপ্যাকেজ: ${renewed.packageName}\nনতুন মেয়াদ: ${newExpiryStr} পর্যন্ত।\nধন্যবাদ, FAZ NETWORK।`,useMessageDirectly:true,variables:{name:customerLabel,username:renewed.voucher.username,package:renewed.packageName,profile:renewed.voucher.profile,expiry_date:newExpiryStr},channels:["sms","whatsapp"]});
+  }
   return res.json({success:true,message:"Hotspot package renewed; RouterOS credentials remain MAC-based.",voucher:renewed.voucher,expiry:renewed.expiryLabel,new_expiry:renewed.expiryLabel});
  }catch(e){return errorResponse(res,e);}
 }
