@@ -905,7 +905,7 @@ class MikroTikService {
     return this._withConnection("Hotspot user update",async connection=>{
       const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);
       const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toUpperCase()===username&&r[".id"]);
-      if(!user)throw new Error("Hotspot user \\""+username+"\\" was not found on MikroTik.");
+      if(!user)throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");
       if(!(Array.isArray(profiles)?profiles:[]).some(r=>this._str(r.name)===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");
       const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});
       await connection.write("/ip/hotspot/user/set",["=.id="+user[".id"],"=name="+username,"=password="+username,"=profile="+profile,"=comment="+comment,"=mac-address="+macAddress]);
