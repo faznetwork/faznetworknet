@@ -5098,6 +5098,28 @@ async function deletePlan(id,name){
           }catch(error){if(resultEl)resultEl.textContent=error.message||'Test notification failed.';await showNotificationTestLog(channel.toUpperCase()+' test error',{success:false,error:error.message||String(error)});}
           finally{if(button)button.disabled=false;}
         }
+        let whatsappStatusPollTimer=null;
+        let whatsappPairingPending=false;
+        let whatsappConnectedToastShown=false;
+        let whatsappStatusPollInFlight=false;
+        function stopWhatsAppStatusPolling(){
+          if(whatsappStatusPollTimer!==null){window.clearInterval(whatsappStatusPollTimer);whatsappStatusPollTimer=null;}
+          whatsappStatusPollInFlight=false;
+        }
+        function startWhatsAppStatusPolling(){
+          if(whatsappStatusPollTimer!==null)return;
+          whatsappStatusPollTimer=window.setInterval(async()=>{
+            if(whatsappStatusPollInFlight)return;
+            whatsappStatusPollInFlight=true;
+            try{await refreshWhatsAppStatus();}catch(_){}finally{whatsappStatusPollInFlight=false;}
+          },2000);
+        }
+        function notifyWhatsAppConnected(){
+          const text='🎉 WhatsApp Device Connected Successfully!';
+          if(typeof showCustomerActionToast==='function')showCustomerActionToast(text);
+          else if(typeof window.toast==='function')window.toast(text);
+          else window.alert(text);
+        }
         async function refreshWhatsAppStatus(){
           const pill=document.getElementById('whatsappStatusPill'),wrap=document.getElementById('whatsappQrWrap'),message=document.getElementById('whatsappStatusMessage');
           try{
@@ -5105,7 +5127,8 @@ async function deletePlan(id,name){
             const data=await response.json();
             if(!response.ok||!data.success)throw new Error(data.message||data.error||'Unable to read WhatsApp status (HTTP '+response.status+').');
             const s=data.status||{};
-            if(pill){pill.textContent=s.connected?'Connected':(s.connection||'Disconnected');pill.className='badge '+(s.connected?'text-bg-success':(['error','owned_elsewhere','reconnect_required'].includes(s.connection)?'text-bg-danger':'text-bg-secondary'));}
+            const wasPairing=whatsappPairingPending||Boolean(wrap?.querySelector('img'))||s.connection==='connecting';
+            if(pill){pill.textContent=s.connected?'Active & Ready':(s.connection||'Disconnected');pill.className='badge '+(s.connected?'text-bg-success':(['error','owned_elsewhere','reconnect_required'].includes(s.connection)?'text-bg-danger':'text-bg-secondary'));if(s.connected){pill.style.boxShadow='0 0 0 .2rem rgba(25,135,84,.18)';}else{pill.style.boxShadow='none';}}
             const account=s.account||null,accountCard=document.getElementById('whatsappAccountCard');
             if(accountCard){accountCard.style.display=s.connected?'block':'none';}
             const phoneEl=document.getElementById('whatsappAccountPhone'),nameEl=document.getElementById('whatsappAccountName'),linkedEl=document.getElementById('whatsappLinkedSince'),readyEl=document.getElementById('whatsappSocketReady');
@@ -5115,7 +5138,18 @@ async function deletePlan(id,name){
             if(readyEl){readyEl.textContent=s.connected?(s.socketStatus||'Active & Ready'):(s.socketStatus||s.connection||'Not ready');readyEl.className='badge '+(s.connected?'text-bg-success':'text-bg-secondary');}
             const testBtn=document.getElementById('whatsappTestBtn');if(testBtn)testBtn.disabled=!s.connected;
             if(wrap){wrap.replaceChildren();if(s.qrDataUrl){const img=document.createElement('img');img.src=s.qrDataUrl;img.alt='Scan this QR code with WhatsApp Linked Devices';img.width=280;img.height=280;img.className='img-fluid';wrap.append(img);const p=document.createElement('p');p.className='small text-muted mt-2 mb-0';p.textContent='WhatsApp → Linked devices → Link a device';wrap.append(p);}else{const p=document.createElement('p');p.className='small text-muted mb-0';p.textContent=s.connected?'WhatsApp device is linked and ready.':(s.lastError||('WhatsApp status: '+(s.connection||'disconnected')+'. Press Connect / Reconnect if pairing is needed.'));wrap.append(p);}}
-            if(message){message.className='small mt-2 '+(s.connected?'text-success':s.lastError?'text-danger':'text-muted');message.textContent=s.lastError||('WhatsApp status refreshed: '+(s.connected?'connected and ready':(s.connection||'disconnected'))+'.');}
+            if(message){message.className='small mt-2 '+(s.connected?'text-success':s.lastError?'text-danger':'text-muted');message.textContent=s.connected?'🎉 WhatsApp Device Connected Successfully!':(s.lastError||('WhatsApp status refreshed: '+(s.connection||'disconnected')+'.'));}
+            if(s.connected){
+              stopWhatsAppStatusPolling();
+              whatsappPairingPending=false;
+              if(wrap)wrap.replaceChildren();
+              if(wasPairing&&!whatsappConnectedToastShown){whatsappConnectedToastShown=true;notifyWhatsAppConnected();}
+            }else if(s.qrDataUrl||s.connection==='connecting'){
+              whatsappPairingPending=true;
+              startWhatsAppStatusPolling();
+            }else if(['error','owned_elsewhere','reconnect_required','disconnected'].includes(s.connection)&&!s.qrDataUrl){
+              stopWhatsAppStatusPolling();
+            }
             return s;
           }catch(error){if(message){message.className='small mt-2 text-danger';message.textContent='Status refresh failed: '+(error.message||'WhatsApp status unavailable.');}throw error;}
         }
@@ -5126,7 +5160,7 @@ async function deletePlan(id,name){
         document.getElementById('smsDeviceMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsDeviceMappingRows'));
         document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
         document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
-        document.getElementById('whatsappConnectBtn')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/connect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'WhatsApp connection failed.');await refreshWhatsAppStatus();window.setTimeout(refreshWhatsAppStatus,1500);window.setTimeout(refreshWhatsAppStatus,3500);}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'WhatsApp connection failed.';}finally{b.disabled=false;}});
+        document.getElementById('whatsappConnectBtn')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;whatsappPairingPending=true;whatsappConnectedToastShown=false;startWhatsAppStatusPolling();try{const r=await fetch('/api/settings/notifications/whatsapp/connect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'WhatsApp connection failed.');await refreshWhatsAppStatus();}catch(error){stopWhatsAppStatusPolling();document.getElementById('whatsappStatusMessage').textContent=error.message||'WhatsApp connection failed.';}finally{b.disabled=false;}});
         document.getElementById('whatsappStatusBtn')?.addEventListener('click',async e=>{
           const button=e.currentTarget,originalText=button.dataset.originalText||button.textContent;
           button.dataset.originalText=originalText;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Checking…';
