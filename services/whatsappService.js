@@ -3,6 +3,7 @@
 const db = require("../db");
 
 let socket = null;
+let activeCreds = null;
 let qrDataUrl = null;
 let qrText = null;
 let connection = "disconnected";
@@ -143,15 +144,17 @@ async function createDatabaseAuthState(options = {}) {
   };
 
   const saveCreds = () => {
-    const snapshot = serialize(creds, BufferJSON);
+    // Snapshot inside the queue, not before it: a queued callback must never
+    // persist an older credential state after a newer creds.update event.
     const write = credentialWriteQueue.then(async () => {
+      const snapshot = serialize(creds, BufferJSON);
       await database.query(
         `INSERT INTO whatsapp_sessions(key, value, updated_at)
          VALUES ($1, $2::jsonb, NOW())
          ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
         ["creds", snapshot]
       );
-      authConfigured = Boolean(creds.registered);
+      authConfigured = creds.registered === true;
     });
     credentialWriteQueue = write.catch(() => {});
     return write;
@@ -332,10 +335,12 @@ async function connect() {
 
     await acquireSocketOwnership();
     const { state, saveCreds } = await createDatabaseAuthState({ database: db, baileys });
-    authConfigured = Boolean(state.creds && state.creds.registered);
+    activeCreds = state.creds;
+    authConfigured = state.creds?.registered === true;
     socket = makeWASocket({
       auth: state,
       printQRInTerminal: false,
+      keepAliveIntervalMs: 20000,
       logger: pino({ level: "silent" }),
       browser: ["FAZ NETWORK", "Chrome", "1.0.0"]
     });
@@ -360,31 +365,32 @@ async function connect() {
         }
       }
       if (update.connection === "open") {
-        connection = "connected";
         reconnectAttempt = 0;
         qrDataUrl = null;
         qrText = null;
         lastError = null;
 
-        // Persist a final credential snapshot when the socket opens. The
-        // creds.update event is intentionally asynchronous and may otherwise
-        // leave PostgreSQL with an older registered=false snapshot.
+        // Flush the latest credential snapshot before advertising readiness.
         try {
           await saveCreds();
-          authConfigured = Boolean(state.creds && state.creds.registered);
-          if (!authConfigured) {
-            console.warn("[WhatsApp] Socket opened, but Baileys credentials are not registered; session may require re-linking.");
-          }
+          authConfigured = state.creds?.registered === true;
         } catch (error) {
-          lastError = "WhatsApp is connected, but its session could not be saved to PostgreSQL.";
+          lastError = "WhatsApp connected, but credentials could not be saved to PostgreSQL.";
           console.error("[WhatsApp] Final credential persistence failed:", error.message);
         }
 
         const connectedSocket = socket;
-        try {
-          await persistConnectedAccount(connectedSocket?.user);
-        } catch (error) {
-          console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+        if (isSocketReady(connectedSocket, state.creds, "connected")) {
+          connection = "connected";
+          try {
+            await persistConnectedAccount(connectedSocket.user);
+          } catch (error) {
+            console.warn("[WhatsApp] Could not persist connected account metadata:", error.message);
+          }
+        } else {
+          connection = "reconnect_required";
+          lastError = "WhatsApp socket opened without registered Baileys credentials. Re-link this device using the QR code.";
+          console.warn("[WhatsApp] Socket opened but is not ready: user/registered credentials missing.");
         }
       }
       if (update.connection === "connecting") connection = "connecting";
@@ -441,16 +447,22 @@ async function restoreSession() {
   return { restored: false, reason: "restore_attempts_exhausted" };
 }
 
+function isSocketReady(sock, creds, state = connection) {
+  return Boolean(state === "connected" && sock && sock.user && creds?.registered === true);
+}
+
 function getStatus() {
+  const live = isSocketReady(socket, activeCreds);
+  const reportedConnection = live ? "connected" : (connection === "connected" ? "reconnect_required" : connection);
   return {
-    connection,
-    connected: connection === "connected",
+    connection: reportedConnection,
+    connected: live,
     qrDataUrl,
     qrText: Boolean(qrText),
     lastError,
     authConfigured,
     account: accountMetadata ? { ...accountMetadata } : null,
-    socketStatus: connection === "connected" ? "Active & Ready" : connection
+    socketStatus: live ? "Active & Ready" : reportedConnection
   };
 }
 
@@ -523,5 +535,6 @@ module.exports = {
   extractConnectedAccount,
   createDatabaseAuthState,
   _handleConnectionClose: handleConnectionClose,
-  _inspectStoredSession: inspectStoredSession
+  _inspectStoredSession: inspectStoredSession,
+  _isSocketReady: isSocketReady
 };
