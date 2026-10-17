@@ -129,7 +129,7 @@ test("verifyTrx recharges an expired MAC-bound voucher and updates the submitted
       if(sql.startsWith("SELECT * FROM transactions"))return {rows:[paymentTransaction(5,10)]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
       if(sql.startsWith("UPDATE transactions SET status='processing'"))return {rows:[{id:5}]};
-      if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:41,username:mac,status:"active",expires_at:params[2]}]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active'"))return {rows:[{id:41,username:mac,status:"active",expires_at:params[2]}]};
       throw new Error("Unexpected database query: "+sql);
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
