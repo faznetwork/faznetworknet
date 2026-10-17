@@ -29,6 +29,7 @@ const DEFAULT_PORT = 8728;
 function ipv4ToInt(value){const p=String(value||'').trim().split('.');if(p.length!==4)return null;let n=0;for(const part of p){if(!/^\d{1,3}$/.test(part))return null;const x=Number(part);if(x<0||x>255)return null;n=n*256+x;}return n>>>0;}
 function ipMatchesPoolRange(ip,range){const target=ipv4ToInt(ip);if(target===null)return false;const value=String(range||'').trim(),dash=value.indexOf('-');if(dash>=0){const a=ipv4ToInt(value.slice(0,dash).trim()),b=ipv4ToInt(value.slice(dash+1).trim());return a!==null&&b!==null&&a<=b&&target>=a&&target<=b;}const slash=value.indexOf('/');if(slash>=0){const base=ipv4ToInt(value.slice(0,slash).trim()),text=value.slice(slash+1).trim();if(base===null||!/^\d{1,2}$/.test(text))return false;const prefix=Number(text);if(prefix<0||prefix>32)return false;const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;return(target&mask)===(base&mask);}const single=ipv4ToInt(value);return single!==null&&single===target;}
 function resolvePoolFromRanges(ip,pools){if(ipv4ToInt(ip)===null||!Array.isArray(pools))return null;for(const pool of pools){const ranges=String(pool?.ranges||'').split(',').map(x=>x.trim()).filter(Boolean);if(ranges.some(r=>ipMatchesPoolRange(ip,r)))return pool.name||null;}return null;}
+function normalizeHotspotMac(value){const compact=String(value??'').trim().replace(/[:-]/g,'');return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(':').toUpperCase():'';}
 
 class MikroTikService {
   constructor() {
@@ -898,26 +899,17 @@ class MikroTikService {
     });
   }
   async updateHotspotUser(usernameValue,profileValue,commentValue,passwordValue,macAddressValue){
-    const username=this._str(usernameValue).trim(),profile=this._str(profileValue).trim(),requestedComment=this._str(commentValue).trim(),password=this._str(passwordValue),macAddress=this._str(macAddressValue).trim().toUpperCase();
-    if(!username||username.length>100)throw new Error("A valid Hotspot username is required.");
+    const macAddress=normalizeHotspotMac(macAddressValue||usernameValue),username=macAddress,profile=this._str(profileValue).trim(),requestedComment=this._str(commentValue).trim();
+    if(!macAddress)throw new Error("A valid normalized device MAC address is required for Hotspot credentials.");
     if(!profile||profile.length>100)throw new Error("A valid Hotspot profile is required.");
-    if(password.length>128)throw new Error("Password must be 128 characters or fewer.");
     return this._withConnection("Hotspot user update",async connection=>{
       const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);
-      const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toLowerCase()===username.toLowerCase()&&r[".id"]);
+      const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toUpperCase()===username&&r[".id"]);
       if(!user)throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");
       if(!(Array.isArray(profiles)?profiles:[]).some(r=>this._str(r.name)===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");
       const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});
-      const params=["=.id="+user[".id"],"=profile="+profile,"=comment="+comment];
-      if(password)params.push("=password="+password);
-      if(macAddress === "__CLEAR__") params.push("=mac-address=");
-      else if(macAddress){
-        if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress))throw new Error("A valid normalized MAC address is required.");
-        params.push("=mac-address="+macAddress);
-      }
-      await connection.write("/ip/hotspot/user/set",params);
-      await this._syncHotspotExpiryScheduler(connection,username,comment,macAddress||this._str(user["mac-address"])||username);
-      return {username,profile,comment,passwordUpdated:Boolean(password),updated:true};
+      await connection.write("/ip/hotspot/user/set",["=.id="+user[".id"],"=name="+username,"=password="+username,"=profile="+profile,"=comment="+comment,"=mac-address="+macAddress]);
+      return {username,profile,comment,passwordUpdated:true,credentials:"mac",updated:true};
     });
   }
   async getHotspotUser(usernameValue) {
@@ -990,14 +982,10 @@ class MikroTikService {
     if (!name) throw new Error("Hotspot server profile name is required.");
     // RouterOS has no mac-as-username boolean on a HotSpot Server Profile.
     // MAC-cookie lifetime belongs to the HotSpot User Profile.
-    const modes = {
-      seamless: ["mac", "http-pap", "http-chap", "mac-cookie"],
-      credentials: ["http-pap", "http-chap"],
-      chap_only: ["http-chap"]
-    };
-    const mode = this._str(modeValue || "seamless").trim().toLowerCase();
-    const expectedLoginBy = modes[mode];
-    if (!expectedLoginBy) throw new Error("Unsupported Hotspot engine mode.");
+    // The unified Hotspot credential model always uses MAC login plus PAP/CHAP and MAC-cookie.
+    // Ignore legacy per-server mode values so a sync cannot silently reintroduce a conflicting auth model.
+    const mode = "seamless";
+    const expectedLoginBy = ["mac", "http-pap", "http-chap", "mac-cookie"];
     const normalizeLoginBy = value => this._str(value).split(",").map(part => part.trim().toLowerCase()).filter(Boolean).sort().join(",");
     return this._withConnection("Hotspot server profile authentication sync", async (connection) => {
       const rows = await connection.write("/ip/hotspot/profile/print");
@@ -1076,50 +1064,15 @@ class MikroTikService {
     return "Exp: "+field("year")+"-"+field("month")+"-"+field("day")+" "+field("hour")+":"+field("minute")+":"+field("second");
   }
 
-  async _syncHotspotExpiryScheduler(connection, usernameValue, commentValue, macAddressValue) {
-    const username=this._str(usernameValue).trim();
-    const comment=this._str(commentValue).trim();
-    const schedulerName="EXP_"+username;
-    const oldNames=new Set([schedulerName.toLowerCase(),("faz-exp-"+username).toLowerCase()]);
-    const schedulerRows=await connection.write("/system/scheduler/print");
-    for(const scheduler of (Array.isArray(schedulerRows)?schedulerRows:[]).filter(item=>item[".id"]&&oldNames.has(this._str(item.name).trim().toLowerCase()))) {
-      await connection.write("/system/scheduler/remove",["=.id="+scheduler[".id"]]);
-    }
-    const match=comment.match(/^Exp: (\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2}:\d{2})$/);
-    if(!match)return {username,scheduled:false,reason:comment==="FAZ|DATA_ONLY"?"data_only":"exact_expiry_missing"};
-    const [,year,month,day,time]=match;
-    const expiry=new Date(year+"-"+month+"-"+day+"T"+time+"+06:00");
-    if(Number.isNaN(expiry.getTime())||expiry.getTime()<=Date.now())return {username,scheduled:false,expired:true};
-    const monthNames=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-    const monthIndex=Number(month)-1;
-    if(monthIndex<0||monthIndex>11)return {username,scheduled:false,reason:"invalid_expiry"};
-    const mac=this._str(macAddressValue||username).trim().toUpperCase();
-    const escapeScript=value=>String(value).replace(/\\/g,"\\\\").replace(/"/g,'\\"');
-    const escapedUser=escapeScript(username),escapedMac=escapeScript(mac),escapedScheduler=escapeScript(schedulerName);
-    const onEvent=':local uName "'+escapedUser+'"; :local uMac "'+escapedMac+'"; :local schedName "'+escapedScheduler+'"; /ip hotspot active remove [find where user=$uName]; /ip hotspot cookie remove [find where user=$uName]; /ip hotspot cookie remove [find where mac-address=$uMac]; /ip hotspot host remove [find where mac-address=$uMac]; /ip hotspot user remove [find where name=$uName]; /system scheduler remove [find where name=$schedName];';
-    const startDate=monthNames[monthIndex]+"/"+day+"/"+year;
-    await connection.write("/system/scheduler/add",this._writeParams({
-      name:schedulerName,"start-date":startDate,"start-time":time,"on-event":onEvent,disabled:"no"
-    }));
-    return {username,scheduled:true,name:schedulerName,startDate,startTime:time};
-  }
   async createHotspotUser(data) {
-    const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
-    if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
+    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim();
+    if(!macAddress)throw new Error("A valid device MAC address is required; Hotspot username and password must both equal the normalized MAC.");
+    if(!profile)throw new Error("Hotspot profile is required.");
     const comment=this._hotspotExpiryComment(data);
-    return this._withConnection("Hotspot user creation", async (connection) => {
-      const params=this._writeParams({
-        name: username,
-        password,
-        profile,
-        server:data.server,
-        "limit-bytes-total":data.dataLimit||data["limit-bytes-total"],
-        "mac-address":data.macAddress||data.mac_address,
-        comment
-      });
-      await connection.write("/ip/hotspot/user/add", params);
-      await this._syncHotspotExpiryScheduler(connection, username, comment, data.macAddress||data.mac_address||username);
-      return { username };
+    return this._withConnection("Hotspot user creation",async connection=>{
+      const params=this._writeParams({name:username,password,profile,server:data.server||"all","limit-bytes-total":data.dataLimit||data.limitBytesTotal||data["limit-bytes-total"],"mac-address":macAddress,comment});
+      await connection.write("/ip/hotspot/user/add",params);
+      return {username,password,macAddress,credentials:"mac"};
     });
   }
   async kickActiveHotspotUser(username,idValue) {
@@ -1137,27 +1090,24 @@ class MikroTikService {
     });
   }
   async rechargeHotspotUser(data) {
-    const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),macAddress=this._str(data.macAddress||data.mac_address).trim().toUpperCase(),previousUsername=this._str(data.previousUsername).trim();
-    if(!username||!password||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires username, password, profile, and time validity or a data quota.");
-    if(macAddress&&!/^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$/.test(macAddress))throw new Error("A valid normalized MAC address is required.");
-    const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress||undefined};
+    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
+    if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires a valid device MAC, profile, and time validity or a data quota.");
+    const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress};
     const comment=this._hotspotExpiryComment(data);
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
-      let matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
+      let matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name).trim().toUpperCase()===username&&item[".id"]);
       if(!matches.length&&previousUsername&&previousUsername!==username)matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===previousUsername&&item[".id"]);
       if(matches.length){
         const item=matches[0];
         await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],name:username,password,profile,disabled:false,...limits,comment}));
-        await this._syncHotspotExpiryScheduler(connection, username, comment, macAddress||username);
         await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
         const activeRows=await connection.write("/ip/hotspot/active/print");
-        for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(s=>this._str(s.user)===username&&s[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
-        return {username,profile,validity,limitBytesTotal,created:false,renamedFrom:previousUsername&&previousUsername!==username?previousUsername:null};
+        for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>this._str(item.user).trim().toUpperCase()===username&&item[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+        return {username,password,macAddress,profile,validity,limitBytesTotal,created:false,renamedFrom:previousUsername&&previousUsername!==username?previousUsername:null,credentials:"mac"};
       }
       await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all",...limits,comment}));
-      await this._syncHotspotExpiryScheduler(connection, username, comment, macAddress||username);
-      return {username,profile,validity,limitBytesTotal,created:true};
+      return {username,password,macAddress,profile,validity,limitBytesTotal,created:true,credentials:"mac"};
     });
   }
 
@@ -1505,4 +1455,5 @@ const mikrotikService=new MikroTikService();
 mikrotikService.ipv4ToInt=ipv4ToInt;
 mikrotikService.ipMatchesPoolRange=ipMatchesPoolRange;
 mikrotikService.resolvePoolFromRanges=resolvePoolFromRanges;
+mikrotikService.normalizeHotspotMac=normalizeHotspotMac;
 module.exports=mikrotikService;

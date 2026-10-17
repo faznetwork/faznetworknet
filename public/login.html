@@ -486,7 +486,7 @@
 <!-- মাইক্রোটিক স্ট্যান্ডার্ড হিডেন লগইন ফর্ম (MAC = Username, Phone = Password) -->
 <form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
     <input type="hidden" name="username" id="mt-user" value="$(mac)" />
-    <input type="hidden" name="password" id="mt-pass" />
+    <input type="hidden" name="password" id="mt-pass" value="$(mac)" />
     <input type="hidden" name="dst" value="$(link-orig)" />
     <input type="hidden" name="popup" value="true" />
 </form>
@@ -720,7 +720,7 @@
             // MikroTik ফর্ম সাবমিট
             const autoForm = document.getElementById('mikrotik-auto-login');
             document.getElementById('mt-user').value = String(data.username || device.mac);
-            document.getElementById('mt-pass').value = String(data.password || phoneInput);
+            document.getElementById('mt-pass').value = String(data.password || device.mac);
 
             showStatus('আলহামদুলিল্লাহ! সংযোগ বৈধ রয়েছে। ইন্টারনেট চালু হচ্ছে...');
             btn.innerText = 'সংযুক্ত হচ্ছে...';
@@ -834,7 +834,7 @@
             // ধাপ ৩: মাইক্রোটিকে ইউজার নিশ্চিত হওয়ার পর স্বয়ংক্রিয় লগইন ফর্ম সাবমিট
             const autoForm = document.getElementById('mikrotik-auto-login');
             document.getElementById('mt-user').value = String(actData.username || device.mac);
-            document.getElementById('mt-pass').value = String(actData.password || phoneInput);
+            document.getElementById('mt-pass').value = String(actData.password || device.mac);
 
             showStatus('আলহামদুলিল্লাহ! রিচার্জ সফল হয়েছে। ইন্টারনেট চালু হচ্ছে...');
             btn.innerText = 'ইন্টারনেট চালু হচ্ছে...';
