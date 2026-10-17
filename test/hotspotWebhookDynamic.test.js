@@ -227,7 +227,8 @@ test("manually generated unused voucher activates from phone number and captive-
         activationQuery=sql;
         assert.match(sql,/pending_claim/);
         assert.match(sql,/unused/);
-        assert.match(sql,/expires_at IS NULL OR expires_at > NOW\(\)/);
+        assert.match(sql,/status,''\) IN \('pending_claim','unused','active','expired'\)/);
+        assert.doesNotMatch(sql,/expires_at IS NULL OR expires_at > NOW\(\)/,"unstarted vouchers must not be filtered by expiry");
         return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:null,first_login_at:null})]};
       }
       if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")){
