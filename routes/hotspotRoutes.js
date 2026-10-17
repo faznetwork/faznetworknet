@@ -28,7 +28,7 @@ router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
 router.post("/active/disconnect",controller.disconnectActive);
 router.post("/vouchers/generate",controller.generate);
-router.post("/users/kick",controller.kick);
+router.post("/users/kick",userController.blockRouterMutation);
 router.post("/generate",controller.generate);
 router.post("/users/remove",async(req,res)=>userController.archive({...req,params:{id:req.body?.id||req.body?.username||req.body?.mac_address||""}},res));
 router.post("/remove",async(req,res)=>userController.archive({...req,params:{id:req.body?.id||req.body?.username||req.body?.mac_address||""}},res));
