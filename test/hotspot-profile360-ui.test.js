@@ -40,6 +40,7 @@ test("Subscriber 360 uses guarded session disconnect and keeps archive database-
   assert.match(controller, /RouterOS calls are deliberately read-only/);
   assert.doesNotMatch(controller, /mikrotikService\.(?:removeHotspotUser|rechargeHotspotUser|kickHotspotUser|deleteHotspotUser|removeHotspotCookie|removeHotspotHost)\s*\(/);
   assert.match(controller, /Voucher archived in PostgreSQL only/);
-  assert.match(ui, /\/api\/hotspot\/active\/disconnect/);\n  assert.match(ui, /user\.sessionId/);
+  assert.match(ui, /\/api\/hotspot\/active\/disconnect/);
+  assert.match(ui, /user\.sessionId/);
   assert.match(ui, /The MikroTik user and sessions will remain untouched/);
 });
