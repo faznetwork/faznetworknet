@@ -367,7 +367,7 @@ async function deleteHotspotUser({ username: usernameValue, database = db, route
 async function remove(req,res){try{const result=await deleteHotspotUser({username:req.body?.username});hotspotListCache.expiresAt=0;return res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 
 async function manualRenew(req,res){
- const body=req.body&&typeof body==="object"?body:{},requestedId=clean(body.id,100),requestedMac=normalizeHotspotMac(body.mac||body.mac_address||""),username=clean(body.username||requestedMac||requestedId,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.send_notification!==false&&body.notify!==false;
+ const body=req.body&&typeof req.body==="object"?req.body:{},requestedId=clean(body.id,100),requestedMac=normalizeHotspotMac(body.mac||body.mac_address||""),username=clean(body.username||requestedMac||requestedId,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.send_notification!==false&&body.notify!==false;
  if(!username||!requestedProfile)return res.status(400).json({success:false,message:"Username and package profile are required."});
  try{
   const renewed=await db.withTransaction(async client=>{
