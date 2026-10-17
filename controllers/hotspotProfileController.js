@@ -65,7 +65,7 @@ async function updateProfile(req,res) {
     const profile=requestedProfile||String(row.profile||"").trim();
     if(!profile)return fail(res,400,"Select a Hotspot package/profile.");
     const targetUsername=macLock?mac:(oldUsername&&!oldMac?oldUsername:"PENDING-"+phone);
-    const nextPassword=password||phone;
+    const nextPassword=macLock?mac:phone;
     const wasActivated=String(row.status||"").toLowerCase()==="active"||Boolean(oldMac);
     let expiresAt=customExpiry|| (row.expires_at?new Date(row.expires_at):null);
     const profileMetaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1").catch(()=>({rows:[]}));
@@ -88,7 +88,7 @@ async function updateProfile(req,res) {
       }
       if(expiresAt&&expiresAt.getTime()<=Date.now())return fail(res,400,"Expiry must be in the future.");
       const exactComment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):(quota?"FAZ|DATA_ONLY":"");
-      await mikrotikService.rechargeHotspotUser({username:mac,password:nextPassword,profile,validity,limitBytesTotal:quota,comment:exactComment,server,macAddress:mac,previousUsername:oldUsername!==mac?oldUsername:""});
+      await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment:exactComment,server,macAddress:mac,previousUsername:oldUsername!==mac?oldUsername:""});
       routerSync={synced:true,username:mac,comment:exactComment};
     } else if(wasActivated&&oldUsername) {
       await mikrotikService.removeHotspotUser(oldUsername);
