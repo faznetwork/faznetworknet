@@ -274,7 +274,7 @@ async function createUser(req,res){
       if(rows.some(row=>String(row.status||"").toLowerCase()==="active"&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now())))throw hotspotError("ACTIVE_PACKAGE_EXISTS",409,"This phone already has an active Hotspot subscriber/package.");
       const bound=await client.query("SELECT * FROM hotspot_vouchers WHERE LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC FOR UPDATE",[mac]);
       if(phone&&(bound.rows||[]).some(row=>normalizeHotspotPhone(row.phone)!==phone))throw hotspotError("MAC_ALREADY_BOUND",409,"This MAC address is already bound to another phone.");
-      const reusable=rows.concat(bound.rows||[]).find(row=>["expired","unused","pending_claim"].includes(String(row.status||"").toLowerCase())||Boolean(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+      const reusable=rows.concat(bound.rows||[]).find(row=>["expired","unused","pending_claim"].includes(String(row.status||"").toLowerCase())||Boolean(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now())||(!phone&&String(row.status||"").toLowerCase()==="active"&&normalizeHotspotMac(row.mac_address||row.username)===mac));
       const params=[mac,mac,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,mac,customerName,note,now,expiresAt, true];
       if(reusable){
         previousRecord=reusable;
