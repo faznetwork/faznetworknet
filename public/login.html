@@ -731,9 +731,11 @@
             // ৩. ব্যানার ও ব্র্যান্ডিং
             if (brandingRes && brandingRes.ok) {
                 const bData = await brandingRes.json();
-                if (bData.banner_url) {
+                if (bData.display_mode === 'banner' && bData.banner_url) {
                     document.getElementById('reseller-banner-box').style.display = 'block';
                     document.getElementById('reseller-banner-img').src = bData.banner_url;
+                } else {
+                    document.getElementById('reseller-banner-box').style.display = 'none';
                 }
                 if (bData.logo_url) document.getElementById('reseller-logo').src = bData.logo_url;
                 if (bData.brand_name) document.getElementById('reseller-title').innerText = bData.brand_name;
