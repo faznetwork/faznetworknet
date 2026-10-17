@@ -7,7 +7,7 @@ const root = path.join(__dirname, "..");
 test("Hotspot Profile 360 routes and customer fields are wired", () => {
  const routes=fs.readFileSync(path.join(root,"routes/hotspotRoutes.js"),"utf8");
  const controller=fs.readFileSync(path.join(root,"controllers/hotspotProfileController.js"),"utf8");
- assert.match(routes,/\/users\/:id\/profile/);assert.match(controller,/normalizePhone/);assert.match(controller,/normalizeMac/);assert.match(controller,/mac_lock/);assert.match(controller,/updateHotspotUser/);
+ assert.match(routes,/\/users\/:id\/profile/);assert.match(controller,/normalizePhone/);assert.match(controller,/normalizeMac/);assert.match(controller,/mac_lock/);assert.match(controller,/rechargeHotspotUser|updateHotspotUser/);
 });
 test("Admin has Profile 360 and professional subscriber rows without General Settings engine controls", () => {
  const view=fs.readFileSync(path.join(root,"views/admin.ejs"),"utf8"),js=fs.readFileSync(path.join(root,"public/js/hotspot-profile360.js"),"utf8"),css=fs.readFileSync(path.join(root,"public/css/hotspot-profile360.css"),"utf8");
