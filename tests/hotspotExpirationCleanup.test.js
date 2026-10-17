@@ -61,7 +61,7 @@ test("promotes a used voucher and records first-login expiry without expiring it
   assert.ok(database.calls.some(call => call.sql.includes("status='active'") && call.params[0] instanceof Date));
 });
 
-test("expires marked users, kicks/removes them, and retains database history", async () => {
+test("expires marked users, removes RouterOS access, and hard-deletes the active voucher row", async () => {
   const rows = [{ id: 2, username: "VOUCHER2", status: "active", cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const cleaned = [];
@@ -78,7 +78,8 @@ test("expires marked users, kicks/removes them, and retains database history", a
   assert.deepEqual(cleaned, ["VOUCHER2"]);
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
-  assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
+  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
 test("reconciles legacy expired vouchers that predate cleanup tracking", async () => {
@@ -120,7 +121,8 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   const expireUpdate = database.calls.find(call => call.sql.startsWith("UPDATE hotspot_vouchers SET status='expired'"));
   assert.ok(expireUpdate);
   assert.equal(expireUpdate.params[1].toISOString(), expiredAt.toISOString());
-  assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())));
+  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
 test("marks due database vouchers expired and retains retry state when RouterOS snapshot is unavailable", async () => {
@@ -189,7 +191,8 @@ test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler re
   assert.deepEqual(cleaned, ["AA:BB:CC:DD:EE:FF"]);
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
-  assert.ok(!database.calls.some(call => /^DELETE/i.test(call.sql.trim())), "voucher/payment audit rows must be retained");
+  assert.ok(database.calls.some(call => /^DELETE FROM hotspot_vouchers WHERE id=/i.test(call.sql.trim()) && call.sql.includes("cleanup_status='completed'")));
+  assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())), "sales transaction audit rows must be retained");
 });
 
 test("does not expire an unused voucher solely because it was created long ago", async () => {
@@ -264,7 +267,7 @@ test("retention archives transaction history before purging expired vouchers aft
   assert.equal(result.archivedTransactions,1);
   assert.equal(result.deletedVouchers,1);
   assert.ok(calls[0].includes("ON CONFLICT(transaction_id) DO NOTHING"));
-  assert.ok(calls[1].includes("status='expired' AND expires_at < NOW() - INTERVAL '30 days'"));
+  assert.ok(calls[1].includes("status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days'"));
 });
 
 
