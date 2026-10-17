@@ -759,7 +759,7 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).map((item) => ({
         id: this._str(item[".id"]), username: this._str(item.name), password: this._str(item.password),
         profile: this._str(item.profile), disabled: this._bool(item.disabled), server: this._str(item.server),
-        comment: this._str(item.comment), comment_phone: ((this._str(item.comment).match(/\\bphone\\s*[:=]\\s*(\\+?[0-9][0-9\\s-]{7,})/i) || [])[1] || "").trim(), uptime: this._str(item.uptime),
+        comment: this._str(item.comment), comment_phone: "", uptime: this._str(item.uptime),
         limitUptime: this._str(item["limit-uptime"]), limitBytesTotal: this._number(item["limit-bytes-total"]),
         bytesIn: this._number(item["bytes-in"]), bytesOut: this._number(item["bytes-out"]), raw: item
       })).filter((item) => item.username);
@@ -785,7 +785,7 @@ class MikroTikService {
         const macAddress = normalizeHotspotMac(voucher?.macAddress || voucher?.mac_address);
         const profile = this._str(voucher?.profile).trim();
         const comment = this._str(voucher?.comment).trim();
-        if (!macAddress || !profile || !/^Exp: \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(comment)) {
+        if (!macAddress || !profile || !new RegExp("^Exp: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$").test(comment)) {
           skipped++;
           continue;
         }
