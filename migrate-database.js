@@ -252,6 +252,20 @@ async function main() {
     await destination.query("SET LOCAL statement_timeout = '120s'");
     await destination.query(schemaSql);
 
+    // connect-pg-simple owns the runtime session table; db/schema.sql intentionally
+    // does not define it. Recreate the exact observed source shape and expiry index.
+    if (sourceTables.includes('session')) {
+      await destination.query(`
+        CREATE TABLE IF NOT EXISTS public.session (
+          sid varchar NOT NULL,
+          sess json NOT NULL,
+          expire timestamp(6) without time zone NOT NULL,
+          CONSTRAINT session_pkey PRIMARY KEY (sid)
+        );
+        CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON public.session USING btree (expire);
+      `);
+    }
+
     const destinationTablesAfterSchema = await listPublicTables(destination);
     const missingTables = sourceTables.filter(t => !destinationTablesAfterSchema.includes(t));
     assert(missingTables.length === 0, `Schema did not create source tables: ${missingTables.join(', ')}`);
