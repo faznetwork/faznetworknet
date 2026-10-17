@@ -273,6 +273,34 @@ test("the same MAC resolves and updates the phone when a customer changes SIM",a
   }
 });
 
+test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vouchers",async()=>{
+  const oldQuery=db.query,oldSessions=mikrotik.getActiveHotspotSessions,oldRouterUsers=mikrotik.getHotspotUsers;
+  let ledgerSql="",routerUserReads=0;
+  const now=Date.now();
+  try{
+    db.query=async sql=>{
+      ledgerSql=sql;
+      return {rows:[
+        {id:1,username:"AA:BB:CC:DD:EE:01",status:"active",expires_at:new Date(now+3600000),mac_address:"AA:BB:CC:DD:EE:01",phone:"01711111111",profile:"1-Hour",price:10},
+        {id:2,username:"AA:BB:CC:DD:EE:02",status:"active",expires_at:new Date(now+3600000),mac_address:"AA:BB:CC:DD:EE:02",phone:"01722222222",profile:"1-Hour",price:10},
+        {id:3,username:"AA:BB:CC:DD:EE:03",status:"active",expires_at:new Date(now-1000),mac_address:"AA:BB:CC:DD:EE:03",phone:"01733333333",profile:"1-Hour",price:10}
+      ]};
+    };
+    mikrotik.getActiveHotspotSessions=async()=>[{username:"AA:BB:CC:DD:EE:01",macAddress:"AA:BB:CC:DD:EE:01",uptime:"2m",bytesIn:10,bytesOut:20}];
+    mikrotik.getHotspotUsers=async()=>{routerUserReads++;throw new Error("The subscriber list must not depend on RouterOS user inventory");};
+    hotspotController.invalidateListCache();
+    const result=await hotspotController.refreshHotspotListCache();
+    assert.match(ledgerSql,/FROM hotspot_vouchers WHERE LOWER\(COALESCE\(status,''\)\) <> 'archived'/);
+    assert.equal(routerUserReads,0);
+    assert.equal(result.users.length,3);
+    assert.equal(result.users.find(row=>row.id===1).is_online,true);
+    assert.equal(result.users.find(row=>row.id===2).is_online,false);
+    assert.equal(result.users.find(row=>row.id===3).status,"expired");
+  }finally{
+    db.query=oldQuery;mikrotik.getActiveHotspotSessions=oldSessions;mikrotik.getHotspotUsers=oldRouterUsers;hotspotController.invalidateListCache();
+  }
+});
+
 test("verifyTrx rejects invalid Bangladeshi phone numbers before claiming a payment",async()=>{
   const oldQuery=db.query;
   let called=false;
