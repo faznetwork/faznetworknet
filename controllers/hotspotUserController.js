@@ -120,11 +120,11 @@ async function updateProfile(req, res) {
   const identifier = clean(req.params.id, 255);
   if (!identifier) return error(res, 400, "A voucher ID, username, or MAC address is required.");
   const body = req.body && typeof req.body === "object" ? req.body : {};
-  const name = clean(body.customer_name, 160);
-  const phone = normalizePhone(body.phone);
+  const name = clean(body.customer_name ?? body.name, 160);
+  const phone = normalizePhone(body.phone ?? body.customer_phone);
   const rawMac = clean(body.mac_address, 32);
   const mac = rawMac ? normalizeMac(rawMac) : "";
-  const note = clean(body.note, 1000);
+  const note = clean(body.note ?? body.notes, 1000);
   const macLock = body.mac_lock === undefined ? undefined : body.mac_lock === true || body.mac_lock === "true";
   if (rawMac && !mac) return error(res, 400, "Enter a valid MAC address.");
   try {
@@ -217,4 +217,8 @@ async function archive(req, res) {
   }
 }
 
-module.exports = { list, getProfile, updateProfile, renew, archive, normalizeMac, normalizePhone, validityMs };
+function blockRouterMutation(req, res) {
+  return res.status(409).json({ success: false, message: "This action is disabled in the safety-scoped Subscriber 360 rebuild. RouterOS users and active sessions remain untouched." });
+}
+
+module.exports = { list, getProfile, updateProfile, renew, archive, blockRouterMutation, normalizeMac, normalizePhone, validityMs };
