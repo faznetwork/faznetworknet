@@ -5,7 +5,7 @@ const dateOrNull=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||""))?String(v):null;
 const money=v=>Number(v||0);
 async function collection(req,res){try{
  const from=dateOrNull(req.query.from),to=dateOrNull(req.query.to),method=METHODS.has(clean(req.query.method).toLowerCase())?clean(req.query.method).toLowerCase():"all";
- const params=[],where=["t.status IN ('processed','PAID')"];
+ const params=[],where=["t.status IN ('processed','PAID')","(t.claim_flow IN ('hotspot','manual_hotspot') OR EXISTS (SELECT 1 FROM hotspot_voucher_payments hp0 WHERE hp0.transaction_id=t.id))"];
  if(from){params.push(from);where.push(`t.created_at >= $${params.length}::date`)}
  if(to){params.push(to);where.push(`t.created_at < ($${params.length}::date + INTERVAL '1 day')`)}
  if(method!=="all"){params.push(method);where.push(`LOWER(t.channel) = $${params.length}`)}
