@@ -1422,6 +1422,20 @@ class MikroTikService {
   }
 
   async ensureExpiredProfile(){
+    const name="EXPIRED-PROFILE";
+    const existing=await this.fetchExistingProfiles();
+    const profile=(Array.isArray(existing)?existing:[]).find(item=>String(item.name||"").toLowerCase()===name.toLowerCase());
+    if(!profile){
+      await this.createProfile({name,rateLimit:"1k/1k",changeTcpMss:"default"});
+      return {name,rateLimit:"1k/1k",created:true};
+    }
+    if(String(profile.rateLimit||"").trim()!=="1k/1k"){
+      await this.updateProfile(profile.id||name,{name,rateLimit:"1k/1k",localAddress:profile.localAddress||"",remoteAddress:profile.remoteAddress||"",dnsServer:profile.dnsServer||"",changeTcpMss:profile.changeTcpMss||"default"});
+    }
+    return {name,rateLimit:"1k/1k",created:false};
+  }
+
+  async ensureExpiredHotspotProfile(){
     const config=require("./hotspotProfileConfig").EXPIRED_HOTSPOT_PROFILE;
     const existing=await this.getHotspotProfiles();
     const profile=(Array.isArray(existing)?existing:[]).find(item=>String(item.name||"").toLowerCase()===config.name.toLowerCase());
