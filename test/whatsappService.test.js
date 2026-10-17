@@ -39,6 +39,12 @@ function fakeDatabase() {
         rows.set(params[0], JSON.parse(params[1]));
         return { rows: [] };
       }
+      if (sql.includes("DELETE FROM whatsapp_sessions WHERE key = $1 OR key LIKE $2")) {
+        for (const key of rows.keys()) {
+          if (key === params[0] || (params[1] === "key:%" && key.startsWith("key:"))) rows.delete(key);
+        }
+        return { rows: [] };
+      }
       if (sql.includes("DELETE FROM whatsapp_sessions WHERE key = $1")) {
         rows.delete(params[0]);
         return { rows: [] };
