@@ -13,12 +13,12 @@ test("Admin loads only the clean Subscriber 360 assets for All Hotspot Users", (
   assert.doesNotMatch(view, /hotspot-profile360\.js|hotspot-master-detail\.js|hotspot-profile360\.css|hotspot-master-detail\.css/);
   assert.doesNotMatch(view, /const getExp=u=>|window\.renderHotspotMasterDetail/);
   const js = read("public/js/hotspot-users-clean.js");
-  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "Edit Profile", "Archive voucher"]) {
+  for (const token of ["freshHotspotUserList", "freshHotspotDetail", "freshEditProfileModal", "freshRenewModal", "freshSubscriberMobileModal", "Quick Renew", "Edit Profile", "Archive voucher", "count-all", "count-online", "count-active", "count-offline", "count-expired", "hs-executive-table"]) {
     assert.ok(js.includes(token), "missing UI feature: " + token);
   }
   assert.match(js, /response\.ok && data\.success === true/);
   assert.match(js, /max-width:991\.98px|991\.98px/);
-  assert.match(js, /data-action="disconnect" disabled/);
+  assert.match(js, /data-row-action="disconnect"/);\n  assert.match(js, /data-filter/);
 });
 
 test("Unified routes direct list, edit, renew and archive to the safe controller", () => {
@@ -33,12 +33,12 @@ test("Unified routes direct list, edit, renew and archive to the safe controller
   assert.match(controller, /status='archived'/);
 });
 
-test("Subscriber 360 explicitly leaves RouterOS active sessions and destructive actions untouched", () => {
+test("Subscriber 360 uses guarded session disconnect and keeps archive database-only", () => {
   const controller = read("controllers/hotspotUserController.js");
   const ui = read("public/js/hotspot-users-clean.js");
   assert.match(controller, /RouterOS calls are deliberately read-only/);
   assert.doesNotMatch(controller, /mikrotikService\.(?:removeHotspotUser|rechargeHotspotUser|kickHotspotUser|deleteHotspotUser|removeHotspotCookie|removeHotspotHost)\s*\(/);
   assert.match(controller, /Voucher archived in PostgreSQL only/);
-  assert.match(ui, /active RouterOS sessions must remain untouched/);
+  assert.match(ui, /\/api\/hotspot\/active\/disconnect/);\n  assert.match(ui, /user\.sessionId/);
   assert.match(ui, /The MikroTik user and sessions will remain untouched/);
 });
