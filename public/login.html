@@ -731,9 +731,11 @@
             // ৩. ব্যানার ও ব্র্যান্ডিং
             if (brandingRes && brandingRes.ok) {
                 const bData = await brandingRes.json();
-                if (bData.banner_url) {
+                if (bData.display_mode === 'banner' && bData.banner_url) {
                     document.getElementById('reseller-banner-box').style.display = 'block';
                     document.getElementById('reseller-banner-img').src = bData.banner_url;
+                } else {
+                    document.getElementById('reseller-banner-box').style.display = 'none';
                 }
                 if (bData.logo_url) document.getElementById('reseller-logo').src = bData.logo_url;
                 if (bData.brand_name) document.getElementById('reseller-title').innerText = bData.brand_name;
@@ -750,10 +752,12 @@
         }
     }
 
+async function applyPublicPortalBranding(){try{const r=await fetch('/api/hotspot/public-branding',{cache:'no-store'}),d=await r.json();if(!d||!d.success)return;const t=document.getElementById('reseller-title'),s=document.getElementById('reseller-subtitle');if(t)t.textContent=d.brand_title||'FAZ NETWORK';if(s)s.textContent=d.brand_subtitle||'';const ph=document.querySelector('.helpline');if(ph&&d.helpline){ph.textContent=d.helpline;ph.href='tel:'+String(d.helpline).replace(/[^+0-9]/g,'');}const box=document.getElementById('reseller-banner-box'),img=document.getElementById('reseller-banner-img'),logo=document.querySelector('.logo-box');if(d.display_mode==='banner'&&d.banner_url&&box&&img){img.src=d.banner_url;box.style.display='block';if(logo)logo.style.display='none';}else{if(box)box.style.display='none';if(logo)logo.style.display='';}let n=document.getElementById('portal-notice-ticker');if(d.notice_text){if(!n){n=document.createElement('div');n.id='portal-notice-ticker';n.style.cssText='margin:10px 0;padding:9px 12px;border-radius:10px;background:rgba(16,185,129,.13);color:#a7f3d0;font-size:12px;overflow:hidden;white-space:nowrap';const m=document.createElement('marquee');m.scrollAmount=4;n.appendChild(m);(s||t)?.insertAdjacentElement('afterend',n);}n.querySelector('marquee').textContent=d.notice_text;}else if(n)n.style.display='none';const f=d.features||{};[['online_payment','m-btn-online','section-online'],['voucher_pin','m-btn-pin','section-pin'],['qr_scan','m-btn-qr','section-qr']].forEach(([k,bid,sid])=>{const b=document.getElementById(bid),x=document.getElementById(sid),on=f[k]!==false;if(b)b.style.display=on?'':'none';if(x&&!on)x.style.display='none';});if(d.display_mode==='custom_code'&&d.custom_html){let x=document.getElementById('portal-custom-content');if(!x){x=document.createElement('iframe');x.id='portal-custom-content';x.title='Custom portal content';x.setAttribute('sandbox','');x.style.cssText='width:100%;min-height:100px;border:0;margin:10px 0;background:white';(n||s||t)?.insertAdjacentElement('afterend',x);}x.srcdoc='<!doctype html><html><body style="font:14px system-ui;margin:12px;overflow-wrap:anywhere">'+d.custom_html+'</body></html>';x.style.display='block';}else{const x=document.getElementById('portal-custom-content');if(x)x.style.display='none';}if(d.redirect_url){window.__fazPortalRedirectUrl=d.redirect_url;const dst=document.querySelector('#mikrotik-auto-login input[name="dst"]');if(dst)dst.value=d.redirect_url;}else{const dst=document.querySelector('#mikrotik-auto-login input[name="dst"]');if(dst){const original=new URLSearchParams(location.search).get('link-orig');if(original)dst.value=original;}}const enabled=[['online_payment','m-btn-online'],['voucher_pin','m-btn-pin'],['qr_scan','m-btn-qr']].filter(([k])=>f[k]!==false).map(([,id])=>document.getElementById(id)).filter(Boolean);if(enabled.length&&!enabled.some(x=>x.classList.contains('active')))enabled[0].click();}catch(e){console.warn('[Portal branding]',e.message);}}
     document.addEventListener('DOMContentLoaded', () => {
         const dev = routerDeviceDetails();
         document.getElementById('display-mac').innerText = dev.mac || '$(mac)';
         loadLivePackagesAndPortalData();
+        applyPublicPortalBranding();
     });
 </script>
 

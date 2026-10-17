@@ -1,0 +1,1 @@
+'use strict';const express=require('express'),c=require('../controllers/hotspotPortalSettingsController'),r=express.Router();r.get('/',c.getSettings);r.put('/',express.json({limit:'25kb'}),c.saveSettings);r.post('/upload-banner',c.upload.single('banner'),c.uploadErrorHandler,c.uploadBanner);r.delete('/banner',c.deleteBanner);module.exports=r;
