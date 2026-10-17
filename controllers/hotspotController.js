@@ -90,7 +90,7 @@ async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
  hotspotListRefresh=(async()=>{
   // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
-  await db.query("UPDATE hotspot_vouchers SET status='expired',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
+  await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
   // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
   const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,subscriber_type,activation_type,profile_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
