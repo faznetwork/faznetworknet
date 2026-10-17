@@ -117,7 +117,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
  if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
+ if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
  if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
  if(channelEnabled("email")&&ruleEnabled("email")){
