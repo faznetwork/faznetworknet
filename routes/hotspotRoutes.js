@@ -4,7 +4,7 @@ router.get("/users",userController.list);
 router.post("/sync/import-from-mikrotik",controller.importFromMikrotik);
 router.post("/sync/push-to-mikrotik",controller.pushToMikrotik);
 const profileController=require("../controllers/hotspotProfileController");
-router.get("/users/:id/profile",profileController.getProfile);
+router.get("/users/:id/profile",userController.getProfile);
 router.put("/users/:id/profile",userController.updateProfile);
 router.post("/users/:id/renew",userController.renew);
 router.delete("/users/:id",userController.archive);
