@@ -27,7 +27,7 @@ test("HotSpot on-login preview returns the session-binding-only V4 script genera
     name: "30-Day", sharedUsers: 1, validityValue: 30, validityUnit: "days"
   }));
   assert.match(res.body.onLogin, /mac-address/);
-  assert.match(res.body.onLogin, /start-time=\$expTime/);
+  assert.doesNotMatch(res.body.onLogin, /system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
   assert.doesNotMatch(res.body.onLogin, /interval=30d|FAZ\|PROFILE=/);
 });
 
