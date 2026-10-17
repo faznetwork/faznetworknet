@@ -215,7 +215,7 @@ async function testEmail(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:isAppsScript?"Google Apps Script confirmed the test email request successfully.":"SMTP connection verified and test email sent successfully.",verification,result});
  }catch(error){return errorResponse(res,error,502);}
 }
-async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:require("../services/whatsappService").getStatus()});}catch(error){return errorResponse(res,error,503);}}
+async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").getStatusSnapshot()});}catch(error){return errorResponse(res,error,503);}}
 async function testWhatsApp(req,res){
  try{
   const to=String(req.body?.to||req.body?.phone||"").trim();
