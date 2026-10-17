@@ -3092,7 +3092,7 @@
                   <div class="hs-create-form-card">
                     <div class="hs-create-card-head">
                       <h5 class="fw-bold mb-1">Customer &amp; Package</h5>
-                      <p class="small text-muted mb-0">Complete the four steps to create a pending account.</p>
+                      <p class="small text-muted mb-0">Create a direct subscriber. First Login stages it; Pre-Assigned provisions immediately.</p>
                     </div>
                     <div class="hs-create-card-body">
                       <form id="addHotspotUserForm" novalidate>
@@ -3100,7 +3100,7 @@
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
                             <label class="hs-create-label d-block">Activation Type</label><div class="d-flex flex-wrap gap-3 mb-3"><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="first_login" checked> On First Login</label><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="preassigned"> Pre-Assigned (Instant MAC Bind)</label></div>
-                            <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim">
+                            <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim" required>
                             <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
                             <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
@@ -3419,8 +3419,8 @@
 
             form.addEventListener('submit', async event => {
                 event.preventDefault();
-                if (!updatePhoneFeedback()) {
-                    phone.focus();
+                if (!updatePhoneFeedback() || !document.getElementById('hsCustomerName')?.value.trim()) {
+                    if (!document.getElementById('hsCustomerName')?.value.trim()) document.getElementById('hsCustomerName')?.focus(); else phone.focus();
                     updateButton();
                     return;
                 }
@@ -3749,7 +3749,7 @@ window.editHotspotUser=function(username,event){
             if(typeof window.editHotspotUserProfile360==="function")return window.editHotspotUserProfile360(username,event);
             alert("Subscriber Profile 360 is still loading. Please try again.");
         };
-        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter=all';const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
+        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);if(titleKey==='all_user'&&typeof window.loadHotspotVoucherRecords==='function'){return window.loadHotspotVoucherRecords('all','All Hotspot Users');}appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(['all','online','active','offline','expired'].includes(filter)?filter:'all');const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
         async function refreshHotspotCurrent(){await loadHotspotSection(currentHotspotMode,currentHotspotTitleKey);}
 
         function showHotspotSyncToast(message,success){
