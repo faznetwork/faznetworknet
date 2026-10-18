@@ -884,31 +884,65 @@ class MikroTikService {
     });
   }
   async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
-    const username=this._str(usernameValue).trim();
-    if(!username||username.length>100)throw new Error("A valid Hotspot username is required for expiration cleanup.");
-    let mac=this._str(macAddressValue).trim().toUpperCase();
-    const validMac=v=>/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(v).trim().toUpperCase());
-    if(!validMac(mac)){mac="";try{const db=require("../db"),r=await db.query("SELECT mac_address FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) OR LOWER(mac_address)=LOWER($1) ORDER BY id DESC LIMIT 1",[username]);const candidate=this._str(r.rows?.[0]?.mac_address).trim().toUpperCase();if(validMac(candidate))mac=candidate;}catch(e){console.warn("[Hotspot expiry] Could not resolve MAC binding:",e.message);}}
-    const config=require("./hotspotProfileConfig").EXPIRED_HOTSPOT_PROFILE;
-    return this._withConnection("Hotspot expiry isolation",async connection=>{
-      const [userRows,activeRows,cookieRows,hostRows,schedulerRows]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/active/print"),connection.write("/ip/hotspot/cookie/print"),connection.write("/ip/hotspot/host/print"),connection.write("/system/scheduler/print")]);
-      const low=v=>this._str(v).trim().toLowerCase(),un=low(username),macs=new Set([...(validMac(username)?[low(username)]:[]),...(mac?[low(mac)]:[])]);
-      const users=Array.isArray(userRows)?userRows:[],sessions=Array.isArray(activeRows)?activeRows:[],cookies=Array.isArray(cookieRows)?cookieRows:[],hosts=Array.isArray(hostRows)?hostRows:[],schedulers=Array.isArray(schedulerRows)?schedulerRows:[];
-      const active=sessions.filter(x=>x?.[".id"]&&(low(x.user)===un||macs.has(low(x["mac-address"]))));
-      const ips=new Set(active.map(x=>low(x.address)).filter(Boolean));for(const h of hosts)if(h?.[".id"]&&macs.has(low(h["mac-address"]))&&h.address)ips.add(low(h.address));
-      const cookieMatches=cookies.filter(x=>x?.[".id"]&&(low(x.user)===un||macs.has(low(x["mac-address"]))));
-      const hostMatches=hosts.filter(x=>x?.[".id"]&&(macs.has(low(x["mac-address"]))||(x.address&&ips.has(low(x.address)))));
-      const userMatches=users.filter(x=>x?.[".id"]&&(low(x.name)===un||(mac&&low(x.name)===low(mac))));
-      const schedNames=new Set(["EXP_"+username,"faz-exp-"+username,...(mac?["EXP_"+mac,"faz-exp-"+mac]:[])].map(low));
-      const sched=schedulers.filter(x=>x?.[".id"]&&schedNames.has(low(x.name)));
-      const remove=async(path,item)=>{try{await connection.write(path,["=.id="+item[".id"]]);return true;}catch(e){if(/no such item|not found|does not exist|no item/i.test(String(e?.message||e)))return false;throw e;}};
-      let usersUpdated=0,sessionsRemoved=0,cookiesRemoved=0,hostsRemoved=0,schedulersRemoved=0;
-      for(const item of userMatches){await connection.write("/ip/hotspot/user/set",["=.id="+item[".id"],"=profile="+config.name,"=comment=Exp: EXPIRED"]);usersUpdated++;}
-      for(const item of active)if(await remove("/ip/hotspot/active/remove",item))sessionsRemoved++;
-      for(const item of cookieMatches)if(await remove("/ip/hotspot/cookie/remove",item))cookiesRemoved++;
-      for(const item of hostMatches)if(await remove("/ip/hotspot/host/remove",item))hostsRemoved++;
-      for(const item of sched)if(await remove("/system/scheduler/remove",item))schedulersRemoved++;
-      return {username,profile:config.name,usersUpdated,sessionsRemoved,cookiesRemoved,hostsRemoved,schedulersRemoved,userPreserved:true};
+    const username = this._str(usernameValue).trim();
+    if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
+    let mac = this._str(macAddressValue).trim().toUpperCase();
+    const validMac = value => /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(value).trim().toUpperCase());
+    if (!validMac(mac)) {
+      mac = "";
+      try {
+        const db = require("../db");
+        const result = await db.query("SELECT mac_address FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) OR LOWER(mac_address)=LOWER($1) ORDER BY id DESC LIMIT 1", [username]);
+        const candidate = this._str(result.rows?.[0]?.mac_address).trim().toUpperCase();
+        if (validMac(candidate)) mac = candidate;
+      } catch (error) {
+        console.warn("[Hotspot expiry] Could not resolve MAC binding:", error.message);
+      }
+    }
+    return this._withConnection("Hotspot hard expiry purge", async connection => {
+      const [userRows, activeRows, cookieRows, hostRows, schedulerRows] = await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/active/print"),
+        connection.write("/ip/hotspot/cookie/print"),
+        connection.write("/ip/hotspot/host/print"),
+        connection.write("/system/scheduler/print")
+      ]);
+      const lower = value => this._str(value).trim().toLowerCase();
+      const target = lower(username);
+      const macs = new Set([...(validMac(username) ? [lower(username)] : []), ...(mac ? [lower(mac)] : [])]);
+      const users = Array.isArray(userRows) ? userRows : [];
+      const sessions = Array.isArray(activeRows) ? activeRows : [];
+      const cookies = Array.isArray(cookieRows) ? cookieRows : [];
+      const hosts = Array.isArray(hostRows) ? hostRows : [];
+      const schedulers = Array.isArray(schedulerRows) ? schedulerRows : [];
+      const active = sessions.filter(item => item?.[".id"] && (lower(item.user) === target || macs.has(lower(item["mac-address"]))));
+      const ips = new Set(active.map(item => lower(item.address)).filter(Boolean));
+      for (const host of hosts) if (host?.[".id"] && macs.has(lower(host["mac-address"])) && host.address) ips.add(lower(host.address));
+      const cookieMatches = cookies.filter(item => item?.[".id"] && (lower(item.user) === target || macs.has(lower(item["mac-address"]))));
+      const hostMatches = hosts.filter(item => {
+        if (!item?.[".id"]) return false;
+        return macs.has(lower(item["mac-address"])) ||
+          Boolean(item.address && ips.has(lower(item.address)));
+      });
+      const userMatches = users.filter(item => item?.[".id"] && (lower(item.name) === target || (mac && lower(item.name) === lower(mac))));
+      const schedulerNames = new Set(["EXP_" + username, "faz-exp-" + username, ...(mac ? ["EXP_" + mac, "faz-exp-" + mac] : [])].map(lower));
+      const schedulerMatches = schedulers.filter(item => item?.[".id"] && schedulerNames.has(lower(item.name)));
+      const remove = async (path, item) => {
+        try {
+          await connection.write(path, ["=.id=" + item[".id"]]);
+          return true;
+        } catch (error) {
+          if (/no such item|not found|does not exist|no item/i.test(String(error?.message || error))) return false;
+          throw error;
+        }
+      };
+      let sessionsRemoved = 0, cookiesRemoved = 0, hostsRemoved = 0, schedulersRemoved = 0, usersRemoved = 0;
+      for (const item of active) if (await remove("/ip/hotspot/active/remove", item)) sessionsRemoved++;
+      for (const item of cookieMatches) if (await remove("/ip/hotspot/cookie/remove", item)) cookiesRemoved++;
+      for (const item of hostMatches) if (await remove("/ip/hotspot/host/remove", item)) hostsRemoved++;
+      for (const item of schedulerMatches) if (await remove("/system/scheduler/remove", item)) schedulersRemoved++;
+      for (const item of userMatches) if (await remove("/ip/hotspot/user/remove", item)) usersRemoved++;
+      return { username, sessionsRemoved, cookiesRemoved, hostsRemoved, schedulersRemoved, usersRemoved, userPreserved: false, alreadyAbsent: userMatches.length === 0 };
     });
   }
 
