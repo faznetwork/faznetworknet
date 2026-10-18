@@ -307,7 +307,7 @@ async function manualMatch(req,res){
 }
 
 async function forceProvisionHotspot(req,res){
- let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,claimWasCreated=false,stagedVoucherId=null,transactionId=null;
+ let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,stagedVoucherId=null,transactionId=null;
  try{
   const body=req.body&&typeof req.body==="object"?req.body:{};
   const trxId=String(body.trxId||body.trx_id||"").trim().toUpperCase();
@@ -326,8 +326,8 @@ async function forceProvisionHotspot(req,res){
   if(!["unmatched","processing","processed","paid"].includes(status))return res.status(409).json({success:false,code:"TRANSACTION_NOT_ELIGIBLE",error:"Only unmatched, stale processing, or completed payment transactions can be force provisioned."});
   const matchedUsername=String(tx.matched_username||"").trim();
   if(matchedUsername){
-   const pppoe=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[matchedUsername]);
-   if(pppoe.rows?.length)return res.status(409).json({success:false,code:"PPPOE_TRANSACTION",error:"This transaction is linked to a PPPoE subscriber and cannot be force-provisioned as Hotspot."});
+   const [pppoe,customer]=await Promise.all([db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[matchedUsername]),db.query("SELECT username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[matchedUsername])]);
+   if(pppoe.rows?.length||customer.rows?.length)return res.status(409).json({success:false,code:"PPPOE_TRANSACTION",error:"This transaction is linked to a PPPoE subscriber and cannot be force-provisioned as Hotspot."});
   }
   const existingAssociation=await db.query("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=$1::bigint LIMIT 1",[tx.id]);
   let associated=existingAssociation.rows?.[0]||null;
@@ -353,11 +353,11 @@ async function forceProvisionHotspot(req,res){
   if(status==="unmatched"){
    const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='force_hotspot',matched_username=$2 WHERE id=$3 AND LOWER(TRIM(status))='unmatched' AND (used=false OR used IS NULL) RETURNING id",["force_hotspot:"+String(req.user?.id||req.session?.userId||"admin"),mac,tx.id]);
    if(!claim.rows?.length)return res.status(409).json({success:false,code:"CLAIM_CONFLICT",error:"Another request has already claimed this TrxID."});
-   claimedTransactionId=claim.rows[0].id??tx.id;claimWasCreated=true;
+   claimedTransactionId=claim.rows[0].id??tx.id;
   }else if(status==="processing"){
    const claim=await db.query("UPDATE transactions SET claimed_at=NOW(),claimed_by=$1,claim_flow='force_hotspot',matched_username=$2,needs_reconciliation=false WHERE id=$3 AND status='processing' AND used=true AND (claimed_at IS NULL OR claimed_at < NOW()-INTERVAL '5 minutes') RETURNING id",["force_hotspot:"+String(req.user?.id||req.session?.userId||"admin"),mac,tx.id]);
    if(!claim.rows?.length)return res.status(409).json({success:false,code:"CLAIM_NOT_STALE",error:"This transaction is still being processed. Force provisioning is allowed only after a claim has been stuck for at least five minutes."});
-   claimedTransactionId=claim.rows[0].id??tx.id;claimWasCreated=true;
+   claimedTransactionId=claim.rows[0].id??tx.id;
   }
   let voucher=null,expiresAt=null,comment="",samePayment=false,resetCounters=true,previousUsername="";
   await db.withTransaction(async client=>{
@@ -375,7 +375,7 @@ async function forceProvisionHotspot(req,res){
     const rows=records.rows||[];
     const macRows=rows.filter(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===mac);
     const boundPhones=[...new Set(rows.filter(row=>phone&&normalizePhone(row.phone)===phone).map(row=>normalizeMac(row.mac_address)||normalizeMac(row.username)).filter(Boolean))];
-    if(boundPhones.some(bound=>bound!==mac)&&!macRows.length)throw Object.assign(new Error("This phone is already bound to a different device. Use the registered device MAC or reconcile the binding first."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
+    if(boundPhones.some(bound=>bound!==mac))throw Object.assign(new Error("This phone is already bound to a different device. Use the registered device MAC or reconcile the binding first."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
     target=macRows[0]||rows.find(row=>phone&&normalizePhone(row.phone)===phone)||null;
    }
    if(target){
@@ -383,11 +383,12 @@ async function forceProvisionHotspot(req,res){
     if(bound&&bound!==mac)throw Object.assign(new Error("This subscriber is already bound to a different device MAC."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
    }
    const targetStatus=String(target?.status||"").toLowerCase();
-   samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Boolean(associated&&target&&Number(associated.id)===Number(target.id));
+samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Boolean(associated&&target&&Number(associated.id)===Number(target.id));
    resetCounters=!(samePayment&&targetStatus==="active");
    const priorExpiry=target?.expires_at?new Date(target.expires_at):null,priorStillValid=Boolean(priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now());
    const duration=hotspotDurationMs(validity);
-   if(samePayment&&priorExpiry&&!Number.isNaN(priorExpiry.getTime()))expiresAt=priorExpiry;
+   if(samePayment&&targetStatus==="active"&&priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&!priorStillValid)throw Object.assign(new Error("This payment already provisioned a package that has expired. A new payment is required to restore service."),{statusCode:409,code:"PACKAGE_ALREADY_EXPIRED"});
+   if(samePayment&&priorStillValid)expiresAt=priorExpiry;
    else if(duration>0)expiresAt=new Date((priorStillValid?priorExpiry.getTime():Date.now())+duration);
    else expiresAt=null;
    comment=expiresAt?hotspotExpiryComment(expiresAt):"FAZ|FORCE|PROFILE="+profile.name;
