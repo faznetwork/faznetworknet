@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");const assert=require("node:assert/strict");const mikrotikService=require("../services/mikrotikService");
 function mockService(rowsByCommand){const service=Object.create(Object.getPrototypeOf(mikrotikService));service._str=value=>String(value??"");const calls=[];service._withConnection=async(_label,callback)=>callback({async write(command,args=[]){calls.push({command,args});if(command.endsWith("/print"))return rowsByCommand[command]||[];return [];}});return {service,calls};}
-test("expiry isolation moves user to expired_profile, clears access artifacts, preserves user, and removes only its schedulers",async()=>{
+test("expiry hard-purges credentials and access artifacts, removing only matching schedulers",async()=>{
  const mac="AA:BB:CC:DD:EE:FF";const {service,calls}=mockService({
  "/ip/hotspot/user/print":[{".id":"*u1",name:mac}],
  "/ip/hotspot/active/print":[{".id":"*a1",user:"stale-name","mac-address":mac,address:"10.5.0.8"}],
@@ -9,8 +9,11 @@ test("expiry isolation moves user to expired_profile, clears access artifacts, p
  "/ip/hotspot/host/print":[{".id":"*h1","mac-address":mac,address:"10.5.0.8"}],
  "/system/scheduler/print":[{".id":"*s1",name:"EXP_"+mac},{".id":"*s2",name:"faz-exp-"+mac},{".id":"*s3",name:"EXP_OTHER"}]});
  const result=await service.cleanupExpiredHotspotUser(mac,mac);
- assert.equal(result.sessionsRemoved,1);assert.equal(result.cookiesRemoved,1);assert.equal(result.hostsRemoved,1);assert.equal(result.usersUpdated,1);assert.equal(result.profile,"expired_profile");assert.equal(result.userPreserved,true);assert.equal(result.schedulersRemoved,2);
- const removals=calls.filter(x=>x.command.endsWith("/remove"));assert.deepEqual(removals.map(x=>x.command),["/ip/hotspot/active/remove","/ip/hotspot/cookie/remove","/ip/hotspot/host/remove","/system/scheduler/remove","/system/scheduler/remove"]);assert.ok(!removals.some(x=>x.args[0]==="=.id=*s3"));const profileSet=calls.find(x=>x.command==="/ip/hotspot/user/set");assert.deepEqual(profileSet.args,["=.id=*u1","=profile=expired_profile","=comment=Exp: EXPIRED"]);
+ assert.equal(result.sessionsRemoved,1);assert.equal(result.cookiesRemoved,1);assert.equal(result.hostsRemoved,1);assert.equal(result.usersRemoved,1);assert.equal(result.userPreserved,false);assert.equal(result.schedulersRemoved,2);
+ const removals=calls.filter(x=>x.command.endsWith("/remove"));
+ assert.deepEqual(removals.map(x=>x.command),["/ip/hotspot/active/remove","/ip/hotspot/cookie/remove","/ip/hotspot/host/remove","/system/scheduler/remove","/system/scheduler/remove","/ip/hotspot/user/remove"]);
+ assert.ok(!removals.some(x=>x.args[0]==="=.id=*s3"));
+ assert.ok(!calls.some(x=>x.command==="/ip/hotspot/user/set"),"expiry must not assign expired_profile");
 });
 test("profile sync scheduler cleanup removes legacy EXP_ and faz-exp- schedulers",async()=>{
  const {service,calls}=mockService({"/system/scheduler/print":[{".id":"*1",name:"EXP_old"},{".id":"*2",name:"faz-exp-old"},{".id":"*3",name:"keep-this"}]});
