@@ -92,7 +92,7 @@ test("All Payments renders the Force Provision action and admin-only route is wi
 
 
 test("payment and Hotspot auth SQL never mix inferred and explicitly cast types for one placeholder",()=>{
- const files=["../controllers/paymentController.js","../controllers/hotspotAuthController.js"];
+ const files=["../controllers/paymentController.js","../controllers/hotspotAuthController.js","../controllers/customerController.js","../controllers/customerSelfCareController.js","../controllers/hotspotController.js"];
  const castTypes="text|varchar|character varying|numeric|int|integer|bigint|date|timestamp(?:tz)?|boolean|jsonb";
  const queryCall=/(?:db|client|database)\.query\(\s*"((?:\\.|[^"\\])*)"/gs;
  for(const file of files){
