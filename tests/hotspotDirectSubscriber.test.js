@@ -78,3 +78,31 @@ test("voucher MAC uniqueness is limited to active records and historical binding
  assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
  assert.match(auth,/SET mac_address=NULL/);
 });
+
+test("generated scratch vouchers persist batch IDs and can be retrieved for reprinting",()=>{
+ const schema=read("db/schema.sql");
+ const migration=read("db/migrations/20261018_hotspot_voucher_batch_persistence.sql");
+ const controller=read("controllers/hotspotController.js");
+ const routes=read("routes/hotspotRoutes.js");
+ const ui=read("views/admin.ejs");
+ assert.match(schema,/ADD COLUMN IF NOT EXISTS batch_id VARCHAR\(36\)/);
+ assert.match(migration,/ADD COLUMN IF NOT EXISTS batch_id VARCHAR\(36\)/);
+ assert.match(controller,/const batchId=crypto\.randomUUID\(\)/);
+ assert.match(controller,/subscriber_type,activation_type,server,mac_lock,batch_id\)/);
+ assert.match(controller,/async function voucherBatches\(req,res\)/);
+ assert.match(controller,/async function voucherBatch\(req,res\)/);
+ assert.match(routes,/router\.get\("\/vouchers\/batches",controller\.voucherBatches\)/);
+ assert.match(routes,/router\.get\("\/vouchers\/batches\/:batchId",controller\.voucherBatch\)/);
+ assert.match(ui,/Unused Voucher Batches/);
+ assert.match(ui,/window\.openSavedVoucherBatch/);
+});
+test("unused scratch cards show PIN and password rather than a MAC in the voucher ledger",()=>{
+ const controller=read("controllers/hotspotController.js");
+ const ui=read("views/admin.ejs");
+ assert.match(controller,/is_scratch_unused:scratchUnused/);
+ assert.match(ui,/Voucher PIN \/ Username/);
+ assert.match(ui,/scratchUnused\?\(v\.password\|\|'—'\):'—'/);
+ assert.match(ui,/scratchUnused\?'—':\(v\.mac_address\|\|'—'\)/);
+ assert.match(ui,/Voucher PIN:/);
+ assert.match(ui,/Password:/);
+});
