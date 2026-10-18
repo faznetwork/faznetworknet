@@ -119,6 +119,8 @@ async function activate(req,res){
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||req.body?.macAddress||"");
   if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi phone number when supplying one.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  const requestedLoginUrl=String(req.body?.login_url||req.body?.link_login_only||"").trim();
+  const redirectUrl=/^https?:\/\//i.test(requestedLoginUrl)&&requestedLoginUrl.length<=2048?requestedLoginUrl:null;
   let reservation=null,routerSucceeded=false;
   try{
     const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
@@ -207,7 +209,7 @@ async function activate(req,res){
       const expiryStr=expiry?new Date(expiry).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
       notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:mac,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
     }
-    return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity});
+    return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
   }catch(error){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");

@@ -437,7 +437,8 @@
 <script>
 (function(){
 'use strict';
-const BACKEND_BASE_URL = location.protocol === 'file:' ? 'https://faznetwork-web.onrender.com' : location.origin;
+// The captive portal is served by the MikroTik router, not the backend web origin.
+const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
 const VERIFY_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
 const ACTIVATE_API_URL = BACKEND_BASE_URL + '/api/hotspot-auth/activate';
 const VOUCHER_CLAIM_URL = BACKEND_BASE_URL + '/api/hotspot-auth/claim-voucher';
@@ -496,11 +497,13 @@ clearStatus();
 if(method==='qr')startQrScanner();else stopQrScanner();
 }
 window.setAuthMethod=setAuthMethod;
-function submitMikrotikLogin(mac){
+function submitMikrotikLogin(mac,redirectUrl){
 const device=deviceDetails(),form=byId('mikrotik-auto-login');
 if(!form)throw new Error('RouterOS login form পাওয়া যায়নি।');
 if(!device.login||device.login.indexOf('$(')>=0||device.login.indexOf('://')<0)throw new Error('MikroTik login URL পাওয়া যায়নি। Captive portal থেকে আবার খুলুন।');
-form.action=device.login;
+let loginUrl=device.login;
+ if(redirectUrl){try{const candidate=new URL(redirectUrl),expected=new URL(device.login);if(/^https?:$/.test(candidate.protocol)&&candidate.host===expected.host)loginUrl=candidate.href;}catch(_){}}
+ form.action=loginUrl;
 byId('mt-user').value=normalizeMac(mac)||device.mac;
 byId('mt-pass').value=normalizeMac(mac)||device.mac;
 if(device.orig)form.querySelector('[name="dst"]').value=device.orig;
@@ -512,8 +515,8 @@ if(!selectedPackage||!selectedPackage.profile||!Number.isFinite(selectedPackage.
 }
 async function quickConnect(device){
 try{
-const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip})});
-submitMikrotikLogin(result.username||device.mac);
+const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});
+submitMikrotikLogin(result.username||device.mac,result.redirect_url);
 return true;
 }catch(error){return false;}
 }
@@ -530,10 +533,10 @@ if(!paymentMethod){showStatus('পেমেন্ট মাধ্যম নি�
 if(!/^[A-Z0-9][A-Z0-9._-]{4,49}$/.test(trx)){showStatus('সঠিক TrxID লিখুন (কমপক্ষে ৫ অক্ষর)।',true);return;}
 setBusy(true,'পেমেন্ট যাচাই হচ্ছে…');
 try{
-const verification=await requestJson(VERIFY_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({service_type:'hotspot',username:device.mac,password:device.mac,trxId:trx,amount:selectedPackage.price,package_id:selectedPackage.profile,profile_id:selectedPackage.profile,paymentMethod:paymentMethod,channel:paymentMethod,mac:device.mac,ip:device.ip})});
+const verification=await requestJson(VERIFY_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({service_type:'hotspot',username:device.mac,password:device.mac,trxId:trx,amount:selectedPackage.price,package_id:selectedPackage.profile,profile_id:selectedPackage.profile,paymentMethod:paymentMethod,channel:paymentMethod,mac:device.mac,ip:device.ip,login_url:device.login})});
 if(!verification.success)throw new Error(verification.message||'পেমেন্ট যাচাই করা যায়নি।');
-const activation=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip})});
-submitMikrotikLogin(activation.username||device.mac);
+const activation=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});
+submitMikrotikLogin(activation.username||device.mac,activation.redirect_url);
 }catch(error){showStatus(error.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে। TrxID ও প্যাকেজ মিলিয়ে দেখুন।',true);setBusy(false);}return;
 }
 if(currentMethod==='pin'){
@@ -543,15 +546,15 @@ const phone=String(byId('direct_subscriber_phone')?.value||'').replace(/[^\d০-
 if(!pin){
 setBusy(true,'সক্রিয় প্যাকেজ যাচাই হচ্ছে…');
 try{
-const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip})});
-submitMikrotikLogin(result.username||device.mac);return;
+const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});
+submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
 }catch(firstError){
 if(!phone){showStatus('এই MAC-এ সক্রিয় প্যাকেজ পাওয়া যায়নি। আগে থেকে নিবন্ধিত ফোন নম্বর থাকলে দিন, অথবা Scratch PIN ব্যবহার করুন।',true);setBusy(false);return;}
 try{
-const lookup=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone})});
+const lookup=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone,login_url:device.login})});
 if(!lookup.found)throw new Error(lookup.message||'এই ফোনে কোনো উপযুক্ত subscriber পাওয়া যায়নি।');
-const activated=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone,ip:device.ip})});
-submitMikrotikLogin(activated.username||device.mac);return;
+const activated=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone,ip:device.ip,login_url:device.login})});
+submitMikrotikLogin(activated.username||device.mac,activated.redirect_url);return;
 }catch(error){showStatus(error.message||firstError.message,true);setBusy(false);return;}
 }
 }
@@ -559,8 +562,8 @@ if(pin.length<4){showStatus('ভাউচার PIN কমপক্ষে ৪ �
 if(!password){showStatus('ভাউচার কার্ডের Password লিখুন।',true);return;}
 setBusy(true,'ভাউচার যাচাই হচ্ছে…');
 try{
-const result=await requestJson(VOUCHER_CLAIM_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({voucher_code:pin,voucher_password:password,mac:device.mac,ip:device.ip})});
-submitMikrotikLogin(result.username||device.mac);
+const result=await requestJson(VOUCHER_CLAIM_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({voucher_code:pin,voucher_password:password,mac:device.mac,ip:device.ip,login_url:device.login})});
+submitMikrotikLogin(result.username||device.mac,result.redirect_url);
 }catch(error){showStatus(error.message||'ভাউচার যাচাই করা যায়নি। PIN ও Password মিলিয়ে দেখুন।',true);setBusy(false);}return;
 }
 if(currentMethod==='qr'){
