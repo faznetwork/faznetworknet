@@ -160,7 +160,8 @@ test("verifyTrx accepts TrxID and package with no customer phone",async()=>{
     db.query=oldQuery;db.withTransaction=oldTransaction;mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
   }
 });
-\ntest("verifyTrx recharges an expired MAC-bound voucher and updates the submitted phone",async()=>{
+
+test("verifyTrx recharges an expired MAC-bound voucher and updates the submitted phone",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
   let routerPayload=null,updatedPhone="",stagedSql="";
   const mac="AA:BB:CC:DD:EE:FF";
