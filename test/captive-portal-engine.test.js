@@ -3,6 +3,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const path=require("node:path");
+const vm=require("node:vm");
 const html=fs.readFileSync(path.join(__dirname,"..","public","login.html"),"utf8");
 const script=(html.match(/<script>\s*\(function\(\)\{[\s\S]*?<\/script>/)||[])[0]||"";
 
@@ -49,4 +50,10 @@ test("captive portal includes eight cyclic package palettes and never requires a
 test("captive portal avoids duplicate inline and listener master-button handlers",()=>{
  assert.doesNotMatch(html,/onclick="handleMasterAction\(\)"/);
  assert.match(script,/byId\('btn-master-action'\)\.addEventListener\('click',handleMasterAction\)/);
+});
+
+test("captive portal inline JavaScript parses without syntax errors",()=>{
+ const inline=Array.from(html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)).map(match=>match[1]).find(source=>source.includes("const BACKEND_BASE_URL"));
+ assert.ok(inline,"main captive portal script must exist");
+ assert.doesNotThrow(()=>new vm.Script(inline,{filename:"public/login.html"}));
 });
