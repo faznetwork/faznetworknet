@@ -6104,10 +6104,14 @@ async function deletePlan(id,name){
         }
 
         function paymentRowHtml(tx, index, t) {
-            const unmatched = tx.status === 'unmatched';
+            const unmatched = String(tx.status || '').toLowerCase() === 'unmatched';
+            const status = String(tx.status || '').toLowerCase();
             const gateway = String(tx.channel || '').toLowerCase();
             const gatewayLabel = gateway === 'bkash' ? 'bKash' : gateway === 'nagad' ? 'Nagad' : gateway === 'rocket' ? 'Rocket' : gateway || '-';
-            const action = unmatched ? '<button type="button" class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" aria-label="' + escapeHtml(t.manual_match) + '" data-manual-match-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-person-check"></i></button>' : '<span class="text-muted">—</span>';
+            const manualAction = unmatched ? '<button type="button" class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" aria-label="' + escapeHtml(t.manual_match) + '" data-manual-match-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-person-check"></i></button>' : '';
+            const canForceProvision = ['unmatched','processing','processed','paid'].includes(status) && String(tx.customer_type || '').toLowerCase() !== 'pppoe';
+            const forceAction = canForceProvision ? '<button type="button" class="btn btn-sm btn-warning text-dark text-nowrap" title="Immediately provision Hotspot access" data-force-provision-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-lightning-charge-fill me-1"></i>Force Provision</button>' : '';
+            const action = manualAction || forceAction ? manualAction + forceAction : '<span class="text-muted">—</span>';
             return '<tr data-payment-row>' +
                 '<td>' + index + '</td>' +
                 '<td><strong>' + escapeHtml(tx.trx_id || '-') + '</strong></td>' +
@@ -6166,6 +6170,112 @@ async function deletePlan(id,name){
                     void openManualMatchModal(trxId);
                 }
             });
+        }
+
+
+        if (!window.__fazForceProvisionClickBound) {
+            window.__fazForceProvisionClickBound = true;
+            document.addEventListener('click', function(event) {
+                const button = event.target.closest('[data-force-provision-trx]');
+                if (!button) return;
+                event.preventDefault();
+                const trxId = button.getAttribute('data-force-provision-trx') || '';
+                if (trxId) void openForceProvisionModal(trxId);
+            });
+        }
+
+        async function openForceProvisionModal(trxId) {
+            const tx = (currentPaymentRows || []).find(row => String(row.trx_id || '').trim().toLowerCase() === String(trxId || '').trim().toLowerCase());
+            if (!tx) return alert('Payment row is no longer available. Refresh the ledger and try again.');
+            const phone = formatBdPhoneNumber(tx.sender_phone || '');
+            const linked = String(tx.matched_username || '').trim();
+            const compactMac = linked.replace(/[:-]/g, '');
+            const defaultMac = /^[0-9a-fA-F]{12}$/.test(compactMac) ? compactMac.match(/.{2}/g).join(':').toUpperCase() : '';
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.setAttribute('tabindex', '-1');
+            modal.setAttribute('aria-labelledby', 'forceProvisionTitle');
+            modal.setAttribute('aria-hidden', 'true');
+            modal.innerHTML =
+                '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content border-0 shadow-lg">' +
+                '<div class="modal-header text-white" style="background:linear-gradient(120deg,#0a3d2e,#0f766e)"><div><h5 class="modal-title" id="forceProvisionTitle"><i class="bi bi-lightning-charge-fill me-2"></i>Force Provision Hotspot</h5><div class="small opacity-75">Recover internet access from this payment</div></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+                '<form id="forceProvisionForm"><div class="modal-body">' +
+                '<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill me-1"></i>This action writes the selected Hotspot user to MikroTik and may disconnect an existing session. Use only after confirming the payment.</div>' +
+                '<div class="row g-3"><div class="col-md-7"><label class="form-label">TrxID</label><input class="form-control font-monospace" id="forceProvisionTrx" value="' + escapeHtml(tx.trx_id || '') + '" readonly></div>' +
+                '<div class="col-md-5"><label class="form-label">Paid Amount (৳)</label><input class="form-control" value="' + Number(tx.amount || 0).toFixed(2) + '" readonly></div>' +
+                '<div class="col-12"><label class="form-label">Customer phone <span class="text-muted">(optional)</span></label><input class="form-control" id="forceProvisionPhone" inputmode="numeric" maxlength="13" placeholder="017XXXXXXXX" value="' + escapeHtml(phone === '—' ? '' : phone) + '"><div class="form-text">Used for the voucher/payment association and notification only.</div></div>' +
+                '<div class="col-12"><label class="form-label">Device MAC address <span class="text-danger">*</span></label><input class="form-control font-monospace text-uppercase" id="forceProvisionMac" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" value="' + escapeHtml(defaultMac) + '" required><div class="form-text">Hotspot username and password will be set to this normalized MAC.</div></div>' +
+                '<div class="col-12"><label class="form-label">Hotspot package/profile <span class="text-danger">*</span></label><select class="form-select" id="forceProvisionPackage" required><option value="">Loading available packages…</option></select><div class="form-text">Only a profile with an exact price match to the transaction will be accepted by the backend.</div></div></div>' +
+                '<div id="forceProvisionResult" class="small mt-3" role="status" aria-live="polite"></div></div>' +
+                '<div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-warning fw-bold" id="forceProvisionSubmit"><i class="bi bi-lightning-charge-fill me-1"></i>Force Provision</button></div></form></div></div>';
+            document.body.appendChild(modal);
+            const instance = getOrCreateModal(modal);
+            if (!instance) { modal.remove(); return alert('Modal support is unavailable. Refresh the admin panel and retry.'); }
+            modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+            instance.show();
+            const select = modal.querySelector('#forceProvisionPackage');
+            const result = modal.querySelector('#forceProvisionResult');
+            try {
+                const data = await jsonFetch('/api/hotspot/profiles');
+                const profiles = (data.profiles || []).filter(p => p && p.name && Number(p.price) > 0 && (String(p.validity || p.validityLabel || '').trim() || Number(p.limitBytesTotal || 0) > 0));
+                profiles.sort((a,b) => {
+                    const am = Math.round(Number(a.price) * 100) === Math.round(Number(tx.amount) * 100) ? 0 : 1;
+                    const bm = Math.round(Number(b.price) * 100) === Math.round(Number(tx.amount) * 100) ? 0 : 1;
+                    return am - bm || Number(a.price) - Number(b.price) || String(a.name).localeCompare(String(b.name));
+                });
+                select.innerHTML = '<option value="">Select package/profile</option>' + profiles.map(p => {
+                    const id = String(p.profile_id || p.profileId || p.id || p.name);
+                    const match = Math.round(Number(p.price) * 100) === Math.round(Number(tx.amount) * 100);
+                    return '<option value="' + escapeHtml(id) + '">' + escapeHtml(p.name) + ' — ৳' + Number(p.price).toFixed(2) + (p.validityLabel || p.validity ? ' · ' + escapeHtml(p.validityLabel || p.validity) : '') + (match ? ' ✓ exact amount' : '') + '</option>';
+                }).join('');
+                const exact = profiles.find(p => Math.round(Number(p.price) * 100) === Math.round(Number(tx.amount) * 100));
+                if (exact) select.value = String(exact.profile_id || exact.profileId || exact.id || exact.name);
+                if (!profiles.length) throw new Error('No valid Hotspot profiles are available. Check Hotspot profile settings first.');
+            } catch (error) {
+                select.innerHTML = '<option value="">Unable to load packages</option>';
+                result.className = 'small mt-3 text-danger';
+                result.textContent = error.message || 'Could not load Hotspot packages.';
+            }
+            modal.querySelector('#forceProvisionForm').addEventListener('submit', async event => {
+                event.preventDefault();
+                const submit = modal.querySelector('#forceProvisionSubmit');
+                const payload = {
+                    trxId: modal.querySelector('#forceProvisionTrx').value.trim(),
+                    phone: modal.querySelector('#forceProvisionPhone').value.trim(),
+                    mac: modal.querySelector('#forceProvisionMac').value.trim(),
+                    package_id: select.value
+                };
+                if (!payload.trxId || !payload.mac || !payload.package_id) {
+                    result.className = 'small mt-3 text-danger';
+                    result.textContent = 'TrxID, device MAC and Hotspot package are required.';
+                    return;
+                }
+                submit.disabled = true;
+                submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Provisioning…';
+                result.className = 'small mt-3 text-muted';
+                result.textContent = 'Validating payment and provisioning the Hotspot user…';
+                try {
+                    const response = await fetch('/api/payments/force-provision', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {'Content-Type':'application/json','Accept':'application/json'},
+                        body: JSON.stringify(payload),
+                        cache: 'no-store'
+                    });
+                    const responseData = await response.json().catch(() => ({}));
+                    if (!response.ok || responseData.success === false) throw new Error(responseData.error || responseData.message || 'Force provisioning failed.');
+                    result.className = 'small mt-3 text-success fw-semibold';
+                    result.textContent = responseData.message || 'Hotspot user provisioned successfully.';
+                    await fetchPaymentsSection();
+                    window.setTimeout(() => bootstrap.Modal.getInstance(modal)?.hide(), 650);
+                } catch (error) {
+                    result.className = 'small mt-3 text-danger fw-semibold';
+                    result.textContent = error.message || 'Force provisioning failed.';
+                    submit.disabled = false;
+                    submit.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i>Force Provision';
+                }
+            });
+            setTimeout(() => modal.querySelector('#forceProvisionMac')?.focus(), 250);
         }
 
         async function openManualMatchModal(trxId) {

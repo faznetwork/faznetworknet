@@ -305,6 +305,131 @@ async function manualMatch(req,res){
   return errorResponse(res,e,500);
  }
 }
+
+async function forceProvisionHotspot(req,res){
+ let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,stagedVoucherId=null,transactionId=null;
+ try{
+  const body=req.body&&typeof req.body==="object"?req.body:{};
+  const trxId=String(body.trxId||body.trx_id||"").trim().toUpperCase();
+  const mac=normalizeMac(body.mac||body.mac_address||body.macAddress||"");
+  const phoneCandidate=normalizePhone(body.phone||body.sender_phone||"");
+  const phone=/^01[0-9]{9}$/.test(phoneCandidate)?phoneCandidate:"";
+  const requestedProfile=String(body.package_id||body.profile_id||body.packageId||"").trim();
+  if(!trxId)return res.status(400).json({success:false,code:"TRXID_REQUIRED",error:"Transaction TrxID is required."});
+  if(!mac)return res.status(400).json({success:false,code:"MAC_REQUIRED",error:"Enter a valid device MAC address before force provisioning."});
+  if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",error:"Select a Hotspot package/profile."});
+  const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
+  if(!found.rows?.length)return res.status(404).json({success:false,code:"TRANSACTION_NOT_FOUND",error:"Payment transaction was not found."});
+  const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  transactionId=tx.id;
+  originalStatus=status;
+  if(!["unmatched","processing","processed","paid"].includes(status))return res.status(409).json({success:false,code:"TRANSACTION_NOT_ELIGIBLE",error:"Only unmatched, stale processing, or completed payment transactions can be force provisioned."});
+  const matchedUsername=String(tx.matched_username||"").trim();
+  if(matchedUsername){
+   const [pppoe,customer]=await Promise.all([db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[matchedUsername]),db.query("SELECT username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[matchedUsername])]);
+   if(pppoe.rows?.length||customer.rows?.length)return res.status(409).json({success:false,code:"PPPOE_TRANSACTION",error:"This transaction is linked to a PPPoE subscriber and cannot be force-provisioned as Hotspot."});
+  }
+  const existingAssociation=await db.query("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=$1::bigint LIMIT 1",[tx.id]);
+  let associated=existingAssociation.rows?.[0]||null;
+  if(["processed","paid"].includes(status)&&!associated&&!["online_mfs","hotspot"].includes(String(tx.sale_type||"").toLowerCase())&&!["hotspot","manual_hotspot","force_hotspot"].includes(String(tx.claim_flow||"").toLowerCase())&&!/^01[0-9]{9}$/.test(normalizePhone(matchedUsername))){
+   return res.status(409).json({success:false,code:"NOT_HOTSPOT_PAYMENT",error:"This completed payment has no Hotspot association. Confirm it is a Hotspot payment before provisioning."});
+  }
+  const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  let metadataMap={};try{metadataMap=JSON.parse(metaResult.rows?.[0]?.value||"{}");}catch(_){}
+  if(!metadataMap||typeof metadataMap!=="object"||Array.isArray(metadataMap))metadataMap={};
+  let routerProfiles=await mikrotikService.getHotspotProfiles();
+  if(!Array.isArray(routerProfiles))routerProfiles=[];
+  const profiles=routerProfiles.length?routerProfiles:Object.keys(metadataMap).map(name=>({name,sharedUsers:"1",sessionTimeout:"",raw:{}}));
+  const matches=profiles.filter(item=>item?.name&&String(item.name).toLowerCase()!=="default"&&profileIdentifierMatches(String(item.name),metadataMap[String(item.name)]||{},requestedProfile));
+  if(matches.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",error:"Selected Hotspot profile is unavailable or ambiguous."});
+  const profile=matches[0],metadata=metadataMap[String(profile.name)]||{},amount=Number(tx.amount);
+  if(!Number.isFinite(amount)||!Number.isFinite(Number(metadata.price))||moneyCents(metadata.price)!==moneyCents(amount))return res.status(400).json({success:false,code:"AMOUNT_MISMATCH",error:"Selected Hotspot package price must exactly match the transaction amount.",expectedAmount:Number(metadata.price),paidAmount:amount});
+  const hc=require("../services/hotspotProfileConfig");
+  let validityConfig;
+  try{validityConfig=metadata.validityValue?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}catch(_){validityConfig=hc.parseStoredValidity(profile);}
+  const validity=String(validityConfig.validity||"").trim(),quota=Math.max(0,Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0));
+  if(!validity&&!quota)return res.status(400).json({success:false,code:"PROFILE_INVALID",error:"Selected Hotspot profile has no usable validity or data quota."});
+  const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
+  if(status==="unmatched"){
+   const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='force_hotspot',matched_username=$2 WHERE id=$3 AND LOWER(TRIM(status))='unmatched' AND (used=false OR used IS NULL) RETURNING id",["force_hotspot:"+String(req.user?.id||req.session?.userId||"admin"),mac,tx.id]);
+   if(!claim.rows?.length)return res.status(409).json({success:false,code:"CLAIM_CONFLICT",error:"Another request has already claimed this TrxID."});
+   claimedTransactionId=claim.rows[0].id??tx.id;
+  }else if(status==="processing"){
+   const claim=await db.query("UPDATE transactions SET claimed_at=NOW(),claimed_by=$1,claim_flow='force_hotspot',matched_username=$2,needs_reconciliation=false WHERE id=$3 AND status='processing' AND used=true AND (claimed_at IS NULL OR claimed_at < NOW()-INTERVAL '5 minutes') RETURNING id",["force_hotspot:"+String(req.user?.id||req.session?.userId||"admin"),mac,tx.id]);
+   if(!claim.rows?.length)return res.status(409).json({success:false,code:"CLAIM_NOT_STALE",error:"This transaction is still being processed. Force provisioning is allowed only after a claim has been stuck for at least five minutes."});
+   claimedTransactionId=claim.rows[0].id??tx.id;
+  }
+  let voucher=null,expiresAt=null,comment="",samePayment=false,resetCounters=true,previousUsername="";
+  await db.withTransaction(async client=>{
+   await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-trx:"+String(tx.id)]);
+   await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-mac:"+mac]);
+   if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-phone:"+phone]);
+   const associationNow=await client.query("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=$1::bigint LIMIT 1",[tx.id]);
+   associated=associationNow.rows?.[0]||null;
+   let target=associated&&associated.id?associated:null;
+   if(target){
+    const bound=normalizeMac(target.mac_address)||normalizeMac(target.username);
+    if(bound&&bound!==mac)throw Object.assign(new Error("This payment is already linked to a voucher bound to a different MAC address."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
+   }else{
+    const records=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1::text<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($1::text) OR LOWER(COALESCE(username,''))=LOWER($1::text))) OR ($2::text<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2::text,'880'||SUBSTRING($2::text FROM 2))) ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1::text) OR LOWER(COALESCE(username,''))=LOWER($1::text) THEN 0 ELSE 1 END,id DESC FOR UPDATE",[String(mac||""),String(phone||"")]);
+    const rows=records.rows||[];
+    const macRows=rows.filter(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===mac);
+    const boundPhones=[...new Set(rows.filter(row=>phone&&normalizePhone(row.phone)===phone).map(row=>normalizeMac(row.mac_address)||normalizeMac(row.username)).filter(Boolean))];
+    if(boundPhones.some(bound=>bound!==mac))throw Object.assign(new Error("This phone is already bound to a different device. Use the registered device MAC or reconcile the binding first."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
+    target=macRows[0]||rows.find(row=>phone&&normalizePhone(row.phone)===phone)||null;
+   }
+   if(target){
+    const bound=normalizeMac(target.mac_address)||normalizeMac(target.username);
+    if(bound&&bound!==mac)throw Object.assign(new Error("This subscriber is already bound to a different device MAC."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
+   }
+   const targetStatus=String(target?.status||"").toLowerCase();
+samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Boolean(associated&&target&&Number(associated.id)===Number(target.id));
+   resetCounters=!(samePayment&&targetStatus==="active");
+   const priorExpiry=target?.expires_at?new Date(target.expires_at):null,priorStillValid=Boolean(priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now());
+   const duration=hotspotDurationMs(validity);
+   if(samePayment&&targetStatus==="active"&&priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&!priorStillValid)throw Object.assign(new Error("This payment already provisioned a package that has expired. A new payment is required to restore service."),{statusCode:409,code:"PACKAGE_ALREADY_EXPIRED"});
+   if(samePayment&&priorStillValid)expiresAt=priorExpiry;
+   else if(duration>0)expiresAt=new Date((priorStillValid?priorExpiry.getTime():Date.now())+duration);
+   else expiresAt=null;
+   comment=expiresAt?hotspotExpiryComment(expiresAt):"FAZ|FORCE|PROFILE="+profile.name;
+   previousUsername=String(target?.username||"").trim();
+   const params=[mac,profile.name,validity,amount,comment,phone,quota?String(quota):"",profileId,new Date(),expiresAt,tx.id];
+   if(target){
+    const updated=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$1,profile=$2,validity=$3,price=$4,status='pending_claim',comment=$5,phone=COALESCE(NULLIF($6::text,''),phone),server=COALESCE(NULLIF(server,''),'all'),time_limit=NULLIF($3::text,''),data_limit=NULLIF($7::text,''),profile_id=$8,mac_address=$1,first_login_at=COALESCE(first_login_at,$9::timestamptz),expires_at=$10::timestamptz,expired_at=NULL,pre_expiry_notified=false,transaction_id=$11::bigint,renewal_stacked=$12,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$13::bigint RETURNING *",[...params,Boolean(priorStillValid&&duration>0),target.id]);
+    voucher=updated.rows?.[0];
+   }else{
+    const inserted=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,first_login_at,expires_at,cleanup_status,transaction_id,renewal_stacked) VALUES($1,$1,$2,$3,$4,'pending_claim',$5,NULLIF($6::text,''),'all',NULLIF($3::text,''),NULLIF($7::text,''),$8,$1,$9::timestamptz,$10::timestamptz,'not_required',$11::bigint,false) RETURNING *",params);
+    voucher=inserted.rows?.[0];
+   }
+   if(!voucher)throw new Error("Could not stage the force-provisioned Hotspot account in PostgreSQL.");
+   stagedVoucherId=voucher.id;
+   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,NULLIF($3::text,''),$4::numeric,$5::text,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=COALESCE(EXCLUDED.phone,hotspot_voucher_payments.phone),amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[tx.id,voucher.id,phone,amount,profile.name]);
+  });
+  await mikrotikService.forceProvisionHotspotUser({username:mac,password:mac,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment,server:voucher?.server||"all",previousUsername,resetCounters});
+  routerSucceeded=true;
+  const finalizedVoucher=await db.query("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active',profile=$2,comment=$3,first_login_at=COALESCE(first_login_at,NOW()),expires_at=$4::timestamptz,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$5::bigint RETURNING id,username,profile,profile_id,status,phone,mac_address,expires_at,transaction_id",[mac,profile.name,comment,expiresAt,stagedVoucherId]);
+  if(!finalizedVoucher.rows?.length)throw new Error("RouterOS provisioning succeeded but the voucher could not be finalized in PostgreSQL.");
+  const finalizedTx=await db.query("UPDATE transactions SET status=CASE WHEN LOWER(status)='processing' THEN 'processed' ELSE status END,used=true,matched_username=$1,needs_reconciliation=false,claim_flow='force_hotspot' WHERE id=$2::bigint AND LOWER(status) IN ('processing','processed','paid') RETURNING id,status",[mac,tx.id]);
+  if(!finalizedTx.rows?.length)throw new Error("RouterOS provisioning succeeded but the payment transaction could not be finalized.");
+  claimedTransactionId=null;
+  return res.json({success:true,status:finalizedTx.rows[0].status,trxId:tx.trx_id,mac,phone,profile:profile.name,amount,expires_at:expiresAt?new Date(expiresAt).toISOString():null,voucher:finalizedVoucher.rows[0],message:"Hotspot user provisioned on MikroTik and payment linked successfully."});
+ }catch(error){
+  if(claimedTransactionId!==null&&!routerSucceeded){
+   try{
+    const nextStatus=originalStatus==="unmatched"?"unmatched":"processing",used=nextStatus==="processing";
+    await db.query("UPDATE transactions SET status=$1,used=$2,matched_username=CASE WHEN $2 THEN matched_username ELSE NULL END,claimed_at=CASE WHEN $2 THEN claimed_at ELSE NULL END,claimed_by=CASE WHEN $2 THEN claimed_by ELSE NULL END,claim_flow=CASE WHEN $2 THEN claim_flow ELSE NULL END,needs_reconciliation=$2 WHERE id=$3::bigint AND status='processing' AND used=true",[nextStatus,used,claimedTransactionId]);
+   }catch(rollbackError){console.error("[Force Provision] Failed to restore payment claim",claimedTransactionId,rollbackError?.message||rollbackError);}
+  }else if(transactionId!==null&&routerSucceeded){
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[transactionId]);}catch(auditError){console.error("[Force Provision] Failed to mark reconciliation",transactionId,auditError?.message||auditError);}
+  }else if(!routerSucceeded&&["processed","paid"].includes(originalStatus)){
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[transactionId]);}catch(_){}
+  }
+  const statusCode=error?.statusCode||500;
+  console.error("[Force Provision] Failed:",error?.message||error);
+  return res.status(statusCode).json({success:false,code:error?.code||"FORCE_PROVISION_FAILED",error:error?.message||"Unable to force-provision this Hotspot payment."});
+ }
+}
+
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
 
 const verifyBuckets=new Map();
@@ -417,4 +542,4 @@ async function verifyTrx(req,res){
 }
 function macFromBody(body){return normalizeMac(body?.mac||body?.device_mac||body?.macAddress||"");}
 
-module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx,renewalExpirationDate};
+module.exports={webhook,dynamicWebhook,list,manualMatch,forceProvisionHotspot,summary,verifyTrx,renewalExpirationDate};
