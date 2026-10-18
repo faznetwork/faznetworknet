@@ -61,7 +61,7 @@ test("promotes a used voucher and records first-login expiry without expiring it
   assert.ok(database.calls.some(call => call.sql.includes("status='active'") && call.params[0] instanceof Date));
 });
 
-test("expires marked users, moves them to expired_profile, and retains rows for 30-day visibility", async () => {
+test("expires marked users, hard-purges RouterOS credentials, and retains rows for 30-day visibility", async () => {
   const rows = [{ id: 2, username: "VOUCHER2", status: "active", cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const cleaned = [];
@@ -79,7 +79,7 @@ test("expires marked users, moves them to expired_profile, and retains rows for 
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
   assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
-  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
+  assert.ok(!database.calls.some(call => call.sql.includes("profile='expired_profile'")), "expiry must not trap users in expired_profile");
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
@@ -123,7 +123,7 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   assert.ok(expireUpdate);
   assert.equal(expireUpdate.params[1].toISOString(), expiredAt.toISOString());
   assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
-  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
+  assert.ok(!database.calls.some(call => call.sql.includes("profile='expired_profile'")), "expiry must not trap users in expired_profile");
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())));
 });
 
@@ -194,7 +194,7 @@ test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler re
   assert.ok(database.calls.some(call => call.sql.includes("status='expired'") && call.sql.includes("cleanup_status='pending'")));
   assert.ok(database.calls.some(call => call.sql.includes("cleanup_status='completed'")));
   assert.ok(!database.calls.some(call => /^DELETE FROM hotspot_vouchers/i.test(call.sql.trim())), "expired subscriber remains visible until 30-day retention");
-  assert.ok(database.calls.some(call => call.sql.includes("profile='expired_profile'")));
+  assert.ok(!database.calls.some(call => call.sql.includes("profile='expired_profile'")), "expiry must not trap users in expired_profile");
   assert.ok(!database.calls.some(call => /^DELETE FROM transactions/i.test(call.sql.trim())), "sales transaction audit rows must be retained");
 });
 
@@ -285,3 +285,20 @@ test("does not let a legacy RouterOS scheduler suppress centralized expiry", () 
 });
 
 test("expired Hotspot profile has strict rate and session limits",()=>{const {EXPIRED_HOTSPOT_PROFILE}=require("../services/hotspotProfileConfig");assert.deepEqual(EXPIRED_HOTSPOT_PROFILE,{name:"expired_profile",rateLimit:"1k/1k",sessionTimeout:"1m",sharedUsers:1});});
+
+test("expired cleanup delegates to hard purge and preserves transaction audit history", async () => {
+  const rows = [{ id: 99, username: "AA:BB:CC:DD:EE:FF", mac_address: "AA:BB:CC:DD:EE:FF", status: "active", expires_at: new Date("2026-10-10T00:00:00Z"), cleanup_status: "not_required" }];
+  const database = mockDb(rows);
+  const purges = [];
+  const router = {
+    async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
+    async cleanupExpiredHotspotUser(username, mac) { purges.push({ username, mac }); return { usersRemoved: 1, sessionsRemoved: 1, cookiesRemoved: 1 }; }
+  };
+  const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger(), now: () => new Date("2026-10-11T12:00:00Z") });
+  const result = await run();
+  assert.equal(result.expired, 1);
+  assert.equal(result.removed, 1);
+  assert.deepEqual(purges, [{ username: "AA:BB:CC:DD:EE:FF", mac: "AA:BB:CC:DD:EE:FF" }]);
+  assert.ok(!database.calls.some(call => /DELETE\s+FROM\s+transactions/i.test(call.sql)));
+  assert.ok(!database.calls.some(call => call.sql.includes("profile='expired_profile'")));
+});
