@@ -1166,7 +1166,7 @@ class MikroTikService {
         await connection.write("/ip/hotspot/user/add",params);
       }
       const activeRows=await connection.write("/ip/hotspot/active/print");
-      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>this._str(item.user).trim().toUpperCase()===macAddress&&item[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>[macAddress,previousUsername.toUpperCase()].includes(this._str(item.user).trim().toUpperCase())&&item[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
       return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac"};
     });
   }
