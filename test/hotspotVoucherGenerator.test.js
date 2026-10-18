@@ -24,6 +24,9 @@ test("generates scratch vouchers in the DB ledger without provisioning RouterOS 
  assert.ok(state.queries.every(q=>/scratch_voucher|SELECT value FROM app_settings/.test(q.sql)));
  assert.ok(state.vouchers.every(v=>v.status==="unused"&&v.profile==="Gold"&&v.validity==="1d"));
  assert.equal(new Set(state.vouchers.map(v=>v.username)).size,3);
+ const insertQuery=state.queries.find(q=>/INSERT INTO hotspot_vouchers/i.test(q.sql));
+ assert.ok(insertQuery);assert.match(insertQuery.sql,/ON CONFLICT DO NOTHING RETURNING/i);
+ assert.doesNotMatch(insertQuery.sql,/ON CONFLICT\s*\(username\)/i);
 });
 test("rejects invalid quantities before database or RouterOS work",async()=>{
  const {controller,state}=loadController(),res=responseRecorder();
