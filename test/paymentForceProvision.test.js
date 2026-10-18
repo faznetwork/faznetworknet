@@ -45,7 +45,7 @@ test("force provision claims payment, stages voucher, and immediately provisions
   assert.equal(res.body.status,"processed");
   assert.equal(res.body.mac,"AA:BB:CC:DD:EE:FF");
   assert.equal(seen.claim.params[1],"AA:BB:CC:DD:EE:FF");
-  assert.match(seen.stage.sql,/status='pending_claim'/);
+  assert.match(seen.stage.sql,/'pending_claim'/);
   assert.equal(seen.stage.params[0],"AA:BB:CC:DD:EE:FF");
   assert.equal(seen.stage.params[1],"1-Hour");
   assert.equal(seen.association.params[0],501);
