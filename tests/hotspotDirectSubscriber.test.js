@@ -66,3 +66,15 @@ test("scratch voucher claim releases only stale MAC bindings and rejects live co
  assert.match(auth,/SET mac_address=NULL,status=CASE WHEN LOWER\(COALESCE\(status,''\)\)='active' THEN 'expired'/);
  assert.match(auth,/MAC_ALREADY_BOUND/);
 });
+
+test("voucher MAC uniqueness is limited to active records and historical bindings are released",()=>{
+ const schema=read("db/schema.sql");
+ const migration=read("db/migrations/20261018_hotspot_voucher_active_mac_unique.sql");
+ const auth=read("controllers/hotspotAuthController.js");
+ assert.match(schema,/DROP INDEX IF EXISTS uq_hotspot_vouchers_mac_address_ci/);
+ assert.match(schema,/CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_active_mac_ci ON hotspot_vouchers \(LOWER\(mac_address\)\) WHERE status = 'active' AND mac_address IS NOT NULL/);
+ assert.match(migration,/DROP INDEX IF EXISTS uq_hotspot_vouchers_mac_address_ci/);
+ assert.match(migration,/WHERE status = 'active' AND mac_address IS NOT NULL/);
+ assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
+ assert.match(auth,/SET mac_address=NULL/);
+});
