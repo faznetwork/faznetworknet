@@ -533,10 +533,19 @@ return littleHex(a0)+littleHex(b0)+littleHex(c0)+littleHex(d0);
 }
 function chapIdentifierByte(value){
 const text=String(value||'').trim();if(!text)return 0;
+const octal=text.match(/^\\\\([0-7]{3})$/);if(octal)return parseInt(octal[1],8)&255;
 if(/^0x[0-9a-f]{1,2}$/i.test(text))return parseInt(text.slice(2),16)&255;
+if(/^[0-9a-f]{2}$/i.test(text)&&/[a-f]/i.test(text))return parseInt(text,16)&255;
 if(/^\d+$/.test(text))return Number(text)&255;
-if(/^[0-9a-f]{2}$/i.test(text))return parseInt(text,16)&255;
-return 0;
+return text.length===1?text.charCodeAt(0)&255:0;
+}
+function decodeChapChallenge(value){
+const text=String(value||'');
+if(!text)return '';
+const octal=/\\\\([0-7]{3})/g;
+if(octal.test(text)){octal.lastIndex=0;return text.replace(octal,(_,digits)=>String.fromCharCode(parseInt(digits,8)));}
+if(/^(?:[0-9a-f]{2})+$/i.test(text)){let decoded='';for(let i=0;i<text.length;i+=2)decoded+=String.fromCharCode(parseInt(text.slice(i,i+2),16));return decoded;}
+return text;
 }
 function submitMikrotikLogin(mac,redirectUrl){
 const device=deviceDetails(),form=byId('mikrotik-auto-login');
@@ -550,7 +559,7 @@ byId('mt-user').value=username;
 // RouterOS http-pap accepts the raw password. http-chap requires MD5 of the
 // challenge identifier byte + password + challenge; never submit raw credentials
 // when a challenge is present.
-byId('mt-pass').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+device.chapChallenge):password;
+byId('mt-pass').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;
 if(device.chapChallenge){byId('mt-chap-id').value=device.chapId;byId('mt-chap-challenge').value=device.chapChallenge;}
 if(device.orig)form.querySelector('[name="dst"]').value=device.orig;
 showStatus('সংযোগ অনুমোদিত হয়েছে। ইন্টারনেট চালু হচ্ছে…',false);
