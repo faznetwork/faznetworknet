@@ -1152,22 +1152,45 @@ class MikroTikService {
   }
 
   async forceProvisionHotspotUser(data) {
-    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim(),comment=this._hotspotExpiryComment(data);
-    if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Force provisioning requires a valid MAC, profile, and time validity or data quota.");
+    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim(),comment=this._hotspotExpiryComment(data),serverName=this._str(data.server||"all").trim()||"all";
+    if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Force provisioning requires a valid MAC, profile, and time validity or a data quota.");
     return this._withConnection("Admin force Hotspot provisioning",async connection=>{
-      const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);
+      const [users,profiles,hotspotServers,hotspotServerProfiles]=await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/user/profile/print"),
+        connection.write("/ip/hotspot/print"),
+        connection.write("/ip/hotspot/profile/print")
+      ]);
       if(!(Array.isArray(profiles)?profiles:[]).some(item=>this._str(item.name).trim()===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");
+      const servers=Array.isArray(hotspotServers)?hotspotServers:[],serverProfiles=Array.isArray(hotspotServerProfiles)?hotspotServerProfiles:[];
+      const applicableServers=serverName.toLowerCase()==="all"?servers:servers.filter(item=>this._str(item.name).trim()===serverName);
+      const applicableProfileNames=applicableServers.map(item=>this._str(item.profile).trim()).filter(Boolean);
+      const macAuthEnabled=serverProfiles.some(item=>applicableProfileNames.includes(this._str(item.name).trim())&&this._str(item["login-by"]||item.loginBy).split(",").map(value=>value.trim().toLowerCase()).includes("mac"));
       const allUsers=Array.isArray(users)?users:[],user=allUsers.find(item=>this._str(item.name).trim().toUpperCase()===macAddress)||allUsers.find(item=>previousUsername&&this._str(item.name).trim().toUpperCase()===previousUsername.toUpperCase());
-      const params=this._writeParams({name:macAddress,password:macAddress,profile,server:data.server||"all","limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress,comment,disabled:"no"});
+      const params=this._writeParams({name:macAddress,password:macAddress,profile,server:serverName,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress,comment,disabled:"no"});
       if(user&&user[".id"]){
         await connection.write("/ip/hotspot/user/set",["=.id="+user[".id"],...params]);
         if(data.resetCounters===true)await connection.write("/ip/hotspot/user/reset-counters",["=.id="+user[".id"]]);
       }else{
         await connection.write("/ip/hotspot/user/add",params);
       }
-      const activeRows=await connection.write("/ip/hotspot/active/print");
-      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>[macAddress,previousUsername.toUpperCase()].includes(this._str(item.user).trim().toUpperCase())&&item[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
-      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac"};
+
+      // Remove stale login state only after the new MAC-bound account is ready.
+      // Active sessions are dynamic/read-only for creation; RouterOS recreates a
+      // MAC-authenticated session on the device's next traffic when login-by=mac
+      // is enabled on the applicable Hotspot server profile.
+      const identityNames=new Set([macAddress,previousUsername].map(value=>this._str(value).trim().toUpperCase()).filter(Boolean));
+      const [activeRows,cookieRows]=await Promise.all([
+        connection.write("/ip/hotspot/active/print"),
+        connection.write("/ip/hotspot/cookie/print")
+      ]);
+      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress))) {
+        await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+      }
+      for(const cookie of (Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress))) {
+        await connection.write("/ip/hotspot/cookie/remove",["=.id="+cookie[".id"]]);
+      }
+      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions:(Array.isArray(activeRows)?activeRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,clearedCookies:(Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,macAuthEnabled};
     });
   }
 
