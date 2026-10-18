@@ -18,6 +18,7 @@ test("force provision claims payment, stages voucher, and immediately provisions
   db.query=async(sql,params=[])=>{
    if(sql.startsWith("SELECT * FROM transactions"))return {rows:[tx()]};
    if(sql.startsWith("SELECT username FROM pppoe_users"))return {rows:[]};
+   if(sql.startsWith("SELECT username FROM customers"))return {rows:[]};
    if(sql.startsWith("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments"))return {rows:[]};
    if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
    if(sql.startsWith("UPDATE transactions SET status='processing'")){seen.claim={sql,params};return {rows:[{id:501}]};}
