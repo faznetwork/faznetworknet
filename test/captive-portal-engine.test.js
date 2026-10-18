@@ -12,7 +12,8 @@ test("captive portal parses RouterOS redirect context and submits the canonical 
  assert.match(html,/link-orig/);
  assert.match(html,/name="username"/);
  assert.match(html,/name="password"/);
- assert.match(script,/form\.action=device\.login/);
+ assert.match(script,/let loginUrl=device\.login/);
+ assert.match(script,/form\.action=loginUrl/);
  assert.match(script,/form\.submit\(\)/);
  assert.match(script,/normalizeMac/);
 });
@@ -42,7 +43,7 @@ test("captive portal has one master action and routes payment, PIN and QR throug
 test("captive portal includes eight cyclic package palettes and never requires a phone for MAC-bound quick connect",()=>{
  assert.equal((script.match(/\{bg:'rgba\(/g)||[]).length,8);
  assert.match(script,/PALETTES\[index%PALETTES\.length\]/);
- assert.match(script,/body:JSON\.stringify\(\{mac:device\.mac,ip:device\.ip\}\)/);
+ assert.match(script,/body:JSON\.stringify\(\{mac:device\.mac,ip:device\.ip,login_url:device\.login\}\)/);
  assert.match(script,/if\(!pin\)/);
  assert.doesNotMatch(html,/name="phone"[^>]+required/);
 });
