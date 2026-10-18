@@ -321,6 +321,7 @@ async function forceProvisionHotspot(req,res){
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
   if(!found.rows?.length)return res.status(404).json({success:false,code:"TRANSACTION_NOT_FOUND",error:"Payment transaction was not found."});
   const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  transactionId=tx.id;
   originalStatus=status;
   if(!["unmatched","processing","processed","paid"].includes(status))return res.status(409).json({success:false,code:"TRANSACTION_NOT_ELIGIBLE",error:"Only unmatched, stale processing, or completed payment transactions can be force provisioned."});
   const matchedUsername=String(tx.matched_username||"").trim();
