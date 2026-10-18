@@ -95,8 +95,10 @@ async function deviceLookup(req,res){
     const expired=status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now());
     if(expired){
       try{
-        await mikrotikService.disableExpiredDirectHotspotUser(row.username||mac,row.mac_address||mac);
-        await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='completed',cleanup_error=NULL,updated_at=NOW() WHERE id=$1",[row.id]);
+        if(String(row.cleanup_status||"").toLowerCase()!=="completed"){
+          await mikrotikService.disableExpiredDirectHotspotUser(row.username||mac,row.mac_address||mac);
+          await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='completed',cleanup_error=NULL,updated_at=NOW() WHERE id=$1",[row.id]);
+        }
       }catch(releaseError){
         console.error("[Hotspot expired portal release]",releaseError.message);
         await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='failed',cleanup_error=$2,updated_at=NOW() WHERE id=$1",[row.id,String(releaseError.message||releaseError).slice(0,500)]).catch(()=>{});
