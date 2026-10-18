@@ -92,8 +92,8 @@ async function deviceLookup(req,res){
     if(!candidates.length)return res.json({success:true,found:false,requires_phone:true,message:"No direct subscriber is bound to this MAC. A staged subscriber must be identified by its registered phone number or existing payment/voucher credentials."});
     const row=candidates[0],status=String(row.status||"").toLowerCase();
     if(normalizeMac(row.mac_address)&&normalizeMac(row.mac_address)!==mac)return fail(403,"MAC_ALREADY_BOUND","This subscriber is permanently bound to another device.");
-    if(status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()))return fail(410,"PACKAGE_EXPIRED","This subscriber package has expired. Purchase a new package to continue.");
-    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status,profile:row.profile||"",expires_at:row.expires_at||null});
+    const expired=status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now());
+    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status:expired?"expired":status,expired:Boolean(expired),can_recharge:Boolean(expired),profile:row.profile||"",expires_at:row.expires_at||null,message:expired?"এই স্থায়ী গ্রাহকের প্যাকেজের মেয়াদ শেষ হয়েছে। নতুন প্যাকেজ কিনে রিচার্জ করুন।":""});
   }catch(error){
     console.error("[Hotspot device lookup]",error.message);
     return fail(503,"DEVICE_LOOKUP_FAILED","Unable to check the subscriber record right now.");
