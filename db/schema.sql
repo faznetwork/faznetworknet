@@ -623,6 +623,18 @@ CREATE TABLE IF NOT EXISTS network_discovery_sources (
 CREATE INDEX IF NOT EXISTS idx_network_discovery_sources_enabled
   ON network_discovery_sources(enabled, protocol);
 
+// Enable read-only RouterOS discovery for an already registered MikroTik device.
+// Credentials remain in the existing app_settings (mikrotik_host/port/user/password);
+// this source row is only the scheduler's explicit opt-in. Idempotent on every startup.
+INSERT INTO network_discovery_sources
+  (device_id, source_key, protocol, enabled, settings, last_status, updated_at)
+SELECT d.id, 'faz-network-mikrotik-api', 'routeros_api', TRUE, '{}'::jsonb, 'not_configured', NOW()
+  FROM network_devices d
+ WHERE LOWER(d.device_type) = 'mikrotik'
+ON CONFLICT (device_id, source_key)
+DO UPDATE SET enabled = TRUE, protocol = 'routeros_api', updated_at = NOW();
+
+
 CREATE TABLE IF NOT EXISTS network_discovery_runs (
   id BIGSERIAL PRIMARY KEY,
   source_id BIGINT REFERENCES network_discovery_sources(id) ON DELETE SET NULL,
