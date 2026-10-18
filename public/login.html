@@ -429,6 +429,8 @@
     <input type="hidden" name="password" id="mt-pass" value="$(mac)" />
     <input type="hidden" name="dst" value="$(link-orig)" />
     <input type="hidden" name="popup" value="true" />
+    <input type="hidden" name="chap-id" id="mt-chap-id" value="$(chap-id)" />
+    <input type="hidden" name="chap-challenge" id="mt-chap-challenge" value="$(chap-challenge)" />
 </form>
 
 <input type="hidden" id="router-mac" value="$(mac)" />
@@ -467,9 +469,13 @@ const mac=normalizeMac(params.get('mac')||byId('router-mac')?.value||'');
 const ip=String(params.get('ip')||byId('router-ip')?.value||'').trim();
 const login=params.get('link-login-only')||((form&&form.getAttribute('action'))||'');
 const orig=params.get('link-orig')||((form&&form.querySelector('[name="dst"]')||{}).value)||'';
+const rawChapId=String(params.get('chap-id')||byId('mt-chap-id')?.value||'').trim();
+const rawChapChallenge=String(params.get('chap-challenge')||byId('mt-chap-challenge')?.value||'').trim();
+const chapId=rawChapId.indexOf('$(')>=0?'':rawChapId;
+const chapChallenge=rawChapChallenge.indexOf('$(')>=0?'':rawChapChallenge;
 if(form&&login&&login.indexOf('$(')<0)form.action=login;
 if(form&&orig)form.querySelector('[name="dst"]').value=orig;
-return {mac:mac,ip:ip,login:login,orig:orig};
+return {mac:mac,ip:ip,login:login,orig:orig,chapId:chapId,chapChallenge:chapChallenge};
 }
 function showStatus(message,isError){
 const box=byId('status-box');if(!box)return;
@@ -497,6 +503,50 @@ clearStatus();
 if(method==='qr')startQrScanner();else stopQrScanner();
 }
 window.setAuthMethod=setAuthMethod;
+// Self-contained MD5 implementation for RouterOS HTTP-CHAP. The captive portal
+// may be copied to the router without any external JavaScript dependencies.
+function md5Hex(input){
+const bytes=[];for(let i=0;i<input.length;i++)bytes.push(input.charCodeAt(i)&255);
+const bitLength=bytes.length*8;bytes.push(128);while(bytes.length%64!==56)bytes.push(0);
+for(let i=0;i<8;i++)bytes.push(i<4?(bitLength>>>((i*8))&255):0);
+function add(a,b){return (a+b)|0;}
+function rol(x,n){return (x<<n)|(x>>>(32-n));}
+let a0=0x67452301|0,b0=0xefcdab89|0,c0=0x98badcfe|0,d0=0x10325476|0;
+const shifts=[7,12,17,22,5,9,14,20,4,11,16,23,6,10,15,21];
+for(let offset=0;offset<bytes.length;offset+=64){
+const words=[];for(let j=0;j<16;j++){const k=offset+j*4;words[j]=(bytes[k]|(bytes[k+1]<<8)|(bytes[k+2]<<16)|(bytes[k+3]<<24))|0;}
+let a=a0,b=b0,c=c0,d=d0;
+for(let i=0;i<64;i++){
+let f,g,shift;
+if(i<16){f=(b&c)|(~b&d);g=i;shift=shifts[i%4];}
+else if(i<32){f=(d&b)|(~d&c);g=(5*i+1)%16;shift=shifts[4+i%4];}
+else if(i<48){f=b^c^d;g=(3*i+5)%16;shift=shifts[8+i%4];}
+else{f=c^(b|~d);g=(7*i)%16;shift=shifts[12+i%4];}
+const k=Math.floor(Math.abs(Math.sin(i+1))*4294967296)|0;
+const next=add(b,rol(add(add(add(a,f),k),words[g]),shift));
+a=d;d=c;c=b;b=next;
+}
+a0=add(a0,a);b0=add(b0,b);c0=add(c0,c);d0=add(d0,d);
+}
+function littleHex(n){let out='';for(let i=0;i<4;i++)out+=((n>>>(i*8))&255).toString(16).padStart(2,'0');return out;}
+return littleHex(a0)+littleHex(b0)+littleHex(c0)+littleHex(d0);
+}
+function chapIdentifierByte(value){
+const text=String(value||'').trim();if(!text)return 0;
+const octal=text.match(/^\\([0-7]{3})$/);if(octal)return parseInt(octal[1],8)&255;
+if(/^0x[0-9a-f]{1,2}$/i.test(text))return parseInt(text.slice(2),16)&255;
+if(/^[0-9a-f]{2}$/i.test(text)&&/[a-f]/i.test(text))return parseInt(text,16)&255;
+if(/^\d+$/.test(text))return Number(text)&255;
+return text.length===1?text.charCodeAt(0)&255:0;
+}
+function decodeChapChallenge(value){
+const text=String(value||'');
+if(!text)return '';
+const octal=/\\([0-7]{3})/g;
+if(octal.test(text)){octal.lastIndex=0;return text.replace(octal,(_,digits)=>String.fromCharCode(parseInt(digits,8)));}
+if(/^(?:[0-9a-f]{2})+$/i.test(text)){let decoded='';for(let i=0;i<text.length;i+=2)decoded+=String.fromCharCode(parseInt(text.slice(i,i+2),16));return decoded;}
+return text;
+}
 function submitMikrotikLogin(mac,redirectUrl){
 const device=deviceDetails(),form=byId('mikrotik-auto-login');
 if(!form)throw new Error('RouterOS login form পাওয়া যায়নি।');
@@ -504,8 +554,13 @@ if(!device.login||device.login.indexOf('$(')>=0||device.login.indexOf('://')<0)t
 let loginUrl=device.login;
  if(redirectUrl){try{const candidate=new URL(redirectUrl),expected=new URL(device.login);if(/^https?:$/.test(candidate.protocol)&&candidate.host===expected.host)loginUrl=candidate.href;}catch(_){}}
  form.action=loginUrl;
-byId('mt-user').value=normalizeMac(mac)||device.mac;
-byId('mt-pass').value=normalizeMac(mac)||device.mac;
+const username=normalizeMac(mac)||device.mac,password=username;
+byId('mt-user').value=username;
+// RouterOS http-pap accepts the raw password. http-chap requires MD5 of the
+// challenge identifier byte + password + challenge; never submit raw credentials
+// when a challenge is present.
+byId('mt-pass').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;
+if(device.chapChallenge){byId('mt-chap-id').value=device.chapId;byId('mt-chap-challenge').value=device.chapChallenge;}
 if(device.orig)form.querySelector('[name="dst"]').value=device.orig;
 showStatus('সংযোগ অনুমোদিত হয়েছে। ইন্টারনেট চালু হচ্ছে…',false);
 window.setTimeout(function(){form.submit();},350);

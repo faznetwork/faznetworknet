@@ -81,7 +81,7 @@ async function deviceLookup(req,res){
   if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit phone number when supplied.");
   try{
     const result=await db.query(
-      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username,cleanup_status FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
+      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username,cleanup_status FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1::text) OR LOWER(username)=LOWER($1::text) OR ($2::text<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2::text,'880'||SUBSTRING($2::text FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1::text) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
       [mac,phone]
     );
     const rows=result.rows||[];
@@ -129,7 +129,7 @@ async function activate(req,res){
     reservation=await db.withTransaction(async client=>{
       if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-phone:"+phone]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-       const found=await client.query("SELECT * FROM hotspot_vouchers WHERE (REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired')) OR LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(username)=LOWER($2) ORDER BY id DESC FOR UPDATE",[phone,mac]);
+       const found=await client.query("SELECT * FROM hotspot_vouchers WHERE (REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired')) OR LOWER(COALESCE(mac_address,''))=LOWER($2::text) OR LOWER(username)=LOWER($2::text) ORDER BY id DESC FOR UPDATE",[phone,mac]);
       const allRows=found.rows||[];
       const phoneRows=phone?allRows.filter(row=>normalizePhone(row.phone)===phone):[];
       const macRows=allRows.filter(row=>getKnownMac(row)===mac);
@@ -171,7 +171,7 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),phone),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
+      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
       if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
       const account=locked.rows[0];
       return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
@@ -198,10 +198,10 @@ async function activate(req,res){
     }
     if(expiry&&expiry.getTime()<=Date.now()){
       try{await mikrotikService.cleanupExpiredHotspotUser(mac);}catch(cleanupError){console.warn("[Hotspot activation] Expired RouterOS user cleanup pending:",cleanupError.message);}
-      await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1 AND mac_address=$2",[account.id,mac]).catch(()=>{});
+      await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1::bigint AND mac_address=$2::text",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,phone=COALESCE(NULLIF($4,''),phone),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1 AND LOWER(mac_address)=LOWER($2) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$2::text,mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -229,7 +229,7 @@ async function claimVoucher(req,res){
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 AND password=$2 AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
@@ -237,7 +237,7 @@ async function claimVoucher(req,res){
       if(known&&known!==mac)throw makeError("VOUCHER_MAC_LOCKED",403,"This voucher is already bound to another device.");
       const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
       if(status==="active"&&expiry&&expiry.getTime()<=Date.now())throw makeError("PACKAGE_EXPIRED",410,"This voucher package has expired.");
-      const conflicts=await client.query("SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>$2 AND LOWER(COALESCE(mac_address,''))=LOWER($1) FOR UPDATE",[mac,row.id]);
+      const conflicts=await client.query("SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>$2::bigint AND LOWER(COALESCE(mac_address,''))=LOWER($1::text) FOR UPDATE",[mac,row.id]);
       for(const conflict of conflicts.rows||[]){
         const state=String(conflict.status||"").toLowerCase();
         const deadline=parseSavedExpiry(conflict.expires_at)||parseCommentExpiry(conflict.comment);
@@ -245,7 +245,7 @@ async function claimVoucher(req,res){
         if(liveActive)throw makeError("MAC_ALREADY_BOUND",409,"This device MAC is already bound to another live voucher. Sign in with that voucher or contact support.");
         await client.query("UPDATE hotspot_vouchers SET mac_address=NULL,status=CASE WHEN LOWER(COALESCE(status,''))='active' THEN 'expired' ELSE status END,expired_at=CASE WHEN LOWER(COALESCE(status,''))='active' THEN COALESCE(expired_at,expires_at,NOW()) ELSE expired_at END,updated_at=NOW() WHERE id=$1",[conflict.id]);
       }
-      await client.query("UPDATE hotspot_vouchers SET mac_address=$1,updated_at=NOW() WHERE id=$2",[mac,row.id]);
+      await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,updated_at=NOW() WHERE id=$2::bigint",[mac,row.id]);
       return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim"};
     });
     let statusCode=200;
@@ -256,7 +256,7 @@ async function claimVoucher(req,res){
           try{
             const trxId="SCRATCH-"+claimed.id+"-"+Date.now();
             const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot','scratch_card',NOW(),$6) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,"Scratch-card redemption for voucher "+claimed.id,"scratch-card:"+claimed.id]);
-            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
+            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
           }catch(auditError){console.error("[Scratch voucher sales audit] Failed to record sale:",auditError.message);body.sale_audit_warning=true;}
         }
         return res.status(statusCode).json(body);

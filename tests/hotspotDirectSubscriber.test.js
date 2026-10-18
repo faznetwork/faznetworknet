@@ -25,7 +25,7 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  assert.match(auth,/async function activate/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
- assert.match(auth,/phone=COALESCE\(NULLIF\(\$4,''\),phone\)/);
+  assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
 });
 
@@ -61,7 +61,7 @@ test("schema distinguishes direct subscribers from legacy and scratch-card inven
 
 test("scratch voucher claim releases only stale MAC bindings and rejects live conflicts",()=>{
  const auth=read("controllers/hotspotAuthController.js");
- assert.match(auth,/SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>\$2 AND LOWER\(COALESCE\(mac_address,''\)\)=LOWER\(\$1\) FOR UPDATE/);
+  assert.ok(auth.includes("SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>$2::bigint AND LOWER(COALESCE(mac_address,''))=LOWER($1::text) FOR UPDATE"));
  assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
  assert.match(auth,/SET mac_address=NULL,status=CASE WHEN LOWER\(COALESCE\(status,''\)\)='active' THEN 'expired'/);
  assert.match(auth,/MAC_ALREADY_BOUND/);

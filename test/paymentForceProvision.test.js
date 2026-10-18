@@ -124,8 +124,8 @@ test("optional phone never becomes NULL in Hotspot payment associations and veri
  const source=fs.readFileSync(path.join(__dirname,"../controllers/paymentController.js"),"utf8");
  const force=source.slice(source.indexOf("async function forceProvisionHotspot"),source.indexOf("async function summary",source.indexOf("async function forceProvisionHotspot")));
  const verify=source.slice(source.indexOf("async function verifyTrx"),source.indexOf("function macFromBody",source.indexOf("async function verifyTrx")));
- assert.ok(force.includes("COALESCE(NULLIF($6::text,''),'')"),"Force Provision voucher phone must fall back to a non-null empty string");
- assert.ok(force.includes("COALESCE(NULLIF($3::text,''),'')"),"Force Provision payment association phone must fall back to a non-null empty string");
+ assert.ok(force.includes("COALESCE(NULLIF($6::text,''),'Unlinked')"),"Force Provision voucher phone must fall back to a non-null empty string");
+ assert.ok(force.includes("COALESCE(NULLIF($3::text,''),'Unlinked')"),"Force Provision payment association phone must fall back to a non-null empty string");
  assert.ok(verify.includes("WHERE UPPER(TRIM(trx_id))=$2::text AND status='unmatched'"),"Online verification claim TrxID parameter must be explicitly typed");
  assert.ok(verify.includes("SELECT status FROM transactions WHERE UPPER(TRIM(trx_id))=$1::text LIMIT 1"),"Online verification conflict lookup parameter must be explicitly typed");
  assert.ok(verify.includes("password=CASE WHEN $11::text IS NOT NULL THEN $2::text ELSE password END"),"Online verification voucher UPDATE must reference $2 with an explicit type instead of leaving a placeholder gap");
