@@ -307,7 +307,7 @@ async function manualMatch(req,res){
 }
 
 async function forceProvisionHotspot(req,res){
- let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,claimWasCreated=false,stagedVoucherId=null;
+ let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,claimWasCreated=false,stagedVoucherId=null,transactionId=null;
  try{
   const body=req.body&&typeof req.body==="object"?req.body:{};
   const trxId=String(body.trxId||body.trx_id||"").trim().toUpperCase();
@@ -329,7 +329,7 @@ async function forceProvisionHotspot(req,res){
    if(pppoe.rows?.length)return res.status(409).json({success:false,code:"PPPOE_TRANSACTION",error:"This transaction is linked to a PPPoE subscriber and cannot be force-provisioned as Hotspot."});
   }
   const existingAssociation=await db.query("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=$1::bigint LIMIT 1",[tx.id]);
-  const associated=existingAssociation.rows?.[0]||null;
+  let associated=existingAssociation.rows?.[0]||null;
   if(["processed","paid"].includes(status)&&!associated&&!["online_mfs","hotspot"].includes(String(tx.sale_type||"").toLowerCase())&&!["hotspot","manual_hotspot","force_hotspot"].includes(String(tx.claim_flow||"").toLowerCase())&&!/^01[0-9]{9}$/.test(normalizePhone(matchedUsername))){
    return res.status(409).json({success:false,code:"NOT_HOTSPOT_PAYMENT",error:"This completed payment has no Hotspot association. Confirm it is a Hotspot payment before provisioning."});
   }
@@ -360,8 +360,11 @@ async function forceProvisionHotspot(req,res){
   }
   let voucher=null,expiresAt=null,comment="",samePayment=false,resetCounters=true,previousUsername="";
   await db.withTransaction(async client=>{
+   await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-trx:"+String(tx.id)]);
    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-mac:"+mac]);
    if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-force-hotspot-phone:"+phone]);
+   const associationNow=await client.query("SELECT hp.voucher_id,v.* FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=$1::bigint LIMIT 1",[tx.id]);
+   associated=associationNow.rows?.[0]||null;
    let target=associated&&associated.id?associated:null;
    if(target){
     const bound=normalizeMac(target.mac_address)||normalizeMac(target.username);
@@ -379,7 +382,7 @@ async function forceProvisionHotspot(req,res){
     if(bound&&bound!==mac)throw Object.assign(new Error("This subscriber is already bound to a different device MAC."),{statusCode:409,code:"MAC_ALREADY_BOUND"});
    }
    const targetStatus=String(target?.status||"").toLowerCase();
-   samePayment=Boolean(associated&&target&&Number(associated.id)===Number(target.id));
+   samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Boolean(associated&&target&&Number(associated.id)===Number(target.id));
    resetCounters=!(samePayment&&targetStatus==="active");
    const priorExpiry=target?.expires_at?new Date(target.expires_at):null,priorStillValid=Boolean(priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now());
    const duration=hotspotDurationMs(validity);
@@ -414,10 +417,10 @@ async function forceProvisionHotspot(req,res){
     const nextStatus=originalStatus==="unmatched"?"unmatched":"processing",used=nextStatus==="processing";
     await db.query("UPDATE transactions SET status=$1,used=$2,matched_username=CASE WHEN $2 THEN matched_username ELSE NULL END,claimed_at=CASE WHEN $2 THEN claimed_at ELSE NULL END,claimed_by=CASE WHEN $2 THEN claimed_by ELSE NULL END,claim_flow=CASE WHEN $2 THEN claim_flow ELSE NULL END,needs_reconciliation=$2 WHERE id=$3::bigint AND status='processing' AND used=true",[nextStatus,used,claimedTransactionId]);
    }catch(rollbackError){console.error("[Force Provision] Failed to restore payment claim",claimedTransactionId,rollbackError?.message||rollbackError);}
-  }else if(claimedTransactionId!==null&&routerSucceeded){
-   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[claimedTransactionId]);}catch(auditError){console.error("[Force Provision] Failed to mark reconciliation",claimedTransactionId,auditError?.message||auditError);}
+  }else if(transactionId!==null&&routerSucceeded){
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[transactionId]);}catch(auditError){console.error("[Force Provision] Failed to mark reconciliation",transactionId,auditError?.message||auditError);}
   }else if(!routerSucceeded&&["processed","paid"].includes(originalStatus)){
-   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[req.body?.id||null]);}catch(_){}
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1::bigint",[transactionId]);}catch(_){}
   }
   const statusCode=error?.statusCode||500;
   console.error("[Force Provision] Failed:",error?.message||error);
