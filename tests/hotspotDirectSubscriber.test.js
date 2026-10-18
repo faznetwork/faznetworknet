@@ -120,4 +120,7 @@ test("expiration cleanup differentiates direct subscribers from ephemeral vouche
  assert.match(service,/\/ip\/hotspot\/cookie\/remove/);
  assert.match(service,/\/ip\/hotspot\/user\/remove/);
  assert.match(auth,/can_recharge:Boolean\(expired\)/);
+ const portal=read("public/login.html");
+ assert.match(portal,/if\(lookup\.expired\)\{showStatus/);
+ assert.match(service,/disabled:false/);
 });
