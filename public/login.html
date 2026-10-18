@@ -322,6 +322,7 @@
         .helpline { color: var(--accent-gold); font-weight: 700; text-decoration: none; }
     
 /* Mobile-first FAZ NETWORK captive portal refresh */
+.input-box{position:relative}
 :root{color-scheme:dark;--primary:#0a3d2e;--accent:#10b981;--muted:#9bb4aa;--line:rgba(167,243,208,.14)}
 html{min-height:100%;background:#061711}
 body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;align-items:center;justify-content:center;color:#f0fdf4;background:radial-gradient(ellipse at 50% -10%,rgba(16,185,129,.22),transparent 54%),radial-gradient(ellipse at 100% 90%,rgba(16,185,129,.10),transparent 42%),#061711;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
@@ -753,8 +754,9 @@ ticker.style.display='block';ticker.firstElementChild.textContent=String(text);
 function applyFeatures(features){
 const f=features||{},mapping=[['online_payment','online','section-online'],['voucher_pin','pin','section-pin'],['qr_scan','qr','section-qr']];
 let enabled=[];
-mapping.forEach(function(item){const on=f[item[0]]!==false,button=byId('m-btn-'+item[1]),section=byId(item[2]);if(button)button.style.display=on?'':'none';if(section&&!on)section.style.display='none';if(on)enabled.push(item[1]);});
-if(!enabled.length){showStatus('এই মুহূর্তে কোনো লগইন পদ্ধতি সক্রিয় নেই। সহায়তার জন্য হেল্পলাইনে যোগাযোগ করুন।',true);byId('btn-master-action').disabled=true;return;}
+mapping.forEach(function(item){const on=f[item[0]]!==false,button=byId('m-btn-'+item[1]),section=byId(item[2]);if(button)button.style.display=on?'':'none';const sectionOn=item[2]==='section-pin'?(f.voucher_pin!==false||f.qr_scan!==false):on;if(section&&!sectionOn)section.style.display='none';if(on)enabled.push(item[1]);});
+const qrButton=byId('open-qr-scanner');if(qrButton)qrButton.style.display=f.qr_scan===false?'none':'';
+if(!enabled.length){setAuthMethod('member');showStatus('Online payment ও voucher আপাতত বন্ধ আছে। Member Login ব্যবহার করুন অথবা হেল্পলাইনে যোগাযোগ করুন।',false);byId('btn-master-action').disabled=false;return;}
 byId('btn-master-action').disabled=false;
 if(enabled.indexOf(currentMethod)<0)setAuthMethod(enabled[0]);
 }
