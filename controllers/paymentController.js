@@ -325,7 +325,7 @@ async function verifyTrx(req,res){
   // may send the device MAC in "username"; never treat it as a customer phone.
   const submittedMac=macFromBody(body);
   const normalizedPhone=normalizePhone(body.phone||body.account_phone||body.customer_phone||"");
-  const phone=/^01\\d{9}$/.test(normalizedPhone)?normalizedPhone:"";
+  const phone=/^01\d{9}$/.test(normalizedPhone)?normalizedPhone:"";
   const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
   if(!cleanTrx)return fail(400,"TRXID_REQUIRED","TrxID/TxnID is required.");
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
