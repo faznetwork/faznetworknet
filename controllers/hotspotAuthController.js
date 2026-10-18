@@ -256,7 +256,7 @@ async function claimVoucher(req,res){
           try{
             const trxId="SCRATCH-"+claimed.id+"-"+Date.now();
             const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot','scratch_card',NOW(),$6) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,"Scratch-card redemption for voucher "+claimed.id,"scratch-card:"+claimed.id]);
-            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
+            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
           }catch(auditError){console.error("[Scratch voucher sales audit] Failed to record sale:",auditError.message);body.sale_audit_warning=true;}
         }
         return res.status(statusCode).json(body);
