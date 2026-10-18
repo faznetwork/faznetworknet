@@ -405,14 +405,16 @@ samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Bool
    stagedVoucherId=voucher.id;
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),''),$4::numeric,$5::text,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[tx.id,voucher.id,phone,amount,profile.name]);
   });
-  await mikrotikService.forceProvisionHotspotUser({username:mac,password:mac,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment,server:voucher?.server||"all",previousUsername,resetCounters});
+  const routerResult=await mikrotikService.forceProvisionHotspotUser({username:mac,password:mac,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment,server:voucher?.server||"all",previousUsername,resetCounters});
   routerSucceeded=true;
   const finalizedVoucher=await db.query("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active',profile=$2,comment=$3,first_login_at=COALESCE(first_login_at,NOW()),expires_at=$4::timestamptz,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$5::bigint RETURNING id,username,profile,profile_id,status,phone,mac_address,expires_at,transaction_id",[mac,profile.name,comment,expiresAt,stagedVoucherId]);
   if(!finalizedVoucher.rows?.length)throw new Error("RouterOS provisioning succeeded but the voucher could not be finalized in PostgreSQL.");
   const finalizedTx=await db.query("UPDATE transactions SET status=CASE WHEN LOWER(status)='processing' THEN 'processed' ELSE status END,used=true,matched_username=$1,needs_reconciliation=false,claim_flow='force_hotspot' WHERE id=$2::bigint AND LOWER(status) IN ('processing','processed','paid') RETURNING id,status",[mac,tx.id]);
   if(!finalizedTx.rows?.length)throw new Error("RouterOS provisioning succeeded but the payment transaction could not be finalized.");
   claimedTransactionId=null;
-  return res.json({success:true,status:finalizedTx.rows[0].status,trxId:tx.trx_id,mac,phone,profile:profile.name,amount,expires_at:expiresAt?new Date(expiresAt).toISOString():null,voucher:finalizedVoucher.rows[0],message:"Hotspot user provisioned on MikroTik and payment linked successfully."});
+  const autoAuthReady=Boolean(routerResult?.macAuthEnabled);
+  const message=autoAuthReady?"Hotspot user provisioned; stale active sessions and cookies cleared. MAC auto-auth is enabled and will reconnect on the device’s next traffic.":"Hotspot user provisioned and stale sessions/cookies cleared, but instant MAC auto-auth is not enabled on the applicable Hotspot server profile. Enable login-by=mac there or the client must complete portal login.";
+  return res.json({success:true,status:finalizedTx.rows[0].status,trxId:tx.trx_id,mac,phone,profile:profile.name,amount,autoAuthReady,clearedActiveSessions:Number(routerResult?.clearedActiveSessions||0),clearedCookies:Number(routerResult?.clearedCookies||0),expires_at:expiresAt?new Date(expiresAt).toISOString():null,voucher:finalizedVoucher.rows[0],message});
  }catch(error){
   if(claimedTransactionId!==null&&!routerSucceeded){
    try{
