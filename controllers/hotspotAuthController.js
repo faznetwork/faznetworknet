@@ -81,7 +81,7 @@ async function deviceLookup(req,res){
   if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit phone number when supplied.");
   try{
     const result=await db.query(
-      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
+      "SELECT id,status,profile,phone,expires_at,first_login_at,mac_address,subscriber_type,activation_type,username,cleanup_status FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1) OR ($2<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2)))) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY CASE WHEN LOWER(COALESCE(mac_address,''))=LOWER($1) THEN 0 WHEN LOWER(COALESCE(status,''))='pending_claim' THEN 1 ELSE 2 END,id DESC LIMIT 2",
       [mac,phone]
     );
     const rows=result.rows||[];
@@ -92,8 +92,20 @@ async function deviceLookup(req,res){
     if(!candidates.length)return res.json({success:true,found:false,requires_phone:true,message:"No direct subscriber is bound to this MAC. A staged subscriber must be identified by its registered phone number or existing payment/voucher credentials."});
     const row=candidates[0],status=String(row.status||"").toLowerCase();
     if(normalizeMac(row.mac_address)&&normalizeMac(row.mac_address)!==mac)return fail(403,"MAC_ALREADY_BOUND","This subscriber is permanently bound to another device.");
-    if(status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()))return fail(410,"PACKAGE_EXPIRED","This subscriber package has expired. Purchase a new package to continue.");
-    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status,profile:row.profile||"",expires_at:row.expires_at||null});
+    const expired=status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now());
+    if(expired){
+      try{
+        if(String(row.cleanup_status||"").toLowerCase()!=="completed"){
+          await mikrotikService.disableExpiredDirectHotspotUser(row.username||mac,row.mac_address||mac);
+          await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='completed',cleanup_error=NULL,updated_at=NOW() WHERE id=$1",[row.id]);
+        }
+      }catch(releaseError){
+        console.error("[Hotspot expired portal release]",releaseError.message);
+        await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='failed',cleanup_error=$2,updated_at=NOW() WHERE id=$1",[row.id,String(releaseError.message||releaseError).slice(0,500)]).catch(()=>{});
+      }
+      return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status:"expired",expired:true,can_recharge:true,session_released:true,profile:"expired_profile",expires_at:row.expires_at||null,message:"আপনার প্যাকেজের মেয়াদ শেষ হয়েছে। পুরোনো সেশন বন্ধ করা হয়েছে—নতুন প্যাকেজ কিনে রিচার্জ করুন।"});
+    }
+    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status,expired:false,can_recharge:false,profile:row.profile||"",expires_at:row.expires_at||null});
   }catch(error){
     console.error("[Hotspot device lookup]",error.message);
     return fail(503,"DEVICE_LOOKUP_FAILED","Unable to check the subscriber record right now.");

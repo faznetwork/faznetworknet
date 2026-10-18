@@ -680,6 +680,11 @@ const option=document.createElement('option');option.value=key;option.textConten
 }
 document.addEventListener('DOMContentLoaded',function(){
 const device=deviceDetails();byId('display-mac').textContent=device.mac||'সনাক্ত হচ্ছে…';
+if(device.mac){
+requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac})})
+.then(function(result){if(result&&result.expired&&result.can_recharge){setAuthMethod('online');showStatus(result.message||'প্যাকেজের মেয়াদ শেষ। Online MFS বা Voucher PIN দিয়ে রিচার্জ করুন।',false);}})
+.catch(function(error){console.warn('[Expired Hotspot check]',error.message);});
+}
 if(!device.mac)showStatus('MikroTik redirect থেকে ডিভাইস MAC পাওয়া যায়নি।',true);
 loadPackagesAndSettings();applyPublicPortalBranding();
 byId('btn-master-action').addEventListener('click',handleMasterAction);
