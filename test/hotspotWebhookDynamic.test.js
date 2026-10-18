@@ -347,16 +347,22 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
   }
 });
 
-test("verifyTrx rejects invalid Bangladeshi phone numbers before claiming a payment",async()=>{
+test("verifyTrx treats an absent or malformed phone as optional and proceeds to TrxID lookup",async()=>{
   const oldQuery=db.query;
-  let called=false;
+  let lookedUp=false,lookupParams=[];
   try{
-    db.query=async()=>{called=true;return {rows:[]};};
-    const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"bad-phone-test",body:{service_type:"hotspot",phone:"12345",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"}},res);
-    assert.equal(res.statusCode,400);
-    assert.equal(res.body.code,"INVALID_ACCOUNT_PHONE");
-    assert.equal(called,false);
+    db.query=async(sql,params=[])=>{if(sql.startsWith("SELECT * FROM transactions")){lookedUp=true;lookupParams=params;return {rows:[]};}throw new Error("Unexpected query: "+sql);};
+    for(const phone of ["","12345",undefined]){
+      lookedUp=false;lookupParams=[];
+      const body={service_type:"hotspot",mac:"AA:BB:CC:DD:EE:FF",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"};
+      if(phone!==undefined)body.phone=phone;
+      const res=responseRecorder();
+      await paymentController.verifyTrx({ip:"optional-phone-test-"+String(phone),body},res);
+      assert.equal(res.statusCode,404);
+      assert.equal(res.body.code,"NOT_FOUND_OR_DELAYED");
+      assert.equal(lookedUp,true,"verification should reach TrxID lookup without a phone");
+      assert.deepEqual(lookupParams,["TXN"]);
+    }
   }finally{db.query=oldQuery;}
 });
 
