@@ -268,7 +268,7 @@ async function generate(req,res){
      username=(userPrefix||"")+randomPin(charLength);
      password=randomPin(8);
      const result=await client.query(
-      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false) ON CONFLICT (username) DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at",
+      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at",
       [username,password,profileName,normalizedValidity,price,"Scratch voucher; profile validity applies on first successful login.",server]
      );
      inserted=result.rows[0]||null;
