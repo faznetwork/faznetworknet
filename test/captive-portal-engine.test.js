@@ -68,7 +68,7 @@ test("online TrxID checkout in the captive login page does not require a custome
  assert.ok(start>=0&&end>start&&onlineStart>=0&&onlineEnd>onlineStart,"online checkout handler must exist");
  assert.match(onlineHandler,/VERIFY_API_URL/);
  assert.match(onlineHandler,/trxId:trx/);
- assert.match(onlineHandler,/package_id:selectedPackage\\.profile/);
+ assert.match(onlineHandler,/package_id:selectedPackage[.]profile/);
  assert.doesNotMatch(onlineHandler,/direct_subscriber_phone/);
  assert.doesNotMatch(onlineHandler,/INVALID_ACCOUNT_PHONE/);
 });
