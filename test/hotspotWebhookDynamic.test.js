@@ -336,7 +336,7 @@ test("the same MAC resolves and updates the phone when a customer changes SIM",a
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
       if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[pendingVoucher({username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF",phone:"01711111111",status:"unused",first_login_at:null,expires_at:new Date(Date.now()+3600000)})]};
-      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1,password=$2,mac_address=$3")){
+      if(/^UPDATE hotspot_vouchers SET username=\$1(?:::text)?,password=\$2(?:::text)?,mac_address=\$3(?:::text)?/.test(sql)){
         updatedPhone=params[6];
         return {rows:[pendingVoucher({id:41,username:params[0],password:params[1],mac_address:params[2],phone:params[6],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
       }
