@@ -58,3 +58,11 @@ test("schema distinguishes direct subscribers from legacy and scratch-card inven
  assert.match(schema,/activation_type VARCHAR\(24\) NOT NULL DEFAULT 'legacy'/);
  assert.match(schema,/CHECK \(subscriber_type IN \('direct_subscriber','scratch_voucher','legacy'\)\)/);
 });
+
+test("scratch voucher claim releases only stale MAC bindings and rejects live conflicts",()=>{
+ const auth=read("controllers/hotspotAuthController.js");
+ assert.match(auth,/SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>\$2 AND LOWER\(COALESCE\(mac_address,''\)\)=LOWER\(\$1\) FOR UPDATE/);
+ assert.match(auth,/state==="expired"\|\|\(state==="active"&&deadline&&deadline\.getTime\(\)<=Date\.now\(\)\)/);
+ assert.match(auth,/SET mac_address=NULL,status=CASE WHEN LOWER\(COALESCE\(status,''\)\)='active' THEN 'expired'/);
+ assert.match(auth,/MAC_ALREADY_BOUND/);
+});
