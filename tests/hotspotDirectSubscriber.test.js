@@ -45,7 +45,7 @@ test("All Hotspot Users is PostgreSQL-first and enriched only by active sessions
 
 test("expired subscribers are retained until the 30-day purge and sales transactions are never deleted",()=>{
  const job=read("jobs/hotspotExpirationCleanup.js");
- assert.match(job,/profile='expired_profile'/);
+ assert.doesNotMatch(job,/profile='expired_profile'/);
  assert.match(job,/expires_at < NOW\(\) - INTERVAL '30 days'/);
  assert.match(job,/cleanupExpiredHotspotUser\(row\.username, row\.mac_address\)/);
  assert.doesNotMatch(job,/DELETE FROM transactions/i);
