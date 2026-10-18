@@ -235,7 +235,7 @@ async function manualMatchHotspot(req,res,tx,trxId){
    if(live.length>1)throw Object.assign(new Error("Multiple live Hotspot packages are linked to this phone. Reconcile the account before assigning payment."),{statusCode:409,code:"MULTIPLE_LIVE_PACKAGES"});
    const target=(boundMac?rows.find(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===boundMac):null)||live[0]||rows[0]||null;
    wasRecharge=live.length>0;
-   const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+phone);
+   const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+(phone||("TX-"+tx.id)));
    const priorExpiry=target?.expires_at?new Date(target.expires_at):null,packageDuration=hotspotDurationMs(validity);
    const stackedExpiry=Boolean(target&&["active","pending_claim"].includes(String(target.status||"").toLowerCase())&&priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now()&&packageDuration>0);
    const nextExpiry=stackedExpiry?new Date(priorExpiry.getTime()+packageDuration):null,stagedComment=nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
@@ -321,9 +321,11 @@ async function verifyTrx(req,res){
   const hasHotspotContext=["package_id","packageId","mac","mac_address","macAddress"].some(key=>String(body[key]||"").trim()!=="");
   const serviceType=explicitServiceType||(hasHotspotContext?"hotspot":"");
   if(serviceType!=="hotspot")return fail(400,"SERVICE_TYPE_REQUIRED","Hotspot checkout must send service_type='hotspot' or a Hotspot package_id/MAC.");
-  const phone=normalizePhone(body.phone||body.account_phone||body.customer_phone||body.username||"");
-  if(!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi customer phone number.");
+  // The phone is optional for captive-portal MFS verification. Older portal builds
+  // may send the device MAC in "username"; never treat it as a customer phone.
   const submittedMac=macFromBody(body);
+  const normalizedPhone=normalizePhone(body.phone||body.account_phone||body.customer_phone||"");
+  const phone=/^01\\d{9}$/.test(normalizedPhone)?normalizedPhone:"";
   const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
   if(!cleanTrx)return fail(400,"TRXID_REQUIRED","TrxID/TxnID is required.");
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
@@ -349,20 +351,21 @@ async function verifyTrx(req,res){
   try{validityConfig=metadata.validityValue?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}catch(_){validityConfig=hc.parseStoredValidity(profile);}
   const validity=String(validityConfig.validity||"").trim(),quota=Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0);
   if(!validity&&!quota)return fail(400,"PROFILE_INVALID","The selected Hotspot package has no usable validity or data quota configured.");
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1,sale_type='online_mfs' WHERE UPPER(TRIM(trx_id))=$2 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[phone,cleanTrx]);
+  const accountIdentifier=phone||submittedMac||("PENDING-TX-"+tx.id);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='hotspot',matched_username=$1,sale_type='online_mfs' WHERE UPPER(TRIM(trx_id))=$2 AND status='unmatched' AND (used=false OR used IS NULL) RETURNING id",[accountIdentifier,cleanTrx]);
   if(!claim.rows.length){const latest=await db.query("SELECT status FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);const ls=String(latest.rows[0]?.status||"").toLowerCase();return fail(409,ls==="processing"?"TRANSACTION_IN_PROCESS":"TRANSACTION_ALREADY_USED","Another request has claimed this TrxID. No package was staged.");}
   claimedTransactionId=claim.rows[0].id??tx.id;
   const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
   const pendingComment="FAZ|PENDING|PROFILE="+profile.name;
   let wasRecharge=false,provisioningVoucher=null;
   await db.withTransaction(async client=>{
-   await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
+   if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
    if(submittedMac)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-mac:"+submittedMac]);
-   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) OR ($2<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(COALESCE(username,''))=LOWER($2))) ORDER BY id DESC FOR UPDATE",[phone,submittedMac]);
+   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2))) OR ($2<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(COALESCE(username,''))=LOWER($2))) ORDER BY id DESC FOR UPDATE",[phone,submittedMac]);
    const rows=records.rows||[];
    const macOf=row=>normalizeMac(row?.mac_address)||normalizeMac(row?.username);
    const macRows=submittedMac?rows.filter(row=>macOf(row)===submittedMac):[];
-   const phoneRows=rows.filter(row=>normalizePhone(row.phone)===phone);
+   const phoneRows=phone?rows.filter(row=>normalizePhone(row.phone)===phone):[];
    const target=macRows[0]||phoneRows.find(row=>macOf(row))||phoneRows[0]||rows[0]||null;
    const boundMac=submittedMac||macOf(target)||"";
    const live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
@@ -383,7 +386,7 @@ async function verifyTrx(req,res){
     row=inserted.rows?.[0];
    }
    if(!row)throw new Error("The paid Hotspot package could not be saved in PostgreSQL.");
-   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[claimedTransactionId,row.id,phone,amount,row.profile]);
+   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1,$2,$3,$4,$5,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[claimedTransactionId,row.id,phone||"",amount,row.profile]);
    const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[username,claimedTransactionId]);
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
    provisioningVoucher={...row,username,phone,mac_address:boundMac||null,expires_at:nextExpiry,first_login_at:firstLoginAt,comment:stagedComment,profile:profile.name,server:row.server||"all",id:row.id};
@@ -402,8 +405,10 @@ async function verifyTrx(req,res){
    }
   }else activationPending=true;
   const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
-  const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
+  if(phone){
+   const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
+   require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
+  }
   return res.json({success:true,pending_activation:!activated,activation_pending:activationPending,message:activated?"Payment verified and the existing MAC-bound Hotspot account has been recharged.":activationPending?"Payment verified and saved; RouterOS activation is pending. Reconnect or contact support if it does not activate automatically.":"Payment verified.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:expiration?new Date(expiration).toISOString():null,username:mac||null,password:mac||null,mac:mac||null});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
