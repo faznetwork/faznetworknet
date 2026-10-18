@@ -28,7 +28,7 @@ test("embedded MD5 implementation matches known vectors for CHAP hashing",()=>{
   vm.runInNewContext(md5Source+";globalThis.md5Hex=md5Hex;",context);
   assert.equal(context.md5Hex(""),"d41d8cd98f00b204e9800998ecf8427e");
   assert.equal(context.md5Hex("abc"),"900150983cd24fb0d6963f7d28e17f72");
-  assert.equal(context.md5Hex("\\x00passwordchallenge"),"d7b0a2a1e4d0c2f3c7a1f6b5a9d2c2a1".replace("d7b0a2a1e4d0c2f3c7a1f6b5a9d2c2a1",""));
+  assert.equal(context.md5Hex("\\x00passwordchallenge"),"37f46edfac1bf2d324dac8d245baba18");
 });
 
 test("Force Provision checks the applicable RouterOS login-by profile and clears only matching sessions/cookies",()=>{
