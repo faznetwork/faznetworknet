@@ -2,7 +2,7 @@ const crypto=require("crypto");
 
 function getAdminCredentials(){
   const ADMIN_USER=String(process.env.ADMIN_USERNAME||process.env.ADMIN_USER||"admin").trim()||"admin";
-  const ADMIN_PASS=String(process.env.ADMIN_PASSWORD||"faznetwork2026").trim()||"faznetwork2026";
+  const ADMIN_PASS=String(process.env.ADMIN_PASSWORD||"").trim()||null;
   const ADMIN_HASH=String(process.env.ADMIN_PASSWORD_HASH||"").trim()||null;
   return {ADMIN_USER,ADMIN_PASS,ADMIN_HASH};
 }
@@ -18,6 +18,8 @@ async function adminCredentialsValid(username,password){
       if(await bcrypt.compare(inputPass,ADMIN_HASH))return true;
     }catch(error){console.warn("[Admin Auth] bcrypt comparison failed:",error.message);}
   }
+  // Fail closed: never authenticate with an embedded/default password.
+  if(!ADMIN_PASS)return false;
   return inputPass===ADMIN_PASS;
 }
 
