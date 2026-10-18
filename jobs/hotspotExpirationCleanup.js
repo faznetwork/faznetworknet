@@ -116,7 +116,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         }));
       } catch (alertError) { logger.error('[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:',alertError.message); }
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,subscriber_type,activation_type,sale_type FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,subscriber_type,activation_type FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
