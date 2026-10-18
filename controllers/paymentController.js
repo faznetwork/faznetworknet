@@ -361,7 +361,7 @@ async function verifyTrx(req,res){
   await db.withTransaction(async client=>{
    if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
    if(submittedMac)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-mac:"+submittedMac]);
-   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2))) OR ($2<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($2) OR LOWER(COALESCE(username,''))=LOWER($2))) ORDER BY id DESC FOR UPDATE",[phone,submittedMac]);
+   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1::text<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2))) OR ($2::text<>'' AND (LOWER(COALESCE(mac_address,''))=LOWER($2::text) OR LOWER(COALESCE(username,''))=LOWER($2::text))) ORDER BY id DESC FOR UPDATE",[String(phone||''),String(submittedMac||'')]);
    const rows=records.rows||[];
    const macOf=row=>normalizeMac(row?.mac_address)||normalizeMac(row?.username);
    const macRows=submittedMac?rows.filter(row=>macOf(row)===submittedMac):[];
