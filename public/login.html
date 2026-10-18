@@ -844,6 +844,7 @@ byId('voucher_pin').addEventListener('input',function(){this.value=this.value.to
 byId('remember-member').addEventListener('change',function(){try{if(!this.checked)localStorage.removeItem('fzn_hotspot_member_username');else if(byId('member_username').value)localStorage.setItem('fzn_hotspot_member_username',byId('member_username').value.trim());}catch(_){ }});
 byId('member_username').addEventListener('input',function(){try{if(byId('remember-member').checked)localStorage.setItem('fzn_hotspot_member_username',this.value.trim());}catch(_){ }});
 byId('cust_trx').addEventListener('input',function(){this.value=this.value.toUpperCase().replace(/\\s+/g,'');});
+window.setTimeout(function(){if(currentMethod==='online')byId('cust_trx').focus({preventScroll:true});},80);
 window.addEventListener('pagehide',stopQrScanner);
 });
 })();
