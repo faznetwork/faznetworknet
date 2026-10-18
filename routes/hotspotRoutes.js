@@ -27,6 +27,8 @@ router.post("/profiles/sync",controller.syncProfiles);
 router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
 router.post("/active/disconnect",userController.blockRouterMutation);
+router.get("/vouchers/batches",controller.voucherBatches);
+router.get("/vouchers/batches/:batchId",controller.voucherBatch);
 router.post("/vouchers/generate",controller.generate);
 router.post("/users/kick",userController.blockRouterMutation);
 router.post("/generate",controller.generate);
