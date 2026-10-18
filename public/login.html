@@ -501,7 +501,9 @@ function submitMikrotikLogin(mac,redirectUrl){
 const device=deviceDetails(),form=byId('mikrotik-auto-login');
 if(!form)throw new Error('RouterOS login form পাওয়া যায়নি।');
 if(!device.login||device.login.indexOf('$(')>=0||device.login.indexOf('://')<0)throw new Error('MikroTik login URL পাওয়া যায়নি। Captive portal থেকে আবার খুলুন।');
-form.action=device.login;
+let loginUrl=device.login;
+ if(redirectUrl){try{const candidate=new URL(redirectUrl),expected=new URL(device.login);if(/^https?:$/.test(candidate.protocol)&&candidate.host===expected.host)loginUrl=candidate.href;}catch(_){}}
+ form.action=loginUrl;
 byId('mt-user').value=normalizeMac(mac)||device.mac;
 byId('mt-pass').value=normalizeMac(mac)||device.mac;
 if(device.orig)form.querySelector('[name="dst"]').value=device.orig;
