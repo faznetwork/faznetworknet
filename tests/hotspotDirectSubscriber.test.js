@@ -106,3 +106,18 @@ test("unused scratch cards show PIN and password rather than a MAC in the vouche
  assert.match(ui,/Voucher PIN:/);
  assert.match(ui,/Password:/);
 });
+
+test("expiration cleanup differentiates direct subscribers from ephemeral vouchers",()=>{
+ const job=read("jobs/hotspotExpirationCleanup.js");
+ const service=read("services/mikrotikService.js");
+ const auth=read("controllers/hotspotAuthController.js");
+ assert.match(job,/subscriber_type/);
+ assert.match(job,/disableExpiredDirectHotspotUser/);
+ assert.match(job,/removeExpiredVoucherHotspotUser/);
+ assert.match(job,/COALESCE\(subscriber_type,\x27legacy\x27\) <> \x27direct_subscriber\x27/);
+ assert.match(service,/=disabled=yes/);
+ assert.match(service,/\/ip\/hotspot\/active\/remove/);
+ assert.match(service,/\/ip\/hotspot\/cookie\/remove/);
+ assert.match(service,/\/ip\/hotspot\/user\/remove/);
+ assert.match(auth,/can_recharge:Boolean\(expired\)/);
+});
