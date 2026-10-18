@@ -919,7 +919,11 @@ class MikroTikService {
       const ips = new Set(active.map(item => lower(item.address)).filter(Boolean));
       for (const host of hosts) if (host?.[".id"] && macs.has(lower(host["mac-address"])) && host.address) ips.add(lower(host.address));
       const cookieMatches = cookies.filter(item => item?.[".id"] && (lower(item.user) === target || macs.has(lower(item["mac-address"]))));
-      const hostMatches = hosts.filter(item => item?.[".id"] && (macs.has(lower(item["mac-address"])) || (item.address && ips.has(lower(item.address))));
+      const hostMatches = hosts.filter(item => {
+        if (!item?.[".id"]) return false;
+        return macs.has(lower(item["mac-address"])) ||
+          Boolean(item.address && ips.has(lower(item.address)));
+      });
       const userMatches = users.filter(item => item?.[".id"] && (lower(item.name) === target || (mac && lower(item.name) === lower(mac))));
       const schedulerNames = new Set(["EXP_" + username, "faz-exp-" + username, ...(mac ? ["EXP_" + mac, "faz-exp-" + mac] : [])].map(lower));
       const schedulerMatches = schedulers.filter(item => item?.[".id"] && schedulerNames.has(lower(item.name)));
