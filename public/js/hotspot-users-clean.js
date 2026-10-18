@@ -158,10 +158,10 @@
   function exportCsv() {
     const q=($("#freshHotspotSearch")?.value||"").trim().toLowerCase();
     const filtered=users.filter(u=>(selectedFilter==="all"||selectedFilter==="online"&&stateOf(u)==="online"||selectedFilter==="active"&&isValidPackage(u)||selectedFilter==="offline"&&stateOf(u)==="offline"&&isValidPackage(u)||selectedFilter==="expired"&&stateOf(u)==="expired")&&[u.username,u.customer_name,u.phone,u.mac_address,u.macAddress,u.profile,u.ip,u.address].some(v=>String(v||"").toLowerCase().includes(q)));
-    const safe=v=>{let s=String(v??"");if(/^[\\t\r\n ]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+    const safe=v=>{let s=String(v??"");if(/^[\t\r\n ]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
     const columns=["Name","Username","Phone","MAC","Package","Status","IP","Expiration"];
     const data=filtered.map(u=>[u.customer_name||u.name,u.username,u.phone,u.mac_address||u.macAddress,packageLabel(u),statusLabel(u),u.ip||u.address,expiryLabel(u.expires_at)]);
-    const csv="\uFEFF"+[columns,...data].map(row=>row.map(safe).join(",")).join("\\r\\n");
+    const csv="\uFEFF"+[columns,...data].map(row=>row.map(safe).join(",")).join("\r\n");
     const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download="faz-hotspot-users-"+selectedFilter+".csv";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
