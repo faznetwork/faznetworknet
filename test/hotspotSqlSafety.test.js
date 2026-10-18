@@ -9,7 +9,7 @@ test("Hotspot voucher writes always supply a non-null phone to payment associati
  const payment=read("controllers/paymentController.js");
  const auth=read("controllers/hotspotAuthController.js");
  const schema=read("db/schema.sql");
- assert.match(schema,/CREATE TABLE IF NOT EXISTS hotspot_voucher_payments[\\s\\S]*?phone VARCHAR\\(40\\) NOT NULL/);
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS hotspot_voucher_payments[\s\S]*?phone VARCHAR\(40\) NOT NULL/);
  assert.ok(payment.includes("COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs')"),"online MFS association must normalize an empty phone");
  assert.ok(payment.includes("phone=COALESCE(NULLIF($6::text,''),NULLIF(phone,''),'Unlinked')"),"force provision update must not preserve a blank/null phone");
  assert.ok(payment.includes("COALESCE(NULLIF($6::text,''),'Unlinked'),'all'"),"force provision insert must normalize an empty phone");
