@@ -10,7 +10,7 @@ test("expired portal lookup exposes recharge state and releases only uncompleted
  const auth=read("controllers/hotspotAuthController.js");
  assert.match(auth,/expired:true,can_recharge:true,session_released:true/);
  assert.match(auth,/disableExpiredDirectHotspotUser\(row\.username\|\|mac,row\.mac_address\|\|mac\)/);
- assert.match(auth,/cleanup_status\|\|"\)\.toLowerCase\(\)!=="completed"/);
+ assert.match(auth,/row\.cleanup_status\|\|""\)\.toLowerCase\(\)!=="completed"/);
  const service=read("services/mikrotikService.js");
  assert.match(service,/async disableExpiredDirectHotspotUser/);
  assert.match(service,/\/ip\/hotspot\/active\/remove/);
