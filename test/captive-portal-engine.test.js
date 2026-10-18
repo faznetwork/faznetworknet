@@ -57,3 +57,15 @@ test("captive portal inline JavaScript parses without syntax errors",()=>{
  assert.ok(inline,"main captive portal script must exist");
  assert.doesNotThrow(()=>new vm.Script(inline,{filename:"public/login.html"}));
 });
+
+test("online TrxID checkout in the captive login page does not require a customer phone",()=>{
+ const start=script.indexOf("async function handleMasterAction()");
+ const end=script.indexOf("window.handleMasterAction=handleMasterAction;",start);
+ const handler=script.slice(start,end);
+ assert.ok(start>=0&&end>start,"main checkout handler must exist");
+ assert.match(handler,/VERIFY_API_URL/);
+ assert.match(handler,/trxId:trx/);
+ assert.match(handler,/package_id:selectedPackage\.profile/);
+ assert.doesNotMatch(handler,/direct_subscriber_phone/);
+ assert.doesNotMatch(handler,/INVALID_ACCOUNT_PHONE/);
+});
