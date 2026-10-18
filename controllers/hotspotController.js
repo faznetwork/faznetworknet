@@ -230,7 +230,46 @@ async function disconnectActive(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 async function generate(req,res){
- return res.status(409).json({success:false,code:"MAC_REQUIRED",error:"Random username/PIN vouchers are incompatible with MAC-as-username authentication. Create a customer account and bind its device MAC instead."});
+ const body=req.body&&typeof req.body==="object"?req.body:{};
+ const quantity=Number(body.quantity??body.count??1);
+ const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
+ const validity=clean(body.validity||body.duration||"1d",50);
+ const price=Number(body.price??0);
+ const server=clean(body.server||"all",100)||"all";
+ if(!Number.isSafeInteger(quantity)||quantity<1||quantity>500)return res.status(400).json({success:false,code:"INVALID_QUANTITY",error:"Quantity must be a whole number from 1 to 500."});
+ if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",error:"Select an existing Hotspot profile."});
+ if(!Number.isFinite(price)||price<0||price>1000000)return res.status(400).json({success:false,code:"INVALID_PRICE",error:"Enter a valid non-negative price."});
+ if(!/^(\d+\s*(m|min|minutes?|h|hours?|d|days?|w|weeks?))$/i.test(validity))return res.status(400).json({success:false,code:"INVALID_VALIDITY",error:"Validity must be a duration such as 1d, 7d, or 30d."});
+ try{
+  const routerProfiles=await mikrotikService.getHotspotProfiles();
+  const meta=await readProfileMetadata();
+  const available=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(p=>p&&p.name&&String(p.name).toLowerCase()!=="default");
+  const profile=available.find(p=>String(p.name)===requestedProfile||String(meta[p.name]?.id||meta[p.name]?.profileId||meta[p.name]?.profile_id||"")===requestedProfile);
+  if(!profile)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND",error:"The selected profile is not available on the configured Hotspot profile list."});
+  const profileName=String(profile.name);
+  const normalizedValidity=validity.replace(/\s+/g,"").toLowerCase();
+  const created=await db.withTransaction(async client=>{
+   const vouchers=[];
+   for(let i=0;i<quantity;i++){
+    let username,password;
+    let inserted=null;
+    for(let attempt=0;attempt<8&&!inserted;attempt++){
+     username=crypto.randomBytes(5).toString("hex").toUpperCase();
+     password=crypto.randomBytes(6).toString("base64url").slice(0,8);
+     const result=await client.query(
+      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false) ON CONFLICT (username) DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at",
+      [username,password,profileName,normalizedValidity,price,"Scratch voucher; activates on first successful login.",server]
+     );
+     inserted=result.rows[0]||null;
+    }
+    if(!inserted)throw new Error("Could not allocate a unique voucher PIN. Please retry.");
+    vouchers.push(inserted);
+   }
+   return vouchers;
+  });
+  hotspotListCache.expiresAt=0;
+  return res.status(201).json({success:true,count:created.length,profile:profileName,validity:normalizedValidity,vouchers:created,message:"Voucher PINs created. They activate through the existing claim-voucher flow on first login; no RouterOS user was created during generation."});
+ }catch(error){return errorResponse(res,error);}
 }
 async function createUser(req,res){
   let savedId=null,routerProvisioned=false,previousRecord=null,createdNewRecord=false;
