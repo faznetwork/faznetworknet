@@ -397,6 +397,7 @@ body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;
     <div class="connection-chip" id="connection-chip">Connected to Fast Network</div>
 
     <div id="status-box" class="alert-box"></div>
+    <div id="router-error" class="alert-box alert-error" role="alert">$(error)</div>
 
     <!-- মেথড সিলেক্টর -->
     <div class="method-selector">
@@ -821,6 +822,7 @@ const option=document.createElement('option');option.value=key;option.textConten
 }catch(error){console.warn('[Public Payment Settings]',error.message);accounts.textContent='পেমেন্ট নম্বর লোড করা যায়নি।';select.innerHTML='<option value="">পেমেন্ট মাধ্যম অনুপলব্ধ</option>';}
 }
 document.addEventListener('DOMContentLoaded',function(){
+const routerError=String(byId('router-error')?.textContent||'').trim();if(routerError&&routerError.indexOf('$(')<0){showStatus(routerError,true);byId('router-error').style.display='none';}else if(byId('router-error'))byId('router-error').style.display='none';
 const device=deviceDetails();byId('display-mac').textContent=device.mac||'সনাক্ত হচ্ছে…';
 if(device.mac){
 requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac})})
