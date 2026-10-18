@@ -16,19 +16,24 @@ test("RouterOS captive portal parses CHAP and redirect query parameters",()=>{
   assert.match(html,/name="chap-id"/);
   assert.match(html,/name="chap-challenge"/);
   assert.match(html,/device\.chapChallenge\?md5Hex\(/);
+  assert.match(html,/decodeChapChallenge\(device\.chapChallenge\)/);
   assert.match(html,/form\.submit\(\)/);
 });
 
-test("embedded MD5 implementation matches known vectors for CHAP hashing",()=>{
+test("embedded MD5 and RouterOS CHAP byte decoding match known vectors",()=>{
   const start=html.indexOf("function md5Hex(input){");
-  const end=html.indexOf("function chapIdentifierByte(value){",start);
-  assert.ok(start>=0&&end>start,"self-contained md5Hex function must exist before CHAP handler");
-  const md5Source=html.slice(start,end);
+  const end=html.indexOf("function submitMikrotikLogin(mac,redirectUrl){",start);
+  assert.ok(start>=0&&end>start,"self-contained CHAP helper functions must exist");
+  const helperSource=html.slice(start,end);
   const context={};
-  vm.runInNewContext(md5Source+";globalThis.md5Hex=md5Hex;",context);
+  vm.runInNewContext(helperSource+";globalThis.md5Hex=md5Hex;globalThis.chapIdentifierByte=chapIdentifierByte;globalThis.decodeChapChallenge=decodeChapChallenge;",context);
   assert.equal(context.md5Hex(""),"d41d8cd98f00b204e9800998ecf8427e");
   assert.equal(context.md5Hex("abc"),"900150983cd24fb0d6963f7d28e17f72");
   assert.equal(context.md5Hex(String.fromCharCode(0)+"passwordchallenge"),"37f46edfac1bf2d324dac8d245baba18");
+  assert.equal(context.chapIdentifierByte(String.fromCharCode(92)+"371"),249);
+  const octal=context.decodeChapChallenge(String.fromCharCode(92)+"357"+String.fromCharCode(92)+"015");
+  assert.equal(octal,String.fromCharCode(239,13));
+  assert.equal(context.decodeChapChallenge("ef0d"),String.fromCharCode(239,13));
 });
 
 test("Force Provision checks the applicable RouterOS login-by profile and clears only matching sessions/cookies",()=>{
