@@ -303,7 +303,8 @@ ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_status_check CHECK 
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_username_key;
 DROP INDEX IF EXISTS uq_hotspot_vouchers_live_username_ci;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_live_username_ci ON hotspot_vouchers (LOWER(username)) WHERE status IN ('pending_claim','unused','active');
-CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_mac_address_ci ON hotspot_vouchers (LOWER(mac_address)) WHERE mac_address IS NOT NULL;
+DROP INDEX IF EXISTS uq_hotspot_vouchers_mac_address_ci;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_vouchers_active_mac_ci ON hotspot_vouchers (LOWER(mac_address)) WHERE status = 'active' AND mac_address IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_profile_id ON hotspot_vouchers(profile_id);
 CREATE TABLE IF NOT EXISTS hotspot_voucher_sales_archive (
   transaction_id BIGINT PRIMARY KEY,
