@@ -130,3 +130,37 @@ test("optional phone never becomes NULL in Hotspot payment associations and veri
  assert.ok(verify.includes("SELECT status FROM transactions WHERE UPPER(TRIM(trx_id))=$1::text LIMIT 1"),"Online verification conflict lookup parameter must be explicitly typed");
  assert.ok(verify.includes("password=CASE WHEN $11::text IS NOT NULL THEN $2::text ELSE password END"),"Online verification voucher UPDATE must reference $2 with an explicit type instead of leaving a placeholder gap");
 });
+
+
+test("RouterOS force provisioning clears matching active sessions and cookies and reports MAC auto-auth readiness",async()=>{
+ const oldConnection=mikrotik._withConnection;
+ const calls=[];
+ const mac="AA:BB:CC:DD:EE:FF";
+ try{
+  mikrotik._withConnection=async(_label,callback)=>callback({write:async(command,params=[])=>{
+   calls.push({command,params});
+   if(command==="/ip/hotspot/user/print")return [];
+   if(command==="/ip/hotspot/user/profile/print")return [{name:"1-Hour"}];
+   if(command==="/ip/hotspot/print")return [{name:"hotspot1",profile:"hsprof1"}];
+   if(command==="/ip/hotspot/profile/print")return [{name:"hsprof1","login-by":"http-chap,mac"}];
+   if(command==="/ip/hotspot/active/print")return [
+    {".id":"*active1",user:mac,"mac-address":mac},
+    {".id":"*active2",user:"OTHER-USER","mac-address":"00:11:22:33:44:55"}
+   ];
+   if(command==="/ip/hotspot/cookie/print")return [
+    {".id":"*cookie1",user:mac,"mac-address":mac},
+    {".id":"*cookie2",user:"OTHER-USER","mac-address":"00:11:22:33:44:55"}
+   ];
+   return [];
+  }});
+  const result=await mikrotik.forceProvisionHotspotUser({username:mac,macAddress:mac,profile:"1-Hour",validity:"1h",limitBytesTotal:0,server:"all",comment:"FAZ|FORCE"});
+  assert.equal(result.macAuthEnabled,true);
+  assert.equal(result.clearedActiveSessions,1);
+  assert.equal(result.clearedCookies,1);
+  assert.ok(calls.some(call=>call.command==="/ip/hotspot/active/remove"&&call.params[0]==="=.id=*active1"));
+  assert.ok(calls.some(call=>call.command==="/ip/hotspot/cookie/remove"&&call.params[0]==="=.id=*cookie1"));
+  assert.ok(!calls.some(call=>call.params.includes("=.id=*active2")||call.params.includes("=.id=*cookie2")));
+ }finally{
+  mikrotik._withConnection=oldConnection;
+ }
+});
