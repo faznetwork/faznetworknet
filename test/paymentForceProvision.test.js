@@ -89,3 +89,32 @@ test("All Payments renders the Force Provision action and admin-only route is wi
  assert.match(routes,/router\.post\("\/payments\/force-provision",requireAdmin,requireRole\(\["super_admin","admin"\]\),controller\.forceProvisionHotspot\)/);
  assert.match(service,/async forceProvisionHotspotUser\(data\)/);
 });
+
+
+test("payment and Hotspot auth SQL never mix inferred and explicitly cast types for one placeholder",()=>{
+ const files=["../controllers/paymentController.js","../controllers/hotspotAuthController.js","../controllers/customerController.js","../controllers/customerSelfCareController.js","../controllers/hotspotController.js"];
+ const castTypes="text|varchar|character varying|numeric|int|integer|bigint|date|timestamp(?:tz)?|boolean|jsonb";
+ const queryCall=/(?:db|client|database)\.query\(\s*"((?:\\.|[^"\\])*)"/gs;
+ for(const file of files){
+  const source=fs.readFileSync(path.join(__dirname,file),"utf8");
+  let match;
+  while((match=queryCall.exec(source))){
+   const sql=match[1].replace(/\\"/g,'"');
+   if(!/\$\d/.test(sql))continue;
+   const placeholders=[...sql.matchAll(new RegExp("\\$(\\d+)(?:::(("+castTypes+")))?","gi"))];
+   const numbers=[...new Set(placeholders.map(item=>item[1]))];
+   for(const number of numbers){
+    const types=placeholders.filter(item=>item[1]===number).map(item=>(item[2]||"inferred").toLowerCase());
+    assert.equal(new Set(types).size,1, file+" has mixed PostgreSQL types for $"+number+": "+sql);
+   }
+  }
+ }
+});
+
+test("force provision casts repeated validity placeholder consistently as text",()=>{
+ const source=fs.readFileSync(path.join(__dirname,"../controllers/paymentController.js"),"utf8");
+ const update=source.match(/UPDATE hotspot_vouchers SET username=\$1::text,password=\$1::text,profile=\$2::text,validity=\$3::text[\s\S]*?WHERE id=\$13::bigint/);
+ const insert=source.match(/INSERT INTO hotspot_vouchers\([\s\S]*?VALUES\(\$1::text,\$1::text,\$2::text,\$3::text,\$4::numeric[\s\S]*?NULLIF\(\$3::text,''\)/);
+ assert.ok(update,"Force Provision UPDATE must type the repeated validity placeholder consistently");
+ assert.ok(insert,"Force Provision INSERT must type the repeated validity placeholder consistently");
+});
