@@ -120,6 +120,47 @@ test("verifyTrx validates payment and stages a pending phone package without Rou
   }
 });
 
+
+test("verifyTrx accepts TrxID and package with no customer phone",async()=>{
+  const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
+  const mac="AA:BB:CC:DD:EE:FF";
+  let paymentPhone=null,claimParams=null,routerWrites=0;
+  try{
+    db.query=async(sql,params=[])=>{
+      if(sql.startsWith("SELECT * FROM transactions"))return {rows:[paymentTransaction(5,10)]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("UPDATE transactions SET status='processing'")){claimParams=params;return {rows:[{id:5}]};}
+      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active'"))return {rows:[{id:41,username:mac,status:"active",expires_at:params[2]}]};
+      throw new Error("Unexpected database query: "+sql);
+    };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+      if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers")){
+        assert.equal(params[0],mac,"MAC is the Hotspot username when no phone is supplied");
+        assert.equal(params[6],"","phone remains optional in the voucher record");
+        return {rows:[{id:41,username:params[0],password:params[1],profile:params[2],profile_id:params[9],phone:params[6],status:"pending_claim",server:"all",mac_address:params[10],comment:params[5],first_login_at:params[11],expires_at:params[12]}]};
+      }
+      if(sql.startsWith("INSERT INTO hotspot_voucher_payments")){paymentPhone=params[2];return {rows:[]};}
+      if(sql.startsWith("UPDATE transactions SET status='processed'"))return {rows:[{id:5}]};
+      throw new Error("Unexpected transactional query: "+sql);
+    }});
+    mikrotik.getHotspotProfiles=async()=>oneHourProfile();
+    mikrotik.rechargeHotspotUser=async payload=>{routerWrites++;assert.equal(payload.username,mac);assert.equal(payload.macAddress,mac);return {username:mac};};
+    const res=responseRecorder();
+    await paymentController.verifyTrx({ip:"no-phone-payment-test",body:{service_type:"hotspot",username:mac,mac,trxId:"TXN-TEST-5",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
+    assert.equal(res.statusCode,200,JSON.stringify(res.body));
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.username,mac);
+    assert.equal(res.body.phone,"");
+    assert.deepEqual(claimParams,[mac,"TXN-TEST-5"],"the MAC, not a phone number, identifies the claim");
+    assert.equal(paymentPhone,"","the payment ledger accepts an empty optional phone");
+    assert.equal(routerWrites,1,"the MAC-bound package is provisioned without requiring a phone");
+  }finally{
+    db.query=oldQuery;db.withTransaction=oldTransaction;mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
+  }
+});
+
 test("verifyTrx recharges an expired MAC-bound voucher and updates the submitted phone",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
   let routerPayload=null,updatedPhone="",stagedSql="";
@@ -347,16 +388,22 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
   }
 });
 
-test("verifyTrx rejects invalid Bangladeshi phone numbers before claiming a payment",async()=>{
+test("verifyTrx treats an absent or malformed phone as optional and proceeds to TrxID lookup",async()=>{
   const oldQuery=db.query;
-  let called=false;
+  let lookedUp=false,lookupParams=[];
   try{
-    db.query=async()=>{called=true;return {rows:[]};};
-    const res=responseRecorder();
-    await paymentController.verifyTrx({ip:"bad-phone-test",body:{service_type:"hotspot",phone:"12345",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"}},res);
-    assert.equal(res.statusCode,400);
-    assert.equal(res.body.code,"INVALID_ACCOUNT_PHONE");
-    assert.equal(called,false);
+    db.query=async(sql,params=[])=>{if(sql.startsWith("SELECT * FROM transactions")){lookedUp=true;lookupParams=params;return {rows:[]};}throw new Error("Unexpected query: "+sql);};
+    for(const phone of ["","12345",undefined]){
+      lookedUp=false;lookupParams=[];
+      const body={service_type:"hotspot",mac:"AA:BB:CC:DD:EE:FF",trxId:"TXN",amount:10,profile_id:"pkg-1-hour"};
+      if(phone!==undefined)body.phone=phone;
+      const res=responseRecorder();
+      await paymentController.verifyTrx({ip:"optional-phone-test-"+String(phone),body},res);
+      assert.equal(res.statusCode,404);
+      assert.equal(res.body.code,"NOT_FOUND_OR_DELAYED");
+      assert.equal(lookedUp,true,"verification should reach TrxID lookup without a phone");
+      assert.deepEqual(lookupParams,["TXN"]);
+    }
   }finally{db.query=oldQuery;}
 });
 
