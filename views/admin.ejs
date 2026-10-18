@@ -2143,6 +2143,74 @@
 <div class="col-md-4"><label class="form-label">Brand Title</label><input id="portalBrandTitle" class="form-control" maxlength="120" required></div><div class="col-md-4"><label class="form-label">Subtitle</label><input id="portalBrandSubtitle" class="form-control" maxlength="255"></div><div class="col-md-4"><label class="form-label">Helpline Number</label><input id="portalHelpline" class="form-control" maxlength="32"></div>
 <div class="col-md-4"><label class="border rounded-3 p-3 d-flex gap-2 align-items-center"><input id="portalEnablePayment" type="checkbox" checked> Online MFS Payment</label></div><div class="col-md-4"><label class="border rounded-3 p-3 d-flex gap-2 align-items-center"><input id="portalEnableVoucher" type="checkbox" checked> Voucher Scratch PIN</label></div><div class="col-md-4"><label class="border rounded-3 p-3 d-flex gap-2 align-items-center"><input id="portalEnableQr" type="checkbox" checked> Camera QR Scanner</label></div>
 <div class="col-12"><label class="form-label">লগইন সফল হলে রিডাইরেক্ট ইউআরএল (ঐচ্ছিক)</label><input id="portalRedirectUrl" type="url" class="form-control" maxlength="500"></div></div><div id="hotspotPortalSettingsStatus" class="small mt-3" role="status"></div><div class="text-end mt-3"><button id="hotspotPortalSaveBtn" type="submit" class="btn btn-success">Save Portal Settings</button></div></form></div></div>
+<div class="card card-custom border-0 shadow-sm my-3" id="hotspotVoucherTemplatesCard">
+<div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><div><div class="fw-semibold">Voucher Templates &amp; QR Cards</div><small class="text-muted">Generate scratch vouchers; direct subscriber MAC authentication stays separate.</small></div></div>
+<div class="card-body p-3 p-md-4">
+<div class="row g-3 align-items-end">
+<div class="col-12"><div class="d-flex flex-wrap gap-2" id="voucherTemplateChoices">
+<button type="button" class="btn btn-outline-success voucher-template-choice" data-validity="1d" data-price="0">Default</button>
+<button type="button" class="btn btn-outline-success voucher-template-choice" data-validity="1d" data-price="0">1-Day Pass</button>
+<button type="button" class="btn btn-outline-success voucher-template-choice" data-validity="7d" data-price="0">7-Day Weekly</button>
+<button type="button" class="btn btn-outline-success voucher-template-choice" data-validity="30d" data-price="0">30-Day Monthly</button>
+</div><small class="text-muted d-block mt-2">Templates set the duration suggestion only. Choose a real, existing RouterOS Hotspot profile below.</small></div>
+<div class="col-md-5"><label class="form-label" for="voucherTemplateProfile">Existing Hotspot profile</label><select id="voucherTemplateProfile" class="form-select"><option value="">Loading profiles…</option></select></div>
+<div class="col-md-2"><label class="form-label" for="voucherTemplateValidity">Validity</label><input id="voucherTemplateValidity" class="form-control" value="1d" maxlength="30" pattern="[0-9]+[mhdw]" /></div>
+<div class="col-md-2"><label class="form-label" for="voucherTemplatePrice">Price (৳)</label><input id="voucherTemplatePrice" type="number" min="0" max="1000000" step="0.01" class="form-control" value="0" /></div>
+<div class="col-md-1"><label class="form-label" for="voucherTemplateQty">Qty</label><input id="voucherTemplateQty" type="number" min="1" max="500" step="1" class="form-control" value="10" /></div>
+<div class="col-md-2"><button type="button" id="voucherTemplateGenerate" class="btn btn-success w-100"><i class="bi bi-magic me-1"></i>Generate</button></div>
+</div>
+<div id="voucherTemplateStatus" class="small mt-3" role="status" aria-live="polite"></div>
+<div id="voucherTemplateResults" class="mt-3"></div>
+<div class="d-flex flex-wrap gap-2 mt-3"><button type="button" id="voucherTemplatePrint" class="btn btn-outline-success" disabled><i class="bi bi-printer me-1"></i>Print A4 Voucher Cards</button><button type="button" id="voucherTemplateClear" class="btn btn-outline-secondary">Clear preview</button></div>
+</div></div>
+<div id="voucherTemplatePrintArea" class="d-none"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script>
+(function(){
+'use strict';
+const byId=id=>document.getElementById(id);
+const status=byId('voucherTemplateStatus'),results=byId('voucherTemplateResults');
+let vouchers=[];
+function say(message,isError){if(status){status.textContent=message;status.className='small mt-3 '+(isError?'text-danger':'text-success');}}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+async function loadProfiles(){
+const select=byId('voucherTemplateProfile');
+try{const response=await fetch('/api/hotspot/profiles',{credentials:'same-origin'});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||data.message||'Could not load existing profiles.');
+const profiles=Array.isArray(data.profiles)?data.profiles:Array.isArray(data.data)?data.data:[];
+select.innerHTML='<option value="">Select existing profile</option>'+profiles.map(p=>{const name=String(p.name||'');const id=String(p.profile_id||p.profileId||name);return '<option value="'+escapeHtml(id)+'">'+escapeHtml(name)+'</option>';}).join('');
+if(!profiles.length)say('No existing Hotspot profiles are available. Create/sync a profile first.',true);
+}catch(error){select.innerHTML='<option value="">Profiles unavailable</option>';say(error.message||'Could not load profiles.',true);}
+}
+document.querySelectorAll('#voucherTemplateChoices .voucher-template-choice').forEach(button=>button.addEventListener('click',()=>{byId('voucherTemplateValidity').value=button.dataset.validity;byId('voucherTemplatePrice').value=button.dataset.price;document.querySelectorAll('#voucherTemplateChoices .voucher-template-choice').forEach(b=>b.classList.remove('active'));button.classList.add('active');}));
+byId('voucherTemplateGenerate').addEventListener('click',async()=>{
+const profile=byId('voucherTemplateProfile').value,quantity=Number(byId('voucherTemplateQty').value),validity=byId('voucherTemplateValidity').value.trim(),price=Number(byId('voucherTemplatePrice').value);
+if(!profile){say('Select an existing Hotspot profile first.',true);return;}
+if(!Number.isInteger(quantity)||quantity<1||quantity>500){say('Quantity must be 1–500.',true);return;}
+const button=byId('voucherTemplateGenerate');button.disabled=true;say('Generating voucher PINs…',false);
+try{
+const response=await fetch('/api/hotspot/vouchers/generate',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({quantity,profile,validity,price})});
+const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||data.message||'Voucher generation failed.');
+vouchers=data.vouchers||[];renderVouchers();byId('voucherTemplatePrint').disabled=!vouchers.length;say(vouchers.length+' voucher(s) generated and saved. No RouterOS user was created; voucher activates on first login.',false);
+}catch(error){say(error.message||'Voucher generation failed.',true);}finally{button.disabled=false;}
+});
+function renderVouchers(){
+results.innerHTML='<div class="d-flex justify-content-between align-items-center mb-2"><strong>Generated vouchers</strong><span class="badge bg-success">'+vouchers.length+'</span></div><div class="table-responsive"><table class="table table-sm table-bordered align-middle"><thead><tr><th>PIN</th><th>Password</th><th>Profile</th><th>Validity</th><th>Price</th></tr></thead><tbody>'+vouchers.map(v=>'<tr><td class="font-monospace">'+escapeHtml(v.username)+'</td><td class="font-monospace">'+escapeHtml(v.password)+'</td><td>'+escapeHtml(v.profile)+'</td><td>'+escapeHtml(v.validity)+'</td><td>৳'+escapeHtml(v.price)+'</td></tr>').join('')+'</tbody></table></div>';
+}
+byId('voucherTemplatePrint').addEventListener('click',()=>{
+const area=byId('voucherTemplatePrintArea');
+area.innerHTML='<div class="voucher-print-grid">'+vouchers.map(v=>'<article class="voucher-print-card"><h3>FAZ NETWORK</h3><p>Hotspot Internet Voucher</p><div class="voucher-print-qr" data-payload="'+escapeHtml(JSON.stringify({pin:v.username,password:v.password}))+'"></div><p><b>PIN:</b> <span>'+escapeHtml(v.username)+'</span></p><p><b>Password:</b> <span>'+escapeHtml(v.password)+'</span></p><p><b>Package:</b> '+escapeHtml(v.profile)+'</p><p><b>Validity:</b> '+escapeHtml(v.validity)+'</p><small>Scan QR or enter PIN and password on the FAZ NETWORK portal.</small></article>').join('')+'</div>';
+if(typeof QRCode==='undefined'){say('QR library did not load. Check network access and retry.',true);return;}
+area.querySelectorAll('.voucher-print-qr').forEach(node=>{node.textContent='';new QRCode(node,{text:node.dataset.payload,width:110,height:110,correctLevel:QRCode.CorrectLevel.M});});
+const style=document.createElement('style');style.id='voucherTemplatePrintStyle';style.textContent='@media screen{#voucherTemplatePrintArea{display:none!important}}@media print{@page{size:A4;margin:10mm}body *{visibility:hidden!important}#voucherTemplatePrintArea,#voucherTemplatePrintArea *{visibility:visible!important}#voucherTemplatePrintArea{display:block!important;position:absolute;inset:0;width:100%}.voucher-print-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm}.voucher-print-card{border:1px dashed #64748b;padding:5mm;text-align:center;break-inside:avoid;color:#111;font:10pt Arial,sans-serif}.voucher-print-card h3{font-size:15pt;margin:0;color:#065f46}.voucher-print-card p{margin:2mm 0}.voucher-print-qr{display:flex;justify-content:center;margin:3mm auto}.voucher-print-qr img{margin:auto}}';document.getElementById('voucherTemplatePrintStyle')?.remove();document.head.appendChild(style);window.print();
+});
+byId('voucherTemplateClear').addEventListener('click',()=>{vouchers=[];results.innerHTML='';byId('voucherTemplatePrint').disabled=true;say('Preview cleared. Already generated vouchers remain in the database.',false);});
+loadProfiles();
+})();
+</script>
+<style>
+#voucherTemplateResults .font-monospace{letter-spacing:.04em}#voucherTemplatePrintArea{background:#fff;color:#111}.voucher-print-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm}.voucher-print-card{border:1px dashed #64748b;padding:5mm;text-align:center}.voucher-print-qr{display:flex;justify-content:center;margin:3mm auto}
+@media(max-width:576px){#voucherTemplateChoices .btn{flex:1 1 calc(50% - .5rem)}}
+</style>
 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><div class="fw-semibold">MikroTik External Redirect Snippet</div></div><div class="card-body"><pre id="portalMikrotikSnippet" class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;overflow-wrap:anywhere">&lt;!DOCTYPE html&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta http-equiv="refresh" content="0; url=https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)"&gt;&lt;/head&gt;
 &lt;body&gt;&lt;script&gt;window.location.href="https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only="+encodeURIComponent("$(link-login-only)")+"&amp;link-orig="+encodeURIComponent("$(link-orig)");&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre><button id="portalCopySnippetBtn" type="button" class="btn btn-outline-success">Copy Snippet</button><span id="portalCopySnippetStatus" class="small ms-2"></span></div></div></div><div id="general-settings-panel-brand" class="general-settings-panel" style="display:none">
