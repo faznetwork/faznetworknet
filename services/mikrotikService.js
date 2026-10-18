@@ -863,6 +863,52 @@ class MikroTikService {
     });
   }
 
+  async disableExpiredDirectHotspotUser(usernameValue, macAddressValue) {
+    const username=this._str(usernameValue).trim();
+    if(!username||username.length>100)throw new Error("A valid Hotspot username is required for direct-subscriber expiry.");
+    const mac=this._str(macAddressValue||username).trim().toUpperCase();
+    return this._withConnection("Disable expired direct Hotspot subscriber",async connection=>{
+      const [userRows,activeRows,cookieRows]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/active/print"),connection.write("/ip/hotspot/cookie/print")]);
+      const low=v=>this._str(v).trim().toLowerCase(),un=low(username),macKey=low(mac);
+      const validMac=v=>/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(v).trim().toUpperCase());
+      const users=(Array.isArray(userRows)?userRows:[]).filter(x=>x?.[".id"]&&(low(x.name)===un||(validMac(mac)&&low(x.name)===macKey)));
+      const sessions=(Array.isArray(activeRows)?activeRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||(validMac(mac)&&low(x["mac-address"])===macKey)));
+      const cookies=(Array.isArray(cookieRows)?cookieRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||(validMac(mac)&&low(x["mac-address"])===macKey)));
+      const remove=async(path,item)=>{try{await connection.write(path,["=.id="+item[".id"]]);return true;}catch(e){if(/no such item|not found|does not exist|no item/i.test(String(e?.message||e)))return false;throw e;}};
+      let usersDisabled=0,sessionsRemoved=0,cookiesRemoved=0;
+      for(const item of sessions)if(await remove("/ip/hotspot/active/remove",item))sessionsRemoved++;
+      for(const item of cookies)if(await remove("/ip/hotspot/cookie/remove",item))cookiesRemoved++;
+      for(const item of users){await connection.write("/ip/hotspot/user/set",["=.id="+item[".id"],"=disabled=yes","=comment=FAZ|EXPIRED|DIRECT_SUBSCRIBER"]);usersDisabled++;}
+      return {username,macAddress:validMac(mac)?mac:null,directSubscriber:true,usersDisabled,sessionsRemoved,cookiesRemoved,userPreserved:true};
+    });
+  }
+
+  async removeExpiredVoucherHotspotUser(usernameValue, macAddressValue) {
+    const username=this._str(usernameValue).trim();
+    if(!username||username.length>100)throw new Error("A valid Hotspot username is required for voucher expiry.");
+    const mac=this._str(macAddressValue||username).trim().toUpperCase();
+    return this._withConnection("Remove expired scratch voucher from Hotspot",async connection=>{
+      const [userRows,activeRows,cookieRows,hostRows,schedulerRows]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/active/print"),connection.write("/ip/hotspot/cookie/print"),connection.write("/ip/hotspot/host/print"),connection.write("/system/scheduler/print")]);
+      const low=v=>this._str(v).trim().toLowerCase(),un=low(username);
+      const validMac=v=>/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(v).trim().toUpperCase());
+      const macs=new Set([...(validMac(username)?[un]:[]),...(validMac(mac)?[low(mac)]:[])]);
+      const users=(Array.isArray(userRows)?userRows:[]).filter(x=>x?.[".id"]&&(low(x.name)===un||(validMac(mac)&&low(x.name)===low(mac))));
+      const sessions=(Array.isArray(activeRows)?activeRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||macs.has(low(x["mac-address"]))));
+      const ips=new Set(sessions.map(x=>low(x.address)).filter(Boolean));
+      const hosts=(Array.isArray(hostRows)?hostRows:[]).filter(x=>x?.[".id"]&&(macs.has(low(x["mac-address"]))||(x.address&&ips.has(low(x.address)))));
+      const cookies=(Array.isArray(cookieRows)?cookieRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||macs.has(low(x["mac-address"]))));
+      const schedNames=new Set(["EXP_"+username,"faz-exp-"+username,...(validMac(mac)?["EXP_"+mac,"faz-exp-"+mac]:[])].map(low));
+      const schedulers=(Array.isArray(schedulerRows)?schedulerRows:[]).filter(x=>x?.[".id"]&&schedNames.has(low(x.name)));
+      const remove=async(path,item)=>{try{await connection.write(path,["=.id="+item[".id"]]);return true;}catch(e){if(/no such item|not found|does not exist|no item/i.test(String(e?.message||e)))return false;throw e;}};
+      let usersRemoved=0,sessionsRemoved=0,cookiesRemoved=0,hostsRemoved=0,schedulersRemoved=0;
+      for(const item of sessions)if(await remove("/ip/hotspot/active/remove",item))sessionsRemoved++;
+      for(const item of cookies)if(await remove("/ip/hotspot/cookie/remove",item))cookiesRemoved++;
+      for(const item of hosts)if(await remove("/ip/hotspot/host/remove",item))hostsRemoved++;
+      for(const item of schedulers)if(await remove("/system/scheduler/remove",item))schedulersRemoved++;
+      for(const item of users)if(await remove("/ip/hotspot/user/remove",item))usersRemoved++;
+      return {username,macAddress:validMac(mac)?mac:null,voucherRemoved:true,usersRemoved,sessionsRemoved,cookiesRemoved,hostsRemoved,schedulersRemoved};
+    });
+  }
   async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
     const username=this._str(usernameValue).trim();
     if(!username||username.length>100)throw new Error("A valid Hotspot username is required for expiration cleanup.");
