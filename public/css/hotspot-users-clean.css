@@ -32,3 +32,50 @@
 .fresh-hs-workspace .btn-action-delete:hover:not(:disabled){background:#ef4444;color:#fff}
 .fresh-hs-workspace .btn-hotspot-action:disabled{opacity:.48;cursor:not-allowed}
 @media(max-width:991.98px){.fresh-hs-workspace .hs-mobile-main strong{font-size:15px!important}.fresh-hs-workspace .hs-mobile-main small{font-size:13px!important}.fresh-hs-workspace .hs-mobile-actions .btn-hotspot-action{min-height:42px;font-size:13px;white-space:normal}}
+
+
+/* All Hotspot Users: compact toolbar and accessible responsive controls */
+.fresh-hs-workspace{padding:0 0 20px!important}
+.fresh-hs-workspace .fresh-hs-title-row{margin-bottom:8px!important}
+.fresh-hs-workspace .fresh-hs-title-row h2{margin:0 0 4px}
+.fresh-hs-workspace .fresh-hs-list-panel{padding:10px 0!important}
+.fresh-hs-workspace .fresh-hs-list-heading{margin:0 0 10px;padding:0 2px}
+.fresh-hs-workspace .hs-main-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.fresh-hs-workspace .hs-main-toolbar .form-control{flex:1 1 260px;min-width:0;max-width:540px;min-height:40px;border:1px solid #cbd5e1;border-radius:12px}
+.fresh-hs-workspace .hs-utility-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;color:#0f513d;font-size:12px;font-weight:750;white-space:nowrap}
+.fresh-hs-workspace .hs-utility-btn:hover,.fresh-hs-workspace .hs-utility-btn:focus-visible{background:#ecfdf5;border-color:#34d399;color:#065f46}
+.fresh-hs-workspace .hs-filter-tabs{gap:7px;padding:5px 2px 10px}
+.fresh-hs-workspace .hs-filter-tab{border-radius:999px;padding:8px 12px;min-height:38px;box-shadow:none;transition:border-color .15s,box-shadow .15s,transform .15s}
+.fresh-hs-workspace .hs-filter-tab:hover{border-color:#34d399;transform:translateY(-1px)}
+.fresh-hs-workspace .hs-filter-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#64748b;box-shadow:0 0 0 3px #e2e8f0}
+.fresh-hs-workspace .hs-filter-online .hs-filter-dot,.fresh-hs-workspace .hs-filter-active .hs-filter-dot{background:#10b981;box-shadow:0 0 0 3px #d1fae5,0 0 9px #10b98188}
+.fresh-hs-workspace .hs-filter-expired .hs-filter-dot{background:#f43f5e;box-shadow:0 0 0 3px #ffe4e6}
+.fresh-hs-workspace .hs-filter-offline .hs-filter-dot{background:#94a3b8;box-shadow:0 0 0 3px #e2e8f0}
+.fresh-hs-workspace .hs-filter-tab.is-selected .hs-filter-dot{box-shadow:0 0 0 3px #ffffff44,0 0 8px currentColor}
+.fresh-hs-workspace .hs-quick-edit{display:inline-flex!important;align-items:center;gap:8px;text-align:left;border:0;background:transparent;padding:0;cursor:pointer}
+.fresh-hs-workspace .hs-quick-edit i{opacity:.55;font-size:13px}
+.fresh-hs-workspace .hs-quick-edit:hover,.fresh-hs-workspace .hs-quick-edit:focus-visible{color:#047857!important;text-decoration:underline}
+.fresh-hs-workspace .hs-row-actions{display:flex;gap:6px!important}
+.fresh-hs-workspace .hs-row-actions .btn-hotspot-action{display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:999px!important;padding:7px 10px!important;font-size:11px!important;font-weight:750!important;min-height:34px!important;min-width:0!important;width:auto!important;height:auto!important;box-shadow:none!important;transition:transform .15s,background .15s,box-shadow .15s}
+.fresh-hs-workspace .hs-row-actions .btn-hotspot-action:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 10px #0f172a1c!important}
+.fresh-hs-workspace .hs-row-actions .btn-action-renew{background:#ecfdf5!important;color:#047857!important;border:1px solid #a7f3d0!important}
+.fresh-hs-workspace .hs-row-actions .btn-action-edit{background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important}
+.fresh-hs-workspace .hs-row-actions .btn-action-disconnect{background:#eff6ff!important;color:#1d4ed8!important;border:1px solid #bfdbfe!important}
+.fresh-hs-workspace .hs-row-actions .btn-action-delete{background:#fff1f2!important;color:#be123c!important;border:1px solid #fecdd3!important}
+.fresh-hs-workspace .hs-row-actions .btn-hotspot-action:disabled{opacity:.45;cursor:not-allowed}
+.hs-edit-modal .modal-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 65px #0f172a2a}
+.hs-edit-modal .modal-header{padding:22px 26px;background:linear-gradient(120deg,#ecfdf5,#fff);border-bottom:1px solid #dbeafe}
+.hs-edit-modal .modal-title{font-size:1.25rem;font-weight:800;margin:4px 0}
+.hs-edit-modal .modal-body{padding:24px 26px}
+.hs-edit-modal .hs-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.hs-edit-modal .hs-edit-field{display:block;min-width:0;color:#334155;font-size:12px;font-weight:800;letter-spacing:.01em}
+.hs-edit-modal .hs-edit-full{grid-column:1/-1}
+.hs-edit-modal .hs-edit-field .form-control{display:block;width:100%;margin-top:7px;min-height:44px;border-radius:11px;border:1px solid #cbd5e1;background:#fff;font-size:14px;font-weight:500;color:#0f172a}
+.hs-edit-modal .hs-edit-field textarea.form-control{min-height:94px}
+.hs-edit-modal .hs-edit-field .form-control:focus{border-color:#10b981;box-shadow:0 0 0 3px #10b98122}
+.hs-edit-modal .hs-edit-security{margin-top:18px;padding:14px 16px;border:1px solid #fde68a;background:#fffbeb;border-radius:12px}
+.hs-edit-modal .hs-edit-security .form-check{margin-bottom:5px}
+.hs-edit-modal .modal-footer{padding:16px 26px;background:#f8fafc;border-top:1px solid #e2e8f0;gap:8px}
+.hs-edit-modal .modal-footer .btn{border-radius:10px;padding:10px 18px;font-weight:750}
+@media(max-width:767.98px){.fresh-hs-workspace .hs-main-toolbar .form-control{flex-basis:100%;max-width:none}.fresh-hs-workspace .hs-main-toolbar .hs-utility-btn{flex:1 1 auto;font-size:11px;padding:8px}.fresh-hs-workspace .hs-row-actions{flex-wrap:wrap;white-space:normal}.fresh-hs-workspace .hs-row-actions .btn-hotspot-action{flex:1 1 42%;min-height:40px!important}.hs-edit-modal .modal-dialog{margin:10px}.hs-edit-modal .modal-body{padding:18px}.hs-edit-modal .modal-header,.hs-edit-modal .modal-footer{padding:16px 18px}.hs-edit-modal .hs-edit-grid{grid-template-columns:1fr;gap:14px}}
+@media(prefers-reduced-motion:reduce){.fresh-hs-workspace .hs-filter-tab,.fresh-hs-workspace .hs-row-actions .btn-hotspot-action{transition:none}}
