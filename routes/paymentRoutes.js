@@ -11,5 +11,6 @@ router.options("/verify-trx",verifyTrxCors);
 router.post("/verify-trx",verifyTrxCors,controller.verifyTrx);
 router.get("/payments/transactions",requireAdmin,requireRole(["super_admin","admin"]),controller.list);
 router.post("/payments/manual-match",requireAdmin,requireRole(["super_admin","admin"]),controller.manualMatch);
+router.post("/payments/force-provision",requireAdmin,requireRole(["super_admin","admin"]),controller.forceProvisionHotspot);
 router.get("/payments/summary",requireAdmin,requireRole(["super_admin","admin"]),controller.summary);
 module.exports=router;
