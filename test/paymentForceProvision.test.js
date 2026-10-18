@@ -118,3 +118,14 @@ test("force provision casts repeated validity placeholder consistently as text",
  assert.ok(update,"Force Provision UPDATE must type the repeated validity placeholder consistently");
  assert.ok(insert,"Force Provision INSERT must type the repeated validity placeholder consistently");
 });
+
+
+test("optional phone never becomes NULL in Hotspot payment associations and verification parameters are typed",()=>{
+ const source=fs.readFileSync(path.join(__dirname,"../controllers/paymentController.js"),"utf8");
+ const force=source.slice(source.indexOf("async function forceProvisionHotspot"),source.indexOf("async function summary",source.indexOf("async function forceProvisionHotspot")));
+ const verify=source.slice(source.indexOf("async function verifyTrx"),source.indexOf("function macFromBody",source.indexOf("async function verifyTrx")));
+ assert.match(force,/hotspot_vouchers[\\s\\S]*?COALESCE\\(NULLIF\\(\\$6::text,''\\),''\\)/);
+ assert.match(force,/hotspot_voucher_payments[\\s\\S]*?COALESCE\\(NULLIF\\(\\$3::text,''\\),''\\)/);
+ assert.match(verify,/WHERE UPPER\\(TRIM\\(trx_id\\)\\)=\\$2::text AND status='unmatched'/);
+ assert.match(verify,/SELECT status FROM transactions WHERE UPPER\\(TRIM\\(trx_id\\)\\)=\\$1::text LIMIT 1/);
+});
