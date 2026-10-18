@@ -53,7 +53,7 @@ test("captive portal avoids duplicate inline and listener master-button handlers
 });
 
 test("captive portal inline JavaScript parses without syntax errors",()=>{
- const inline=Array.from(html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)).map(match=>match[1]).find(source=>source.includes("const BACKEND_BASE_URL"));
+ const inline=Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(match=>match[1]).find(source=>source.includes("const BACKEND_BASE_URL"));
  assert.ok(inline,"main captive portal script must exist");
  assert.doesNotThrow(()=>new vm.Script(inline,{filename:"public/login.html"}));
 });
