@@ -74,23 +74,17 @@ function routerUserExpired(user, schedulerNames) {
   return byteLimit > 0 && usedBytes >= byteLimit;
 }
 
-async function applyExpiredProfile(router, username, macAddress) {
-  const mac = String(macAddress || username || "").trim().replace(/[:-]/g, "").toUpperCase();
-  const isMac = /^[0-9A-F]{12}$/.test(mac);
-  if (isMac && typeof router.getHotspotUser === "function" && typeof router.updateHotspotUser === "function") {
-    const existing = await router.getHotspotUser(username);
-    if (!existing) return { alreadyAbsent: true };
-    const comment = String(existing.comment || "");
-    await router.updateHotspotUser(username, "expired_profile", comment, username, mac);
-    if (typeof router.kickActiveHotspotUser === "function") await router.kickActiveHotspotUser(username);
-    return { profileApplied: true };
+async function applyExpiredProfile(router, username, macAddress, subscriberType) {
+  const direct = String(subscriberType || "").toLowerCase() === "direct_subscriber";
+  if (direct) {
+    if (typeof router.disableExpiredDirectHotspotUser !== "function") throw new Error("RouterOS direct-subscriber disable operation is unavailable.");
+    return router.disableExpiredDirectHotspotUser(username, macAddress);
   }
-  // Legacy non-MAC usernames cannot be safely normalized into the direct-subscriber model.
-  // Remove their access rather than leave an expired legacy credential usable.
-  if (typeof router.cleanupExpiredHotspotUser === "function") {
-    return await router.cleanupExpiredHotspotUser(username, macAddress);
+  if (typeof router.removeExpiredVoucherHotspotUser === "function") {
+    return router.removeExpiredVoucherHotspotUser(username, macAddress);
   }
-  throw new Error("RouterOS does not expose a safe expired-profile or cleanup operation.");
+  if (typeof router.cleanupExpiredHotspotUser === "function") return router.cleanupExpiredHotspotUser(username, macAddress);
+  throw new Error("RouterOS does not expose a safe voucher cleanup operation.");
 }
 
 function createHotspotExpirationCleanup(deps = {}) {
@@ -122,7 +116,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         }));
       } catch (alertError) { logger.error('[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:',alertError.message); }
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,subscriber_type,activation_type FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
@@ -147,7 +141,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         const pendingCleanup = voucher.status === "expired" && ["pending", "not_required", "failed"].includes(voucher.cleanup_status);
         if (pendingCleanup) {
           try {
-            await applyExpiredProfile(router, username, voucher.mac_address);
+            await applyExpiredProfile(router, username, voucher.mac_address, voucher.subscriber_type);
             await database.query(
               "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
               [voucher.id]
@@ -233,7 +227,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
         if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
         try {
-          await applyExpiredProfile(router, username, voucher.mac_address);
+          await applyExpiredProfile(router, username, voucher.mac_address, voucher.subscriber_type);
           await database.query(
             "UPDATE hotspot_vouchers SET profile='expired_profile',cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
             [voucher.id]
@@ -269,7 +263,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     // Keep expired subscribers visible for 30 days. Only purge a row after the
     // expired profile was applied successfully and the final RouterOS removal succeeds.
     const candidates = await database.query(
-      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
+      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
     );
     const purgeIds = [];
     for (const row of candidates.rows || []) {
@@ -291,7 +285,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
       [purgeIds]
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
+      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
       [purgeIds]
     );
     const result = {

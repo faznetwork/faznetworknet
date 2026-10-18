@@ -550,6 +550,7 @@ if(!phone){showStatus('এই MAC-এ সক্রিয় প্যাকে�
 try{
 const lookup=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone})});
 if(!lookup.found)throw new Error(lookup.message||'এই ফোনে কোনো উপযুক্ত subscriber পাওয়া যায়নি।');
+if(lookup.expired){showStatus(lookup.message||'আপনার স্থায়ী সংযোগের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে Online MFS অপশন থেকে নতুন প্যাকেজ কিনে রিচার্জ করুন।',true);setBusy(false);return;}
 const activated=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({mac:device.mac,phone:phone,ip:device.ip})});
 submitMikrotikLogin(activated.username||device.mac);return;
 }catch(error){showStatus(error.message||firstError.message,true);setBusy(false);return;}
