@@ -260,6 +260,7 @@ async function generate(req,res){
   const quota=Number(profileMeta.limitBytesTotal||profileValidity.limitBytesTotal||0);
   if(!hasRouterTimeout&&!hasConfiguredMetadata&&!quota)return res.status(400).json({success:false,code:"PROFILE_VALIDITY_MISSING",error:"The selected profile has no saved time validity or data quota. Configure validity in Hotspot Profile settings first."});
   const normalizedValidity=String(profileValidity.validity||"").trim()||(quota?"0m":"");
+  const batchId=crypto.randomUUID();
   const created=await db.withTransaction(async client=>{
    const vouchers=[];
    for(let i=0;i<quantity;i++){
@@ -268,8 +269,8 @@ async function generate(req,res){
      username=(userPrefix||"")+randomPin(charLength);
      password=randomPin(8);
      const result=await client.query(
-      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at",
-      [username,password,profileName,normalizedValidity,price,"Scratch voucher; profile validity applies on first successful login.",server]
+      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock,batch_id) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false,$8) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at,batch_id",
+      [username,password,profileName,normalizedValidity,price,"Scratch voucher; profile validity applies on first successful login.",server,batchId]
      );
      inserted=result.rows[0]||null;
     }
@@ -279,7 +280,7 @@ async function generate(req,res){
    return vouchers;
   });
   hotspotListCache.expiresAt=0;
-  return res.status(201).json({success:true,count:created.length,profile:profileName,validity:normalizedValidity,vouchers:created,message:"Voucher PINs generated successfully using the selected Hotspot profile validity."});
+  return res.status(201).json({success:true,batchId,count:created.length,profile:profileName,validity:normalizedValidity,vouchers:created,message:"Voucher PINs generated successfully using the selected Hotspot profile validity."});
  }catch(error){return errorResponse(res,error);}
 }
 async function createUser(req,res){
@@ -410,13 +411,33 @@ async function voucherStats(req,res){
   return res.json({success:true,totalVouchers:Number(row.total_vouchers||0),unusedVouchers:Number(row.unused_vouchers||0),usedVouchers:Number(row.used_vouchers||0),activeVouchers:Number(row.active_vouchers||0),expiredVouchers:Number(row.expired_vouchers||0),cleanupPending:Number(row.cleanup_pending||0)});
  }catch(e){return errorResponse(res,e);}
 }
+async function voucherBatches(req,res){
+ try{
+  const result=await db.query(
+   "SELECT batch_id,MIN(created_at) AS created_at,MAX(profile) AS profile,MAX(validity) AS validity,MAX(price) AS price,COUNT(*)::int AS total_count,COUNT(*) FILTER (WHERE status='unused')::int AS unused_count FROM hotspot_vouchers WHERE subscriber_type='scratch_voucher' AND batch_id IS NOT NULL AND status='unused' GROUP BY batch_id ORDER BY MIN(created_at) DESC LIMIT 200",
+   []
+  );
+  return res.json({success:true,batches:result.rows||[]});
+ }catch(e){return errorResponse(res,e);}
+}
+async function voucherBatch(req,res){
+ try{
+  const batchId=clean(req.params.batchId,64);
+  if(!/^[0-9a-f-]{36}$/i.test(batchId))return res.status(400).json({success:false,message:"Invalid voucher batch id."});
+  const result=await db.query(
+   "SELECT id,batch_id,username,password,profile,validity,price,status,created_at FROM hotspot_vouchers WHERE batch_id=$1 AND subscriber_type='scratch_voucher' AND status='unused' ORDER BY id ASC",
+   [batchId]
+  );
+  return res.json({success:true,batchId,count:result.rows.length,vouchers:result.rows});
+ }catch(e){return errorResponse(res,e);}
+}
 async function voucherRecords(req,res){
  try{
   const allowed=new Set(["all","unused","active","online","offline","expired","cleanup"]);
   const filter=String(req.query.status||"all").trim().toLowerCase();
   if(!allowed.has(filter))return res.status(400).json({success:false,message:"Invalid Hotspot user status filter."});
   const [result,sessionRows]=await Promise.all([
-   db.query("SELECT id,username,password,profile,profile_id,validity,price,status,phone,customer_name,mac_address,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY created_at DESC,id DESC LIMIT 2000"),
+   db.query("SELECT id,username,password,profile,profile_id,validity,price,status,phone,customer_name,mac_address,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,subscriber_type,activation_type,batch_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY created_at DESC,id DESC LIMIT 2000"),
    mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot users] Live-session enrichment unavailable:",error.message);return [];})
   ]);
   const sessions=(Array.isArray(sessionRows)?sessionRows:[]).map(row=>({...row,username:String(row.user||row.username||"").trim(),macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||"")}));
@@ -430,7 +451,8 @@ async function voucherRecords(req,res){
    const expired=String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
    const online=Boolean(session&&String(session.address||session.ip||"").trim())&&!expired;
    const status=expired?"expired":online?"online":String(row.status||"").toLowerCase()==="pending_claim"?"pending_claim":String(row.status||"").toLowerCase()==="unused"?"unused":"offline";
-   return {...row,mac_address:mac||row.mac_address||"",is_online:online,online,live_status:online?"online":"offline",status,display_status:expired?"Expired":online?"Online":String(row.status||"").toLowerCase()==="pending_claim"?"Pending first login":expiry&&expiry.getTime()>now?"Active · Offline":"Offline",db_status:row.status,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",session_ip:session?.address||session?.ip||"",session_uptime:session?.uptime||"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),price:Number(row.price||0)};
+   const scratchUnused=String(row.subscriber_type||"").toLowerCase()==="scratch_voucher"&&String(row.status||"").toLowerCase()==="unused";
+   return {...row,mac_address:scratchUnused?"":(mac||row.mac_address||""),is_scratch_unused:scratchUnused,is_online:online,online,live_status:online?"online":"offline",status,display_status:expired?"Expired":online?"Online":String(row.status||"").toLowerCase()==="pending_claim"?"Pending first login":expiry&&expiry.getTime()>now?"Active · Offline":"Offline",db_status:row.status,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",session_ip:session?.address||session?.ip||"",session_uptime:session?.uptime||"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),price:Number(row.price||0)};
   });
   let rows=all;
   if(filter==="cleanup")rows=all.filter(row=>row.db_status==="expired"&&["pending","failed"].includes(row.cleanup_status));
@@ -508,4 +530,4 @@ async function manualRenew(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
+module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,voucherBatches,voucherBatch,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
