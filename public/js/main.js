@@ -517,3 +517,47 @@
   const load=async()=>{try{const d=await fetch("/api/payments/summary",{cache:"no-store"}).then(r=>r.json());if(!d.success)throw new Error(d.error);total.textContent="৳"+Number(d.summary.today_collection||0).toLocaleString(undefined,{minimumFractionDigits:2});box.innerHTML=(d.recent||[]).length?d.recent.map(x=>"<div class='flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3'><div><p class='font-bold text-sm'>"+x.channel.toUpperCase()+" · "+x.trx_id+"</p><p class='text-xs text-slate-400'>"+(x.matched_username||x.sender_phone||"Unmatched")+"</p></div><div class='text-right'><p class='font-black'>৳"+Number(x.amount).toFixed(2)+"</p><p class='text-xs font-bold "+(x.status==="processed"?"text-emerald-600":"text-amber-600")+"'>"+x.status+"</p></div></div>").join(""):"<p class='text-sm text-slate-400'>No recent payments.</p>"}catch(e){box.innerHTML="<p class='text-sm text-red-500'>Unable to load payment summary.</p>";}};
   load();setInterval(load,15000);
 })();
+
+
+/* General Settings sidebar submenu -> existing settings tab router.
+ * Delegate clicks so navigation works regardless of script initialization order. */
+(() => {
+  if (window.__generalSettingsSidebarNavigationBound) return;
+  window.__generalSettingsSidebarNavigationBound = true;
+
+  const expandSettingsMenu = () => {
+    const toggle = document.querySelector('#sidebar .general-settings-toggle');
+    const submenu = document.getElementById('general-settings-submenu');
+    if (!toggle || !submenu) return;
+    submenu.classList.add('show');
+    toggle.setAttribute('aria-expanded', 'true');
+    const arrow = toggle.querySelector('.arrow-icon');
+    if (arrow) {
+      arrow.classList.remove('bi-chevron-down');
+      arrow.classList.add('bi-chevron-up');
+    }
+  };
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('#sidebar [data-settings-nav]');
+    if (!link) return;
+    event.preventDefault();
+
+    const target = link.dataset.settingsNav;
+    const tab = document.querySelector('#view-general-settings [data-settings-tab="' + target + '"]');
+    if (!tab) return;
+
+    expandSettingsMenu();
+    document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach((item) => {
+      const active = item === link;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
+
+    if (typeof window.switchView === 'function') window.switchView('general-settings');
+    // Reuse the existing tab click handler so section visibility, settings hydration,
+    // and payment/webhook loaders continue to run through their established path.
+    tab.click();
+  });
+})();
