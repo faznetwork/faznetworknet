@@ -78,7 +78,8 @@ async function listTenants(req, res) {
   try {
     const result = await db.query(`
       SELECT t.id, t.name, t.slug, t.contact_email, t.contact_phone, t.status,
-             t.modules, t.created_at, s.starts_at, s.ends_at,
+             t.modules, t.created_at, s.starts_at, s.ends_at, t.invitation_expires_at,
+             CASE WHEN EXISTS (SELECT 1 FROM public.admin_users au WHERE au.tenant_id=t.id) THEN 'onboarded' ELSE 'pending_invite' END AS onboarding_status,
              GREATEST(0, CEIL(EXTRACT(EPOCH FROM (s.ends_at - NOW())) / 86400))::int AS days_remaining,
              CASE WHEN t.status <> 'active' THEN 'suspended'
                   WHEN s.ends_at <= NOW() THEN 'expired' ELSE 'active' END AS subscription_status
@@ -174,4 +175,66 @@ async function updateTenant(req, res) {
   } finally { client.release(); }
 }
 
-module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, listTenants, createTenant, updateTenant };
+
+async function resendTenantInvitation(req, res) {
+  const tenantId = Number(req.params.id);
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1) return res.status(400).json({ success: false, message: 'Invalid tenant ID.' });
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+  const invitationUrl = 'https://isp.faznetwork.com/onboard?token=' + token;
+  const client = await db.getPool().connect();
+  let tenant;
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(`SELECT t.id, t.name, t.contact_email,
+      EXISTS (SELECT 1 FROM public.admin_users au WHERE au.tenant_id=t.id) AS onboarded
+      FROM public.tenants t WHERE t.id=$1 FOR UPDATE`, [tenantId]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
+    tenant = found.rows[0];
+    if (tenant.onboarded) { await client.query('ROLLBACK'); return res.status(409).json({ success: false, message: 'This tenant is already onboarded; invitation links cannot be reissued.' }); }
+    await client.query("UPDATE public.tenants SET invitation_token_hash=$2, invitation_expires_at=NOW()+INTERVAL '48 hours', status='suspended', updated_at=NOW() WHERE id=$1", [tenantId, tokenHash]);
+    await audit(client, req, 'tenant_invitation_resent', null, { tenantId, invitationExpiresHours: 48 });
+    await client.query('COMMIT');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[Server Settings] Invitation refresh failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Unable to generate a fresh tenant invitation.' });
+  } finally { client.release(); }
+  let emailSent = false, emailWarning = '';
+  try { await require('../services/appsScriptMailer').sendTenantInvitation({ email: tenant.contact_email, tenantName: tenant.name, link: invitationUrl }); emailSent = true; }
+  catch (error) { emailWarning = 'Email delivery failed; copy the link and share it securely.'; console.warn('[Tenant Invitation] Resend failed for tenant #' + tenantId + ':', error.message); }
+  res.set('Cache-Control', 'no-store, private');
+  return res.json({ success: true, invitationUrl, emailSent, emailWarning, expiresInHours: 48, message: emailSent ? 'Fresh invitation emailed; link expires in 48 hours.' : 'Fresh invitation generated; link expires in 48 hours.' });
+}
+
+async function deleteTenant(req, res) {
+  const tenantId = Number(req.params.id);
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1) return res.status(400).json({ success: false, message: 'Invalid tenant ID.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT id, name, slug FROM public.tenants WHERE id=$1 FOR UPDATE', [tenantId]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
+    const tenant = found.rows[0];
+    await audit(client, req, 'tenant_deleted', null, { tenantId, slug: tenant.slug, name: tenant.name });
+    // Remove tenant-owned users only when this installation has a tenant-scoped public.users table.
+    const usersTable = await client.query(`SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users'`);
+    const usersColumn = usersTable.rowCount ? await client.query(`SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='tenant_id'`) : { rowCount: 0 };
+    if (usersColumn.rowCount) await client.query('DELETE FROM public.users WHERE tenant_id=$1', [tenantId]);
+    // Explicit deletes document cleanup requirements; foreign keys also cascade to tenant-owned admin_users.
+    await client.query('DELETE FROM public.tenant_subscriptions WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenant_routers WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenant_olts WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.admin_users WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenants WHERE id=$1', [tenantId]);
+    await client.query('COMMIT');
+    res.set('Cache-Control', 'no-store, private');
+    return res.json({ success: true, deletedTenantId: tenantId, message: 'Tenant and associated records deleted.' });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[Server Settings] Tenant deletion failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Tenant deletion failed; no changes were committed.' });
+  } finally { client.release(); }
+}
+
+module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, listTenants, createTenant, updateTenant, deleteTenant, resendTenantInvitation };
