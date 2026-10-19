@@ -763,7 +763,7 @@ if(enabled.indexOf(currentMethod)<0)setAuthMethod(enabled[0]);
 async function applyPublicPortalBranding(){
 try{
 const data=await requestJson(PUBLIC_BRANDING_URL,{method:'GET'});
-const title=byId('reseller-title'),subtitle=byId('reseller-subtitle');
+const title=byId('reseller-title'),subtitle=byId('reseller-subtitle'),logo=byId('reseller-logo');if(logo){const logoUrl=String(data.portal_logo_url||'').trim();if(logoUrl){logo.src=new URL(logoUrl,BACKEND_BASE_URL).toString();logo.style.display='';}else{logo.src='logo-Faznetwork.png';logo.style.display='';}}
 if(title)title.textContent=data.brand_title||'FAZ NETWORK';
 if(subtitle)subtitle.textContent=data.brand_subtitle||'স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন';
 const phone=String(data.helpline||'').trim(),helpline=byId('reseller-helpline');
