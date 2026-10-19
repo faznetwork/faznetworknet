@@ -4882,6 +4882,35 @@ async function deletePlan(id,name){
           }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
         document.querySelectorAll('[data-settings-tab]').forEach(tab=>tab.addEventListener('click',()=>{const target=tab.dataset.settingsTab;document.querySelectorAll('[data-settings-tab]').forEach(t=>{const active=t===tab;t.classList.toggle('btn-success',active);t.classList.toggle('btn-outline-success',!active);t.setAttribute('aria-selected',String(active));});document.querySelectorAll('.general-settings-panel').forEach(panel=>{const key=panel.id.replace('general-settings-panel-','');panel.style.display=(key===target||(target==='payments'&&(key==='webhook'||key==='mfs')))?'block':'none';});if(['brand','billing','sms'].includes(target))loadSystemSettings();}));
+        // Keep sidebar navigation self-contained on admin.ejs; main.js may not be loaded
+        // by this server-rendered page, and both paths share a guard against double binding.
+        if (!window.__generalSettingsSidebarNavigationBound) {
+          window.__generalSettingsSidebarNavigationBound = true;
+          document.addEventListener('click', event => {
+            const link = event.target.closest('#sidebar [data-settings-nav]');
+            if (!link) return;
+            event.preventDefault();
+            const target = link.dataset.settingsNav;
+            const tab = document.querySelector('#view-general-settings [data-settings-tab="' + target + '"]');
+            if (!tab) return;
+            const toggle = document.querySelector('#sidebar .general-settings-toggle');
+            const submenu = document.getElementById('general-settings-submenu');
+            if (toggle && submenu) {
+              submenu.classList.add('show');
+              toggle.setAttribute('aria-expanded', 'true');
+              const arrow = toggle.querySelector('.arrow-icon');
+              if (arrow) { arrow.classList.remove('bi-chevron-down'); arrow.classList.add('bi-chevron-up'); }
+            }
+            document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
+              const active = item === link;
+              item.classList.toggle('active', active);
+              if (active) item.setAttribute('aria-current', 'page');
+              else item.removeAttribute('aria-current');
+            });
+            if (typeof window.switchView === 'function') window.switchView('general-settings');
+            tab.click();
+          });
+        }
         document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
         document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
