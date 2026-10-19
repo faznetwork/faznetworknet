@@ -934,3 +934,55 @@ CREATE INDEX IF NOT EXISTS idx_hotspot_direct_subscriber_phone
 CREATE INDEX IF NOT EXISTS idx_hotspot_direct_subscriber_mac
   ON hotspot_vouchers (LOWER(mac_address), id DESC)
   WHERE subscriber_type='direct_subscriber' AND mac_address IS NOT NULL;
+
+
+-- Platform-owner control plane. These tables are separate from tenant operational data.
+CREATE TABLE IF NOT EXISTS system_server_settings (
+  id BIGSERIAL PRIMARY KEY,
+  setting_key VARCHAR(150) NOT NULL UNIQUE,
+  setting_value TEXT,
+  description VARCHAR(500),
+  is_secret BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by BIGINT
+);
+CREATE TABLE IF NOT EXISTS server_settings_audit (
+  id BIGSERIAL PRIMARY KEY,
+  actor_id BIGINT,
+  actor_label VARCHAR(160) NOT NULL DEFAULT 'super_admin',
+  action VARCHAR(80) NOT NULL,
+  setting_key VARCHAR(150),
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_server_settings_audit_created_at ON server_settings_audit(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  slug VARCHAR(100) NOT NULL UNIQUE,
+  contact_email VARCHAR(254),
+  contact_phone VARCHAR(50),
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+  modules JSONB NOT NULL DEFAULT '{"hotspot":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ends_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended','expired')),
+  updated_by BIGINT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (ends_at > starts_at)
+);
+CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_tenant_ends ON tenant_subscriptions(tenant_id, ends_at DESC);
+
+-- These tables are only accessed by the trusted server-side PostgreSQL connection; public Supabase roles must not query them.
+ALTER TABLE system_server_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE server_settings_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
