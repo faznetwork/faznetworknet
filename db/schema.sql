@@ -514,9 +514,6 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- A database-backed administrator belongs to one tenant; NULL is reserved for legacy platform accounts.
-ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS idx_admin_users_tenant_status ON admin_users(tenant_id,status);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_username_ci ON admin_users (lower(username));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_email_ci ON admin_users (lower(email));
 CREATE INDEX IF NOT EXISTS idx_admin_users_role_status ON admin_users(role,status);
@@ -1025,3 +1022,8 @@ CREATE TABLE IF NOT EXISTS tenant_olts (
 CREATE INDEX IF NOT EXISTS idx_tenant_olts_owner_active ON tenant_olts(tenant_id, is_active);
 ALTER TABLE tenant_routers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenant_olts ENABLE ROW LEVEL SECURITY;
+
+
+-- Tenant administrators are scoped to their owning tenant. NULL remains for legacy platform accounts.
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_admin_users_tenant_status ON admin_users(tenant_id,status);
