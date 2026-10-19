@@ -135,12 +135,18 @@ async function createTenant(req, res) {
   const name = String(req.body?.name || '').trim();
   const slug = String(req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
+  const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
+  const modules = {
+    hotspot: requestedModules.hotspot !== false,
+    sms_gateway: requestedModules.sms_gateway !== false,
+    whatsapp: requestedModules.whatsapp !== false
+  };
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
       'INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules) VALUES($1,$2,$3,$4,\'active\',$5::jsonb) RETURNING id',
-      [name, slug, String(req.body?.contact_email || '').trim() || null, String(req.body?.contact_phone || '').trim() || null, JSON.stringify({ hotspot: true, sms_gateway: true, whatsapp: true })]
+      [name, slug, String(req.body?.contact_email || '').trim() || null, String(req.body?.contact_phone || '').trim() || null, JSON.stringify(modules)]
     );
     const tenantId = inserted.rows[0].id;
     await client.query(
