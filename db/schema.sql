@@ -1027,3 +1027,7 @@ ALTER TABLE tenant_olts ENABLE ROW LEVEL SECURITY;
 -- Tenant administrators are scoped to their owning tenant. NULL remains for legacy platform accounts.
 ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_admin_users_tenant_status ON admin_users(tenant_id,status);
+
+
+-- Keep the tenant identity sequence aligned with existing tenant IDs; a fresh installation starts at 1.
+SELECT setval(pg_get_serial_sequence('public.tenants','id'), COALESCE((SELECT MAX(id) FROM public.tenants), 0) + 1, FALSE);
