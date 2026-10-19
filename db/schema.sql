@@ -968,6 +968,9 @@ CREATE TABLE IF NOT EXISTS tenants (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_token_hash CHAR(64);
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS tenant_subscriptions (
   id BIGSERIAL PRIMARY KEY,
   tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
