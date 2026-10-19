@@ -1892,6 +1892,12 @@
                 <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
 
+            <% if (typeof currentRole !== "undefined" && currentRole === "super_admin") { %>
+            <li class="menu-item">
+                <a href="javascript:void(0)" data-view-target="view-server-settings" onclick="event.preventDefault(); switchView('server-settings'); return false;"><i class="bi bi-shield-lock"></i><span>Server Settings</span></a>
+            </li>
+            <% } %>
+
             <li class="menu-item general-settings-menu">
                 <button class="dropdown-toggle general-settings-toggle" type="button" aria-expanded="false" aria-controls="general-settings-submenu" onclick="toggleSubmenu(event, this); return false;">
                     <i class="bi bi-sliders2-vertical"></i><span>General Settings</span>
@@ -2058,6 +2064,22 @@
 
         <div id="dynamicPageContent">
             <!-- VIEW 1: DASHBOARD — Enterprise NOC -->
+            <% if (typeof currentRole !== "undefined" && currentRole === "super_admin") { %>
+            <section id="view-server-settings" class="admin-view dashboard-view hidden" style="display:none" aria-labelledby="serverSettingsTitle">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+                    <div><div class="text-uppercase small fw-bold text-success mb-1">Platform administration</div><h1 id="serverSettingsTitle" class="h4 fw-bold mb-1">Server Settings</h1><p class="text-muted small mb-0">Manage platform-level configuration and the master webhook token.</p></div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="serverSettingsRefresh"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+                </div>
+                <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-key-fill"></i> Master Webhook Token</div><div class="card-body">
+                    <p class="text-muted small">Generate a new cryptographically random token. Only its SHA-256 hash is stored; the plaintext token is shown once.</p>
+                    <div id="serverSettingsTokenResult" class="alert d-none" role="status" aria-live="polite"></div>
+                    <div id="serverSettingsTokenReveal" class="d-none mb-3"><label for="serverSettingsGeneratedToken" class="form-label">New token (copy now; it will not be shown again)</label><div class="input-group"><input id="serverSettingsGeneratedToken" class="form-control font-monospace" type="password" readonly autocomplete="off"><button type="button" class="btn btn-outline-secondary" id="serverSettingsToggleToken" aria-label="Show token"><i class="bi bi-eye"></i></button><button type="button" class="btn btn-outline-secondary" id="serverSettingsCopyToken"><i class="bi bi-clipboard"></i> Copy</button></div></div>
+                    <button type="button" class="btn btn-theme" id="serverSettingsGenerateToken"><i class="bi bi-arrow-repeat me-1"></i>Generate New Token</button>
+                </div></div>
+                <div class="card card-custom"><div class="card-custom-header"><i class="bi bi-list-check"></i> Configuration Inventory</div><div class="card-body"><div id="serverSettingsStatus" class="small text-muted mb-3">Settings have not been loaded.</div><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th scope="col">Setting</th><th scope="col">Value</th><th scope="col">Updated</th></tr></thead><tbody id="serverSettingsTableBody"><tr><td colspan="3" class="text-muted">Loading settings…</td></tr></tbody></table></div></div></div>
+            </section>
+            <% } %>
+
             <section id="view-main-dashboard" class="admin-view dashboard-view">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="dashboardTrafficStatus" class="badge rounded-pill bg-secondary">Connecting…</span><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
               
@@ -5411,9 +5433,73 @@ async function deletePlan(id,name){
                 } else if (target === 'general-settings') {
                     loadGeneralSettings();
                 }
+                } else if (target === 'view-server-settings') {
+                    loadServerSettings();
+                }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
         }
+
+
+        // Server Settings UI is isolated from router and payment workflows.
+        async function loadServerSettings() {
+            const status = document.getElementById('serverSettingsStatus');
+            const body = document.getElementById('serverSettingsTableBody');
+            if (!status || !body) return;
+            status.textContent = 'Loading settings…';
+            try {
+                const response = await fetch('/api/server-settings', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok || data.success === false) throw new Error(data.message || 'Unable to load server settings.');
+                body.replaceChildren();
+                (Array.isArray(data.settings) ? data.settings : []).forEach(setting => {
+                    const tr = document.createElement('tr');
+                    const key = document.createElement('th'); key.scope = 'row'; key.textContent = String(setting.key || '');
+                    const value = document.createElement('td'); value.textContent = setting.isSecret ? (setting.configured ? 'Configured (masked)' : 'Not configured') : String(setting.value ?? '');
+                    const updated = document.createElement('td'); updated.className = 'text-muted small'; updated.textContent = setting.updatedAt ? new Date(setting.updatedAt).toLocaleString() : '—';
+                    tr.append(key, value, updated); body.appendChild(tr);
+                });
+                if (!body.children.length) body.innerHTML = '<tr><td colspan="3" class="text-muted">No server settings found.</td></tr>';
+                status.textContent = 'Loaded ' + (data.settings || []).length + ' setting(s). Secret values are never returned.';
+            } catch (error) {
+                status.textContent = error.message || 'Unable to load server settings.';
+                body.innerHTML = '<tr><td colspan="3" class="text-danger">Settings could not be loaded.</td></tr>';
+            }
+        }
+        function showServerSettingsTokenMessage(message, isError) {
+            const result = document.getElementById('serverSettingsTokenResult');
+            if (!result) return;
+            result.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+            result.textContent = message;
+        }
+        document.getElementById('serverSettingsRefresh')?.addEventListener('click', loadServerSettings);
+        document.getElementById('serverSettingsGenerateToken')?.addEventListener('click', async function () {
+            if (!window.confirm('Generate a new master webhook token? Integrations using the previous token will need updating.')) return;
+            const button = this; button.disabled = true;
+            try {
+                const response = await fetch('/api/server-settings/generate-token', { method: 'POST', headers: { Accept: 'application/json' }, cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok || data.success === false || !data.token) throw new Error(data.message || 'Unable to generate token.');
+                const reveal = document.getElementById('serverSettingsTokenReveal');
+                const input = document.getElementById('serverSettingsGeneratedToken');
+                if (input) input.value = data.token;
+                if (reveal) reveal.classList.remove('d-none');
+                showServerSettingsTokenMessage('Token generated. Copy and securely store it now; it cannot be retrieved again.', false);
+                await loadServerSettings();
+            } catch (error) { showServerSettingsTokenMessage(error.message || 'Unable to generate token.', true); }
+            finally { button.disabled = false; }
+        });
+        document.getElementById('serverSettingsToggleToken')?.addEventListener('click', function () {
+            const input = document.getElementById('serverSettingsGeneratedToken'); if (!input) return;
+            input.type = input.type === 'password' ? 'text' : 'password';
+            this.setAttribute('aria-label', input.type === 'password' ? 'Show token' : 'Hide token');
+            this.innerHTML = input.type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+        });
+        document.getElementById('serverSettingsCopyToken')?.addEventListener('click', async function () {
+            const input = document.getElementById('serverSettingsGeneratedToken'); if (!input || !input.value) return;
+            try { await navigator.clipboard.writeText(input.value); showServerSettingsTokenMessage('Token copied to clipboard. Store it securely; it will not be shown again.', false); }
+            catch (_) { input.type = 'text'; input.focus(); input.select(); showServerSettingsTokenMessage('Clipboard access was blocked. The token is selected so you can copy it manually.', true); }
+        });
 
         window.switchView = switchView;
 
