@@ -4297,6 +4297,8 @@ window.editHotspotUser=function(username,event){
                 arrow.classList.toggle('bi-chevron-down', !isOpen);
             }
         }
+        // Inline sidebar onclick handlers resolve functions on the global window object.
+        window.toggleSubmenu = toggleSubmenu;
         document.addEventListener('click', function(event) {
             if (window.innerWidth >= 768) return;
             const sidebar = document.getElementById('sidebar');
@@ -5430,11 +5432,11 @@ async function deletePlan(id,name){
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
         }
-        if(document.readyState==='loading'){
-            document.addEventListener('DOMContentLoaded',hydratePaymentSettingsOnReady,{once:true});
-        }else{
-            hydratePaymentSettingsOnReady();
-        }
+        // Keep initialization expression structurally simple to avoid parser ambiguity
+        // in the rendered inline script across EJS/template transformations.
+        document.readyState === 'loading'
+            ? document.addEventListener('DOMContentLoaded', hydratePaymentSettingsOnReady, { once: true })
+            : hydratePaymentSettingsOnReady();
         document.querySelectorAll('[data-settings-tab="payments"]').forEach(tab=>tab.addEventListener('click',()=>{
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
