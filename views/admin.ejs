@@ -129,6 +129,17 @@
             display: none;
         }
         .submenu.show { display: block; }
+        /* General Settings uses the same sidebar accordion, with a short smooth reveal. */
+        .submenu.general-settings-submenu { display: block; max-height: 0; overflow: hidden; visibility: hidden; transition: max-height .24s ease, visibility .24s ease; }
+        .submenu.general-settings-submenu.show { max-height: 360px; visibility: visible; }
+        .general-settings-toggle .arrow-icon { transition: transform .24s ease; }
+        .general-settings-toggle[aria-expanded="true"] .arrow-icon { transform: rotate(180deg); }
+        .general-settings-submenu a { padding-left: 48px; }
+        .general-settings-submenu a.active { color: #fff; background: rgba(16,185,129,.28); box-shadow: inset 3px 0 #6ee7b7; }
+        .general-settings-submenu a:focus-visible { outline: 2px solid #a7f3d0; outline-offset: -2px; }
+        @media (prefers-reduced-motion: reduce) {
+            .submenu.general-settings-submenu, .general-settings-toggle .arrow-icon { transition: none; }
+        }
         .submenu a, .submenu button { 
             padding-left: 48px; 
             font-size: 13.5px; 
@@ -1881,8 +1892,18 @@
                 <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
 
-            <li class="menu-item">
-                <a href="javascript:void(0)" onclick="switchView('general-settings'); return false;"><i class="bi bi-sliders2-vertical"></i><span>General Settings</span></a>
+            <li class="menu-item general-settings-menu">
+                <button class="dropdown-toggle general-settings-toggle" type="button" aria-expanded="false" aria-controls="general-settings-submenu" onclick="toggleSubmenu(event, this); return false;">
+                    <i class="bi bi-sliders2-vertical"></i><span>General Settings</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon" aria-hidden="true"></i>
+                </button>
+                <ul id="general-settings-submenu" class="submenu general-settings-submenu" aria-label="General Settings sections">
+                    <li><a href="javascript:void(0)" data-settings-nav="brand" onclick="event.preventDefault(); return false;"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="billing" onclick="event.preventDefault(); return false;"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="payments" onclick="event.preventDefault(); return false;"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="sms" onclick="event.preventDefault(); return false;"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="hotspot-portal" onclick="event.preventDefault(); return false;"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
+                </ul>
             </li>
             <li class="menu-item">
                 <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
@@ -4861,6 +4882,35 @@ async function deletePlan(id,name){
           }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
         document.querySelectorAll('[data-settings-tab]').forEach(tab=>tab.addEventListener('click',()=>{const target=tab.dataset.settingsTab;document.querySelectorAll('[data-settings-tab]').forEach(t=>{const active=t===tab;t.classList.toggle('btn-success',active);t.classList.toggle('btn-outline-success',!active);t.setAttribute('aria-selected',String(active));});document.querySelectorAll('.general-settings-panel').forEach(panel=>{const key=panel.id.replace('general-settings-panel-','');panel.style.display=(key===target||(target==='payments'&&(key==='webhook'||key==='mfs')))?'block':'none';});if(['brand','billing','sms'].includes(target))loadSystemSettings();}));
+        // Keep sidebar navigation self-contained on admin.ejs; main.js may not be loaded
+        // by this server-rendered page, and both paths share a guard against double binding.
+        if (!window.__generalSettingsSidebarNavigationBound) {
+          window.__generalSettingsSidebarNavigationBound = true;
+          document.addEventListener('click', event => {
+            const link = event.target.closest('#sidebar [data-settings-nav]');
+            if (!link) return;
+            event.preventDefault();
+            const target = link.dataset.settingsNav;
+            const tab = document.querySelector('#view-general-settings [data-settings-tab="' + target + '"]');
+            if (!tab) return;
+            const toggle = document.querySelector('#sidebar .general-settings-toggle');
+            const submenu = document.getElementById('general-settings-submenu');
+            if (toggle && submenu) {
+              submenu.classList.add('show');
+              toggle.setAttribute('aria-expanded', 'true');
+              const arrow = toggle.querySelector('.arrow-icon');
+              if (arrow) { arrow.classList.remove('bi-chevron-down'); arrow.classList.add('bi-chevron-up'); }
+            }
+            document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
+              const active = item === link;
+              item.classList.toggle('active', active);
+              if (active) item.setAttribute('aria-current', 'page');
+              else item.removeAttribute('aria-current');
+            });
+            if (typeof window.switchView === 'function') window.switchView('general-settings');
+            tab.click();
+          });
+        }
         document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
         document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
