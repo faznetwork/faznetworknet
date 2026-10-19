@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tenant Login · FAZ NETWORK</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{min-height:100vh;background:linear-gradient(135deg,#062e25,#0b7051);display:grid;place-items:center;padding:18px;font-family:system-ui,sans-serif}.panel{width:min(100%,460px);background:#fff;border-radius:22px;padding:30px;box-shadow:0 25px 70px #001c153d}.brand{color:#087f5b;font-weight:900;letter-spacing:-.04em}.form-control{min-height:46px}.hint{color:#64748b;font-size:.85rem}</style></head>
+<body><main class="panel"><div class="brand fs-3">FAZ NETWORK</div><h1 class="h4 fw-bold mt-3">ISP Tenant Portal</h1><p class="hint mb-4">Sign in to your own ISP workspace and hardware configuration.</p>
+<% if(error){ %><div class="alert alert-danger"><%= error %></div><% } %>
+<form method="post" action="/tenant/login" autocomplete="on">
+<div class="mb-3"><label class="form-label fw-semibold" for="tenantNumber">Tenant ID / Number</label><input class="form-control" id="tenantNumber" name="tenantNumber" inputmode="numeric" pattern="[0-9]+" required value="<%= tenantNumber %>" placeholder="e.g. 1"></div>
+<div class="mb-3"><label class="form-label fw-semibold" for="username">Email / Username</label><input class="form-control" id="username" name="username" autocomplete="username" required maxlength="254" placeholder="admin@example.com"></div>
+<div class="mb-4"><label class="form-label fw-semibold" for="password">Password</label><input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required></div>
+<button class="btn btn-success w-100 py-3 fw-bold" type="submit">Sign in to Tenant Portal</button></form>
+<p class="hint mt-4 mb-0">Your tenant number and subscription must be active. Platform Owner access uses the separate platform login.</p></main></body></html>
