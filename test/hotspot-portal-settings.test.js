@@ -4,19 +4,30 @@ const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const path=require("node:path");
 const vm=require("node:vm");
-const source=fs.readFileSync(path.join(__dirname,"..","public","js","hotspot-portal-settings.js"),"utf8");
+const js=fs.readFileSync(path.join(__dirname,"..","public","js","hotspot-portal-settings.js"),"utf8");
+const controller=fs.readFileSync(path.join(__dirname,"..","controllers","hotspotPortalSettingsController.js"),"utf8");
+const login=fs.readFileSync(path.join(__dirname,"..","public","login.html"),"utf8");
 
-test("hotspot portal settings script parses and does not depend on removed URL/default-profile controls",()=>{
- assert.doesNotThrow(()=>new vm.Script(source,{filename:"hotspot-portal-settings.js"}));
- assert.doesNotMatch(source, /\$\('portalLogoUrl'\)|\$\('portalBannerUrl'\)|\$\('portalDefaultProfile'\)/);
- assert.match(source,/async function loadProfiles\(\)/);
- assert.match(source,/Retry profile loading/);
- assert.match(source,/renderPackageRows\(savedPackages/);
+test("hotspot portal package selector is read-only and safely handles API failure",()=>{
+ assert.doesNotThrow(()=>new vm.Script(js,{filename:"hotspot-portal-settings.js"}));
+ assert.doesNotMatch(js,/portal-package-name|portal-package-price" type="number|portal-package-validity" maxlength/);
+ assert.match(js,/Profile Name/);
+ assert.match(js,/Price \(৳\)/);
+ assert.match(js,/Validity/);
+ assert.match(js,/Show on Portal/);
+ assert.match(js,/async function loadProfiles\(\)/);
+ assert.match(js,/Retry profile loading/);
+ assert.match(js,/Could not load MikroTik profiles/);
+ assert.match(js,/renderPackageRows\(savedPackages/);
 });
 
-test("public sale packages are serialized with checkbox state and safe defaults",()=>{
- assert.match(source,/enabled:tr\.querySelector\('\.portal-package-enabled'\)\.checked/);
- assert.match(source,/profileId:tr\.dataset\.profileId/);
- assert.match(source,/Number\(tr\.querySelector\('\.portal-package-price'\)\.value\)\|\|0/);
- assert.match(source,/Array\.isArray\(d\.profiles\)\?d\.profiles/);
+test("settings save only enabled profile names, and public config resolves existing metadata",()=>{
+ assert.match(js,/enabledProfiles:readEnabledProfiles\(\)/);
+ assert.match(js,/function readEnabledProfiles\(\)/);
+ assert.doesNotMatch(js,/packages:readPackages\(\)/);
+ assert.match(controller,/enabledProfiles/);
+ assert.match(controller,/hotspot_profile_metadata/);
+ assert.match(controller,/packages:await enabledPortalPackages\(config\)/);
+ assert.match(login,/config\.packages/);
+ assert.match(login,/Number\.isFinite\(p\.price\)&&p\.price>0/);
 });
