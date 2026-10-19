@@ -6,13 +6,6 @@ const db = require('../db');
 const SECRET_KEYS = new Set([
   'master_webhook_token_hash',
   'android_sms_gateway_token_hash',
-  'mikrotik_core_password'
-]);
-const EDITABLE_SETTINGS = new Set([
-  'mikrotik_core_host',
-  'mikrotik_core_api_port',
-  'mikrotik_core_username',
-  'mikrotik_core_password'
 ]);
 
 function maskSetting(key, value, isSecret) {
@@ -79,37 +72,6 @@ async function generateMasterToken(req, res) {
 }
 async function generateAndroidToken(req, res) {
   return generateToken(req, res, 'android_sms_gateway_token_hash');
-}
-
-async function saveCoreSettings(req, res) {
-  const input = req.body && typeof req.body === 'object' ? req.body : {};
-  const entries = Object.entries(input).filter(([key]) => EDITABLE_SETTINGS.has(key));
-  if (!entries.length) return res.status(400).json({ success: false, message: 'No supported core settings supplied.' });
-  const client = await db.getPool().connect();
-  try {
-    await client.query('BEGIN');
-    for (const [key, raw] of entries) {
-      if (key === 'mikrotik_core_api_port') {
-        const port = Number(raw);
-        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('MikroTik API port must be between 1 and 65535.');
-      }
-      // Blank secret fields mean retain the existing password, never clear it accidentally.
-      if (key === 'mikrotik_core_password' && !String(raw || '')) continue;
-      await client.query(
-        `INSERT INTO public.system_server_settings(setting_key, setting_value, is_secret, updated_at, updated_by)
-         VALUES ($1, $2, $3, NOW(), $4)
-         ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value, is_secret=EXCLUDED.is_secret, updated_at=NOW(), updated_by=EXCLUDED.updated_by`,
-        [key, String(raw ?? ''), key === 'mikrotik_core_password', req.session?.userId || null]
-      );
-      await audit(client, req, 'setting_updated', key);
-    }
-    await client.query('COMMIT');
-    return res.json({ success: true, message: 'Platform core settings saved.' });
-  } catch (error) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    console.error('[Server Settings] Core settings save failed:', error.message);
-    return res.status(400).json({ success: false, message: error.message || 'Unable to save core settings.' });
-  } finally { client.release(); }
 }
 
 async function listTenants(req, res) {
@@ -200,4 +162,4 @@ async function updateTenant(req, res) {
   } finally { client.release(); }
 }
 
-module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, saveCoreSettings, listTenants, createTenant, updateTenant };
+module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, listTenants, createTenant, updateTenant };
