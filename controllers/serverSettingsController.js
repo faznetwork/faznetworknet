@@ -99,7 +99,7 @@ async function createTenant(req, res) {
   const email = String(req.body?.contact_email || '').trim().toLowerCase();
   const phone = String(req.body?.contact_phone || '').trim();
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required.' });
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
   const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
   const invitationToken = crypto.randomBytes(32).toString('base64url');
