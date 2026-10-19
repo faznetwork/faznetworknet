@@ -7,6 +7,7 @@ function authorizeMailerRequest(data) {
   return expected.length >= 32 && supplied.length === expected.length && supplied === expected;
 }
 function sendInvitation(data, to) {
+  if (!authorizeMailerRequest(data)) return jsonResponse({ success: false, error: 'Unauthorized mailer request' });
   var username = String(data.username || 'Tenant Admin').trim().slice(0, 60);
   var role = String(data.role || '').trim();
   var link = String(data.link || '').trim();
