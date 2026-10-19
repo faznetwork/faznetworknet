@@ -46,7 +46,25 @@ async function saveHotspotEngine(req,res){
 }
 
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
-async function saveHotspotWebhookSettings(req,res){try{const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();if(webhookEnabled&&!webhookUrl)throw new Error("Webhook URL is required when automation is enabled.");const current=await db.query("SELECT value FROM app_settings WHERE key='personal_payment_webhook_secret' LIMIT 1"),currentSecret=String(current.rows[0]?.value||"");if(webhookEnabled&&!newSecret&&!currentSecret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");const secret=newSecret||currentSecret;for(const [key,value] of [["personal_payment_webhook_url",webhookUrl],["personal_payment_webhook_enabled",webhookEnabled?"true":"false"],["personal_payment_webhook_secret",secret]])await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,value]);return res.json({success:true,message:"Hotspot Webhook settings saved successfully.",settings:await readSettings()});}catch(error){return errorResponse(res,error,400);}}
+async function saveHotspotWebhookSettings(req,res){
+ try{
+  const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();
+  if(webhookEnabled&&!webhookUrl)throw new Error("Webhook URL is required when automation is enabled.");
+  const saved=await db.withTransaction(async tx=>{
+   const current=await tx.query("SELECT value FROM app_settings WHERE key=$1 LIMIT 1",["personal_payment_webhook_secret"]);
+   const currentSecret=String(current.rows[0]?.value||"");
+   if(webhookEnabled&&!newSecret&&!currentSecret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");
+   const secret=newSecret||currentSecret;
+   for(const [key,value] of [["personal_payment_webhook_url",webhookUrl],["personal_payment_webhook_enabled",webhookEnabled?"true":"false"],["personal_payment_webhook_secret",secret]]){
+    await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,value]);
+   }
+   const result=await tx.query("SELECT key,value FROM app_settings WHERE key = ANY($1::varchar[])",[["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret"]]);
+   return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
+  });
+  const settings={webhookUrl:String(saved.personal_payment_webhook_url||""),webhookEnabled:parseBool(saved.personal_payment_webhook_enabled),secretConfigured:Boolean(String(saved.personal_payment_webhook_secret||""))};
+  return res.set("Cache-Control","no-store").json({success:true,message:"Payment webhook settings saved to PostgreSQL.",data:settings,settings});
+ }catch(error){return errorResponse(res,error,400);}
+}
 
 const mikrotikService=require("../services/mikrotikService");
 const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"];
@@ -105,8 +123,13 @@ async function saveGeneralSettings(req,res){
  try{
   const body=req.body||{},mfs=body.mfs&&typeof body.mfs==="object"?body.mfs:body,normalized={};
   for(const [name] of Object.entries(MFS_KEYS)){const value=String(mfs[name]??"").trim();if(value&&!/^[+()\d\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
-  for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
-  return res.set("Cache-Control","no-store").json({success:true,message:"MFS receiving numbers saved. Customer payment instructions update immediately.",accounts:normalized});
+  await db.withTransaction(async tx=>{
+   for(const [name,key] of Object.entries(MFS_KEYS)){
+    await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,normalized[name]]);
+   }
+  });
+  try{require("../services/appSettings").invalidate();}catch(_){}
+  return res.set("Cache-Control","no-store").json({success:true,message:"MFS receiving numbers saved to PostgreSQL.",data:normalized,accounts:normalized});
  }catch(error){return errorResponse(res,error,400);}
 }
 async function saveMfsAccounts(req,res){
