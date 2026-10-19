@@ -2,7 +2,9 @@
 
 const express = require('express');
 const controller = require('../controllers/tenantHardwareController');
+const requireTenantAdmin = require('../middleware/requireTenantAdmin');
 const router = express.Router();
+router.use(requireTenantAdmin);
 
 router.get('/', controller.list);
 router.post('/routers', controller.createRouter);
