@@ -980,3 +980,9 @@ CREATE TABLE IF NOT EXISTS tenant_subscriptions (
   CHECK (ends_at > starts_at)
 );
 CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_tenant_ends ON tenant_subscriptions(tenant_id, ends_at DESC);
+
+-- These tables are only accessed by the trusted server-side PostgreSQL connection; public Supabase roles must not query them.
+ALTER TABLE system_server_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE server_settings_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
