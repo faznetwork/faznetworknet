@@ -545,7 +545,7 @@
 
     const target = link.dataset.settingsNav;
     const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
-    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return;
+    if (!validTargets.includes(target)) return;
 
     expandSettingsMenu();
     document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach((item) => {
@@ -556,6 +556,32 @@
     });
 
     if (typeof window.switchView === 'function') window.switchView('general-settings');
-    window.showGeneralSettingsSection(target);
+    if (typeof window.showGeneralSettingsSection === 'function') {
+      window.showGeneralSettingsSection(target);
+      return;
+    }
+
+    // Fallback for script-order or partial-template scenarios: never leave the
+    // System Settings content blank if the inline view helper is unavailable.
+    const view = document.getElementById('view-general-settings');
+    if (view) {
+      document.querySelectorAll('.admin-view').forEach((panel) => {
+        panel.classList.add('hidden');
+        panel.style.display = 'none';
+      });
+      view.classList.remove('hidden');
+      view.style.display = 'block';
+      const panels = view.querySelectorAll('.general-settings-panel');
+      panels.forEach((panel) => {
+        const key = panel.dataset.settingsSection || panel.id.replace('general-settings-panel-', '');
+        const visible = key === target || (target === 'payments' && ['webhook', 'mfs'].includes(key));
+        panel.classList.toggle('d-none', !visible);
+        panel.style.display = visible ? 'block' : 'none';
+      });
+      if (target === 'payments') {
+        if (typeof window.loadHotspotWebhookSettings === 'function') window.loadHotspotWebhookSettings();
+      }
+      if (target === 'hotspot-portal' && typeof window.loadHotspotPortalConfig === 'function') window.loadHotspotPortalConfig();
+    }
   });
 })();
