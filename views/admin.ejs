@@ -5518,7 +5518,6 @@ async function deletePlan(id,name){
                     const sectionPanels = document.querySelectorAll('#view-general-settings .general-settings-panel[data-settings-section]');
                     const hasVisibleSection = Array.from(sectionPanels).some(panel => panel.style.display === 'block' && !panel.classList.contains('d-none'));
                     if (!hasVisibleSection) showGeneralSettingsSection('brand');
-                }
                 } else if (target === 'view-server-settings') {
                     loadServerSettings();
                 }
