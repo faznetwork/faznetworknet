@@ -801,27 +801,34 @@ if(!grid.querySelector('.pkg-card')){const note=document.createElement('div');no
 }
 async function loadPackagesAndSettings(){
 const grid=byId('packages-grid'),accounts=byId('payment-accounts-list'),select=byId('cust_payment_method');
+const fallback={logoUrl:'',bannerUrl:'',portalTitle:'FAZ NETWORK',mfs:[],packages:[]};
+let config=fallback;
+try{const r=await fetch(BACKEND_BASE_URL+'/api/public/portal-config',{cache:'no-store',credentials:'omit'});if(!r.ok)throw Error('public config unavailable');const d=await r.json();if(d&&typeof d==='object')config={...fallback,...d};}
+catch(error){console.warn('[Portal CMS] Using inline fallback configuration.',error.message);}
 try{
-const homeResponse=await fetch(BACKEND_BASE_URL+'/',{cache:'no-store',credentials:'omit'});
-if(!homeResponse.ok)throw new Error('প্যাকেজ সার্ভার অনুপলব্ধ।');
-const html=await homeResponse.text(),doc=new DOMParser().parseFromString(html,'text/html');
-let nodes=Array.from(doc.querySelectorAll('[data-buy-hotspot][data-profile][data-price]')).map(function(node){return {profile:node.getAttribute('data-profile'),price:Number(node.getAttribute('data-price')),validity:node.getAttribute('data-validity')||node.getAttribute('data-profile')};});
-if(!nodes.length)nodes=Array.from(doc.querySelectorAll('[data-profile][data-price]')).map(function(node){return {profile:node.getAttribute('data-profile'),price:Number(node.getAttribute('data-price')),validity:node.getAttribute('data-validity')||node.getAttribute('data-profile')};});
-renderPackages(nodes);
-}catch(error){console.warn('[Hotspot Packages]',error.message);renderPackages([]);}
-try{
-const data=await requestJson(PUBLIC_SETTINGS_URL,{method:'GET'}),acc=data.settings&&data.settings.payment_accounts?data.settings.payment_accounts:{};
-accounts.replaceChildren();select.replaceChildren();availablePaymentMethods=Object.keys(LABELS).filter(function(key){return safeText(acc[key]).trim().length>0;});
-if(!availablePaymentMethods.length){const empty=document.createElement('span');empty.className='account-number';empty.textContent='পেমেন্ট নম্বর এখনো সেট করা হয়নি';accounts.appendChild(empty);const option=document.createElement('option');option.value='';option.textContent='কোনো মাধ্যম কনফিগার করা নেই';select.appendChild(option);return;}
-availablePaymentMethods.forEach(function(key,index){
+const title=byId('reseller-title'),subtitle=byId('reseller-subtitle'),logo=byId('reseller-logo');
+if(title)title.textContent=config.portalTitle||'FAZ NETWORK';
+if(subtitle&&!subtitle.textContent.trim())subtitle.textContent='স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন';
+if(logo){const u=String(config.logoUrl||'').trim();logo.onerror=function(){this.onerror=null;this.src='logo-Faznetwork.png';};logo.src=u?new URL(u,BACKEND_BASE_URL).toString():'logo-Faznetwork.png';logo.style.display='';}
+const box=byId('reseller-banner-box'),image=byId('reseller-banner-img');
+if(box&&image&&config.bannerUrl){image.src=new URL(config.bannerUrl,BACKEND_BASE_URL).toString();image.alt=(config.portalTitle||'FAZ NETWORK')+' promotional banner';box.style.display='block';}else if(box)box.style.display='none';
+const packages=(Array.isArray(config.packages)?config.packages:[]).map(p=>({profile:p.profileId||p.profile||p.name, name:p.name,price:Number(p.price),validity:p.validity||p.name})).filter(p=>p.profile&&Number.isFinite(p.price)&&p.price>0);
+renderPackages(packages);
+accounts.replaceChildren();select.replaceChildren();availablePaymentMethods=[];
+const labels=[['bkash','bKash'],['nagad','Nagad'],['rocket','Rocket']];
+const configured=(Array.isArray(config.mfs)?config.mfs:[]).filter(m=>m&&String(m.number||'').trim());
+configured.forEach(function(item){
+const raw=String(item.name||'').toLowerCase(),entry=labels.find(([key,label])=>raw.includes(key)||raw.includes(label.toLowerCase()));if(!entry)return;
+const key=entry[0],label=entry[1],number=String(item.number||'').trim();if(!availablePaymentMethods.includes(key))availablePaymentMethods.push(key);
 const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:6px';
-const label=document.createElement('span');label.style.cssText='font-size:11px;color:#cbd5e1';label.textContent=LABELS[key]+':';
-const number=document.createElement('span');number.className='account-number';number.textContent=safeText(acc[key]);const copy=document.createElement('button');copy.type='button';copy.className='copy-number';copy.textContent='কপি';copy.style.cssText='font-size:11px;color:#a7f3d0;padding:4px 7px;border:1px solid rgba(167,243,208,.25);border-radius:6px';
-copy.addEventListener('click',async function(){try{await navigator.clipboard.writeText(safeText(acc[key]));showStatus(LABELS[key]+' নম্বর কপি হয়েছে।',false);}catch(_){showStatus('নম্বরটি নির্বাচন করে কপি করুন: '+safeText(acc[key]),false);}});
-row.append(label,number,copy);accounts.appendChild(row);
-const option=document.createElement('option');option.value=key;option.textContent=LABELS[key];select.appendChild(option);
+const name=document.createElement('span');name.style.cssText='font-size:11px;color:#cbd5e1';name.textContent=label+':';
+const value=document.createElement('span');value.className='account-number';value.textContent=number;
+const copy=document.createElement('button');copy.type='button';copy.className='copy-number';copy.textContent='কপি';copy.style.cssText='font-size:11px;color:#a7f3d0;padding:4px 7px;border:1px solid rgba(167,243,208,.25);border-radius:6px';copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(number);showStatus(label+' নম্বর কপি হয়েছে।',false);}catch(_){showStatus('নম্বরটি কপি করুন: '+number,false);}});
+row.append(name,value,copy);accounts.appendChild(row);
+const option=document.createElement('option');option.value=key;option.textContent=label;select.appendChild(option);
 });
-}catch(error){console.warn('[Public Payment Settings]',error.message);accounts.textContent='পেমেন্ট নম্বর লোড করা যায়নি।';select.innerHTML='<option value="">পেমেন্ট মাধ্যম অনুপলব্ধ</option>';}
+if(!availablePaymentMethods.length){const empty=document.createElement('span');empty.className='account-number';empty.textContent='পেমেন্ট অ্যাকাউন্ট এখনো কনফিগার করা হয়নি।';accounts.appendChild(empty);const option=document.createElement('option');option.value='';option.textContent='পেমেন্ট মাধ্যম নির্বাচন করুন';select.appendChild(option);}
+}catch(error){console.warn('[Portal CMS hydration]',error.message);renderPackages([]);accounts.textContent='পেমেন্ট অ্যাকাউন্ট কনফিগার করা হলে এখানে দেখাবে।';select.innerHTML='<option value="">পেমেন্ট মাধ্যম নির্বাচন করুন</option>';}
 }
 document.addEventListener('DOMContentLoaded',function(){
 const routerError=String(byId('router-error')?.textContent||'').trim();if(routerError&&routerError.indexOf('$(')<0){showStatus(routerError,true);byId('router-error').style.display='none';}else if(byId('router-error'))byId('router-error').style.display='none';
