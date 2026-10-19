@@ -48,7 +48,7 @@ app.get("/api/dashboard/stats",requireAdmin,requireRole(["super_admin","admin","
 app.get("/api/dashboard/hotspot-overview",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.hotspotOverview);
 app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
 app.get("/tenant",(req,res)=>res.redirect("/tenant/login"));
-app.get("/tenant/login",require("./controllers/tenantAuthController").showLogin);
+app.get("/tenant/login",(req,res)=>res.redirect('/login'));
 app.post("/tenant/login",require("./controllers/tenantAuthController").login);
 app.post("/tenant/logout",require("./controllers/tenantAuthController").logout);
 app.get("/tenant/dashboard",require("./middleware/requireTenantAdmin"),(req,res)=>res.render("tenant-admin",{title:"Tenant Workspace",tenant:req.tenant}));
