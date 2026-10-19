@@ -174,7 +174,8 @@ async function updateTenant(req, res) {
       if (action === 'extend') {
         await client.query("INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), GREATEST(NOW(), COALESCE((SELECT MAX(ends_at) FROM public.tenant_subscriptions WHERE tenant_id=$1), NOW())) + ($2::text || ' days')::interval, 'active', $3)", [tenantId, days, req.session?.userId || null]);
       } else {
-        await client.query("UPDATE public.tenant_subscriptions SET status='active', updated_at=NOW() WHERE tenant_id=$1 AND ends_at>NOW()", [tenantId]);
+        // Activate starts a fresh 30-day term if the previous term has expired.
+        await client.query("INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)", [tenantId, req.session?.userId || null]);
       }
     } else if (action === 'modules') {
       const modules = req.body.modules || {};
