@@ -97,10 +97,14 @@ async function listTenants(req, res) {
 async function createTenant(req, res) {
   const name = String(req.body?.name || '').trim();
   const slug = String(req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-  const email = String(req.body?.contact_email || '').trim().toLowerCase();
-  const phone = String(req.body?.contact_phone || '').trim();
+  // The Platform Owner form uses contactEmail; accept legacy contact_email/email too.
+  // Never derive the recipient from the authenticated admin/session.
+  const recipientEmail = String(req.body?.contactEmail || req.body?.contact_email || req.body?.email || '').trim().toLowerCase();
+  const phone = String(req.body?.contact_phone || req.body?.contactPhone || '').trim();
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required.' });
+  if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail) || recipientEmail.length > 254) {
+    return res.status(400).json({ success: false, message: 'A valid client contact email is required. No invitation was sent.' });
+  }
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
   const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
   const invitationToken = crypto.randomBytes(32).toString('base64url');
@@ -112,11 +116,11 @@ async function createTenant(req, res) {
     await client.query('BEGIN');
     const inserted = await client.query(
       "INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules, invitation_token_hash, invitation_expires_at) VALUES($1,$2,$3,$4,'suspended',$5::jsonb,$6,NOW()+INTERVAL '48 hours') RETURNING id",
-      [name, slug, email, phone || null, JSON.stringify(modules), invitationHash]
+      [name, slug, recipientEmail, phone || null, JSON.stringify(modules), invitationHash]
     );
     tenantId = Number(inserted.rows[0].id);
     await client.query("INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)", [tenantId, req.session?.userId || null]);
-    await audit(client, req, 'tenant_invitation_created', null, { tenantId, slug, termDays: 30, invitationExpiresHours: 48, initialAdminEmail: email });
+    await audit(client, req, 'tenant_invitation_created', null, { tenantId, slug, termDays: 30, invitationExpiresHours: 48, initialAdminEmail: recipientEmail });
     await client.query('COMMIT');
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
@@ -128,7 +132,8 @@ async function createTenant(req, res) {
   let emailSent = false;
   let emailWarning = '';
   try {
-    await require('../services/appsScriptMailer').sendTenantInvitation({ email, tenantName: name, link: invitationUrl });
+    console.log('Sending tenant invite to:', recipientEmail);
+    await require('../services/appsScriptMailer').sendTenantInvitation({ recipientEmail, email: recipientEmail, tenantName: name, link: invitationUrl });
     emailSent = true;
   } catch (error) {
     emailWarning = 'Invitation email could not be sent: ' + String(error.message || error).slice(0, 180) + '. Copy the link and share it securely.';
