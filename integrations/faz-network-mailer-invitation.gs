@@ -1,4 +1,4 @@
-/** FAZ NETWORK Apps Script mailer invitation handler patch. Keep the existing OTP, login_alert, and notification handlers unchanged. */
+/** FAZ NETWORK Apps Script mailer invitation handler patch. Keep existing handlers unchanged.\n * Store MAILER_API_TOKEN in Script Properties. In doPost, immediately after JSON.parse,\n * reject requests unless authorizeMailerRequest(data) returns true. */\nfunction authorizeMailerRequest(data) {\n  var expected = PropertiesService.getScriptProperties().getProperty('MAILER_API_TOKEN') || '';\n  var supplied = String(data && data.token || '');\n  return expected.length >= 32 && supplied.length === expected.length && supplied === expected;\n}
 function sendInvitation(data, to) {
   var username = String(data.username || 'Tenant Admin').trim().slice(0, 60);
   var role = String(data.role || '').trim();
