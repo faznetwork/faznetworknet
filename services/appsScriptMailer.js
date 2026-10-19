@@ -7,7 +7,7 @@ function getMailerConfig() {
   const token = String(process.env.OTP_MAILER_TOKEN || '');
   if (!url || token.length < 32) throw new Error('Apps Script mailer is not configured. Set OTP_MAILER_URL and a 32+ character OTP_MAILER_TOKEN.');
   const endpoint = new URL(url);
-  if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' || !/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(endpoint.pathname)) throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
+  if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' || !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
   return { endpoint: endpoint.toString(), token };
 }
 
