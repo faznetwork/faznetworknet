@@ -87,6 +87,8 @@ app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
 app.get("/platform/settings",requireAdmin,requireRole(["super_admin"]),(req,res)=>res.render("platform-settings",{title:"FAZ NETWORK Platform Owner Console",currentRole:req.session.role||"super_admin"}));
+app.delete("/api/platform/tenants/:id",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").deleteTenant);
+app.post("/api/platform/tenants/:id/invite",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").resendTenantInvitation);
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 
 app.get("/admin/reports/collection",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
