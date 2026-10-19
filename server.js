@@ -48,15 +48,26 @@ app.get("/api/dashboard/stats",requireAdmin,requireRole(["super_admin","admin","
 app.get("/api/dashboard/hotspot-overview",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.hotspotOverview);
 app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
 app.get("/tenant",(req,res)=>res.redirect("/tenant/login"));
-app.get("/tenant/login",require("./controllers/tenantAuthController").showLogin);
+app.get("/tenant/login",(req,res)=>res.redirect('/login'));
 app.post("/tenant/login",require("./controllers/tenantAuthController").login);
 app.post("/tenant/logout",require("./controllers/tenantAuthController").logout);
 app.get("/tenant/dashboard",require("./middleware/requireTenantAdmin"),(req,res)=>res.render("tenant-admin",{title:"Tenant Workspace",tenant:req.tenant}));
 app.get("/login",(req,res)=>{
-  if(isAdminAuthenticated(req)) return res.redirect("/admin");
-  return res.render("login",{next:String(req.query.next||"/admin"),error:null});
+  if(req.session?.tenantAdmin===true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
+  if(isAdminAuthenticated(req)) return res.redirect('/admin');
+  return res.set('Cache-Control','no-store').render('tenant-login',{error:req.query?.error==='inactive'?'This tenant is inactive or its 30-day subscription has expired.':null,tenantNumber:''});
 });
-app.post("/login",rbacAuthController.login);
+app.post("/login",async(req,res)=>{
+  const tenantAuth=require('./controllers/tenantAuthController');
+  const username=String(req.body?.username||req.body?.email||'').trim();
+  const password=String(req.body?.password||'');
+  try { const user=await tenantAuth.authenticate(username,password); if(user) return tenantAuth.startSession(req,res,user,false); }
+  catch(error) { console.warn('[Smart Login] Tenant lookup failed:',error.message); }
+  return rbacAuthController.login(req,res);
+});
+app.post('/api/auth/login',require('./controllers/tenantAuthController').apiLogin);
+app.get('/onboard',require('./controllers/tenantOnboardingController').show);
+app.post('/onboard',require('./controllers/tenantOnboardingController').submit);
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
@@ -76,6 +87,8 @@ app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
 app.get("/platform/settings",requireAdmin,requireRole(["super_admin"]),(req,res)=>res.render("platform-settings",{title:"FAZ NETWORK Platform Owner Console",currentRole:req.session.role||"super_admin"}));
+app.delete("/api/platform/tenants/:id",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").deleteTenant);
+app.post("/api/platform/tenants/:id/invite",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").resendTenantInvitation);
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 
 app.get("/admin/reports/collection",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));

@@ -78,7 +78,8 @@ async function listTenants(req, res) {
   try {
     const result = await db.query(`
       SELECT t.id, t.name, t.slug, t.contact_email, t.contact_phone, t.status,
-             t.modules, t.created_at, s.starts_at, s.ends_at,
+             t.modules, t.created_at, s.starts_at, s.ends_at, t.invitation_expires_at,
+             CASE WHEN EXISTS (SELECT 1 FROM public.admin_users au WHERE au.tenant_id=t.id) THEN 'onboarded' ELSE 'pending_invite' END AS onboarding_status,
              GREATEST(0, CEIL(EXTRACT(EPOCH FROM (s.ends_at - NOW())) / 86400))::int AS days_remaining,
              CASE WHEN t.status <> 'active' THEN 'suspended'
                   WHEN s.ends_at <= NOW() THEN 'expired' ELSE 'active' END AS subscription_status
@@ -99,42 +100,42 @@ async function createTenant(req, res) {
   const email = String(req.body?.contact_email || '').trim().toLowerCase();
   const phone = String(req.body?.contact_phone || '').trim();
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required to provision the initial account.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required.' });
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
   const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
-  const bcrypt = require('bcryptjs');
-  const temporaryPassword = crypto.randomBytes(12).toString('base64url') + 'A9!';
-  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  const invitationToken = crypto.randomBytes(32).toString('base64url');
+  const invitationHash = crypto.createHash('sha256').update(invitationToken, 'utf8').digest('hex');
+  const invitationUrl = 'https://isp.faznetwork.com/onboard?token=' + invitationToken;
   const client = await db.getPool().connect();
+  let tenantId;
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
-      "INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules) VALUES($1,$2,$3,$4,'active',$5::jsonb) RETURNING id",
-      [name, slug, email, phone || null, JSON.stringify(modules)]
+      "INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules, invitation_token_hash, invitation_expires_at) VALUES($1,$2,$3,$4,'suspended',$5::jsonb,$6,NOW()+INTERVAL '48 hours') RETURNING id",
+      [name, slug, email, phone || null, JSON.stringify(modules), invitationHash]
     );
-    const tenantId = Number(inserted.rows[0].id);
-    await client.query(
-      "INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)",
-      [tenantId, req.session?.userId || null]
-    );
-    await client.query(
-      "INSERT INTO public.admin_users(tenant_id, username, email, password_hash, role, is_first_login, status, created_by) VALUES($1,$2,$3,$4,'admin',FALSE,'active',$5)",
-      [tenantId, 'tenant-' + tenantId, email, passwordHash, String(req.session?.adminUser || 'platform-owner')]
-    );
-    await audit(client, req, 'tenant_created', null, { tenantId, slug, termDays: 30, initialAdminEmail: email });
+    tenantId = Number(inserted.rows[0].id);
+    await client.query("INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)", [tenantId, req.session?.userId || null]);
+    await audit(client, req, 'tenant_invitation_created', null, { tenantId, slug, termDays: 30, invitationExpiresHours: 48, initialAdminEmail: email });
     await client.query('COMMIT');
-    res.set('Cache-Control', 'no-store, private');
-    return res.status(201).json({
-      success: true, tenantId, tenantNumber: tenantId, loginUrl: 'https://isp.faznetwork.com/tenant',
-      username: email, email, temporaryPassword,
-      message: 'Tenant and initial admin created with an active 30-day subscription. Copy the temporary password now; it will not be shown again.'
-    });
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('[Server Settings] Tenant provisioning failed:', error.message);
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'That tenant slug or admin email is already registered.' });
-    return res.status(400).json({ success: false, message: 'Unable to provision tenant and initial admin. Check the server log.' });
+    return res.status(400).json({ success: false, message: 'Unable to provision tenant invitation. Check the server log.' });
   } finally { client.release(); }
+
+  let emailSent = false;
+  let emailWarning = '';
+  try {
+    await require('../services/appsScriptMailer').sendTenantInvitation({ email, tenantName: name, link: invitationUrl });
+    emailSent = true;
+  } catch (error) {
+    emailWarning = 'Invitation email could not be sent: ' + String(error.message || error).slice(0, 180) + '. Copy the link and share it securely.';
+    console.warn('[Tenant Invitation] Email delivery failed for tenant #' + tenantId + ':', error.message);
+  }
+  res.set('Cache-Control', 'no-store, private');
+  return res.status(201).json({ success: true, tenantId, tenantNumber: tenantId, loginUrl: 'https://isp.faznetwork.com/login', invitationUrl, emailSent, emailWarning, message: emailSent ? 'Tenant invitation sent. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' : 'Tenant invitation created. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' });
 }
 
 async function updateTenant(req, res) {
@@ -174,4 +175,66 @@ async function updateTenant(req, res) {
   } finally { client.release(); }
 }
 
-module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, listTenants, createTenant, updateTenant };
+
+async function resendTenantInvitation(req, res) {
+  const tenantId = Number(req.params.id);
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1) return res.status(400).json({ success: false, message: 'Invalid tenant ID.' });
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+  const invitationUrl = 'https://isp.faznetwork.com/onboard?token=' + token;
+  const client = await db.getPool().connect();
+  let tenant;
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(`SELECT t.id, t.name, t.contact_email,
+      EXISTS (SELECT 1 FROM public.admin_users au WHERE au.tenant_id=t.id) AS onboarded
+      FROM public.tenants t WHERE t.id=$1 FOR UPDATE`, [tenantId]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
+    tenant = found.rows[0];
+    if (tenant.onboarded) { await client.query('ROLLBACK'); return res.status(409).json({ success: false, message: 'This tenant is already onboarded; invitation links cannot be reissued.' }); }
+    await client.query("UPDATE public.tenants SET invitation_token_hash=$2, invitation_expires_at=NOW()+INTERVAL '48 hours', status='suspended', updated_at=NOW() WHERE id=$1", [tenantId, tokenHash]);
+    await audit(client, req, 'tenant_invitation_resent', null, { tenantId, invitationExpiresHours: 48 });
+    await client.query('COMMIT');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[Server Settings] Invitation refresh failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Unable to generate a fresh tenant invitation.' });
+  } finally { client.release(); }
+  let emailSent = false, emailWarning = '';
+  try { await require('../services/appsScriptMailer').sendTenantInvitation({ email: tenant.contact_email, tenantName: tenant.name, link: invitationUrl }); emailSent = true; }
+  catch (error) { emailWarning = 'Email delivery failed; copy the link and share it securely.'; console.warn('[Tenant Invitation] Resend failed for tenant #' + tenantId + ':', error.message); }
+  res.set('Cache-Control', 'no-store, private');
+  return res.json({ success: true, invitationUrl, emailSent, emailWarning, expiresInHours: 48, message: emailSent ? 'Fresh invitation emailed; link expires in 48 hours.' : 'Fresh invitation generated; link expires in 48 hours.' });
+}
+
+async function deleteTenant(req, res) {
+  const tenantId = Number(req.params.id);
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1) return res.status(400).json({ success: false, message: 'Invalid tenant ID.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT id, name, slug FROM public.tenants WHERE id=$1 FOR UPDATE', [tenantId]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
+    const tenant = found.rows[0];
+    await audit(client, req, 'tenant_deleted', null, { tenantId, slug: tenant.slug, name: tenant.name });
+    // Remove tenant-owned users only when this installation has a tenant-scoped public.users table.
+    const usersTable = await client.query(`SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users'`);
+    const usersColumn = usersTable.rowCount ? await client.query(`SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='tenant_id'`) : { rowCount: 0 };
+    if (usersColumn.rowCount) await client.query('DELETE FROM public.users WHERE tenant_id=$1', [tenantId]);
+    // Explicit deletes document cleanup requirements; foreign keys also cascade to tenant-owned admin_users.
+    await client.query('DELETE FROM public.tenant_subscriptions WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenant_routers WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenant_olts WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.admin_users WHERE tenant_id=$1', [tenantId]);
+    await client.query('DELETE FROM public.tenants WHERE id=$1', [tenantId]);
+    await client.query('COMMIT');
+    res.set('Cache-Control', 'no-store, private');
+    return res.json({ success: true, deletedTenantId: tenantId, message: 'Tenant and associated records deleted.' });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[Server Settings] Tenant deletion failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Tenant deletion failed; no changes were committed.' });
+  } finally { client.release(); }
+}
+
+module.exports = { listSettings, generateToken: generateMasterToken, generateAndroidToken, listTenants, createTenant, updateTenant, deleteTenant, resendTenantInvitation };
