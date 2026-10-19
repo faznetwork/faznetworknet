@@ -5262,6 +5262,21 @@ async function deletePlan(id,name){
             const result=document.getElementById('paymentWebhookSettingsResult');
             try{const response=await jsonFetch('/api/settings/hotspot-webhook'),s=response.settings||response.data||response;const url=document.getElementById('paymentWebhookUrl'),secret=document.getElementById('paymentWebhookSecret'),enabled=document.getElementById('paymentWebhookEnabled');const savedUrl=s.webhookUrl??s.personal_payment_webhook_url??s.url;const rawEnabled=s.webhookEnabled??s.personal_payment_webhook_enabled??s.enabled;const isEnabled=rawEnabled===true||String(rawEnabled).trim().toLowerCase()==='true'||rawEnabled===1||rawEnabled==='1';if(url)url.value=savedUrl==null||String(savedUrl)===''?'/api/webhooks/macrodroid-sms':String(savedUrl);if(enabled)enabled.checked=isEnabled;if(secret)secret.value='';renderWebhookEndpointDisplay();const status=document.getElementById('paymentWebhookStatus');if(status){status.textContent=isEnabled?'Enabled':'Disabled';status.className='badge ms-auto '+(isEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('paymentWebhookSecretHint');if(hint)hint.textContent=s.secretConfigured?'A secret is already saved. Leave this field blank to keep it unchanged.':'No secret is saved yet.';hotspotWebhookSettingsLoaded=true;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Hotspot Webhook settings.';}}
         }
+        // Hydrate persisted payment settings on initial page load and whenever the Payments tab is opened.
+        // This script is inline near the end of the document, so handle both loading states.
+        function hydratePaymentSettingsOnReady(){
+            loadHotspotWebhookSettings();
+            loadGeneralSettings(true);
+        }
+        if(document.readyState==='loading'){
+            document.addEventListener('DOMContentLoaded',hydratePaymentSettingsOnReady,{once:true});
+        }else{
+            hydratePaymentSettingsOnReady();
+        }
+        document.querySelectorAll('[data-settings-tab="payments"]').forEach(tab=>tab.addEventListener('click',()=>{
+            loadHotspotWebhookSettings();
+            loadGeneralSettings(true);
+        }));
         document.getElementById('paymentWebhookUrl')?.addEventListener('input',renderWebhookEndpointDisplay);
         document.getElementById('copyWebhookEndpointBtn')?.addEventListener('click',async function(){
             const endpoint=document.getElementById('webhookEndpointDisplay')?.textContent||'';
