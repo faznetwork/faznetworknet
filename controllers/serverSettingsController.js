@@ -96,32 +96,44 @@ async function listTenants(req, res) {
 async function createTenant(req, res) {
   const name = String(req.body?.name || '').trim();
   const slug = String(req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const email = String(req.body?.contact_email || '').trim().toLowerCase();
+  const phone = String(req.body?.contact_phone || '').trim();
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required to provision the initial account.' });
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
-  const modules = {
-    hotspot: requestedModules.hotspot !== false,
-    sms_gateway: requestedModules.sms_gateway !== false,
-    whatsapp: requestedModules.whatsapp !== false
-  };
+  const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
+  const bcrypt = require('bcryptjs');
+  const temporaryPassword = crypto.randomBytes(12).toString('base64url') + 'A9!';
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
-      'INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules) VALUES($1,$2,$3,$4,\'active\',$5::jsonb) RETURNING id',
-      [name, slug, String(req.body?.contact_email || '').trim() || null, String(req.body?.contact_phone || '').trim() || null, JSON.stringify(modules)]
+      "INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules) VALUES($1,$2,$3,$4,'active',$5::jsonb) RETURNING id",
+      [name, slug, email, phone || null, JSON.stringify(modules)]
     );
-    const tenantId = inserted.rows[0].id;
+    const tenantId = Number(inserted.rows[0].id);
     await client.query(
-      'INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL \'30 days\', \'active\', $2)',
+      "INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)",
       [tenantId, req.session?.userId || null]
     );
-    await audit(client, req, 'tenant_created', null, { tenantId, slug, termDays: 30 });
+    await client.query(
+      "INSERT INTO public.admin_users(tenant_id, username, email, password_hash, role, is_first_login, status, created_by) VALUES($1,$2,$3,$4,'admin',FALSE,'active',$5)",
+      [tenantId, 'tenant-' + tenantId, email, passwordHash, String(req.session?.adminUser || 'platform-owner')]
+    );
+    await audit(client, req, 'tenant_created', null, { tenantId, slug, termDays: 30, initialAdminEmail: email });
     await client.query('COMMIT');
-    return res.status(201).json({ success: true, tenantId, message: 'Tenant created with a 30-day subscription.' });
+    res.set('Cache-Control', 'no-store, private');
+    return res.status(201).json({
+      success: true, tenantId, tenantNumber: tenantId, loginUrl: 'https://isp.faznetwork.com/tenant',
+      username: email, email, temporaryPassword,
+      message: 'Tenant and initial admin created with an active 30-day subscription. Copy the temporary password now; it will not be shown again.'
+    });
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
-    console.error('[Server Settings] Tenant create failed:', error.message);
-    return res.status(400).json({ success: false, message: error.code === '23505' ? 'That tenant slug already exists.' : 'Unable to create tenant. Check the server log.' });
+    console.error('[Server Settings] Tenant provisioning failed:', error.message);
+    if (error.code === '23505') return res.status(409).json({ success: false, message: 'That tenant slug or admin email is already registered.' });
+    return res.status(400).json({ success: false, message: 'Unable to provision tenant and initial admin. Check the server log.' });
   } finally { client.release(); }
 }
 
