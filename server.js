@@ -53,10 +53,21 @@ app.post("/tenant/login",require("./controllers/tenantAuthController").login);
 app.post("/tenant/logout",require("./controllers/tenantAuthController").logout);
 app.get("/tenant/dashboard",require("./middleware/requireTenantAdmin"),(req,res)=>res.render("tenant-admin",{title:"Tenant Workspace",tenant:req.tenant}));
 app.get("/login",(req,res)=>{
-  if(isAdminAuthenticated(req)) return res.redirect("/admin");
-  return res.render("login",{next:String(req.query.next||"/admin"),error:null});
+  if(req.session?.tenantAdmin===true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
+  if(isAdminAuthenticated(req)) return res.redirect('/admin');
+  return res.set('Cache-Control','no-store').render('tenant-login',{error:req.query?.error==='inactive'?'This tenant is inactive or its 30-day subscription has expired.':null,tenantNumber:''});
 });
-app.post("/login",rbacAuthController.login);
+app.post("/login",async(req,res)=>{
+  const tenantAuth=require('./controllers/tenantAuthController');
+  const username=String(req.body?.username||req.body?.email||'').trim();
+  const password=String(req.body?.password||'');
+  try { const user=await tenantAuth.authenticate(username,password); if(user) return tenantAuth.startSession(req,res,user,false); }
+  catch(error) { console.warn('[Smart Login] Tenant lookup failed:',error.message); }
+  return rbacAuthController.login(req,res);
+});
+app.post('/api/auth/login',require('./controllers/tenantAuthController').apiLogin);
+app.get('/onboard',require('./controllers/tenantOnboardingController').show);
+app.post('/onboard',require('./controllers/tenantOnboardingController').submit);
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
