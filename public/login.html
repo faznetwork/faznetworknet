@@ -769,7 +769,7 @@ if(subtitle)subtitle.textContent=data.brand_subtitle||'স্বয়ংক্�
 const phone=String(data.helpline||'').trim(),helpline=byId('reseller-helpline');
 if(helpline&&phone){helpline.textContent=phone;helpline.href='tel:'+phone.replace(/[^+0-9]/g,'');}
 const box=byId('reseller-banner-box'),image=byId('reseller-banner-img');
-if(data.display_mode==='banner'&&data.banner_url&&box&&image){image.src=data.banner_url;image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}
+if(data.banner_url&&box&&image){image.src=new URL(data.banner_url,BACKEND_BASE_URL).toString();image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}
 else if(box)box.style.display='none';
 if(data.display_mode==='custom_code'&&data.custom_html){
 let frame=byId('portal-custom-content');
