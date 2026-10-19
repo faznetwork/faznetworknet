@@ -129,6 +129,17 @@
             display: none;
         }
         .submenu.show { display: block; }
+        /* General Settings uses the same sidebar accordion, with a short smooth reveal. */
+        .submenu.general-settings-submenu { display: block; max-height: 0; overflow: hidden; visibility: hidden; transition: max-height .24s ease, visibility .24s ease; }
+        .submenu.general-settings-submenu.show { max-height: 360px; visibility: visible; }
+        .general-settings-toggle .arrow-icon { transition: transform .24s ease; }
+        .general-settings-toggle[aria-expanded="true"] .arrow-icon { transform: rotate(180deg); }
+        .general-settings-submenu a { padding-left: 48px; }
+        .general-settings-submenu a.active { color: #fff; background: rgba(16,185,129,.28); box-shadow: inset 3px 0 #6ee7b7; }
+        .general-settings-submenu a:focus-visible { outline: 2px solid #a7f3d0; outline-offset: -2px; }
+        @media (prefers-reduced-motion: reduce) {
+            .submenu.general-settings-submenu, .general-settings-toggle .arrow-icon { transition: none; }
+        }
         .submenu a, .submenu button { 
             padding-left: 48px; 
             font-size: 13.5px; 
@@ -1881,8 +1892,18 @@
                 <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
 
-            <li class="menu-item">
-                <a href="javascript:void(0)" onclick="switchView('general-settings'); return false;"><i class="bi bi-sliders2-vertical"></i><span>General Settings</span></a>
+            <li class="menu-item general-settings-menu">
+                <button class="dropdown-toggle general-settings-toggle" type="button" aria-expanded="false" aria-controls="general-settings-submenu" onclick="toggleSubmenu(event, this); return false;">
+                    <i class="bi bi-sliders2-vertical"></i><span>General Settings</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon" aria-hidden="true"></i>
+                </button>
+                <ul id="general-settings-submenu" class="submenu general-settings-submenu" aria-label="General Settings sections">
+                    <li><a href="javascript:void(0)" data-settings-nav="brand" onclick="event.preventDefault(); return false;"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="billing" onclick="event.preventDefault(); return false;"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="payments" onclick="event.preventDefault(); return false;"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="sms" onclick="event.preventDefault(); return false;"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
+                    <li><a href="javascript:void(0)" data-settings-nav="hotspot-portal" onclick="event.preventDefault(); return false;"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
+                </ul>
             </li>
             <li class="menu-item">
                 <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
