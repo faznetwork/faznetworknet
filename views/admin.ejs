@@ -5513,7 +5513,7 @@ async function deletePlan(id,name){
                     fetchCustomers();
                 } else if (target === 'payments') {
                     fetchPayments(currentPaymentChannel);
-                } else if (target === 'general-settings') {
+                } else if (target === 'view-general-settings') {
                     loadGeneralSettings();
                     const sectionPanels = document.querySelectorAll('#view-general-settings .general-settings-panel[data-settings-section]');
                     const hasVisibleSection = Array.from(sectionPanels).some(panel => panel.style.display === 'block' && !panel.classList.contains('d-none'));
