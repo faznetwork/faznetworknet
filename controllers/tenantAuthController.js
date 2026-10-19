@@ -42,4 +42,4 @@ async function apiLogin(req,res) {
   catch(error){console.error('[Tenant Auth] API smart login failed:',error.message);return res.status(503).json({success:false,message:'Tenant authentication is temporarily unavailable.'});}
 }
 function logout(req,res){if(!req.session)return res.redirect('/login');req.session.destroy(error=>{if(error)console.error('[Tenant Auth] Logout failed:',error.message);res.clearCookie('connect.sid',{path:'/'});return res.redirect('/login');});}
-module.exports={showLogin,login,apiLogin,logout};
+module.exports={showLogin,login,apiLogin,logout,authenticate,startSession};
