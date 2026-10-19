@@ -544,8 +544,8 @@
     event.preventDefault();
 
     const target = link.dataset.settingsNav;
-    const tab = document.querySelector('#view-general-settings [data-settings-tab="' + target + '"]');
-    if (!tab) return;
+    const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
+    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return;
 
     expandSettingsMenu();
     document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach((item) => {
@@ -556,8 +556,6 @@
     });
 
     if (typeof window.switchView === 'function') window.switchView('general-settings');
-    // Reuse the existing tab click handler so section visibility, settings hydration,
-    // and payment/webhook loaders continue to run through their established path.
-    tab.click();
+    window.showGeneralSettingsSection(target);
   });
 })();
