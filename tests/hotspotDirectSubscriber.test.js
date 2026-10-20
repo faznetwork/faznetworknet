@@ -5,6 +5,8 @@ const fs=require("node:fs");
 const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
+const portalPath=path.join(root,"public","login.html");
+const portalAvailable=fs.existsSync(portalPath)&&fs.readFileSync(portalPath,"utf8").trim().length>0;
 
 test("Add User implements distinct direct-subscriber creation modes",()=>{
  const source=read("controllers/hotspotController.js");
@@ -114,7 +116,7 @@ test("device activation backend preserves the MikroTik redirect and activation r
  assert.match(auth,/redirect_url:redirectUrl/);
 });
 
-test("captive portal submits the hosted-backend MikroTik login handshake when the replacement page is present",{skip:!read("public/login.html").trim()&&"public/login.html is intentionally absent pending the replacement portal"},()=>{
+test("captive portal submits the hosted-backend MikroTik login handshake when the replacement page is present",{skip:!portalAvailable&&"public/login.html is intentionally absent pending the replacement portal"},()=>{
  const portal=read("public/login.html");
  assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
  assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
