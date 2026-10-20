@@ -9573,7 +9573,35 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
   const bindCreate = (formId, endpoint, after) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
   bindCreate('tenantCustomerForm','customers');
-  bindCreate('tenantVoucherForm','vouchers');
+  document.getElementById('tenantVoucherForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const body = Object.fromEntries(new FormData(form).entries());
+    try {
+      await tenantApi('/api/tenant/provisioning/hotspot', { method: 'POST', body: JSON.stringify({ action: 'create', username: body.username, password: body.password, profile: body.profile }) });
+      await dataRequest('vouchers', { method: 'POST', body: JSON.stringify(body) });
+      form.reset();
+      await loadTenantData();
+      dataMessage('Voucher created on this tenant router and saved.');
+    } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
+  });
+  const pppoePanel = document.getElementById('tenantCustomersPanel');
+  if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
+    const pppoe = document.createElement('section');
+    pppoe.className = 'mt-4';
+    pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-3"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-3"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><button class="btn btn-sm btn-primary">Create on tenant router</button></div></form>';
+    pppoePanel.appendChild(pppoe);
+    pppoe.querySelector('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const body = Object.fromEntries(new FormData(form).entries());
+      try {
+        await tenantApi('/api/tenant/provisioning/pppoe', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) });
+        form.reset();
+        dataMessage('PPPoE account created on this tenant router.');
+      } catch (e) { dataMessage(e.message || 'PPPoE provisioning failed.', true); }
+    });
+  }
   bindCreate('tenantTransactionForm','transactions');
   loadTenantData();
 
