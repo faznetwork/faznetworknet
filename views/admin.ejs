@@ -1806,19 +1806,7 @@
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
-    <!-- TEMPORARY DEBUG: remove after diagnosis; exposes tenant context on the dashboard -->
-    <section id="tenant-module-debug" style="position:relative;z-index:99999;background:#fff3cd;color:#111;border:2px solid #dc3545;padding:16px;margin:10px;font:13px monospace;overflow-wrap:anywhere;">
-      <h3 style="color:#b91c1c;">TENANT MODULE DEBUG (TEMPORARY)</h3>
-      <p><strong>typeof tenantContext</strong></p>
-      <pre style="white-space:pre-wrap;"><%= typeof tenantContext %></pre>
-      <p><strong>tenant</strong></p>
-      <pre style="white-space:pre-wrap;"><%= typeof tenant !== 'undefined' ? JSON.stringify(tenant, null, 2) : 'tenant is UNDEFINED' %></pre>
-      <p><strong>normalizedModules</strong></p>
-      <pre style="white-space:pre-wrap;"><%= typeof normalizedModules !== 'undefined' ? JSON.stringify(normalizedModules, null, 2) : 'normalizedModules is UNDEFINED' %></pre>
-      <p><strong>tenantModuleConfig</strong></p>
-      <pre style="white-space:pre-wrap;"><%= typeof tenantModuleConfig !== 'undefined' ? JSON.stringify(tenantModuleConfig, null, 2) : 'tenantModuleConfig is UNDEFINED' %></pre>
-    </section>
-    <!-- END TEMPORARY DEBUG -->
+
 
 
     <div class="sidebar" id="sidebar">
@@ -1840,13 +1828,27 @@
 <% if (tenantPage) { %>
         <ul class="sidebar-menu">
             <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
+            <% if (tenantModuleEnabled('customers')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('hotspot')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('billing')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('pppoe')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('mikrotik')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('olt')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li>
+            <% } %>
+            <% if (tenantModuleEnabled('reports')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
+            <% } %>
             <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
         </ul>
 <% } else { %>
@@ -9623,25 +9625,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     return data;
   };
   const text = (tag, value, cls) => { const node = document.createElement(tag); node.textContent = value == null ? '' : String(value); if (cls) node.className = cls; return node; };
-
-  // Hide entire top-level sidebar groups when their feature is not licensed.
-  const sidebar = document.querySelector('.sidebar-menu');
-  if (sidebar) {
-    const rules = [
-      { match: /customer/i, module: 'customers' },
-      { match: /hotspot|voucher/i, module: 'hotspot' },
-      { match: /payment|billing|collection|due summary|expense/i, module: 'billing' },
-      { match: /pppoe/i, module: 'pppoe' },
-      { match: /olt/i, module: 'olt' },
-      { match: /router|mikrotik|network devices/i, module: 'mikrotik' },
-      { match: /report/i, module: 'reports' }
-    ];
-    Array.from(sidebar.children).forEach((item) => {
-      const label = (item.textContent || '').replace(/\s+/g, ' ').trim();
-      const rule = rules.find((candidate) => candidate.match.test(label));
-      if (rule && !enabled(rule.module)) item.hidden = true;
-    });
-  }
 
   // Do not expose legacy operational views to tenant sessions: their actions still
   // target platform-global APIs (including renew/provision/session controls). The
