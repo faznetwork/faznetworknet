@@ -7,8 +7,11 @@ const read = p => fs.readFileSync(path.join(root, p), "utf8");
 
 test("public homepage links to the unified online payment portal", () => {
   const view = read("views/index.ejs");
-  assert.match(view, /href="\/payment\.html" class="online-payment-nav"/);
-  assert.match(view, /href="\/payment\.html" class="online-payment-cta"/);
+  assert.match(view, /href="\/payment" class="online-payment-cta"/);
+  assert.equal((view.match(/href="\/payment(?:\.html)?"/g) || []).length, 1, "homepage should have exactly one payment navigation link");
+  assert.doesNotMatch(view, /online-payment-nav/);
+  const server = read("server.js");
+  assert.match(server, /app\.get\("\/payment",\(req,res\)=>res\.sendFile\(path\.join\(__dirname,"public","payment\.html"\)\)\)/);
 });
 
 test("unified payment portal uses dynamic public MFS/package settings and five-minute payment session", () => {
