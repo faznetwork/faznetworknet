@@ -10,7 +10,7 @@ async function requireTenantAdmin(req, res, next) {
   }
   try {
     const result = await db.query(`
-      SELECT t.id, t.name, t.slug, t.status, t.modules, s.ends_at
+      SELECT t.id, t.name, t.slug, t.status, t.modules, t.modules AS enabled_modules, s.ends_at
       FROM public.tenants t
       JOIN LATERAL (
         SELECT ends_at FROM public.tenant_subscriptions

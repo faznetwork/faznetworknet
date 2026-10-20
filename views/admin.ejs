@@ -9492,5 +9492,244 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
+
+<% if (typeof tenantContext !== 'undefined' && tenantContext) { %>
+<script>
+(function () {
+  'use strict';
+  const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
+  const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
+  const enabled = (key) => modules[key] === true;
+  const tenantApi = async (path, options = {}) => {
+    const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.code || ('Request failed (' + response.status + ')'));
+    return data;
+  };
+  const text = (tag, value, cls) => { const node = document.createElement(tag); node.textContent = value == null ? '' : String(value); if (cls) node.className = cls; return node; };
+
+  // Hide entire top-level sidebar groups when their feature is not licensed.
+  const sidebar = document.querySelector('.sidebar-menu');
+  if (sidebar) {
+    const rules = [
+      { match: /customer/i, module: 'customers' },
+      { match: /hotspot|voucher/i, module: 'hotspot' },
+      { match: /payment|billing|collection|due summary|expense/i, module: 'billing' },
+      { match: /pppoe/i, module: 'pppoe' },
+      { match: /olt/i, module: 'olt' },
+      { match: /router|mikrotik|network devices/i, module: 'mikrotik' },
+      { match: /report/i, module: 'reports' }
+    ];
+    Array.from(sidebar.children).forEach((item) => {
+      const label = (item.textContent || '').replace(/\s+/g, ' ').trim();
+      const rule = rules.find((candidate) => candidate.match.test(label));
+      if (rule && !enabled(rule.module)) item.hidden = true;
+    });
+  }
+
+  // Do not expose legacy operational views to tenant sessions: their actions still
+  // target platform-global APIs (including renew/provision/session controls). The
+  // tenant workspace below is the only enabled CRUD path until those workflows
+  // have a tenant-aware provisioning implementation.
+  const legacyTenantViews = ['view-add-customer','view-all-customer','view-hotspot-dashboard','view-payments','view-payment-ledger'];
+  legacyTenantViews.forEach((id) => {
+    const view = document.getElementById(id);
+    if (view) { view.hidden = true; view.setAttribute('aria-hidden','true'); }
+  });
+  const legacyTenantActions = document.querySelectorAll('[onclick*="/api/customers"], [onclick*="/api/hotspot"], [onclick*="/api/payments"]');
+  legacyTenantActions.forEach((node) => { node.hidden = true; node.setAttribute('aria-hidden','true'); });
+
+  // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
+  // legacy global CRUD controls are not used by this workspace.
+  const dataPanel = document.createElement('section');
+  dataPanel.id = 'tenantDataWorkspace';
+  dataPanel.className = 'card border-0 shadow-sm m-3';
+  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
+  const settings = document.getElementById('view-general-settings');
+  if (settings) settings.prepend(dataPanel);
+  ['customers','hotspot','billing'].forEach((key) => {
+    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : 'tenantBillingPanel');
+    if (panel) panel.hidden = !enabled(key);
+  });
+  const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
+  const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
+  let tenantVoucherRows = [];
+  const runProvisioningAction = async (kind, action, username) => {
+    await tenantApi('/api/tenant/provisioning/' + kind, { method: 'POST', body: JSON.stringify({ action, username }) });
+  };
+  const dataTable = (target, headers, rows, removePath, actionKind) => {
+    const host = document.getElementById(target); if (!host) return; host.replaceChildren();
+    if (!rows || !rows.length) { host.appendChild(text('div', 'No records yet.', 'small text-muted')); return; }
+    const table = document.createElement('table'); table.className = 'table table-sm align-middle';
+    const thead = document.createElement('thead'); const headRow = document.createElement('tr'); headers.forEach(h => headRow.appendChild(text('th', h))); thead.appendChild(headRow); table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      const displayHeaders = headers.filter(h => !(actionKind && h === 'Router action') && !(removePath && h === 'Delete'));
+      displayHeaders.forEach(h => {
+        const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at','Router state':'disabled'})[h];
+        let value = key ? row[key] : '';
+        if (h === 'Router state') value = row.disabled ? 'Disabled' : 'Enabled';
+        tr.appendChild(text('td', value));
+      });
+      if (actionKind) {
+        const td = document.createElement('td');
+        const isDisabled = actionKind === 'hotspot' ? String(row.status || '').toLowerCase() !== 'active' : Boolean(row.disabled);
+        const button = text('button', isDisabled ? 'Enable' : 'Disable', 'btn btn-sm ' + (isDisabled ? 'btn-outline-success' : 'btn-outline-warning'));
+        button.type = 'button';
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try { await runProvisioningAction(actionKind, isDisabled ? 'enable' : 'disable', row.username); await loadTenantData(); dataMessage((isDisabled ? 'Enabled ' : 'Disabled ') + row.username + '.'); }
+          catch (e) { dataMessage(e.message || 'Router action failed.', true); button.disabled = false; }
+        });
+        td.appendChild(button); tr.appendChild(td);
+      }
+      if (removePath) {
+        const td = document.createElement('td'); const button = text('button','Delete','btn btn-sm btn-outline-danger'); button.type='button';
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Delete this tenant-owned record?')) return;
+          try { await dataRequest(removePath + '/' + encodeURIComponent(row.id), {method:'DELETE'}); await loadTenantData(); dataMessage('Record deleted.'); }
+          catch(e) { dataMessage(e.message,true); }
+        });
+        td.appendChild(button); tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); host.appendChild(table);
+  };
+  async function loadTenantData() {
+    try {
+      const jobs = [];
+      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
+      if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => {
+        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : [];
+        dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
+      }));
+      if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
+      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],d.transactions,null)));
+      await Promise.all(jobs); dataMessage('Tenant records loaded.');
+    } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
+  }
+  document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
+  document.getElementById('tenantVoucherPrint')?.addEventListener('click', async () => {
+    if (!tenantVoucherRows.length) { dataMessage('There are no tenant vouchers to print.', true); return; }
+    let printableVouchers;
+    try { printableVouchers = (await dataRequest('vouchers/print-data')).vouchers || []; }
+    catch (e) { dataMessage(e.message || 'Unable to load voucher print data.', true); return; }
+    const popup = window.open('', '_blank');
+    if (!popup) { dataMessage('Allow pop-ups to print voucher cards.', true); return; }
+    const doc = popup.document;
+    doc.title = 'Tenant Hotspot Vouchers';
+    const style = doc.createElement('style');
+    style.textContent = '@page{size:A4 portrait;margin:8mm}body{font:12px Arial,sans-serif;color:#111}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{border:1px dashed #555;padding:12px;break-inside:avoid;min-height:110px}.brand{font-weight:800;font-size:14px}.credential{font: bold 17px monospace;margin:10px 0}.muted{color:#555;font-size:11px}';
+    doc.head.appendChild(style);
+    const grid = doc.createElement('main'); grid.className = 'grid';
+    printableVouchers.forEach(voucher => {
+      const card = doc.createElement('section'); card.className = 'card';
+      const brand = doc.createElement('div'); brand.className = 'brand'; brand.textContent = 'HOTSPOT VOUCHER'; card.appendChild(brand);
+      const profile = doc.createElement('div'); profile.className = 'muted'; profile.textContent = 'Profile: ' + (voucher.profile || '—') + ' · Validity: ' + (voucher.validity || '—'); card.appendChild(profile);
+      const username = doc.createElement('div'); username.className = 'credential'; username.textContent = 'User: ' + (voucher.username || ''); card.appendChild(username);
+      const password = doc.createElement('div'); password.className = 'credential'; password.textContent = 'Pass: ' + (voucher.password || ''); card.appendChild(password);
+      const price = doc.createElement('div'); price.className = 'muted'; price.textContent = 'Price: ' + (voucher.price ?? 0) + ' · Status: ' + (voucher.status || ''); card.appendChild(price);
+      grid.appendChild(card);
+    });
+    doc.body.appendChild(grid); popup.focus(); popup.print();
+  });
+  const bindCreate = (formId, endpoint) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
+  bindCreate('tenantCustomerForm','customers');
+  document.getElementById('tenantVoucherForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const body = Object.fromEntries(new FormData(form).entries());
+    try {
+      await tenantApi('/api/tenant/provisioning/hotspot', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) });
+      form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
+    } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
+  });
+  const pppoePanel = document.getElementById('tenantCustomersPanel');
+  if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
+    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
+    pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
+    pppoePanel.appendChild(pppoe);
+    pppoe.querySelector('form').addEventListener('submit', async event => {
+      event.preventDefault(); const form = event.currentTarget; const body = Object.fromEntries(new FormData(form).entries());
+      try { await tenantApi('/api/tenant/provisioning/pppoe', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) }); form.reset(); await loadTenantData(); dataMessage('PPPoE account and tenant customer record created atomically.'); }
+      catch (e) { dataMessage(e.message || 'PPPoE provisioning failed.', true); }
+    });
+  }
+  if (enabled('hotspot')) {
+    const heading = document.querySelector('#tenantVouchersPanel h6');
+    if (heading && !document.getElementById('tenantVoucherPrint')) {
+      const print = text('button', 'Batch print vouchers', 'btn btn-sm btn-outline-primary float-end');
+      print.id = 'tenantVoucherPrint'; print.type = 'button'; heading.appendChild(print);
+    }
+  }
+  bindCreate('tenantTransactionForm','transactions');
+  loadTenantData();
+
+  // Tenant users must never interact with legacy shared/global hardware settings.
+  document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
+  document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
+  const settings = document.getElementById('view-general-settings');
+  if (!settings || document.getElementById('tenantHardwareManager')) return;
+  const section = document.createElement('section');
+  section.id = 'tenantHardwareManager';
+  section.className = 'card border-0 shadow-sm m-3';
+  section.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>My Network Hardware</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="tenantHardwareRefresh">Refresh</button></div><div class="card-body"><p class="small text-muted">Router and OLT records are isolated to this tenant. Saving credentials stores encrypted inventory data; it does not connect to or change a live device.</p><div id="tenantHardwareMessage" class="small mb-3" role="status"></div><div class="row g-3"><div class="col-lg-6" id="tenantRouterCard"><h6>MikroTik Routers</h6><form id="tenantRouterForm" class="row g-2"><div class="col-12"><input class="form-control" name="router_name" placeholder="Router name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="host" placeholder="Host / IP" required maxlength="253"></div><div class="col-6"><input class="form-control" name="api_port" type="number" value="8728" min="1" max="65535" required></div><div class="col-6"><input class="form-control" name="username" placeholder="API username" required maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="API password" required autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Router</button></div></form><div id="tenantRouterList" class="mt-3"></div></div><div class="col-lg-6" id="tenantOltCard"><h6>OLT Devices</h6><form id="tenantOltForm" class="row g-2"><div class="col-12"><input class="form-control" name="olt_name" placeholder="OLT name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="olt_type" placeholder="Vendor / type" required maxlength="80"></div><div class="col-6"><input class="form-control" name="ip_address" placeholder="IP / hostname" required maxlength="253"></div><div class="col-6"><input class="form-control" name="username" placeholder="Management username" maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="Password (optional)" autocomplete="new-password"></div><div class="col-12"><input class="form-control" name="snmp_community" type="password" placeholder="SNMP community (optional)" autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save OLT</button></div></form><div id="tenantOltList" class="mt-3"></div></div></div></div>';
+  settings.appendChild(section);
+  const routerCard = section.querySelector('#tenantRouterCard');
+  const oltCard = section.querySelector('#tenantOltCard');
+  routerCard.hidden = !enabled('mikrotik');
+  oltCard.hidden = !enabled('olt');
+  if (!enabled('mikrotik') && !enabled('olt')) section.querySelector('.card-body').prepend(text('div', 'Your tenant plan has no hardware modules enabled.', 'alert alert-warning py-2'));
+
+  const message = (value, error) => {
+    const node = document.getElementById('tenantHardwareMessage');
+    node.textContent = value || '';
+    node.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success');
+  };
+  const formData = (form) => Object.fromEntries(new FormData(form).entries());
+  const renderList = (target, rows, kind) => {
+    const host = document.getElementById(target);
+    host.replaceChildren();
+    if (!rows || !rows.length) { host.appendChild(text('p', 'No ' + kind + ' registered.', 'small text-muted')); return; }
+    rows.forEach((row) => {
+      const line = document.createElement('div');
+      line.className = 'd-flex justify-content-between align-items-center border rounded p-2 mb-2 gap-2';
+      const label = text('div', kind === 'router' ? row.router_name + ' — ' + row.host + ':' + row.api_port : row.olt_name + ' — ' + row.olt_type + ' — ' + row.ip_address, 'small');
+      const remove = text('button', 'Remove', 'btn btn-sm btn-outline-danger');
+      remove.type = 'button';
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('Remove this saved ' + kind + ' inventory record? This does not change the device itself.')) return;
+        try { await tenantApi('/api/tenant/hardware/' + (kind === 'router' ? 'routers/' : 'olts/') + encodeURIComponent(row.id), { method: 'DELETE' }); await loadHardware(); message('Inventory record removed.'); }
+        catch (error) { message(error.message, true); }
+      });
+      line.append(label, remove); host.appendChild(line);
+    });
+  };
+  async function loadHardware() {
+    try {
+      const data = await tenantApi('/api/tenant/hardware');
+      renderList('tenantRouterList', enabled('mikrotik') ? data.routers : [], 'router');
+      renderList('tenantOltList', enabled('olt') ? data.olts : [], 'OLT');
+      message('');
+    } catch (error) { message(error.message, true); }
+  }
+  document.getElementById('tenantHardwareRefresh').addEventListener('click', loadHardware);
+  document.getElementById('tenantRouterForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { await tenantApi('/api/tenant/hardware/routers', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); event.currentTarget.elements.api_port.value = '8728'; await loadHardware(); message('Router inventory saved.'); }
+    catch (error) { message(error.message, true); }
+  });
+  document.getElementById('tenantOltForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { await tenantApi('/api/tenant/hardware/olts', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); await loadHardware(); message('OLT inventory saved.'); }
+    catch (error) { message(error.message, true); }
+  });
+  loadHardware();
+})();
+</script>
+<% } %>
 </body>
 </html>

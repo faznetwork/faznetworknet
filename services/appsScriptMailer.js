@@ -11,11 +11,19 @@ function getMailerConfig() {
   return { endpoint: endpoint.toString(), token };
 }
 
-async function sendTenantInvitation({ email, tenantName, link }) {
+async function sendTenantInvitation({ recipientEmail, email, tenantName, link }) {
   const { endpoint, token } = getMailerConfig();
+  // Explicitly require the client recipient; do not fall back to any admin/session address.
+  const to = String(recipientEmail || email || '').trim().toLowerCase();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 254) {
+    throw new Error('Client recipient email is missing or invalid; invitation was not sent.');
+  }
+  if (!String(link || '').startsWith('https://isp.faznetwork.com/onboard?token=')) {
+    throw new Error('Tenant onboarding URL is missing or invalid; invitation was not sent.');
+  }
   const response = await fetch(endpoint, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ type: 'invitation', token, to: email, username: String(tenantName || 'Tenant Admin').slice(0, 60), role: 'Tenant Admin', link }),
+    body: JSON.stringify({ type: 'invitation', token, to, username: String(tenantName || 'Tenant Administrator').slice(0, 60), role: 'Tenant Admin', link }),
     signal: AbortSignal.timeout(20000), redirect: 'follow'
   });
   const body = await response.text();
