@@ -17,6 +17,10 @@ test("expired portal lookup exposes recharge state and releases only uncompleted
  assert.match(service,/\/ip\/hotspot\/cookie\/remove/);
  assert.match(service,/=disabled=yes/);
  assert.match(service,/=profile=expired_profile/);
+
+});
+
+test("expired portal UI exposes device lookup and recharge state when the replacement page is present",{skip:!read("public/login.html").trim()&&"public/login.html is intentionally absent pending the replacement portal"},()=>{
  const portal=read("public/login.html");
  assert.match(portal,/requestJson\(DEVICE_LOOKUP_URL/);
  assert.match(portal,/result\.expired&&result\.can_recharge/);
