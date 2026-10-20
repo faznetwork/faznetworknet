@@ -5,7 +5,7 @@ const db = require('../db');
 
 function renderLogin(res, status, error) { return res.status(status).set('Cache-Control', 'no-store').render('tenant-login', { error, tenantNumber: '' }); }
 function showLogin(req, res) {
-  if (req.session?.tenantAdmin === true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
+  if (req.session?.tenantAdmin === true && req.session?.tenantId) return res.redirect('/dashboard');
   return res.set('Cache-Control', 'no-store').render('tenant-login', { error: req.query?.error === 'inactive' ? 'This tenant is inactive or its 30-day subscription has expired.' : null, tenantNumber: '' });
 }
 async function authenticate(username, password) {
@@ -25,7 +25,7 @@ function startSession(req,res,user,jsonMode) {
     req.session.save(saveError=>{
       if(saveError)return resolve(jsonMode?res.status(500).json({success:false,message:'Could not save your session.'}):renderLogin(res,500,'Could not save your session. Please retry.'));
       db.query('UPDATE public.admin_users SET last_login_at=NOW(),updated_at=NOW() WHERE id=$1 AND tenant_id=$2',[user.user_id,user.tenant_id]).catch(()=>{});
-      resolve(jsonMode?res.json({success:true,redirect:'/tenant/dashboard',tenantId:Number(user.tenant_id)}):res.redirect('/tenant/dashboard'));
+      resolve(jsonMode?res.json({success:true,redirect:'/dashboard',tenantId:Number(user.tenant_id)}):res.redirect('/dashboard'));
     });
   }));
 }

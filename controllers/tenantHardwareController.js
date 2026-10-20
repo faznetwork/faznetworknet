@@ -29,9 +29,15 @@ function requireTenant(req, res) {
 exports.list = async (req, res) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   try {
+    const modules = req.tenant?.enabled_modules ?? req.tenant?.modules ?? {};
+    const isEnabled = (key) => modules && typeof modules === 'object' && modules[key] === true;
     const [routers, olts] = await Promise.all([
-      db.query('SELECT id, router_name, host, api_port, username, is_active, created_at, updated_at FROM public.tenant_routers WHERE tenant_id=$1 ORDER BY id DESC', [tenantId]),
-      db.query('SELECT id, olt_name, olt_type, ip_address, username, is_active, created_at, updated_at, (snmp_community_encrypted IS NOT NULL) AS snmp_configured, (password_encrypted IS NOT NULL) AS password_configured FROM public.tenant_olts WHERE tenant_id=$1 ORDER BY id DESC', [tenantId])
+      isEnabled('mikrotik')
+        ? db.query('SELECT id, router_name, host, api_port, username, is_active, created_at, updated_at FROM public.tenant_routers WHERE tenant_id=$1 ORDER BY id DESC', [tenantId])
+        : Promise.resolve({ rows: [] }),
+      isEnabled('olt')
+        ? db.query('SELECT id, olt_name, olt_type, ip_address, username, is_active, created_at, updated_at, (snmp_community_encrypted IS NOT NULL) AS snmp_configured, (password_encrypted IS NOT NULL) AS password_configured FROM public.tenant_olts WHERE tenant_id=$1 ORDER BY id DESC', [tenantId])
+        : Promise.resolve({ rows: [] })
     ]);
     res.set('Cache-Control', 'no-store, private');
     return res.json({ success: true, routers: routers.rows || [], olts: olts.rows || [] });
