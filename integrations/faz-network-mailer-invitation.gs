@@ -6,9 +6,13 @@ function authorizeMailerRequest(data) {
   var supplied = String(data && data.token || '');
   return expected.length >= 32 && supplied.length === expected.length && supplied === expected;
 }
-function sendInvitation(data, to) {
+function sendInvitation(data, recipient) {
   if (!authorizeMailerRequest(data)) return jsonResponse({ success: false, error: 'Unauthorized mailer request' });
-  var username = String(data.username || 'Tenant Admin').trim().slice(0, 60);
+  // Recipient must be supplied explicitly by the caller. Never fall back to Session/active-user email.
+  var to = String(recipient == null ? (data && data.to != null ? data.to : '') : recipient).trim();
+  if (!to || to === '') return jsonResponse({ success: false, error: 'Recipient email is missing' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 254) return jsonResponse({ success: false, error: 'Recipient email is invalid' });
+  var username = String(data.username || 'Tenant Administrator').trim().slice(0, 60);
   var role = String(data.role || '').trim();
   var link = String(data.link || '').trim();
   var tenantOnboarding = role === 'Tenant Admin';
