@@ -3,7 +3,7 @@
 // Tenant access policy deliberately fails closed for legacy APIs whose tables and
 // controller queries are not yet tenant-scoped. Never promote a tenant session
 // to isAdmin or let it inherit platform-owner access.
-const CORE_MODULES = Object.freeze(['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports']);
+const CORE_MODULES = Object.freeze(['customers', 'hotspot', 'billing', 'pppoe', 'mikrotik', 'olt', 'reports']);
 
 const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
   '/api/customers', '/api/hotspot', '/api/pppoe', '/api/payments-admin',
@@ -13,26 +13,16 @@ const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
 ]);
 
 function normalizeModules(input) {
-  let value = input;
-  if (typeof value === 'string') {
-    try { value = JSON.parse(value); } catch (_) { value = {}; }
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) value = {};
-  // enabled_modules is the canonical name; legacy rows continue to read modules.
-  const enabled = value.enabled_modules && typeof value.enabled_modules === 'object' && !Array.isArray(value.enabled_modules)
-    ? value.enabled_modules
-    : value;
-  // Preserve strict booleans; treat absent or malformed flags as missing.
-  const normalized = Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === true ? true : on === false ? false : undefined]));
-  for (const moduleName of CORE_MODULES) {
-    if (normalized[moduleName] !== true && normalized[moduleName] !== false) normalized[moduleName] = true;
-  }
-  return Object.freeze(normalized);
+  // PostgreSQL's JSONB driver returns an object. Do not infer defaults, parse
+  // legacy aliases, or promote missing/malformed values to enabled.
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return Object.freeze({});
+  return Object.freeze(Object.fromEntries(
+    Object.entries(input).map(([key, enabled]) => [String(key), enabled === true])
+  ));
 }
 
 function moduleEnabled(tenant, moduleName) {
-  const raw = tenant?.enabled_modules ?? tenant?.modules;
-  return normalizeModules(raw)[moduleName] === true;
+  return normalizeModules(tenant?.modules)[moduleName] === true;
 }
 
 function requireTenantModule(moduleName) {
