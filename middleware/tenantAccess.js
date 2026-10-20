@@ -22,17 +22,19 @@ function normalizeModules(input) {
   const enabled = value.enabled_modules && typeof value.enabled_modules === 'object' && !Array.isArray(value.enabled_modules)
     ? value.enabled_modules
     : value;
-  // Preserve explicit false separately from missing/invalid flags so only an
-  // explicit false can disable a core module.
-  return Object.freeze(Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === false ? false : on === true ? true : null])));
+  // Preserve explicit false; normalize all other stored values without treating
+  // absent flags as disabled. Core modules are explicitly seeded for legacy rows.
+  const normalized = Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === false ? false : on === true ? true : undefined]));
+  for (const moduleName of CORE_MODULES) {
+    if (!Object.prototype.hasOwnProperty.call(normalized, moduleName)) normalized[moduleName] = true;
+  }
+  return Object.freeze(normalized);
 }
 
 function moduleEnabled(tenant, moduleName) {
   const raw = tenant?.enabled_modules ?? tenant?.modules;
-  const modules = normalizeModules(raw);
-  if (modules[moduleName] === false) return false;
-  if (modules[moduleName] === true) return true;
-  return CORE_MODULES.includes(moduleName);
+  // Fail open for missing flags; only an explicit false disables a module.
+  return normalizeModules(raw)[moduleName] !== false;
 }
 
 function requireTenantModule(moduleName) {
