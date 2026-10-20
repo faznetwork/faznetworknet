@@ -10,7 +10,7 @@ async function requireTenantAdmin(req, res, next) {
   }
   try {
     const result = await db.query(`
-      SELECT t.id, t.name, t.slug, t.status, t.modules, s.ends_at
+      SELECT t.id, t.name, t.slug, t.status, t.modules, t.modules AS enabled_modules, s.ends_at
       FROM public.tenants t
       JOIN LATERAL (
         SELECT ends_at FROM public.tenant_subscriptions
@@ -27,11 +27,7 @@ async function requireTenantAdmin(req, res, next) {
         return res.redirect('/tenant/login?error=inactive');
       });
     }
-    // Publish the freshly queried tenant record through both request context (API guards)
-    // and Express render locals (EJS). This is the single canonical dashboard data handoff.
     req.tenant = result.rows[0];
-    res.locals.tenant = req.tenant;
-    res.locals.tenantContext = true;
     res.set('Cache-Control', 'no-store, private');
     return next();
   } catch (error) {
