@@ -228,6 +228,8 @@ async function deleteTenant(req, res) {
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
+    // Share the allocator lock so create/delete/renumber cannot interleave.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('public.tenants.tenant_number'))");
     const found = await client.query('SELECT id, name, slug FROM public.tenants WHERE id=$1 FOR UPDATE', [tenantId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
     const tenant = found.rows[0];
