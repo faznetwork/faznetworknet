@@ -9528,6 +9528,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     });
   }
 
+  // Do not expose legacy operational views to tenant sessions: their actions still
+  // target platform-global APIs (including renew/provision/session controls). The
+  // tenant workspace below is the only enabled CRUD path until those workflows
+  // have a tenant-aware provisioning implementation.
+  const legacyTenantViews = ['view-add-customer','view-all-customer','view-hotspot-dashboard','view-payments','view-payment-ledger'];
+  legacyTenantViews.forEach((id) => {
+    const view = document.getElementById(id);
+    if (view) { view.hidden = true; view.setAttribute('aria-hidden','true'); }
+  });
+  const legacyTenantActions = document.querySelectorAll('[onclick*="/api/customers"], [onclick*="/api/hotspot"], [onclick*="/api/payments"]');
+  legacyTenantActions.forEach((node) => { node.hidden = true; node.setAttribute('aria-hidden','true'); });
+
   // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
   // legacy global CRUD controls are not used by this workspace.
   const dataPanel = document.createElement('section');
