@@ -87,7 +87,7 @@ test('voucher and billing list/create/update/delete SQL is tenant-scoped', async
 test('tenant endpoints reject missing tenant identity without querying database', async () => {
   await withQueryStub(async () => { throw new Error('must not query'); }, async calls => {
     const res = response();
-    await controller.listCustomers(request({ tenantId: undefined, tenantAdmin: false }), res);
+    await controller.listCustomers(request({ tenantId: null, tenantAdmin: false }), res);
     assert.equal(res.statusCode, 403);
     assert.equal(res.body.code, 'TENANT_CONTEXT_REQUIRED');
     assert.equal(calls.length, 0);
