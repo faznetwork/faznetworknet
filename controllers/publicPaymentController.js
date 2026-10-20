@@ -9,10 +9,11 @@ function limited(req, key, limit = 8) {
   if (!bucket || now - bucket.start >= 60_000) bucket = { start: now, count: 0 };
   bucket.count++;
   buckets.set(id, bucket);
+  if (buckets.size > 5000) { for (const [key, value] of buckets) { if (now - value.start > 120_000) buckets.delete(key); if (buckets.size <= 4000) break; } }
   return bucket.count <= limit;
 }
-function fail(res, status, message) {
-  return res.status(status).set("Cache-Control", "no-store").json({ success: false, message });
+function fail(res, status, message, extra = {}) {
+  return res.status(status).set("Cache-Control", "no-store").json({ success: false, message, ...extra });
 }
 function clean(v, max = 120) { return String(v ?? "").trim().slice(0, max); }
 function normalizePhone(v) {
