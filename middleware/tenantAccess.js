@@ -22,10 +22,10 @@ function normalizeModules(input) {
   const enabled = value.enabled_modules && typeof value.enabled_modules === 'object' && !Array.isArray(value.enabled_modules)
     ? value.enabled_modules
     : value;
-  // Preserve strict booleans; missing core flags default to enabled for legacy tenants.
-  const normalized = Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === true ? true : on === false ? false : false]));
+  // Preserve strict booleans; treat absent or malformed flags as missing.
+  const normalized = Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === true ? true : on === false ? false : undefined]));
   for (const moduleName of CORE_MODULES) {
-    if (!Object.prototype.hasOwnProperty.call(normalized, moduleName)) normalized[moduleName] = true;
+    if (normalized[moduleName] !== true && normalized[moduleName] !== false) normalized[moduleName] = true;
   }
   return Object.freeze(normalized);
 }
