@@ -1,7 +1,11 @@
+const crypto = require("node:crypto");
 const db = require("../db");
 const payments = require("./paymentController");
 
 const buckets = new Map();
+const paymentSessions = new Map();
+const SESSION_TTL_MS = 5 * 60 * 1000;
+
 function limited(req, key, limit = 8) {
   const now = Date.now();
   const id = String(req.ip || "unknown") + ":" + key;
@@ -9,7 +13,15 @@ function limited(req, key, limit = 8) {
   if (!bucket || now - bucket.start >= 60_000) bucket = { start: now, count: 0 };
   bucket.count++;
   buckets.set(id, bucket);
-  if (buckets.size > 5000) { for (const [key, value] of buckets) { if (now - value.start > 120_000) buckets.delete(key); if (buckets.size <= 4000) break; } }
+  if (buckets.size > 5000) {
+    for (const [key, value] of buckets) {
+      if (now - value.start > 120_000) buckets.delete(key);
+      if (buckets.size <= 4000) break;
+    }
+  }
+  for (const [sessionId, session] of paymentSessions) {
+    if (session.expiresAt <= now) paymentSessions.delete(sessionId);
+  }
   return bucket.count <= limit;
 }
 function fail(res, status, message, extra = {}) {
@@ -44,59 +56,138 @@ async function resolveSubscriber(identifier) {
   }
   return result.rows[0];
 }
-async function checkSubscriber(req, res) {
-  if (!limited(req, "pppoe-check", 10)) return fail(res, 429, "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।");
+function publicSubscriber(customer) {
+  const amount = Number(customer.price ?? customer.monthly_bill ?? 0);
+  return {
+    username: String(customer.username),
+    name: String(customer.full_name || customer.username),
+    package: String(customer.plan_name || customer.package_name || ""),
+    amount,
+    expiryDate: customer.expiration_date || null,
+    status: String(customer.status || "active").toLowerCase()
+  };
+}
+async function getPaymentSettings() {
+  const keys = ["mfs_bkash_number", "mfs_nagad_number", "mfs_rocket_number", "mfs_upay_number"];
+  const result = await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])", [keys]);
+  const values = Object.fromEntries((result.rows || []).map(row => [row.key, row.value]));
+  const providers = {};
+  for (const id of ["bkash", "nagad", "rocket", "upay"]) {
+    const number = clean(values["mfs_" + id + "_number"], 80);
+    providers[id] = { enabled: Boolean(number), number };
+  }
+  return providers;
+}
+async function paymentSettings(req, res) {
   try {
-    const identifier = clean(req.body?.identifier || req.body?.username || req.body?.customer_id);
-    if (!identifier) return fail(res, 400, "Subscriber ID বা username লিখুন।");
-    const customer = await resolveSubscriber(identifier);
-    if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "অ্যাকাউন্ট পাওয়া যায়নি। Subscriber ID/username যাচাই করুন।");
-    const status = String(customer.status || "active").toLowerCase();
-    return res.set("Cache-Control", "no-store").json({
-      success: true,
-      subscriber: {
-        username: customer.username,
-        name: customer.full_name || customer.username,
-        package: customer.plan_name,
-        amount: Number(customer.price ?? customer.monthly_bill ?? 0),
-        expiryDate: customer.expiration_date || null,
-        status
-      }
-    });
+    const providers = await getPaymentSettings();
+    const accounts = Object.fromEntries(Object.entries(providers).map(([id, item]) => [id, item.number]));
+    const mfs = Object.entries(providers).filter(([, item]) => item.enabled).map(([id, item]) => ({ id, name: id, enabled: true, number: item.number }));
+    return res.set("Cache-Control", "no-store").json({ success: true, providers, accounts, mfs });
   } catch (error) {
-    console.error("[Public PPPoE Bill Check]", error?.message || error);
-    return fail(res, 503, "বিল যাচাই করা যাচ্ছে না। কিছুক্ষণ পরে আবার চেষ্টা করুন।");
+    console.error("[Public Payment Settings]", error?.message || error);
+    return fail(res, 503, "Payment methods are temporarily unavailable.");
   }
 }
+async function checkSubscriber(req, res) {
+  if (!limited(req, "pppoe-check", 10)) return fail(res, 429, "Too many attempts. Please try again in one minute.");
+  try {
+    const identifier = clean(req.body?.identifier || req.body?.username || req.body?.customer_id || req.body?.subscriberId);
+    if (!identifier) return fail(res, 400, "Enter your subscriber username or ID.");
+    const customer = await resolveSubscriber(identifier);
+    if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found. Please check your username or ID.");
+    return res.set("Cache-Control", "no-store").json({ success: true, subscriber: publicSubscriber(customer) });
+  } catch (error) {
+    console.error("[Public PPPoE Bill Check]", error?.message || error);
+    return fail(res, 503, "Unable to retrieve your bill right now. Please try again later.");
+  }
+}
+async function createPaymentSession(req, res) {
+  if (!limited(req, "pppoe-payment-session", 10)) return fail(res, 429, "Too many payment sessions. Please try again shortly.");
+  try {
+    const username = clean(req.body?.username || req.body?.identifier || req.body?.subscriberId);
+    const provider = clean(req.body?.provider || req.body?.paymentMethod, 20).toLowerCase();
+    if (!username || !["bkash", "nagad", "rocket", "upay"].includes(provider)) {
+      return fail(res, 400, "A subscriber username and valid payment provider are required.");
+    }
+    const customer = await resolveSubscriber(username);
+    if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found.");
+    const amount = Number(customer.price ?? customer.monthly_bill ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) return fail(res, 400, "The current monthly bill is not configured correctly.");
+    const providers = await getPaymentSettings();
+    if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
+    const paymentSessionId = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    paymentSessions.set(paymentSessionId, {
+      username: String(customer.username),
+      provider,
+      amount,
+      expiresAt,
+      createdAt: Date.now()
+    });
+    return res.set("Cache-Control", "no-store").status(201).json({
+      success: true,
+      paymentSessionId,
+      expiresAt: new Date(expiresAt).toISOString(),
+      expiresInSeconds: Math.floor(SESSION_TTL_MS / 1000),
+      provider,
+      amount
+    });
+  } catch (error) {
+    console.error("[Public Payment Session]", error?.message || error);
+    return fail(res, 503, "Unable to start a payment session. Please try again.");
+  }
+}
+async function confirmPayment(req, res) {
+  if (!limited(req, "pppoe-payment-confirm", 6)) return fail(res, 429, "Too many payment confirmation attempts. Please try again later.");
+  const paymentSessionId = clean(req.body?.paymentSessionId, 128);
+  const trxId = clean(req.body?.transactionId || req.body?.trxId || req.body?.trx_id, 80).toUpperCase();
+  if (!paymentSessionId || !trxId) return fail(res, 400, "A payment session and transaction ID are required.");
+  const session = paymentSessions.get(paymentSessionId);
+  if (!session) return fail(res, 410, "Payment session is invalid or has expired. Start a new payment session.");
+  if (session.expiresAt <= Date.now()) {
+    paymentSessions.delete(paymentSessionId);
+    return fail(res, 410, "Payment session has expired. Start a new payment session.");
+  }
+  // The server owns the username, provider, amount, and expiry. Never trust browser-submitted amounts.
+  paymentSessions.delete(paymentSessionId);
+  req.body = {
+    ...req.body,
+    username: session.username,
+    amount: session.amount,
+    paymentMethod: session.provider,
+    trxId,
+    service_type: "pppoe"
+  };
+  return verifyRenewal(req, res);
+}
 async function verifyRenewal(req, res) {
-  if (!limited(req, "pppoe-renewal", 6)) return fail(res, 429, "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।");
+  if (!limited(req, "pppoe-renewal", 6)) return fail(res, 429, "Too many attempts. Please try again in one minute.");
   try {
     const identifier = clean(req.body?.username || req.body?.identifier);
     const trxId = clean(req.body?.trxId || req.body?.trx_id, 80).toUpperCase();
     const method = clean(req.body?.paymentMethod || req.body?.gateway, 20).toLowerCase();
     const submittedAmount = Number(req.body?.amount);
     if (!identifier || !trxId || !["bkash", "nagad", "rocket", "upay"].includes(method)) {
-      return fail(res, 400, "Subscriber ID, TrxID এবং বৈধ MFS মাধ্যম আবশ্যক।");
+      return fail(res, 400, "Subscriber ID, TrxID, and a valid MFS provider are required.");
     }
     const customer = await resolveSubscriber(identifier);
-    if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account পাওয়া যায়নি।");
+    if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found.");
     const expected = Number(customer.price ?? customer.monthly_bill ?? 0);
     if (!Number.isFinite(expected) || expected <= 0 || Math.round(submittedAmount * 100) !== Math.round(expected * 100)) {
-      return fail(res, 400, "প্রদত্ত বিলের পরিমাণ বর্তমান মাসিক বিলের সঙ্গে মিলছে না।", { expectedAmount: expected });
+      return fail(res, 400, "The submitted bill amount does not match the current monthly bill.");
     }
     const trx = await db.query("SELECT trx_id,amount,channel,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1", [trxId]);
-    if (!trx.rows.length) return fail(res, 404, "TrxID এখনো পাওয়া যায়নি। SMS payment forwarder আপডেট হলে আবার চেষ্টা করুন।");
+    if (!trx.rows.length) return fail(res, 404, "Transaction ID has not been received yet. Please retry after your payment notification has been processed.");
     const row = trx.rows[0];
-    if (String(row.channel || "").toLowerCase() !== method) return fail(res, 400, "নির্বাচিত MFS মাধ্যম TrxID-এর সঙ্গে মিলছে না।");
-    if (Math.round(Number(row.amount) * 100) !== Math.round(expected * 100)) return fail(res, 400, "লেনদেনের পরিমাণ বিলের সঙ্গে মিলছে না।");
-    if (String(row.status || "").toLowerCase() !== "unmatched" || row.used === true) return fail(res, 409, "এই TrxID ইতিমধ্যে ব্যবহার করা হয়েছে বা যাচাইয়ের জন্য উপলব্ধ নয়।");
-    // Reuse the existing guarded renewal path: it claims the transaction atomically,
-    // validates the exact bill again, updates RouterOS, persists expiry, and finalizes the payment.
+    if (String(row.channel || "").toLowerCase() !== method) return fail(res, 400, "The selected payment provider does not match this transaction.");
+    if (Math.round(Number(row.amount) * 100) !== Math.round(expected * 100)) return fail(res, 400, "The transaction amount does not match your bill.");
+    if (String(row.status || "").toLowerCase() !== "unmatched" || row.used === true) return fail(res, 409, "This transaction ID has already been used or is not available for verification.");
     req.body = { ...req.body, trxId, service_type: "pppoe", username: customer.username };
     return payments.manualMatch(req, res);
   } catch (error) {
     console.error("[Public PPPoE Renewal]", error?.message || error);
-    return fail(res, 503, "পেমেন্ট যাচাই বা renewal সম্পন্ন হয়নি। TrxID দিয়ে পুনরায় status যাচাই করুন।");
+    return fail(res, 503, "Payment verification or renewal could not be completed. Please retry with your transaction ID.");
   }
 }
-module.exports = { checkSubscriber, verifyRenewal };
+module.exports = { checkSubscriber, verifyRenewal, paymentSettings, createPaymentSession, confirmPayment };
