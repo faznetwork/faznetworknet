@@ -3,6 +3,8 @@
 // Tenant access policy deliberately fails closed for legacy APIs whose tables and
 // controller queries are not yet tenant-scoped. Never promote a tenant session
 // to isAdmin or let it inherit platform-owner access.
+const CORE_MODULES = Object.freeze(['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports']);
+
 const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
   '/api/customers', '/api/hotspot', '/api/pppoe', '/api/payments-admin',
   '/api/payments', '/api/reports', '/api/devices', '/api/mikrotik',
@@ -17,15 +19,20 @@ function normalizeModules(input) {
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) value = {};
   // enabled_modules is the canonical name; legacy rows continue to read modules.
-  const enabled = value.enabled_modules && typeof value.enabled_modules === 'object'
+  const enabled = value.enabled_modules && typeof value.enabled_modules === 'object' && !Array.isArray(value.enabled_modules)
     ? value.enabled_modules
     : value;
-  return Object.freeze(Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === true])));
+  // Preserve explicit false separately from missing/invalid flags so only an
+  // explicit false can disable a core module.
+  return Object.freeze(Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === false ? false : on === true ? true : null])));
 }
 
 function moduleEnabled(tenant, moduleName) {
   const raw = tenant?.enabled_modules ?? tenant?.modules;
-  return normalizeModules(raw)[moduleName] === true;
+  const modules = normalizeModules(raw);
+  if (modules[moduleName] === false) return false;
+  if (modules[moduleName] === true) return true;
+  return CORE_MODULES.includes(moduleName);
 }
 
 function requireTenantModule(moduleName) {
@@ -53,4 +60,4 @@ function tenantLegacyApiGuard(req, res, next) {
   });
 }
 
-module.exports = { normalizeModules, moduleEnabled, requireTenantModule, tenantLegacyApiGuard, LEGACY_GLOBAL_API_PREFIXES };
+module.exports = { normalizeModules, moduleEnabled, requireTenantModule, tenantLegacyApiGuard, LEGACY_GLOBAL_API_PREFIXES, CORE_MODULES };
