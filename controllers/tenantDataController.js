@@ -150,6 +150,28 @@ exports.listTransactions = async (req, res) => {
     return res.json({ success: true, transactions: result.rows });
   } catch (error) { return fail(res, error); }
 };
+exports.updateTransaction = async (req, res) => {
+  const tid = requireTenant(req, res); if (!tid) return;
+  const id = positiveId(req.params.id); if (!id) return res.status(400).json({ success: false, message: 'Invalid transaction id.' });
+  try {
+    const body = req.body || {};
+    const status = body.status == null ? null : String(body.status);
+    if (status !== null && !['processed','unmatched','duplicate'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Unsupported transaction status.' });
+    }
+    const result = await db.query(
+      `UPDATE public.transactions SET
+       sender_phone=COALESCE($3,sender_phone), amount=COALESCE($4,amount),
+       status=COALESCE($5,status), matched_username=COALESCE($6,matched_username)
+       WHERE tenant_id=$1 AND id=$2
+       RETURNING id,tenant_id,channel,trx_id,sender_phone,amount,status,matched_username,used,created_at`,
+      [tid,id,body.sender_phone ?? null,body.amount == null ? null : Number(body.amount),status,body.matched_username ?? null]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Transaction not found for this tenant.' });
+    return res.json({ success: true, transaction: result.rows[0] });
+  } catch (error) { return fail(res, error); }
+};
+
 exports.createTransaction = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
