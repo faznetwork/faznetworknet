@@ -41,7 +41,7 @@ async function saveTenantRecord(kind, tid, body, username, password, profile) {
       if (!Number.isFinite(price) || price < 0) throw Object.assign(new Error('Price must be non-negative.'), { statusCode: 400, code: 'INVALID_ROUTER_INPUT' });
       const result = await client.query(
         `INSERT INTO public.hotspot_vouchers(tenant_id,username,password,profile,validity,price,status,comment)
-         VALUES($1,$2,$3,$4,$5,$6,'unused',$7)
+         VALUES($1,$2,$3,$4,$5,$6,'active',$7)
          RETURNING id,tenant_id,username,profile,validity,price,status,comment,created_at`,
         [tid, username, password, profile, validity, price, body.comment || null]
       );
