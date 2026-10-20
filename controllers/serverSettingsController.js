@@ -106,16 +106,17 @@ async function createTenant(req, res) {
     return res.status(400).json({ success: false, message: 'A valid client contact email is required. No invitation was sent.' });
   }
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' && !Array.isArray(req.body.modules) ? req.body.modules : {};
-  // Persist every known module flag explicitly in the same transaction as the
-  // tenant row. The tenant settings UI may deliberately opt a module out.
+  // Every new tenant starts with all seven core operational modules explicitly
+  // enabled. Platform owners can disable modules later through the tenant
+  // settings transaction; the creation request cannot produce a partial map.
   const modules = {
-    customers: requestedModules.customers !== false,
-    hotspot: requestedModules.hotspot !== false,
-    billing: requestedModules.billing !== false,
-    pppoe: requestedModules.pppoe !== false,
-    mikrotik: requestedModules.mikrotik !== false,
-    olt: requestedModules.olt !== false,
-    reports: requestedModules.reports !== false,
+    customers: true,
+    hotspot: true,
+    billing: true,
+    pppoe: true,
+    mikrotik: true,
+    olt: true,
+    reports: true,
     sms_gateway: requestedModules.sms_gateway !== false,
     whatsapp: requestedModules.whatsapp !== false
   };
