@@ -9610,13 +9610,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     item.style.removeProperty('visibility');
   });
   window.openTenantModule = function (key) {
-    const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
-    if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
-    if (typeof switchView === 'function') switchView('general-settings');
-    window.setTimeout(() => {
-      const target = document.getElementById(map[key]) || document.getElementById('tenantDataWorkspace');
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
+    const map = { dashboard: 'view-main-dashboard', customers: 'view-tenant-customers', hotspot: 'view-tenant-hotspot', billing: 'view-tenant-billing', pppoe: 'view-tenant-pppoe', mikrotik: 'view-tenant-hardware', olt: 'view-tenant-hardware', reports: 'view-tenant-reports', support: 'view-support-tickets' };
+    const targetId = map[key] || 'view-support-tickets';
+    const viewName = targetId.replace(/^view-/, '');
+    if (typeof switchView === 'function') switchView(key === 'dashboard' ? 'dashboard' : viewName);
+    window.setTimeout(() => { const target = document.getElementById(targetId); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
   };
 
   // Tenant menu items must never fall through to legacy platform-wide customer views.
@@ -9658,16 +9656,23 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 
   // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
   // legacy global CRUD controls are not used by this workspace.
-  const dataPanel = document.createElement('section');
+  // Each tenant module gets its own top-level admin view; do not mount all
+  // module forms inside General Settings or render them simultaneously.
+  const dataPanel = document.createElement('div');
   dataPanel.id = 'tenantDataWorkspace';
-  dataPanel.className = 'card border-0 shadow-sm m-3';
-  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantReportsPanel"><h6>Tenant Reports</h6><p class="small text-muted">Summaries are calculated from tenant-scoped customer, voucher, and billing records.</p><div id="tenantReportsSummary" class="row g-3"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
-  const tenantSettingsView = document.getElementById('view-general-settings');
-  if (tenantSettingsView) tenantSettingsView.prepend(dataPanel);
-  dataPanel.hidden = !['customers','hotspot','billing','pppoe','reports'].some(enabled);
-  ['customers','hotspot','billing','reports'].forEach((key) => {
-    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : key === 'billing' ? 'tenantBillingPanel' : 'tenantReportsPanel');
-    if (panel) panel.hidden = !enabled(key);
+  dataPanel.className = 'tenant-workspace-shell';
+  dataPanel.innerHTML = `
+    <div id="tenantDataMessage" class="small mb-3" role="status" aria-live="polite"></div>
+    <section id="view-tenant-customers" class="admin-view hidden" style="display:none" aria-labelledby="tenantCustomersTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-people text-success"></i><strong id="tenantCustomersTitle">Customers</strong></div><div class="card-body"><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div></div></section>
+    <section id="view-tenant-hotspot" class="admin-view hidden" style="display:none" aria-labelledby="tenantHotspotTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-wifi text-success"></i><strong id="tenantHotspotTitle">Hotspot vouchers</strong></div><div class="card-body"><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div></div></section>
+    <section id="view-tenant-billing" class="admin-view hidden" style="display:none" aria-labelledby="tenantBillingTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-credit-card text-success"></i><strong id="tenantBillingTitle">Billing transactions</strong></div><div class="card-body"><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></section>
+    <section id="view-tenant-reports" class="admin-view hidden" style="display:none" aria-labelledby="tenantReportsTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-bar-chart text-success"></i><strong id="tenantReportsTitle">Tenant reports</strong></div><div class="card-body"><p class="small text-muted">Summaries are calculated from tenant-scoped customer, voucher, and billing records.</p><div id="tenantReportsSummary" class="row g-3"></div></div></div></section>
+    <section id="view-tenant-pppoe" class="admin-view hidden" style="display:none" aria-labelledby="tenantPppoeTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-router text-success"></i><strong id="tenantPppoeTitle">PPPoE provisioning</strong></div><div class="card-body"><p class="small text-muted">Create and manage tenant-scoped PPPoE accounts.</p><div id="tenantPppoePanel"></div></div></div></section>`;
+  const tenantMainContent = document.getElementById('dynamicPageContent');
+  if (tenantMainContent) tenantMainContent.appendChild(dataPanel);
+  ['customers','hotspot','billing','reports','pppoe'].forEach((key) => {
+    const view = document.getElementById('view-tenant-' + key);
+    if (view) view.hidden = !enabled(key);
   });
   const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
   const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
@@ -9777,7 +9782,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
     } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
   });
-  const pppoePanel = document.querySelector('#tenantDataWorkspace .card-body .row.g-4');
+  const pppoePanel = document.getElementById('tenantPppoePanel');
   if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
     const pppoe = document.createElement('section'); pppoe.className = 'col-12 mt-4';
     pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
@@ -9875,7 +9880,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   // Tenant users must never interact with legacy shared/global hardware settings.
   document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
   document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
-  const tenantHardwareSettingsView = document.getElementById('view-general-settings');
+  const tenantHardwareSettingsView = document.getElementById('dynamicPageContent');
   if (!tenantHardwareSettingsView || document.getElementById('tenantHardwareManager')) return;
   const section = document.createElement('section');
   section.id = 'tenantHardwareManager';
