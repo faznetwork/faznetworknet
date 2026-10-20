@@ -1803,9 +1803,8 @@
   if (typeof tenantModuleConfig === 'string') { try { tenantModuleConfig = JSON.parse(tenantModuleConfig); } catch (_) { tenantModuleConfig = {}; } }
   if (!tenantModuleConfig || typeof tenantModuleConfig !== 'object' || Array.isArray(tenantModuleConfig)) tenantModuleConfig = {};
   const tenantCoreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
-  const tenantModuleFlagsPresent = tenantCoreModules.some((key) => Object.prototype.hasOwnProperty.call(tenantModuleConfig, key));
-  // Missing/empty flags must not hide the tenant's operational menu. Only an explicit false disables a module.
-  const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleFlagsPresent ? tenantModuleConfig[key] !== false : tenantCoreModules.includes(key));
+  // Missing flags default to enabled only for core modules; explicit false always disables.
+  const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleConfig[key] === true || (tenantModuleConfig[key] !== false && tenantCoreModules.includes(key)));
 %>
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
@@ -9576,8 +9575,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   window.__tenantDashboardInitialized = true;
   const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  // Missing tenant module flags default to enabled; only an explicit false disables a module.
-  const enabled = (key) => modules[key] !== false;
+  // Match backend policy: missing flags default to enabled only for core modules.
+  const enabled = (key) => modules[key] === true || (modules[key] !== false && ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'].includes(key));
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
