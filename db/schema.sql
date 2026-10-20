@@ -865,10 +865,10 @@ $faz_hotspot_voucher_customer_name_length$;
 
 
 -- Captive portal branding and login-method settings.
-CREATE TABLE IF NOT EXISTS hotspot_portal_settings (id SERIAL PRIMARY KEY,tenant_id VARCHAR(64) NOT NULL DEFAULT 'default',display_mode VARCHAR(32) NOT NULL DEFAULT 'default',banner_url VARCHAR(500),custom_html TEXT,notice_text TEXT,brand_title VARCHAR(120) NOT NULL DEFAULT 'FAZ NETWORK',brand_subtitle VARCHAR(255) NOT NULL DEFAULT 'স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন',helpline_number VARCHAR(32) NOT NULL DEFAULT '01339932887',redirect_url VARCHAR(500),enable_online_payment BOOLEAN NOT NULL DEFAULT true,enable_voucher_pin BOOLEAN NOT NULL DEFAULT true,enable_qr_scan BOOLEAN NOT NULL DEFAULT true,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),CONSTRAINT hotspot_portal_settings_display_mode_check CHECK(display_mode IN ('default','banner','custom_code')),CONSTRAINT hotspot_portal_settings_tenant_unique UNIQUE(tenant_id));
+CREATE TABLE IF NOT EXISTS hotspot_portal_settings (id SERIAL PRIMARY KEY,display_mode VARCHAR(32) NOT NULL DEFAULT 'default',banner_url VARCHAR(500),custom_html TEXT,notice_text TEXT,brand_title VARCHAR(120) NOT NULL DEFAULT 'FAZ NETWORK',brand_subtitle VARCHAR(255) NOT NULL DEFAULT 'স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন',helpline_number VARCHAR(32) NOT NULL DEFAULT '01339932887',redirect_url VARCHAR(500),enable_online_payment BOOLEAN NOT NULL DEFAULT true,enable_voucher_pin BOOLEAN NOT NULL DEFAULT true,enable_qr_scan BOOLEAN NOT NULL DEFAULT true,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),CONSTRAINT hotspot_portal_settings_display_mode_check CHECK(display_mode IN ('default','banner','custom_code')));
 ALTER TABLE hotspot_portal_settings ADD COLUMN IF NOT EXISTS portal_logo_url VARCHAR(500);
 ALTER TABLE hotspot_portal_settings ADD COLUMN IF NOT EXISTS default_user_profile VARCHAR(128) NOT NULL DEFAULT '';
-INSERT INTO hotspot_portal_settings(id,tenant_id) VALUES(1,'default') ON CONFLICT(id) DO NOTHING;
+INSERT INTO hotspot_portal_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
 SELECT setval(pg_get_serial_sequence('hotspot_portal_settings','id'),GREATEST((SELECT COALESCE(MAX(id),1) FROM hotspot_portal_settings),1));
 
 
@@ -956,95 +956,3 @@ CREATE TABLE IF NOT EXISTS server_settings_audit (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_server_settings_audit_created_at ON server_settings_audit(created_at DESC);
-
-CREATE TABLE IF NOT EXISTS tenants (
-  id BIGSERIAL PRIMARY KEY,
-  name VARCHAR(200) NOT NULL,
-  slug VARCHAR(100) NOT NULL UNIQUE,
-  contact_email VARCHAR(254),
-  contact_phone VARCHAR(50),
-  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-  modules JSONB NOT NULL DEFAULT '{"customers":true,"hotspot":true,"billing":true,"pppoe":true,"mikrotik":true,"olt":true,"reports":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
--- Human-facing tenant numbers are independent of the stable primary key.
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS tenant_number INTEGER;
-WITH numbered AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC NULLS FIRST, id ASC)::INTEGER AS tenant_number
-  FROM public.tenants
-)
-UPDATE public.tenants AS t
-SET tenant_number = numbered.tenant_number
-FROM numbered
-WHERE numbered.id = t.id
-  AND (t.tenant_number IS NULL OR t.tenant_number <= 0);
-ALTER TABLE public.tenants ALTER COLUMN tenant_number SET NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_tenants_tenant_number ON public.tenants(tenant_number);
-
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_token_hash CHAR(64);
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ;
-
-CREATE TABLE IF NOT EXISTS tenant_subscriptions (
-  id BIGSERIAL PRIMARY KEY,
-  tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  ends_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
-  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended','expired')),
-  updated_by BIGINT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CHECK (ends_at > starts_at)
-);
-CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_tenant_ends ON tenant_subscriptions(tenant_id, ends_at DESC);
-
--- These tables are only accessed by the trusted server-side PostgreSQL connection; public Supabase roles must not query them.
-ALTER TABLE system_server_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE server_settings_audit ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
-
-
--- Tenant-owned access hardware. Credentials are encrypted by the application before persistence.
-CREATE TABLE IF NOT EXISTS tenant_routers (
-  id BIGSERIAL PRIMARY KEY,
-  tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  router_name VARCHAR(120) NOT NULL,
-  host VARCHAR(253) NOT NULL,
-  api_port INTEGER NOT NULL DEFAULT 8728 CHECK (api_port BETWEEN 1 AND 65535),
-  username VARCHAR(160) NOT NULL,
-  password_encrypted TEXT NOT NULL,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, router_name)
-);
-CREATE INDEX IF NOT EXISTS idx_tenant_routers_owner_active ON tenant_routers(tenant_id, is_active);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_tenant_routers_host_port ON tenant_routers(tenant_id, lower(host), api_port);
-
-CREATE TABLE IF NOT EXISTS tenant_olts (
-  id BIGSERIAL PRIMARY KEY,
-  tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  olt_name VARCHAR(120) NOT NULL,
-  olt_type VARCHAR(80) NOT NULL,
-  ip_address VARCHAR(253) NOT NULL,
-  snmp_community_encrypted TEXT,
-  username VARCHAR(160),
-  password_encrypted TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, olt_name)
-);
-CREATE INDEX IF NOT EXISTS idx_tenant_olts_owner_active ON tenant_olts(tenant_id, is_active);
-ALTER TABLE tenant_routers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tenant_olts ENABLE ROW LEVEL SECURITY;
-
-
--- Tenant administrators are scoped to their owning tenant. NULL remains for legacy platform accounts.
-ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS idx_admin_users_tenant_status ON admin_users(tenant_id,status);
-
-
--- Keep the tenant identity sequence aligned with existing tenant IDs; a fresh installation starts at 1.
-SELECT setval(pg_get_serial_sequence('public.tenants','id'), COALESCE((SELECT MAX(id) FROM public.tenants), 0) + 1, FALSE);
