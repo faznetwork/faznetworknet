@@ -1847,15 +1847,14 @@
         </div>
 
 <% if (tenantPage) { %>
-        <ul class="sidebar-menu">
+        <ul class="sidebar-menu" id="tenantSidebarMenu">
             <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>Hardware</span></a></li>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
             <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
         </ul>
 <% } else { %>
@@ -9613,7 +9612,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     const map = { dashboard: 'view-main-dashboard', customers: 'view-tenant-customers', hotspot: 'view-tenant-hotspot', billing: 'view-tenant-billing', pppoe: 'view-tenant-pppoe', mikrotik: 'view-tenant-hardware', olt: 'view-tenant-hardware', reports: 'view-tenant-reports', support: 'view-support-tickets' };
     const targetId = map[key] || 'view-support-tickets';
     const viewName = targetId.replace(/^view-/, '');
-    if (typeof switchView === 'function') switchView(key === 'dashboard' ? 'dashboard' : viewName);
+    if (key === 'mikrotik' || key === 'olt') {
+      if (typeof switchView === 'function') switchView('tenant-hardware');
+      const hardwareView = document.getElementById('view-tenant-hardware');
+      if (hardwareView) {
+        hardwareView.hidden = false;
+        hardwareView.classList.remove('hidden');
+        hardwareView.style.display = '';
+        hardwareView.setAttribute('aria-hidden', 'false');
+      }
+    } else if (typeof switchView === 'function') {
+      switchView(key === 'dashboard' ? 'dashboard' : viewName);
+    }
     window.setTimeout(() => { const target = document.getElementById(targetId); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
   };
 
@@ -9884,9 +9894,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   if (!tenantHardwareSettingsView || document.getElementById('view-tenant-hardware')) return;
   const section = document.createElement('section');
   section.id = 'view-tenant-hardware';
-  section.className = 'card border-0 shadow-sm m-3';
+  section.className = 'admin-view hidden card border-0 shadow-sm m-3';
+  section.style.display = 'none';
+  section.setAttribute('aria-hidden', 'true');
   section.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>My Network Hardware</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="tenantHardwareRefresh">Refresh</button></div><div class="card-body"><p class="small text-muted">Router and OLT records are isolated to this tenant. Saving credentials stores encrypted inventory data; it does not connect to or change a live device.</p><div id="tenantHardwareMessage" class="small mb-3" role="status"></div><div class="row g-3"><div class="col-lg-6" id="tenantRouterCard"><h6>MikroTik Routers</h6><form id="tenantRouterForm" class="row g-2"><div class="col-12"><input class="form-control" name="router_name" placeholder="Router name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="host" placeholder="Host / IP" required maxlength="253"></div><div class="col-6"><input class="form-control" name="api_port" type="number" value="8728" min="1" max="65535" required></div><div class="col-6"><input class="form-control" name="username" placeholder="API username" required maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="API password" required autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Router</button></div></form><div id="tenantRouterList" class="mt-3"></div></div><div class="col-lg-6" id="tenantOltCard"><h6>OLT Devices</h6><form id="tenantOltForm" class="row g-2"><div class="col-12"><input class="form-control" name="olt_name" placeholder="OLT name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="olt_type" placeholder="Vendor / type" required maxlength="80"></div><div class="col-6"><input class="form-control" name="ip_address" placeholder="IP / hostname" required maxlength="253"></div><div class="col-6"><input class="form-control" name="username" placeholder="Management username" maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="Password (optional)" autocomplete="new-password"></div><div class="col-12"><input class="form-control" name="snmp_community" type="password" placeholder="SNMP community (optional)" autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save OLT</button></div></form><div id="tenantOltList" class="mt-3"></div></div></div></div>';
+  // Append a true sibling view: switchView() only toggles .admin-view containers.
   tenantHardwareSettingsView.appendChild(section);
+  const showTenantHardwareView = () => {
+    section.hidden = false;
+    section.classList.remove('hidden');
+    section.style.display = '';
+    section.setAttribute('aria-hidden', 'false');
+  };
   const routerCard = section.querySelector('#tenantRouterCard');
   const oltCard = section.querySelector('#tenantOltCard');
   routerCard.hidden = !enabled('mikrotik');
