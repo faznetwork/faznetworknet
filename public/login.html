@@ -795,7 +795,7 @@ if(subtitle)subtitle.textContent=data.brand_subtitle||'স্বয়ংক্�
 const phone=String(data.helpline||'').trim(),helpline=byId('reseller-helpline');
 if(helpline&&phone){helpline.textContent=phone;helpline.href='tel:'+phone.replace(/[^+0-9]/g,'');}
 const box=byId('reseller-banner-box'),image=byId('reseller-banner-img');
-if(data.banner_url&&box&&image&&data.display_mode==='banner'){image.src=data.banner_url;image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}
+if(data.banner_url&&box&&image){if(data.display_mode==='banner'){image.src=data.banner_url;image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}else{box.style.display='none';}}
 else if(box)box.style.display='none';
 if(data.display_mode==='custom_code'&&data.custom_html){
 let frame=byId('portal-custom-content');
@@ -829,7 +829,7 @@ async function loadPackagesAndSettings(){
 const grid=byId('packages-grid'),accounts=byId('payment-accounts-list'),select=byId('cust_payment_method');
 try{
 const config=await requestJson(PUBLIC_PORTAL_CONFIG_URL,{method:'GET'});
-const nodes=Array.isArray(config.packages)?config.packages.filter(function(p){return p&&Number.isFinite(p.price)&&p.price>0;}).map(function(p){return {profile:p.profileId||p.name,price:Number(p.price),validity:p.validity||p.name||p.profileId||'Internet access'};}):[];
+const nodes=Array.isArray(config.packages)?config.packages.filter(function(p){return Number.isFinite(p.price)&&p.price>0;}).map(function(p){return {profile:p.profileId||p.name,price:Number(p.price),validity:p.validity||p.name||p.profileId||'Internet access'};}):[];
 renderPackages(nodes);
 }catch(error){console.warn('[Hotspot Packages]',error.message);renderPackages([]);}
 try{
