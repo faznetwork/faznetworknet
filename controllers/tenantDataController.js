@@ -93,7 +93,7 @@ exports.deleteCustomer = async (req, res) => {
 exports.listVouchers = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
-    const result = await db.query('SELECT id,tenant_id,username,profile,validity,price,status,comment,transaction_id,created_at FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
+    const result = await db.query('SELECT id,tenant_id,username,password,profile,validity,price,status,comment,transaction_id,created_at FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
     return res.json({ success: true, vouchers: result.rows });
   } catch (error) { return fail(res, error); }
 };
