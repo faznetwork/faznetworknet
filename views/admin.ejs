@@ -1802,7 +1802,10 @@
   let tenantModuleConfig = tenantPage ? (tenant.enabled_modules || tenant.modules || {}) : {};
   if (typeof tenantModuleConfig === 'string') { try { tenantModuleConfig = JSON.parse(tenantModuleConfig); } catch (_) { tenantModuleConfig = {}; } }
   if (!tenantModuleConfig || typeof tenantModuleConfig !== 'object' || Array.isArray(tenantModuleConfig)) tenantModuleConfig = {};
-  const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true;
+  const tenantCoreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
+  const tenantModuleFlagsPresent = tenantCoreModules.some((key) => Object.prototype.hasOwnProperty.call(tenantModuleConfig, key));
+  // Missing/empty flags must not hide the tenant's operational menu. Only an explicit false disables a module.
+  const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleFlagsPresent ? tenantModuleConfig[key] !== false : tenantCoreModules.includes(key));
 %>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
@@ -8158,12 +8161,25 @@ async function deletePlan(id,name){
         }
 
         async function refreshDashboard() {
+            // Tenant sessions may receive 403/404 from platform-wide endpoints. Resolve each widget
+            // independently, with a timeout, so one denied or stalled request cannot strand the UI.
+            const dashboardRequest = async (url, fallback) => {
+                let timeoutId;
+                try {
+                    return await Promise.race([
+                        jsonFetch(url).catch(() => fallback),
+                        new Promise(resolve => { timeoutId = setTimeout(() => resolve(fallback), 8000); })
+                    ]);
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            };
+            const [users, active, summary] = await Promise.all([
+                dashboardRequest('/api/pppoe/users', { success: false, users: [] }),
+                dashboardRequest('/api/pppoe/active', { success: false, sessions: [] }),
+                dashboardRequest('/api/payments/summary', { success: false, summary: { today_collection: 0 }, recent: [] })
+            ]);
             try {
-                const [users, active, summary] = await Promise.all([
-                    jsonFetch('/api/pppoe/users'),
-                    jsonFetch('/api/pppoe/active'),
-                    jsonFetch('/api/payments/summary')
-                ]);
                 const customerRows = Array.isArray(users.users) ? users.users : null;
                 const sessionRows = Array.isArray(active.sessions) ? active.sessions : (Array.isArray(active.active) ? active.active : null);
                 const usersAvailable = users.success !== false && customerRows !== null;
@@ -8181,6 +8197,16 @@ async function deletePlan(id,name){
                 }
             } catch (error) {
                 console.error('[Dashboard]', error);
+            } finally {
+                // Always resolve the initial payment placeholder, including empty, denied, and failed responses.
+                const recentPaymentsBody = document.getElementById('recentPaymentsBody');
+                if (recentPaymentsBody && /Loading payments/i.test(recentPaymentsBody.textContent || '')) {
+                    recentPaymentsBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
+                }
+                ['metricCustomers', 'metricSessions', 'metricOffline', 'metricCollection'].forEach(id => {
+                    const node = document.getElementById(id);
+                    if (node && /Loading|—/.test(node.textContent || '')) node.textContent = '—';
+                });
             }
             await loadRouterMetrics();
         }
