@@ -331,7 +331,7 @@
             <b>$(mac)</b>
         </div>
 
-        <!-- MFS Account Card -->
+        <!-- MFS Account Card (Dynamic from Server) -->
         <div class="payment-account-card">
             <div class="payment-account-title">Personal MFS (Send Money)</div>
             <div id="payment-accounts-list">
@@ -379,7 +379,7 @@
     </div>
 </div>
 
-<!-- Hidden MikroTik Auto-Login Form (PAP Submission: MAC as User, Phone as Pass) -->
+<!-- Hidden MikroTik Auto-Login Form (Username = MAC, Password = Phone) -->
 <form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
     <input type="hidden" name="username" id="mt-user" value="$(mac)">
     <input type="hidden" name="password" id="mt-pass">
@@ -391,7 +391,7 @@
 <input type="hidden" id="router-ip" value="$(ip)">
 
 <script>
-    const BACKEND_BASE_URL = 'https://faznetwork.com';
+    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
 
@@ -427,12 +427,18 @@
             return;
         }
 
-        valid.forEach(pkg => {
+        valid.forEach((pkg, index) => {
             const card = document.createElement('button');
             card.type = 'button';
             card.className = 'pkg-card';
             card.setAttribute('aria-pressed', 'false');
             card.setAttribute('aria-label', pkg.profile + ', ' + formatTaka(pkg.price));
+
+            if (index === 0) {
+                card.classList.add('selected');
+                selectedPackage = { profile: pkg.profile, price: Number(pkg.price), validity: pkg.validity || pkg.profile };
+                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + selectedPackage.validity + ' — ' + formatTaka(selectedPackage.price);
+            }
 
             const time = document.createElement('div');
             time.className = 'pkg-time';
@@ -462,7 +468,7 @@
         const methodSelect = document.getElementById('cust_payment_method');
 
         try {
-            // সার্ভার থেকে লাইভ প্যাকেজ ও সেটিংস ফেচ করা হচ্ছে
+            // সার্ভার হোমপেজ এবং পাবলিক সেটিংস থেকে ডাইনামিক ডেটা ফেচ করা হচ্ছে
             const [homeResponse, settingsResponse] = await Promise.all([
                 fetch(BACKEND_BASE_URL + '/', { cache: 'no-store', credentials: 'omit' }),
                 fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store', credentials: 'omit' }).catch(() => null)
@@ -523,7 +529,7 @@
             const message = document.createElement('div');
             message.className = 'send-money-alert';
             message.style.gridColumn = '1 / -1';
-            message.textContent = 'লাইভ প্যাকেজ লোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পেজ রিফ্রেশ করুন।';
+            message.textContent = 'লাইভ প্যাকেজ লোড করা যায়নি। Walled Garden চেক করুন বা পেজ রিফ্রেশ করুন।';
             grid.appendChild(message);
 
             accountList.replaceChildren();
