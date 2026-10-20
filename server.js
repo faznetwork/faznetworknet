@@ -14,10 +14,8 @@ const adminSecurityRoutes=require("./routes/adminSecurityRoutes");
 const appSettingsService=require("./services/appSettings");
 const settingsController=require("./controllers/settingsController");
 const serverSettingsRoutes=require("./routes/serverSettingsRoutes");
-const { normalizeModules } = require("./middleware/tenantAccess");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
-app.get("/favicon.ico",(req,res)=>res.status(204).end());
 
 // Render liveness probe intentionally runs before session, PostgreSQL, branding, and other middleware.
 // It only confirms that the Node.js process can answer HTTP requests; database health is checked separately.
@@ -114,7 +112,7 @@ app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 });
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
-app.get("/dashboard",(req,res,next)=>{ if(req.session?.tenantAdmin===true&&req.session?.tenantId) return next(); if(req.session?.isAdmin===true) return res.redirect("/admin"); return res.redirect("/login"); },require("./middleware/requireTenantAdmin"),(req,res)=>{ const normalizedModules=normalizeModules(req.tenant.modules); return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:"tenant_admin",currentAdminUser:req.session.adminUser||"tenant-admin",currentAdminId:req.session.userId||0,tenantContext:true,tenantPage:true,tenant:req.tenant,normalizedModules}); });
+app.get("/dashboard",(req,res,next)=>{ if(req.session?.tenantAdmin===true&&req.session?.tenantId) return require("./middleware/requireTenantAdmin")(req,res,()=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:"tenant_admin",currentAdminUser:req.session.adminUser||"tenant-admin",currentAdminId:req.session.userId||0,tenantContext:true,tenant:req.tenant})); if(req.session?.isAdmin===true) return res.redirect("/admin"); return res.redirect("/login"); });
 app.get("/hotspot/webhook",requireRole(["super_admin","admin"]),(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
 app.get("/",async (req,res)=>{
