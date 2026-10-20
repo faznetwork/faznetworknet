@@ -14,16 +14,21 @@ test("public homepage links to the unified online payment portal", () => {
   assert.match(server, /app\.get\("\/payment",\(req,res\)=>res\.sendFile\(path\.join\(__dirname,"public","payment\.html"\)\)\)/);
 });
 
-test("unified payment portal uses dynamic public MFS/package settings and five-minute payment session", () => {
+test("payment portal is English-only and dedicated to PPPoE with a five-minute payment session", () => {
   const page = read("public/payment.html");
+  assert.match(page, /<html lang="en">/);
+  assert.match(page, /<title>Online Payment/);
+  assert.match(page, /PPPoE Broadband Bill Payment/);
+  assert.match(page, /Check Bill/);
+  assert.match(page, /Submit TrxID & Verify Payment/);
   assert.match(page, /\/api\/public\/portal-config/);
   assert.match(page, /\/api\/settings\/public/);
   assert.match(page, /startTimer\(\)/);
   assert.match(page, /300000/);
-  assert.match(page, /\/api\/verify-trx/);
   assert.match(page, /\/api\/pppoe\/check-subscriber/);
   assert.match(page, /\/api\/pppoe\/verify-renewal/);
-  assert.match(page, /submitMikrotik\(data\.username,data\.password/);
+  assert.doesNotMatch(page, /hotspot|hotspot-mac|hotspot-phone|hotspot-packages|\/api\/verify-trx|submitMikrotik/i);
+  assert.doesNotMatch(page, /[\u0980-\u09FF]/, "all visible copy and markup must use English");
 });
 
 test("public PPPoE renewal validates bill, MFS channel and unused transaction before guarded renewal", () => {
