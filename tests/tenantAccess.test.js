@@ -35,3 +35,23 @@ test('tenant legacy API guard allows non-tenant and tenant-hardware paths', () =
   tenantLegacyApiGuard({ session: { tenantAdmin: true }, path: '/api/tenant/hardware' }, response(), () => { nextCalled = true; });
   assert.equal(nextCalled, true);
 });
+
+test('disabled tenant module returns 403 at route middleware level', () => {
+  const { requireTenantModule } = require('../middleware/tenantAccess');
+  const req = { session: { tenantAdmin: true, tenantId: 7, isAdmin: false }, tenant: { id: 7, enabled_modules: { billing: false } } };
+  const res = response();
+  let nextCalled = false;
+  requireTenantModule('billing')(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'MODULE_DISABLED');
+  assert.equal(req.session.isAdmin, false);
+});
+
+test('tenant-scoped API prefixes are not treated as legacy global APIs', () => {
+  const req = { session: { tenantAdmin: true, tenantId: 7, isAdmin: false }, originalUrl: '/api/tenant/data/customers' };
+  const res = response();
+  let nextCalled = false;
+  tenantLegacyApiGuard(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+});
