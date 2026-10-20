@@ -1,7 +1,7 @@
 (function(){'use strict';const api='/api/admin/hotspot-portal-settings',$=id=>document.getElementById(id);let knownProfiles=[],savedPackages=[];
 function st(t,e){const x=$('hotspotPortalSettingsStatus');if(x){x.textContent=t||'';x.className='small mt-3 '+(e?'text-danger':'text-success');}}
 function bs(t,e){const x=$('portalBannerStatus');if(x){x.textContent=t||'';x.className='small mt-2 '+(e?'text-danger':'text-success');}}
-async function req(u,o){const r=await fetch(u,o||{}),d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw Error(d.error||d.message||'Request failed');return d;}
+async function req(u,o){const r=await fetch(u,o||{}),d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw Error(d.message||d.error||`Request failed (HTTP ${r.status})`);return d;}
 function mode(){const v=document.querySelector('[name="portalDisplayMode"]:checked')?.value||'default';if($('portalBannerEditor'))$('portalBannerEditor').style.display=v==='banner'?'':'none';if($('portalCustomEditor'))$('portalCustomEditor').style.display=v==='custom_code'?'':'none';}
 function logo(u){const x=$('portalLogoPreview');if(!x)return;x.style.display=u?'':'none';if(u)x.src=u;else x.removeAttribute('src');}
 function banner(u){const x=$('portalBannerPreview');if(!x)return;x.style.display=u?'':'none';if(u)x.src=u;else x.removeAttribute('src');}

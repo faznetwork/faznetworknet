@@ -8,6 +8,8 @@ router.post("/mikrotik/test",controller.testMikrotik);
 router.post("/mikrotik/sync",controller.syncMikrotik);
 router.post("/mikrotik",controller.saveMikrotik);
 router.post("/mfs-accounts",controller.saveMfsAccounts);
+router.get("/hotspot-portal",controller.getHotspotPortalSettings);
+router.post("/hotspot-portal",controller.saveHotspotPortalSettings);
 router.get("/hotspot-webhook",controller.hotspotWebhookSettings);
 router.post("/hotspot-webhook",controller.saveHotspotWebhookSettings);
 router.get("/website",controller.website);
