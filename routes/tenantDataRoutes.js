@@ -12,6 +12,7 @@ router.post('/customers', requireTenantModule('customers'), controller.createCus
 router.put('/customers/:id', requireTenantModule('customers'), controller.updateCustomer);
 router.delete('/customers/:id', requireTenantModule('customers'), controller.deleteCustomer);
 router.get('/vouchers', requireTenantModule('hotspot'), controller.listVouchers);
+router.get('/vouchers/print-data', requireTenantModule('hotspot'), controller.printVouchers);
 router.post('/vouchers', requireTenantModule('hotspot'), controller.createVoucher);
 router.put('/vouchers/:id', requireTenantModule('hotspot'), controller.updateVoucher);
 router.delete('/vouchers/:id', requireTenantModule('hotspot'), controller.deleteVoucher);
