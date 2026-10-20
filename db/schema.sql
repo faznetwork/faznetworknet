@@ -964,7 +964,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   contact_email VARCHAR(254),
   contact_phone VARCHAR(50),
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-  modules JSONB NOT NULL DEFAULT '{"customers":true,"hotspot":true,"billing":true,"pppoe":true,"mikrotik":true,"olt":true,"reports":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
+  modules JSONB NOT NULL DEFAULT '{"hotspot":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
