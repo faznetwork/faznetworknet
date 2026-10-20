@@ -9554,53 +9554,113 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   });
   const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
   const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
-  const dataTable = (target, headers, rows, removePath) => {
+  let tenantVoucherRows = [];
+  const runProvisioningAction = async (kind, action, username) => {
+    await tenantApi('/api/tenant/provisioning/' + kind, { method: 'POST', body: JSON.stringify({ action, username }) });
+  };
+  const dataTable = (target, headers, rows, removePath, actionKind) => {
     const host = document.getElementById(target); if (!host) return; host.replaceChildren();
     if (!rows || !rows.length) { host.appendChild(text('div', 'No records yet.', 'small text-muted')); return; }
     const table = document.createElement('table'); table.className = 'table table-sm align-middle';
     const thead = document.createElement('thead'); const headRow = document.createElement('tr'); headers.forEach(h => headRow.appendChild(text('th', h))); thead.appendChild(headRow); table.appendChild(thead);
-    const tbody = document.createElement('tbody'); rows.forEach(row => { const tr = document.createElement('tr'); const displayHeaders = removePath ? headers.slice(0, -1) : headers; displayHeaders.forEach(h => { const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at'})[h]; tr.appendChild(text('td', key ? row[key] : '')); }); if (removePath) { const td = document.createElement('td'); const button = text('button','Delete','btn btn-sm btn-outline-danger'); button.type='button'; button.addEventListener('click', async () => { if (!window.confirm('Delete this tenant-owned record?')) return; try { await dataRequest(removePath + '/' + encodeURIComponent(row.id), {method:'DELETE'}); await loadTenantData(); dataMessage('Record deleted.'); } catch(e) { dataMessage(e.message,true); } }); td.appendChild(button); tr.appendChild(td); } tbody.appendChild(tr); }); table.appendChild(tbody); host.appendChild(table);
+    const tbody = document.createElement('tbody');
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      const displayHeaders = removePath ? headers.slice(0, -1) : headers;
+      displayHeaders.forEach(h => {
+        const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at','Router state':'disabled'})[h];
+        let value = key ? row[key] : '';
+        if (h === 'Router state') value = row.disabled ? 'Disabled' : 'Enabled';
+        tr.appendChild(text('td', value));
+      });
+      if (actionKind) {
+        const td = document.createElement('td');
+        const isDisabled = actionKind === 'hotspot' ? String(row.status || '').toLowerCase() !== 'active' : Boolean(row.disabled);
+        const button = text('button', isDisabled ? 'Enable' : 'Disable', 'btn btn-sm ' + (isDisabled ? 'btn-outline-success' : 'btn-outline-warning'));
+        button.type = 'button';
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try { await runProvisioningAction(actionKind, isDisabled ? 'enable' : 'disable', row.username); await loadTenantData(); dataMessage((isDisabled ? 'Enabled ' : 'Disabled ') + row.username + '.'); }
+          catch (e) { dataMessage(e.message || 'Router action failed.', true); button.disabled = false; }
+        });
+        td.appendChild(button); tr.appendChild(td);
+      }
+      if (removePath) {
+        const td = document.createElement('td'); const button = text('button','Delete','btn btn-sm btn-outline-danger'); button.type='button';
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Delete this tenant-owned record?')) return;
+          try { await dataRequest(removePath + '/' + encodeURIComponent(row.id), {method:'DELETE'}); await loadTenantData(); dataMessage('Record deleted.'); }
+          catch(e) { dataMessage(e.message,true); }
+        });
+        td.appendChild(button); tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); host.appendChild(table);
   };
   async function loadTenantData() {
     try {
       const jobs = [];
       if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
-      if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Delete'],d.vouchers,'vouchers')));
+      if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => {
+        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : [];
+        dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
+      }));
+      if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
       if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],d.transactions,null)));
       await Promise.all(jobs); dataMessage('Tenant records loaded.');
     } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
   }
   document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
-  const bindCreate = (formId, endpoint, after) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
+  document.getElementById('tenantVoucherPrint')?.addEventListener('click', () => {
+    if (!tenantVoucherRows.length) { dataMessage('There are no tenant vouchers to print.', true); return; }
+    const popup = window.open('', '_blank');
+    if (!popup) { dataMessage('Allow pop-ups to print voucher cards.', true); return; }
+    const doc = popup.document;
+    doc.title = 'Tenant Hotspot Vouchers';
+    const style = doc.createElement('style');
+    style.textContent = '@page{size:A4 portrait;margin:8mm}body{font:12px Arial,sans-serif;color:#111}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{border:1px dashed #555;padding:12px;break-inside:avoid;min-height:110px}.brand{font-weight:800;font-size:14px}.credential{font: bold 17px monospace;margin:10px 0}.muted{color:#555;font-size:11px}';
+    doc.head.appendChild(style);
+    const grid = doc.createElement('main'); grid.className = 'grid';
+    tenantVoucherRows.forEach(voucher => {
+      const card = doc.createElement('section'); card.className = 'card';
+      const brand = doc.createElement('div'); brand.className = 'brand'; brand.textContent = 'HOTSPOT VOUCHER'; card.appendChild(brand);
+      const profile = doc.createElement('div'); profile.className = 'muted'; profile.textContent = 'Profile: ' + (voucher.profile || '—') + ' · Validity: ' + (voucher.validity || '—'); card.appendChild(profile);
+      const username = doc.createElement('div'); username.className = 'credential'; username.textContent = 'User: ' + (voucher.username || ''); card.appendChild(username);
+      const password = doc.createElement('div'); password.className = 'credential'; password.textContent = 'Pass: ' + (voucher.password || ''); card.appendChild(password);
+      const price = doc.createElement('div'); price.className = 'muted'; price.textContent = 'Price: ' + (voucher.price ?? 0) + ' · Status: ' + (voucher.status || ''); card.appendChild(price);
+      grid.appendChild(card);
+    });
+    doc.body.appendChild(grid); popup.focus(); popup.print();
+  });
+  const bindCreate = (formId, endpoint) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
   bindCreate('tenantCustomerForm','customers');
   document.getElementById('tenantVoucherForm')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const body = Object.fromEntries(new FormData(form).entries());
     try {
-      await tenantApi('/api/tenant/provisioning/hotspot', { method: 'POST', body: JSON.stringify({ action: 'create', username: body.username, password: body.password, profile: body.profile }) });
-      await dataRequest('vouchers', { method: 'POST', body: JSON.stringify(body) });
-      form.reset();
-      await loadTenantData();
-      dataMessage('Voucher created on this tenant router and saved.');
+      await tenantApi('/api/tenant/provisioning/hotspot', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) });
+      form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
     } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
   });
   const pppoePanel = document.getElementById('tenantCustomersPanel');
   if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
-    const pppoe = document.createElement('section');
-    pppoe.className = 'mt-4';
-    pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-3"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-3"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><button class="btn btn-sm btn-primary">Create on tenant router</button></div></form>';
+    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
+    pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
     pppoePanel.appendChild(pppoe);
     pppoe.querySelector('form').addEventListener('submit', async event => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const body = Object.fromEntries(new FormData(form).entries());
-      try {
-        await tenantApi('/api/tenant/provisioning/pppoe', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) });
-        form.reset();
-        dataMessage('PPPoE account created on this tenant router.');
-      } catch (e) { dataMessage(e.message || 'PPPoE provisioning failed.', true); }
+      event.preventDefault(); const form = event.currentTarget; const body = Object.fromEntries(new FormData(form).entries());
+      try { await tenantApi('/api/tenant/provisioning/pppoe', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) }); form.reset(); await loadTenantData(); dataMessage('PPPoE account and tenant customer record created atomically.'); }
+      catch (e) { dataMessage(e.message || 'PPPoE provisioning failed.', true); }
     });
+  }
+  if (enabled('hotspot')) {
+    const heading = document.querySelector('#tenantVouchersPanel h6');
+    if (heading && !document.getElementById('tenantVoucherPrint')) {
+      const print = text('button', 'Batch print vouchers', 'btn btn-sm btn-outline-primary float-end');
+      print.id = 'tenantVoucherPrint'; print.type = 'button'; heading.appendChild(print);
+    }
   }
   bindCreate('tenantTransactionForm','transactions');
   loadTenantData();
