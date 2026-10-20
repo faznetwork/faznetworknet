@@ -8,20 +8,22 @@ function response() {
   return { statusCode: 200, body: null, status(n) { this.statusCode = n; return this; }, json(body) { this.body = body; return this; } };
 }
 
-test('module policy reads only the canonical modules JSONB and requires literal true', () => {
+test('module policy defaults missing core flags to enabled and honors explicit false', () => {
   assert.equal(moduleEnabled({ modules: { hotspot: true } }, 'hotspot'), true);
-  assert.equal(moduleEnabled({ enabled_modules: { hotspot: true } }, 'hotspot'), false);
   assert.equal(moduleEnabled({ modules: { hotspot: false } }, 'hotspot'), false);
-  assert.equal(moduleEnabled({ modules: { hotspot: 'true' } }, 'hotspot'), false);
-  assert.equal(moduleEnabled({ modules: {} }, 'hotspot'), false);
-  assert.equal(moduleEnabled({ modules: null }, 'customers'), false);
-  assert.equal(moduleEnabled({ modules: '{"customers":true}' }, 'customers'), false);
-  assert.equal(moduleEnabled({ modules: { customers: true } }, 'customers'), true);
+  assert.equal(moduleEnabled({ modules: { hotspot: 'true' } }, 'hotspot'), true);
+  assert.equal(moduleEnabled({ modules: {} }, 'hotspot'), true);
+  assert.equal(moduleEnabled({ modules: null }, 'customers'), true);
+  assert.equal(moduleEnabled({ modules: { customers: false } }, 'customers'), false);
+  assert.equal(moduleEnabled({ enabled_modules: { billing: false } }, 'billing'), false);
   assert.equal(moduleEnabled({ modules: {} }, 'analytics'), false);
   assert.deepEqual(normalizeModules({ billing: true, hotspot: 1, customers: false }), {
-    billing: true, hotspot: false, customers: false
+    billing: true, hotspot: true, customers: false,
+    pppoe: true, mikrotik: true, olt: true, reports: true
   });
-  assert.deepEqual(normalizeModules('{"billing":true}'), {});
+  assert.deepEqual(normalizeModules('{"billing":true}'), {
+    customers: true, hotspot: true, pppoe: true, billing: true, mikrotik: true, olt: true, reports: true
+  });
 });
 
 test('tenant legacy API guard denies global customer APIs without elevating privileges', () => {
