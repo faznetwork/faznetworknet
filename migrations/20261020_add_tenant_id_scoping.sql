@@ -13,6 +13,7 @@ DECLARE
     'customers',
     'transactions',
     'vouchers',
+    'hotspot_vouchers',
     'hotspot_users',
     'packages',
     'payments',
