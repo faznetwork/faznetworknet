@@ -3,7 +3,6 @@ const db = require("../db");
 const payments = require("./paymentController");
 
 const buckets = new Map();
-const paymentSessions = new Map();
 const SESSION_TTL_MS = 5 * 60 * 1000;
 
 function limited(req, key, limit = 8) {
@@ -18,9 +17,6 @@ function limited(req, key, limit = 8) {
       if (now - value.start > 120_000) buckets.delete(key);
       if (buckets.size <= 4000) break;
     }
-  }
-  for (const [sessionId, session] of paymentSessions) {
-    if (session.expiresAt <= now) paymentSessions.delete(sessionId);
   }
   return bucket.count <= limit;
 }
@@ -118,13 +114,11 @@ async function createPaymentSession(req, res) {
     if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
     const paymentSessionId = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + SESSION_TTL_MS;
-    paymentSessions.set(paymentSessionId, {
-      username: String(customer.username),
-      provider,
-      amount,
-      expiresAt,
-      createdAt: Date.now()
-    });
+    await db.query(
+      "INSERT INTO public_payment_sessions(session_id,username,provider,amount,expires_at) VALUES($1,$2,$3,$4,to_timestamp($5 / 1000.0))",
+      [paymentSessionId, String(customer.username), provider, amount, expiresAt]
+    );
+    await db.query("DELETE FROM public_payment_sessions WHERE expires_at <= NOW()");
     return res.set("Cache-Control", "no-store").status(201).json({
       success: true,
       paymentSessionId,
@@ -143,18 +137,28 @@ async function confirmPayment(req, res) {
   const paymentSessionId = clean(req.body?.paymentSessionId, 128);
   const trxId = clean(req.body?.transactionId || req.body?.trxId || req.body?.trx_id, 80).toUpperCase();
   if (!paymentSessionId || !trxId) return fail(res, 400, "A payment session and transaction ID are required.");
-  const session = paymentSessions.get(paymentSessionId);
+  let sessionResult;
+  try {
+    sessionResult = await db.query(
+      "SELECT username,provider,amount,expires_at FROM public_payment_sessions WHERE session_id=$1 LIMIT 1",
+      [paymentSessionId]
+    );
+  } catch (error) {
+    console.error("[Public Payment Session Lookup]", error?.message || error);
+    return fail(res, 503, "Payment verification is temporarily unavailable.");
+  }
+  const session = sessionResult.rows[0];
   if (!session) return fail(res, 410, "Payment session is invalid or has expired. Start a new payment session.");
-  if (session.expiresAt <= Date.now()) {
-    paymentSessions.delete(paymentSessionId);
+  if (new Date(session.expires_at).getTime() <= Date.now()) {
+    await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]).catch(() => {});
     return fail(res, 410, "Payment session has expired. Start a new payment session.");
   }
   // The server owns the username, provider, amount, and expiry. Never trust browser-submitted amounts.
-  paymentSessions.delete(paymentSessionId);
+  await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]);
   req.body = {
     ...req.body,
     username: session.username,
-    amount: session.amount,
+    amount: Number(session.amount),
     paymentMethod: session.provider,
     trxId,
     service_type: "pppoe"
