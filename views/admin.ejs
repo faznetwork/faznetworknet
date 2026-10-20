@@ -1800,8 +1800,10 @@
 <% 
   const tenantPage = (typeof tenantContext !== 'undefined' && tenantContext === true) || (typeof tenant !== 'undefined' && tenant && Number(tenant.id) > 0) || (typeof user !== 'undefined' && user && Number(user.tenantId) > 0);
   // The dashboard route passes a normalized, flat, boolean-only module map.
+  const tenantCoreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
   const tenantModuleConfig = tenantPage ? normalizedModules : {};
-  const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true;
+  // Missing flags default to enabled only for core modules; explicit false always disables.
+  const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true || (tenantModuleConfig[key] !== false && tenantCoreModules.includes(key));
 %>
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
@@ -9589,8 +9591,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   window.__tenantDashboardInitialized = true;
   const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  // Same strict policy as middleware/tenantAccess.js: only JSON boolean true enables a module.
-  const enabled = (key) => modules[key] === true;
+  // Match backend policy: missing core flags default to enabled; explicit false disables.
+  const coreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
+  const enabled = (key) => modules[key] === true || (modules[key] !== false && coreModules.includes(key));
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
@@ -9779,6 +9782,80 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   }
   bindCreate('tenantTransactionForm','transactions');
   loadTenantData();
+
+  // The platform NOC endpoints are intentionally blocked for tenant sessions.
+  // Hydrate summaries from tenant-scoped APIs and replace legacy spinners with clear states.
+  async function hydrateTenantDashboard() {
+    const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
+    const setRows = (id, colspan, message) => {
+      const body = document.getElementById(id);
+      if (!body) return;
+      const row = document.createElement('tr'); const cell = document.createElement('td');
+      cell.colSpan = colspan; cell.className = 'text-center py-3 text-muted'; cell.textContent = message;
+      row.appendChild(cell); body.replaceChildren(row);
+    };
+    setText('dashboardTrafficStatus', 'Tenant mode');
+    setText('nocLastUpdated', 'Tenant-scoped data');
+    setText('nocAvailability', 'Tenant records only');
+    setText('nocInterfacePill', 'Live telemetry unavailable in tenant view');
+    setText('nocRouterUptime', 'Inventory only — no live device connection');
+    setText('dashboardRouterStatus', 'Inventory only');
+    setText('nocOltStatus', 'Inventory only');
+    setText('nocRouterModel', 'Saved router inventory');
+    setText('nocOltAddress', 'Saved OLT inventory; telemetry not connected');
+    setText('nocUrgentCount', 'Telemetry unavailable');
+    setRows('nocUrgentBody', 4, 'Live optical telemetry is not available in the tenant dashboard.');
+    setText('nocExpiringCount', 'Tenant records');
+    setRows('nocExpiringBody', 4, 'Loading tenant expiry records…');
+    setRows('recentPaymentsBody', 5, 'Loading tenant payments…');
+    setText('nocChartEmpty', 'Live interface samples are not available in the tenant dashboard.');
+    setText('nocPeakRx', '— Mbps');
+    setText('nocAvgRx', '— Mbps');
+    setText('nocTransferred', 'Live telemetry unavailable');
+    try {
+      const jobs = [];
+      let customers = [], transactions = [], vouchers = [];
+      if (enabled('customers')) jobs.push(tenantApi('/api/tenant/data/customers').then(d => { customers = Array.isArray(d.customers) ? d.customers : []; }));
+      if (enabled('hotspot')) jobs.push(tenantApi('/api/tenant/data/vouchers').then(d => { vouchers = Array.isArray(d.vouchers) ? d.vouchers : []; }));
+      if (enabled('billing')) jobs.push(tenantApi('/api/tenant/data/transactions').then(d => { transactions = Array.isArray(d.transactions) ? d.transactions : []; }));
+      await Promise.all(jobs);
+      setText('nocSubscriberValue', customers.length + ' tenant customers');
+      setText('nocAvailability', enabled('customers') ? 'Tenant customer records loaded' : 'Customer module disabled');
+      setText('nocBillingToday', '৳ ' + transactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toLocaleString('en-BD', {minimumFractionDigits:2,maximumFractionDigits:2}));
+      setText('nocBillingSub', transactions.length + ' tenant transactions');
+      setText('nocFiberValue', 'Inventory only');
+      setText('nocFiberSub', 'Live optical metrics are not connected to this tenant view');
+      setText('nocPonSummary', '—');
+      setText('nocOnuTotal', '—');
+      setText('nocPonActive', '—');
+      setText('nocOltSeen', 'No live telemetry in tenant view');
+      const expiring = customers.filter(row => row.expiry_date);
+      setText('nocExpiringCount', expiring.length + ' with expiry dates');
+      setRows('nocExpiringBody', 4, expiring.length ? 'Expiry dates are available in Customer records.' : 'No tenant expiry records available.');
+      const body = document.getElementById('recentPaymentsBody');
+      if (body) {
+        body.replaceChildren();
+        const escape = value => String(value ?? '—').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        if (!transactions.length) setRows('recentPaymentsBody', 5, 'No tenant transactions found.');
+        else transactions.slice(0, 10).forEach(row => {
+          const tr = document.createElement('tr');
+          [row.trx_id, row.channel, (Number(row.amount)||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}), row.status, row.created_at].forEach(value => { const td = document.createElement('td'); td.textContent = escape(value); tr.appendChild(td); });
+          body.appendChild(tr);
+        });
+      }
+      setText('dashboardTrafficStatus', 'Tenant data loaded');
+      setText('nocLastUpdated', 'Updated ' + new Date().toLocaleTimeString());
+      setText('nocInterfacePill', vouchers.length + ' hotspot vouchers');
+      setText('nocUrgentCount', 'Live telemetry off');
+    } catch (error) {
+      console.warn('[Tenant Dashboard]', error.message || error);
+      setText('dashboardTrafficStatus', 'Tenant data unavailable');
+      setText('nocLastUpdated', 'Tenant API request failed');
+      setRows('recentPaymentsBody', 5, 'Tenant payments could not be loaded. Open Billing and use Refresh to retry.');
+      setText('nocAvailability', 'Tenant API request failed');
+    }
+  }
+  void hydrateTenantDashboard();
 
   // Tenant users must never interact with legacy shared/global hardware settings.
   document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
