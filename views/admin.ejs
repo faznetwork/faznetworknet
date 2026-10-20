@@ -5488,7 +5488,7 @@ async function deletePlan(id,name){
 
             const target = viewName === 'dashboard' ? 'view-main-dashboard'
                 : viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard'
-                : 'view-' + viewName;
+                : (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard');
             const targetElement = document.getElementById(target);
 
             if (!targetElement) {
