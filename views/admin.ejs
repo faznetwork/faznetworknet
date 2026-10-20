@@ -5276,6 +5276,7 @@ async function deletePlan(id,name){
         document.getElementById('broadcastMessage')?.addEventListener('input',broadcastPreview);
         document.getElementById('broadcastStartBtn')?.addEventListener('click',startBulkBroadcast);
         async function loadSystemSettings(force=false){
+          if (window.__isTenantPage) return;
           if(systemSettingsLoaded&&!force)return;
           try{
             const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
@@ -5296,7 +5297,7 @@ async function deletePlan(id,name){
             toggleSmsProviderFields();toggleEmailProviderFields();systemSettingsLoaded=true;
           }catch(e){generalSettingsResult('systemBrandResult',e.message||'Unable to load system settings.',false);}
         }
-        async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
+        async function saveSystemSettings(payload,buttonId,resultId){if (window.__isTenantPage) return;const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
         document.getElementById('setSmsMode')?.addEventListener('change',()=>{toggleSmsProviderFields();if(document.getElementById('setSmsMode').value==='provider_preset')document.getElementById('smsProviderPreset')?.dispatchEvent(new Event('change'));});
         function toggleEmailProviderFields(){
           const mode=document.getElementById('emailProviderMode')?.value||'apps_script';
