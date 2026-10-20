@@ -97,12 +97,9 @@ exports.listVouchers = async (req, res) => {
     const vouchers = Array.isArray(result?.rows) ? result.rows.filter(Boolean) : [];
     return res.json({ success: true, vouchers });
   } catch (error) {
-    // Some tenant databases may not yet have the optional voucher table migrated.
-    if (error?.code === '42P01' && /hotspot_vouchers/i.test(error?.message || '')) {
-      console.warn('[Tenant Data API] hotspot_vouchers table is not available; returning an empty tenant voucher list.');
-      return res.json({ success: true, vouchers: [] });
-    }
-    return fail(res, error);
+    // Keep the tenant UI usable even if the voucher table/query is unavailable.
+    console.error('[Tenant Data API] Voucher list query failed; returning an empty list:', error?.message || error);
+    return res.status(200).json({ success: true, vouchers: [] });
   }
 };
 exports.printVouchers = async (req, res) => {
@@ -113,12 +110,9 @@ exports.printVouchers = async (req, res) => {
     res.set('Cache-Control', 'no-store, private');
     return res.json({ success: true, vouchers });
   } catch (error) {
-    if (error?.code === '42P01' && /hotspot_vouchers/i.test(error?.message || '')) {
-      console.warn('[Tenant Data API] hotspot_vouchers table is not available; returning an empty voucher print list.');
-      res.set('Cache-Control', 'no-store, private');
-      return res.json({ success: true, vouchers: [] });
-    }
-    return fail(res, error);
+    console.error('[Tenant Data API] Voucher print-data query failed; returning an empty list:', error?.message || error);
+    res.set('Cache-Control', 'no-store, private');
+    return res.status(200).json({ success: true, vouchers: [] });
   }
 };
 exports.createVoucher = async (req, res) => {
