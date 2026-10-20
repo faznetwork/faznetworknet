@@ -9528,6 +9528,43 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     });
   }
 
+  // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
+  // legacy global CRUD controls are not used by this workspace.
+  const dataPanel = document.createElement('section');
+  dataPanel.id = 'tenantDataWorkspace';
+  dataPanel.className = 'card border-0 shadow-sm m-3';
+  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
+  const settings = document.getElementById('view-general-settings');
+  if (settings) settings.prepend(dataPanel);
+  ['customers','hotspot','billing'].forEach((key) => {
+    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : 'tenantBillingPanel');
+    if (panel) panel.hidden = !enabled(key);
+  });
+  const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
+  const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
+  const dataTable = (target, headers, rows, removePath) => {
+    const host = document.getElementById(target); if (!host) return; host.replaceChildren();
+    if (!rows || !rows.length) { host.appendChild(text('div', 'No records yet.', 'small text-muted')); return; }
+    const table = document.createElement('table'); table.className = 'table table-sm align-middle';
+    const thead = document.createElement('thead'); const headRow = document.createElement('tr'); headers.forEach(h => headRow.appendChild(text('th', h))); thead.appendChild(headRow); table.appendChild(thead);
+    const tbody = document.createElement('tbody'); rows.forEach(row => { const tr = document.createElement('tr'); headers.slice(0,-1).forEach(h => { const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at'})[h]; tr.appendChild(text('td', key ? row[key] : '')); }); const td = document.createElement('td'); const button = text('button','Delete','btn btn-sm btn-outline-danger'); button.type='button'; button.addEventListener('click', async () => { if (!window.confirm('Delete this tenant-owned record?')) return; try { await dataRequest(removePath + '/' + encodeURIComponent(row.id), {method:'DELETE'}); await loadTenantData(); dataMessage('Record deleted.'); } catch(e) { dataMessage(e.message,true); } }); td.appendChild(button); tr.appendChild(td); tbody.appendChild(tr); }); table.appendChild(tbody); host.appendChild(table);
+  };
+  async function loadTenantData() {
+    try {
+      const jobs = [];
+      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
+      if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Delete'],d.vouchers,'vouchers')));
+      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created','Delete'],d.transactions,'transactions')));
+      await Promise.all(jobs); dataMessage('Tenant records loaded.');
+    } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
+  }
+  document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
+  const bindCreate = (formId, endpoint, after) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
+  bindCreate('tenantCustomerForm','customers');
+  bindCreate('tenantVoucherForm','vouchers');
+  bindCreate('tenantTransactionForm','transactions');
+  loadTenantData();
+
   // Tenant users must never interact with legacy shared/global hardware settings.
   document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
   document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
