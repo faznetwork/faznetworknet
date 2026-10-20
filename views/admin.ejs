@@ -1807,6 +1807,7 @@
   // Missing/empty flags must not hide the tenant's operational menu. Only an explicit false disables a module.
   const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleFlagsPresent ? tenantModuleConfig[key] !== false : tenantCoreModules.includes(key));
 %>
+<script>window.__isTenantPage = <%= Boolean(tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
@@ -5506,7 +5507,7 @@ async function deletePlan(id,name){
         }
         function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
         document.getElementById('hotspotProfilesRefreshBtn')?.addEventListener('click',loadHotspotProfileSettings);
-        if (!tenantPage) setInterval(function(){const view=document.getElementById('view-hotspot-webhook');if(view&&view.style.display!=='none'&&!document.hidden)loadHotspotProfileSettings();},15000);
+        if (!window.__isTenantPage) setInterval(function(){const view=document.getElementById('view-hotspot-webhook');if(view&&view.style.display!=='none'&&!document.hidden)loadHotspotProfileSettings();},15000);
 
         document.getElementById('paymentWebhookSettingsForm')?.addEventListener('submit',async function(event){event.preventDefault();const btn=document.getElementById('paymentWebhookSaveBtn'),result=document.getElementById('paymentWebhookSettingsResult');if(btn)btn.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving settings...';}try{const payload={webhookUrl:document.getElementById('paymentWebhookUrl')?.value.trim()||'',webhookSecret:document.getElementById('paymentWebhookSecret')?.value||'',webhookEnabled:Boolean(document.getElementById('paymentWebhookEnabled')?.checked)};const response=await fetch('/api/settings/hotspot-webhook',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});let data={};try{data=await response.json();}catch(_){}if(!response.ok||data.success===false)throw new Error(data.error||data.message||'Unable to save settings.');if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Webhook settings saved successfully.';}hotspotWebhookSettingsLoaded=true;if(document.getElementById('paymentWebhookSecret'))document.getElementById('paymentWebhookSecret').value='';}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save settings.';}}finally{if(btn)btn.disabled=false;}});
 
