@@ -5,7 +5,7 @@ const db = require('../db');
 
 function renderLogin(res, status, error) { return res.status(status).set('Cache-Control', 'no-store').render('tenant-login', { error, tenantNumber: '' }); }
 function showLogin(req, res) {
-  if (req.session?.tenantAdmin === true && req.session?.tenantId) return res.redirect('/dashboard');
+  if (req.session?.tenantAdmin === true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
   return res.set('Cache-Control', 'no-store').render('tenant-login', { error: req.query?.error === 'inactive' ? 'This tenant is inactive or its 30-day subscription has expired.' : null, tenantNumber: '' });
 }
 async function authenticate(username, password) {
@@ -19,21 +19,13 @@ async function authenticate(username, password) {
   return user;
 }
 function startSession(req,res,user,jsonMode) {
-  // Normalize and validate the tenant identity before creating an authenticated session.
-  // The API guards intentionally require tenantAdmin === true and a positive safe-integer tenantId.
-  const tenantId = Number(user?.tenant_id);
-  if (!Number.isSafeInteger(tenantId) || tenantId < 1) {
-    return Promise.resolve(jsonMode
-      ? res.status(500).json({success:false,message:'Could not initialize a valid tenant session.'})
-      : renderLogin(res,500,'Could not initialize a valid tenant session. Please retry.'));
-  }
   return new Promise(resolve=>req.session.regenerate(err=>{
     if(err)return resolve(jsonMode?res.status(500).json({success:false,message:'Could not initialize a secure session.'}):renderLogin(res,500,'Could not initialize a secure session. Please retry.'));
-    Object.assign(req.session,{tenantAdmin:true,tenantId,tenantName:user.tenant_name,isAdmin:false,adminUser:user.username,userId:user.user_id,role:user.role,legacySuperAdmin:false,loginAt:Date.now()});
+    Object.assign(req.session,{tenantAdmin:true,tenantId:Number(user.tenant_id),tenantName:user.tenant_name,isAdmin:false,adminUser:user.username,userId:user.user_id,role:user.role,legacySuperAdmin:false,loginAt:Date.now()});
     req.session.save(saveError=>{
       if(saveError)return resolve(jsonMode?res.status(500).json({success:false,message:'Could not save your session.'}):renderLogin(res,500,'Could not save your session. Please retry.'));
       db.query('UPDATE public.admin_users SET last_login_at=NOW(),updated_at=NOW() WHERE id=$1 AND tenant_id=$2',[user.user_id,user.tenant_id]).catch(()=>{});
-      resolve(jsonMode?res.json({success:true,redirect:'/dashboard',tenantId:Number(user.tenant_id)}):res.redirect('/dashboard'));
+      resolve(jsonMode?res.json({success:true,redirect:'/tenant/dashboard',tenantId:Number(user.tenant_id)}):res.redirect('/tenant/dashboard'));
     });
   }));
 }

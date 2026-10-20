@@ -77,7 +77,7 @@ async function generateAndroidToken(req, res) {
 async function listTenants(req, res) {
   try {
     const result = await db.query(`
-      SELECT t.id, t.tenant_number, t.name, t.slug, t.contact_email, t.contact_phone, t.status,
+      SELECT t.id, t.name, t.slug, t.contact_email, t.contact_phone, t.status,
              t.modules, t.created_at, s.starts_at, s.ends_at, t.invitation_expires_at,
              CASE WHEN EXISTS (SELECT 1 FROM public.admin_users au WHERE au.tenant_id=t.id) THEN 'onboarded' ELSE 'pending_invite' END AS onboarding_status,
              GREATEST(0, CEIL(EXTRACT(EPOCH FROM (s.ends_at - NOW())) / 86400))::int AS days_remaining,
@@ -85,7 +85,7 @@ async function listTenants(req, res) {
                   WHEN s.ends_at <= NOW() THEN 'expired' ELSE 'active' END AS subscription_status
       FROM public.tenants t
       LEFT JOIN LATERAL (SELECT starts_at, ends_at FROM public.tenant_subscriptions WHERE tenant_id=t.id ORDER BY ends_at DESC LIMIT 1) s ON TRUE
-      ORDER BY t.tenant_number ASC, t.id ASC
+      ORDER BY t.created_at DESC, t.id DESC
     `);
     return res.set('Cache-Control', 'no-store, private').json({ success: true, tenants: result.rows || [] });
   } catch (error) {
@@ -97,53 +97,26 @@ async function listTenants(req, res) {
 async function createTenant(req, res) {
   const name = String(req.body?.name || '').trim();
   const slug = String(req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-  // The Platform Owner form uses contactEmail; accept legacy contact_email/email too.
-  // Never derive the recipient from the authenticated admin/session.
-  const recipientEmail = String(req.body?.contactEmail || req.body?.contact_email || req.body?.email || '').trim().toLowerCase();
-  const phone = String(req.body?.contact_phone || req.body?.contactPhone || '').trim();
+  const email = String(req.body?.contact_email || '').trim().toLowerCase();
+  const phone = String(req.body?.contact_phone || '').trim();
   if (!name || !slug) return res.status(400).json({ success: false, message: 'Tenant name and URL slug are required.' });
-  if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail) || recipientEmail.length > 254) {
-    return res.status(400).json({ success: false, message: 'A valid client contact email is required. No invitation was sent.' });
-  }
-  const requestedModules = req.body?.modules && typeof req.body.modules === 'object' && !Array.isArray(req.body.modules) ? req.body.modules : {};
-  // Every new tenant starts with all seven core operational modules explicitly
-  // enabled. Platform owners can disable modules later through the tenant
-  // settings transaction; the creation request cannot produce a partial map.
-  const modules = {
-    customers: true,
-    hotspot: true,
-    billing: true,
-    pppoe: true,
-    mikrotik: true,
-    olt: true,
-    reports: true,
-    sms_gateway: requestedModules.sms_gateway !== false,
-    whatsapp: requestedModules.whatsapp !== false
-  };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'A valid tenant admin email is required.' });
+  const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
+  const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
   const invitationToken = crypto.randomBytes(32).toString('base64url');
   const invitationHash = crypto.createHash('sha256').update(invitationToken, 'utf8').digest('hex');
   const invitationUrl = 'https://isp.faznetwork.com/onboard?token=' + invitationToken;
   const client = await db.getPool().connect();
   let tenantId;
-  let tenantNumber;
   try {
     await client.query('BEGIN');
-    // Serialize tenant-number allocation across concurrent onboarding transactions.
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('public.tenants.tenant_number'))");
-    const slot = await client.query(`
-      SELECT candidate AS tenant_number
-      FROM generate_series(1, (SELECT COALESCE(MAX(tenant_number), 0) + 1 FROM public.tenants)) AS candidate
-      WHERE NOT EXISTS (SELECT 1 FROM public.tenants t WHERE t.tenant_number = candidate)
-      ORDER BY candidate ASC LIMIT 1
-    `);
-    tenantNumber = Number(slot.rows[0]?.tenant_number || 1);
     const inserted = await client.query(
-      "INSERT INTO public.tenants(tenant_number, name, slug, contact_email, contact_phone, status, modules, invitation_token_hash, invitation_expires_at) VALUES($1,$2,$3,$4,$5,'suspended',$6::jsonb,$7,NOW()+INTERVAL '48 hours') RETURNING id",
-      [tenantNumber, name, slug, recipientEmail, phone || null, JSON.stringify(modules), invitationHash]
+      "INSERT INTO public.tenants(name, slug, contact_email, contact_phone, status, modules, invitation_token_hash, invitation_expires_at) VALUES($1,$2,$3,$4,'suspended',$5::jsonb,$6,NOW()+INTERVAL '48 hours') RETURNING id",
+      [name, slug, email, phone || null, JSON.stringify(modules), invitationHash]
     );
     tenantId = Number(inserted.rows[0].id);
     await client.query("INSERT INTO public.tenant_subscriptions(tenant_id, starts_at, ends_at, status, updated_by) VALUES($1, NOW(), NOW() + INTERVAL '30 days', 'active', $2)", [tenantId, req.session?.userId || null]);
-    await audit(client, req, 'tenant_invitation_created', null, { tenantId, slug, termDays: 30, invitationExpiresHours: 48, initialAdminEmail: recipientEmail });
+    await audit(client, req, 'tenant_invitation_created', null, { tenantId, slug, termDays: 30, invitationExpiresHours: 48, initialAdminEmail: email });
     await client.query('COMMIT');
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
@@ -155,15 +128,14 @@ async function createTenant(req, res) {
   let emailSent = false;
   let emailWarning = '';
   try {
-    console.log('Sending tenant invite to:', recipientEmail);
-    await require('../services/appsScriptMailer').sendTenantInvitation({ recipientEmail, email: recipientEmail, tenantName: name, link: invitationUrl });
+    await require('../services/appsScriptMailer').sendTenantInvitation({ email, tenantName: name, link: invitationUrl });
     emailSent = true;
   } catch (error) {
     emailWarning = 'Invitation email could not be sent: ' + String(error.message || error).slice(0, 180) + '. Copy the link and share it securely.';
     console.warn('[Tenant Invitation] Email delivery failed for tenant #' + tenantId + ':', error.message);
   }
   res.set('Cache-Control', 'no-store, private');
-  return res.status(201).json({ success: true, tenantId, tenantNumber, loginUrl: 'https://isp.faznetwork.com/login', invitationUrl, emailSent, emailWarning, message: emailSent ? 'Tenant invitation sent. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' : 'Tenant invitation created. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' });
+  return res.status(201).json({ success: true, tenantId, tenantNumber: tenantId, loginUrl: 'https://isp.faznetwork.com/login', invitationUrl, emailSent, emailWarning, message: emailSent ? 'Tenant invitation sent. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' : 'Tenant invitation created. The tenant remains inactive until onboarding is completed; the invitation expires in 48 hours.' });
 }
 
 async function updateTenant(req, res) {
@@ -188,14 +160,7 @@ async function updateTenant(req, res) {
       }
     } else if (action === 'modules') {
       const modules = req.body.modules || {};
-      let existingModules = tenant.rows[0].modules || {};
-      if (typeof existingModules === 'string') { try { existingModules = JSON.parse(existingModules); } catch (_) { existingModules = {}; } }
-      const normalized = {};
-      ['customers','hotspot','billing','pppoe','mikrotik','olt','reports','sms_gateway','whatsapp'].forEach((key) => {
-        normalized[key] = Object.prototype.hasOwnProperty.call(modules, key)
-          ? modules[key] === true
-          : existingModules[key] === true;
-      });
+      const normalized = { hotspot: modules.hotspot === true, sms_gateway: modules.sms_gateway === true, whatsapp: modules.whatsapp === true };
       await client.query('UPDATE public.tenants SET modules=$2::jsonb, updated_at=NOW() WHERE id=$1', [tenantId, JSON.stringify(normalized)]);
     } else {
       throw new Error('Unsupported tenant action.');
@@ -248,8 +213,6 @@ async function deleteTenant(req, res) {
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
-    // Share the allocator lock so create/delete/renumber cannot interleave.
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('public.tenants.tenant_number'))");
     const found = await client.query('SELECT id, name, slug FROM public.tenants WHERE id=$1 FOR UPDATE', [tenantId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Tenant not found.' }); }
     const tenant = found.rows[0];
@@ -264,16 +227,6 @@ async function deleteTenant(req, res) {
     await client.query('DELETE FROM public.tenant_olts WHERE tenant_id=$1', [tenantId]);
     await client.query('DELETE FROM public.admin_users WHERE tenant_id=$1', [tenantId]);
     await client.query('DELETE FROM public.tenants WHERE id=$1', [tenantId]);
-    // Compact human-facing numbers while leaving primary keys and all foreign keys untouched.
-    await client.query(`
-      WITH ordered AS (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY tenant_number ASC, created_at ASC NULLS FIRST, id ASC)::INTEGER AS next_number
-        FROM public.tenants
-      )
-      UPDATE public.tenants t SET tenant_number = -ordered.next_number
-      FROM ordered WHERE ordered.id = t.id
-    `);
-    await client.query('UPDATE public.tenants SET tenant_number = -tenant_number WHERE tenant_number < 0');
     await client.query('COMMIT');
     res.set('Cache-Control', 'no-store, private');
     return res.json({ success: true, deletedTenantId: tenantId, message: 'Tenant and associated records deleted.' });

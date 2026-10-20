@@ -1,4 +1,4 @@
-(function(){'use strict';if(window.__isTenantPage||window.location.pathname==='/tenant'||window.location.pathname.startsWith('/tenant/'))return;const api='/api/admin/hotspot-portal-settings',$=id=>document.getElementById(id);let knownProfiles=[],savedPackages=[];
+(function(){'use strict';const api='/api/admin/hotspot-portal-settings',$=id=>document.getElementById(id);let knownProfiles=[],savedPackages=[];
 function st(t,e){const x=$('hotspotPortalSettingsStatus');if(x){x.textContent=t||'';x.className='small mt-3 '+(e?'text-danger':'text-success');}}
 function bs(t,e){const x=$('portalBannerStatus');if(x){x.textContent=t||'';x.className='small mt-2 '+(e?'text-danger':'text-success');}}
 async function req(u,o){const r=await fetch(u,o||{}),d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw Error(d.error||d.message||'Request failed');return d;}
