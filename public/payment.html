@@ -25,7 +25,7 @@
       <button class="btn btn-primary btn-block" id="check-bill" type="submit">Check Bill</button>
     </form>
     <section class="bill-card" id="bill-card" aria-live="polite">
-      <div class="bill-head"><div><strong id="bill-name">Subscriber</strong><small id="bill-username"></small></div><div class="bill-amount" id="bill-amount">৳0</div></div>
+      <div class="bill-head"><div><strong id="bill-name">Subscriber</strong><small id="bill-username"></small></div><div class="bill-amount" id="bill-amount">0</div></div>
       <div class="bill-meta"><span class="pill" id="bill-plan">Plan</span><span class="pill" id="bill-expiry">Expiry</span><span class="pill" id="bill-status">Status</span></div>
       <p class="hint">Pay the exact bill amount using an available MFS provider. Your renewal will be processed after the server verifies the transaction ID.</p>
       <h3 style="font-size:13px;margin:18px 0 0">Select Payment Method</h3>
@@ -56,7 +56,7 @@ const PROVIDERS=[{id:"bkash",name:"bKash",mark:"bK"},{id:"nagad",name:"Nagad",ma
 let config={mfs:[],accounts:{}},selectedProvider="",subscriber=null,expiresAt=0,timerHandle=null,busy=false;
 function showStatus(message,type="info"){const box=$("status");box.textContent=message;box.className="status visible "+type;box.scrollIntoView({behavior:"smooth",block:"nearest"});}
 function clearStatus(){const box=$("status");box.textContent="";box.className="status";}
-function money(n){return "৳"+Number(n||0).toLocaleString("en-BD",{maximumFractionDigits:2});}
+function money(n){return ""+Number(n||0).toLocaleString("en-BD",{maximumFractionDigits:2});}
 async function api(url,options={}){const response=await fetch(url,{cache:"no-store",...options,headers:{"Accept":"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(options.headers||{})}});let data={};try{data=await response.json();}catch(_){}if(!response.ok||data.success===false)throw new Error(data.message||data.error||"The request could not be completed. Please try again.");return data;}
 function renderProviders(){
  const accounts={...(config.accounts||{})};
