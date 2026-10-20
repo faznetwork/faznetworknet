@@ -38,6 +38,7 @@ app.use(session({
   }
 }));
 app.use(express.json({limit:"1mb"}));app.use(express.urlencoded({extended:true,limit:"1mb"}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
+app.get("/payment",(req,res)=>res.sendFile(path.join(__dirname,"public","payment.html")));
 // Branding is read from a short-lived in-memory cache, never queried per EJS template.
 app.use(async(req,res,next)=>{try{res.locals.brandSettings=await appSettingsService.getBrandSettings();}catch(_){res.locals.brandSettings=await appSettingsService.getBrandSettings().catch(()=>({company_name:"FAZ NETWORK",logo_url:"",favicon_url:"",support_phone:"01339932887",whatsapp_number:"",office_address:"FAZ NETWORK, Bangladesh",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved."}));}next();});
 app.get("/api/settings/public",settingsController.publicSettings);
