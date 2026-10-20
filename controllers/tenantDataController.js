@@ -94,16 +94,32 @@ exports.listVouchers = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
     const result = await db.query('SELECT id,tenant_id,username,profile,validity,price,status,comment,transaction_id,created_at FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
-    return res.json({ success: true, vouchers: result.rows });
-  } catch (error) { return fail(res, error); }
+    const vouchers = Array.isArray(result?.rows) ? result.rows.filter(Boolean) : [];
+    return res.json({ success: true, vouchers });
+  } catch (error) {
+    // Some tenant databases may not yet have the optional voucher table migrated.
+    if (error?.code === '42P01' && /hotspot_vouchers/i.test(error?.message || '')) {
+      console.warn('[Tenant Data API] hotspot_vouchers table is not available; returning an empty tenant voucher list.');
+      return res.json({ success: true, vouchers: [] });
+    }
+    return fail(res, error);
+  }
 };
 exports.printVouchers = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
     const result = await db.query('SELECT id,username,password,profile,validity,price,status FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
+    const vouchers = Array.isArray(result?.rows) ? result.rows.filter(Boolean) : [];
     res.set('Cache-Control', 'no-store, private');
-    return res.json({ success: true, vouchers: result.rows });
-  } catch (error) { return fail(res, error); }
+    return res.json({ success: true, vouchers });
+  } catch (error) {
+    if (error?.code === '42P01' && /hotspot_vouchers/i.test(error?.message || '')) {
+      console.warn('[Tenant Data API] hotspot_vouchers table is not available; returning an empty voucher print list.');
+      res.set('Cache-Control', 'no-store, private');
+      return res.json({ success: true, vouchers: [] });
+    }
+    return fail(res, error);
+  }
 };
 exports.createVoucher = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
