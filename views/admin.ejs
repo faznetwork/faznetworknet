@@ -9587,6 +9587,23 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
   };
+
+  // Tenant menu items must never fall through to legacy platform-wide customer views.
+  // Those views are intentionally hidden for tenant sessions, so their old handlers can
+  // otherwise reveal an unrelated panel when a tenant clicks Customers.
+  document.addEventListener('click', function (event) {
+    if (!window.__isTenantPage) return;
+    const control = event.target && event.target.closest
+      ? event.target.closest('.sidebar-menu a, .sidebar-menu button, .sidebar-menu [role="button"]')
+      : null;
+    if (!control) return;
+    const label = (control.textContent || control.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim();
+    if (!/customer/i.test(label)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    window.openTenantModule('customers');
+  }, true);
   const tenantApi = async (path, options = {}) => {
     const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
