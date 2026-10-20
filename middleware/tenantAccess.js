@@ -29,7 +29,10 @@ function normalizeModules(input) {
 }
 
 function moduleEnabled(tenant, moduleName) {
-  return normalizeModules(tenant?.modules)[moduleName] === true;
+  const moduleConfig = tenant && Object.prototype.hasOwnProperty.call(tenant, 'modules')
+    ? tenant.modules
+    : tenant?.enabled_modules;
+  return normalizeModules(moduleConfig)[moduleName] === true;
 }
 
 function requireTenantModule(moduleName) {
