@@ -105,7 +105,9 @@ async function createTenant(req, res) {
   if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail) || recipientEmail.length > 254) {
     return res.status(400).json({ success: false, message: 'A valid client contact email is required. No invitation was sent.' });
   }
-  const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
+  const requestedModules = req.body?.modules && typeof req.body.modules === 'object' && !Array.isArray(req.body.modules) ? req.body.modules : {};
+  // Persist every known module flag explicitly in the same transaction as the
+  // tenant row. The tenant settings UI may deliberately opt a module out.
   const modules = {
     customers: requestedModules.customers !== false,
     hotspot: requestedModules.hotspot !== false,
@@ -188,15 +190,10 @@ async function updateTenant(req, res) {
       let existingModules = tenant.rows[0].modules || {};
       if (typeof existingModules === 'string') { try { existingModules = JSON.parse(existingModules); } catch (_) { existingModules = {}; } }
       const normalized = {};
-      ['customers','hotspot','billing','pppoe','mikrotik','olt','reports'].forEach((key) => {
+      ['customers','hotspot','billing','pppoe','mikrotik','olt','reports','sms_gateway','whatsapp'].forEach((key) => {
         normalized[key] = Object.prototype.hasOwnProperty.call(modules, key)
           ? modules[key] === true
-          : existingModules[key] !== false;
-      });
-      ['sms_gateway','whatsapp'].forEach((key) => {
-        normalized[key] = Object.prototype.hasOwnProperty.call(modules, key)
-          ? modules[key] === true
-          : existingModules[key] !== false;
+          : existingModules[key] === true;
       });
       await client.query('UPDATE public.tenants SET modules=$2::jsonb, updated_at=NOW() WHERE id=$1', [tenantId, JSON.stringify(normalized)]);
     } else {
