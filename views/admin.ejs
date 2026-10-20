@@ -1825,27 +1825,13 @@
 <% if (tenantPage) { %>
         <ul class="sidebar-menu">
             <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
-            <% if (tenantModuleEnabled('customers')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('hotspot')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('billing')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('pppoe')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('mikrotik')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('olt')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('reports')) { %>
-            <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
-            <% } %>
+            <% if (tenantModuleEnabled('customers')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li><% } %>
+            <% if (tenantModuleEnabled('hotspot')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li><% } %>
+            <% if (tenantModuleEnabled('billing')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li><% } %>
+            <% if (tenantModuleEnabled('pppoe')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li><% } %>
+            <% if (tenantModuleEnabled('mikrotik')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li><% } %>
+            <% if (tenantModuleEnabled('olt')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li><% } %>
+            <% if (tenantModuleEnabled('reports')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li><% } %>
             <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
         </ul>
 <% } else { %>
@@ -2046,11 +2032,9 @@
                 <ul class="submenu">
                     <li><a href="/admin/resellers/sub-staff"><span data-key="sub_staff">Sub-Staff</span></a></li>
                 </ul>
-<% } %>
             </li>
         </ul>
-
-        <div class="drawer-account">
+<% } %>        <div class="drawer-account">
             <div class="drawer-account-user d-md-none">
                 <i class="bi bi-person-circle"></i>
                 <span><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></span>
@@ -9559,11 +9543,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
-    const settingsView = document.getElementById('view-general-settings');
-    if (settingsView && typeof switchView === 'function') switchView('general-settings');
+    if (typeof switchView === 'function') switchView('general-settings');
     window.setTimeout(() => {
       const target = document.getElementById(map[key]) || document.getElementById('tenantDataWorkspace');
-      if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); target.focus?.({ preventScroll: true }); }
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
   };
   const tenantApi = async (path, options = {}) => {
@@ -9681,13 +9664,12 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       if (reportHost) {
         reportHost.replaceChildren();
         const total = reportTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
-        const cards = [
+        [
           ['Customers', enabled('customers') ? reportCustomers.length : 'Disabled'],
           ['Hotspot vouchers', enabled('hotspot') ? reportVouchers.length : 'Disabled'],
           ['Billing transactions', enabled('billing') ? reportTransactions.length : 'Disabled'],
           ['Recorded payments', enabled('billing') ? total.toLocaleString(undefined, { style: 'currency', currency: 'BDT' }) : 'Disabled']
-        ];
-        cards.forEach(([label, value]) => { const col = document.createElement('div'); col.className = 'col-sm-6 col-xl-3'; const card = document.createElement('div'); card.className = 'border rounded-3 p-3 h-100'; card.appendChild(text('div', label, 'small text-muted')); card.appendChild(text('strong', value, 'fs-5')); col.appendChild(card); reportHost.appendChild(col); });
+        ].forEach(([label, value]) => { const col = document.createElement('div'); col.className = 'col-sm-6 col-xl-3'; const card = document.createElement('div'); card.className = 'border rounded-3 p-3 h-100'; card.appendChild(text('div', label, 'small text-muted')); card.appendChild(text('strong', value, 'fs-5')); col.appendChild(card); reportHost.appendChild(col); });
       }
       dataMessage('Tenant records loaded.');
     } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
@@ -9728,9 +9710,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
     } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
   });
-  const pppoePanel = document.getElementById('tenantCustomersPanel');
+  const pppoePanel = document.querySelector('#tenantDataWorkspace .card-body .row.g-4');
   if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
-    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
+    const pppoe = document.createElement('section'); pppoe.className = 'col-12 mt-4';
     pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
     pppoePanel.appendChild(pppoe);
     pppoe.querySelector('form').addEventListener('submit', async event => {
