@@ -116,6 +116,34 @@
             align-items: center;
         }
 
+        .tab-switcher {
+            display: flex;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #ffffff;
+            box-shadow: 0 2px 10px rgba(5, 150, 105, 0.4);
+        }
+
         .payment-account-card {
             background: rgba(0, 0, 0, 0.45);
             border: 1px solid rgba(245, 158, 11, 0.4);
@@ -331,46 +359,71 @@
             <b>$(mac)</b>
         </div>
 
-        <!-- MFS Account Card (Dynamic from Server) -->
-        <div class="payment-account-card">
-            <div class="payment-account-title">Personal MFS (Send Money)</div>
-            <div id="payment-accounts-list">
-                <div class="send-money-alert">পেমেন্ট নম্বর লোড হচ্ছে...</div>
+        <!-- টাব সুইচিং: অনলাইন রিচার্জ বনাম ভাউচার পিন / QR কোড -->
+        <div class="tab-switcher">
+            <button type="button" id="tab-recharge-btn" class="tab-btn active" onclick="switchPortalTab('recharge')">অনলাইন রিচার্জ (MFS)</button>
+            <button type="button" id="tab-voucher-btn" class="tab-btn" onclick="switchPortalTab('voucher')">ভাউচার পিন / QR স্ক্যান</button>
+        </div>
+
+        <!-- ১. অনলাইন রিচার্জ সেকশন -->
+        <div id="section-recharge">
+            <div class="payment-account-card">
+                <div class="payment-account-title">Personal MFS (Send Money)</div>
+                <div id="payment-accounts-list">
+                    <div class="send-money-alert">পেমেন্ট নম্বর লোড হচ্ছে...</div>
+                </div>
+                <div class="send-money-alert">★ নির্বাচিত প্যাকেজের সঠিক টাকা Send Money করুন ★</div>
             </div>
-            <div class="send-money-alert">★ নির্বাচিত প্যাকেজের সঠিক টাকা Send Money করুন ★</div>
-        </div>
 
-        <!-- Live Server Packages Grid -->
-        <div class="packages-grid" id="packages-grid">
-            <div class="send-money-alert" style="grid-column: 1 / -1;">প্যাকেজ লোড হচ্ছে...</div>
-        </div>
-        <div id="selected-package" class="selected-package">চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।</div>
-
-        <!-- Purchase Inputs -->
-        <div class="input-group">
-            <label for="cust_phone">আপনার মোবাইল নম্বর (যেটিতে নেট চালাবেন)</label>
-            <div class="input-box">
-                <input type="tel" id="cust_phone" placeholder="017xxxxxxxx" maxlength="11" autocomplete="tel">
+            <div class="packages-grid" id="packages-grid">
+                <div class="send-money-alert" style="grid-column: 1 / -1;">প্যাকেজ লোড হচ্ছে...</div>
             </div>
-        </div>
+            <div id="selected-package" class="selected-package">চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।</div>
 
-        <div class="input-group">
-            <label for="cust_payment_method">যে মাধ্যমে টাকা পাঠিয়েছেন</label>
-            <select id="cust_payment_method" class="payment-method-select">
-                <option value="">পেমেন্ট মাধ্যম লোড হচ্ছে...</option>
-            </select>
-        </div>
-
-        <div class="input-group">
-            <label for="cust_trx">বিকাশ/নগদের TrxID দিন</label>
-            <div class="input-box">
-                <input type="text" id="cust_trx" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;">
+            <div class="input-group">
+                <label for="cust_phone">আপনার মোবাইল নম্বর (যেটিতে নেট চালাবেন)</label>
+                <div class="input-box">
+                    <input type="tel" id="cust_phone" placeholder="017xxxxxxxx" maxlength="11" autocomplete="tel">
+                </div>
             </div>
+
+            <div class="input-group">
+                <label for="cust_payment_method">যে মাধ্যমে টাকা পাঠিয়েছেন</label>
+                <select id="cust_payment_method" class="payment-method-select">
+                    <option value="">পেমেন্ট মাধ্যম লোড হচ্ছে...</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="cust_trx">বিকাশ/নগদের TrxID দিন</label>
+                <div class="input-box">
+                    <input type="text" id="cust_trx" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;">
+                </div>
+            </div>
+
+            <button type="button" id="btn-activate" class="btn-action" onclick="handleVerification()">
+                প্যাকেজ চালু করুন
+            </button>
         </div>
 
-        <button type="button" id="btn-activate" class="btn-action" onclick="handleVerification()">
-            প্যাকেজ চালু করুন
-        </button>
+        <!-- ২. ভাউচার পিন / ক্যামেরা QR স্ক্যানার সেকশন -->
+        <div id="section-voucher" style="display: none;">
+            <div class="input-group">
+                <label for="voucher_pin">ভাউচার স্ক্র্যাচ পিন কোড</label>
+                <div class="input-box" style="display: flex; gap: 6px;">
+                    <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন বা স্ক্যান করুন" style="flex: 1; text-transform: uppercase;">
+                    <button type="button" id="btn-scan-qr" class="btn-action" style="margin-top:0; width: auto; padding: 0 14px; font-size: 13px;" onclick="openQrScanner()">📷 স্ক্যান</button>
+                </div>
+            </div>
+
+            <div style="font-size: 11px; color: var(--text-muted); text-align: left; margin-bottom: 12px; line-height: 1.4;">
+                💡 <b>নির্দেশনা:</b> কার্ডের গায়ে থাকা স্ক্র্যাচ কোডটি এখানে লিখুন অথবা ক্যামেরা বাটন চাপ দিয়ে প্রিন্টেড QR কোড স্ক্যান করুন।
+            </div>
+
+            <button type="button" id="btn-voucher-login" class="btn-action" onclick="handleVoucherLogin()">
+                ভাউচার দিয়ে ইন্টারনেট চালু করুন
+            </button>
+        </div>
 
         <div class="card-footer">
             <span>হেল্পলাইন:</span>
@@ -379,7 +432,7 @@
     </div>
 </div>
 
-<!-- Hidden MikroTik Auto-Login Form (Username = MAC, Password = Phone) -->
+<!-- Hidden MikroTik Auto-Login Form -->
 <form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
     <input type="hidden" name="username" id="mt-user" value="$(mac)">
     <input type="hidden" name="password" id="mt-pass">
@@ -393,6 +446,7 @@
 <script>
     const BACKEND_BASE_URL = 'https://faznetwork.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
+    const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/verify-voucher'; // ভাউচার ভেরিফিকেশনের জন্য
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
 
     let selectedPackage = null;
@@ -408,6 +462,25 @@
     function formatTaka(value) {
         const amount = Number(value);
         return Number.isFinite(amount) ? '৳ ' + amount.toLocaleString('en-BD', { maximumFractionDigits: 2 }) : '৳ —';
+    }
+
+    function switchPortalTab(tab) {
+        const secRecharge = document.getElementById('section-recharge');
+        const secVoucher = document.getElementById('section-voucher');
+        const btnRecharge = document.getElementById('tab-recharge-btn');
+        const btnVoucher = document.getElementById('tab-voucher-btn');
+
+        if (tab === 'recharge') {
+            secRecharge.style.display = 'block';
+            secVoucher.style.display = 'none';
+            btnRecharge.classList.add('active');
+            btnVoucher.classList.remove('active');
+        } else {
+            secRecharge.style.display = 'none';
+            secVoucher.style.display = 'block';
+            btnRecharge.classList.remove('active');
+            btnVoucher.classList.add('active');
+        }
     }
 
     function renderPackages(packages) {
@@ -468,7 +541,6 @@
         const methodSelect = document.getElementById('cust_payment_method');
 
         try {
-            // সার্ভার হোমপেজ এবং পাবলিক সেটিংস থেকে ডাইনামিক ডেটা ফেচ করা হচ্ছে
             const [homeResponse, settingsResponse] = await Promise.all([
                 fetch(BACKEND_BASE_URL + '/', { cache: 'no-store', credentials: 'omit' }),
                 fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store', credentials: 'omit' }).catch(() => null)
@@ -554,6 +626,105 @@
         box.innerText = text;
     }
 
+    // ক্যামেরা দিয়ে QR কোড স্ক্যান করার ফাংশন (Browser BarcodeDetector API সমর্থিত)
+    async function openQrScanner() {
+        if (!('BarcodeDetector' in window)) {
+            alert('আপনার ব্রাউজার সরাসরি QR স্ক্যান সমর্থন করে না। অনুগ্রহ করে পিন কোড manually লিখুন অথবা QR কোডের টেক্সট পেস্ট করুন।');
+            const manualCode = prompt('ভাউচার কোড বা QR টেক্সট এখানে দিন:');
+            if (manualCode) {
+                document.getElementById('voucher_pin').value = manualCode.trim().toUpperCase();
+            }
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            await video.play();
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+
+            showStatus('ক্যামেরা চালু হয়েছে। QR কোডের সামনে ধরুন...');
+
+            const scanInterval = setInterval(async () => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    try {
+                        const barcodes = await barcodeDetector.detect(canvas);
+                        if (barcodes.length > 0) {
+                            clearInterval(scanInterval);
+                            stream.getTracks().forEach(track => track.stop());
+                            video.remove();
+                            document.getElementById('voucher_pin').value = barcodes[0].rawValue.trim().toUpperCase();
+                            showStatus('QR কোড সফলভাবে স্ক্যান হয়েছে!', false);
+                        }
+                    } catch (e) {}
+                }
+            }, 200);
+        } catch (err) {
+            alert('ক্যামেরা পারমিশন পাওয়া যায়নি বা ক্যামেরা সমর্থিত নয়।');
+        }
+    }
+
+    // ভাউচার পিন দিয়ে লগইন / ভেরিফিকেশন
+    async function handleVoucherLogin() {
+        const pinInput = document.getElementById('voucher_pin').value.trim().toUpperCase();
+        const btn = document.getElementById('btn-voucher-login');
+        const routerMac = String(document.getElementById('router-mac')?.value || '').trim();
+        const routerIp = String(document.getElementById('router-ip')?.value || '').trim();
+
+        if (!pinInput || pinInput.length < 3) {
+            showStatus('অনুগ্রহ করে সঠিক ভাউচার পিন কোড বা QR টেক্সট দিন।', true);
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = 'ভাউচার যাচাই করা হচ্ছে...';
+        showStatus('ভাউচার পিন যাচাই করা হচ্ছে...');
+
+        try {
+            const response = await fetch(VOUCHER_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'omit',
+                body: JSON.stringify({
+                    voucher_code: pinInput,
+                    mac: routerMac,
+                    ip: routerIp,
+                    username: routerMac
+                })
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.success) {
+                showStatus(data.message || data.error || 'ভাউচার পিনটি সঠিক নয় বা ইতিমধ্যে ব্যবহার করা হয়েছে।', true);
+                btn.disabled = false;
+                btn.innerText = 'ভাউচার দিয়ে ইন্টারনেট চালু করুন';
+                return;
+            }
+
+            const autoForm = document.getElementById('mikrotik-auto-login');
+            document.getElementById('mt-user').value = String(data.username || routerMac);
+            document.getElementById('mt-pass').value = String(data.password || pinInput);
+
+            showStatus('আলহামদুলিল্লাহ! ভাউচার সফলভাবে রিডিম হয়েছে। সংযোগ সক্রিয় হচ্ছে...');
+            btn.innerText = 'সংযুক্ত হচ্ছে...';
+
+            setTimeout(() => {
+                autoForm.submit();
+            }, 300);
+
+        } catch (err) {
+            showStatus('সার্ভারের সাথে সংযোগ করা যায়নি। আবার চেষ্টা করুন।', true);
+            btn.disabled = false;
+            btn.innerText = 'ভাউচার দিয়ে ইন্টারনেট চালু করুন';
+        }
+    }
+
     async function handleVerification() {
         const phoneInput = normalizePhoneInput(document.getElementById('cust_phone').value);
         const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
@@ -615,7 +786,6 @@
                 return;
             }
 
-            // সফল হলে সরাসরি মিক্রোটিকে সাবমিট (PAP: User = MAC, Pass = Phone)
             const autoForm = document.getElementById('mikrotik-auto-login');
             document.getElementById('mt-user').value = String(data.username || routerMac);
             document.getElementById('mt-pass').value = String(data.password || phoneInput);
