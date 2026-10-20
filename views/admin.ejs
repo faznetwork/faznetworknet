@@ -9492,5 +9492,104 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
+
+<% if (typeof tenantContext !== 'undefined' && tenantContext) { %>
+<script>
+(function () {
+  'use strict';
+  const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
+  const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
+  const enabled = (key) => modules[key] === true;
+  const tenantApi = async (path, options = {}) => {
+    const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.code || ('Request failed (' + response.status + ')'));
+    return data;
+  };
+  const text = (tag, value, cls) => { const node = document.createElement(tag); node.textContent = value == null ? '' : String(value); if (cls) node.className = cls; return node; };
+
+  // Hide entire top-level sidebar groups when their feature is not licensed.
+  const sidebar = document.querySelector('.sidebar-menu');
+  if (sidebar) {
+    const rules = [
+      { match: /customer/i, module: 'customers' },
+      { match: /hotspot|voucher/i, module: 'hotspot' },
+      { match: /payment|billing|collection|due summary|expense/i, module: 'billing' },
+      { match: /pppoe/i, module: 'pppoe' },
+      { match: /olt/i, module: 'olt' },
+      { match: /router|mikrotik|network devices/i, module: 'mikrotik' },
+      { match: /report/i, module: 'reports' }
+    ];
+    Array.from(sidebar.children).forEach((item) => {
+      const label = (item.textContent || '').replace(/\\s+/g, ' ').trim();
+      const rule = rules.find((candidate) => candidate.match.test(label));
+      if (rule && !enabled(rule.module)) item.hidden = true;
+    });
+  }
+
+  // Tenant users must never interact with legacy shared/global hardware settings.
+  document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
+  document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
+  const settings = document.getElementById('view-general-settings');
+  if (!settings || document.getElementById('tenantHardwareManager')) return;
+  const section = document.createElement('section');
+  section.id = 'tenantHardwareManager';
+  section.className = 'card border-0 shadow-sm m-3';
+  section.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>My Network Hardware</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="tenantHardwareRefresh">Refresh</button></div><div class="card-body"><p class="small text-muted">Router and OLT records are isolated to this tenant. Saving credentials stores encrypted inventory data; it does not connect to or change a live device.</p><div id="tenantHardwareMessage" class="small mb-3" role="status"></div><div class="row g-3"><div class="col-lg-6" id="tenantRouterCard"><h6>MikroTik Routers</h6><form id="tenantRouterForm" class="row g-2"><div class="col-12"><input class="form-control" name="router_name" placeholder="Router name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="host" placeholder="Host / IP" required maxlength="253"></div><div class="col-6"><input class="form-control" name="api_port" type="number" value="8728" min="1" max="65535" required></div><div class="col-6"><input class="form-control" name="username" placeholder="API username" required maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="API password" required autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Router</button></div></form><div id="tenantRouterList" class="mt-3"></div></div><div class="col-lg-6" id="tenantOltCard"><h6>OLT Devices</h6><form id="tenantOltForm" class="row g-2"><div class="col-12"><input class="form-control" name="olt_name" placeholder="OLT name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="olt_type" placeholder="Vendor / type" required maxlength="80"></div><div class="col-6"><input class="form-control" name="ip_address" placeholder="IP / hostname" required maxlength="253"></div><div class="col-6"><input class="form-control" name="username" placeholder="Management username" maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="Password (optional)" autocomplete="new-password"></div><div class="col-12"><input class="form-control" name="snmp_community" type="password" placeholder="SNMP community (optional)" autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save OLT</button></div></form><div id="tenantOltList" class="mt-3"></div></div></div></div>';
+  settings.appendChild(section);
+  const routerCard = section.querySelector('#tenantRouterCard');
+  const oltCard = section.querySelector('#tenantOltCard');
+  routerCard.hidden = !enabled('mikrotik');
+  oltCard.hidden = !enabled('olt');
+  if (!enabled('mikrotik') && !enabled('olt')) section.querySelector('.card-body').prepend(text('div', 'Your tenant plan has no hardware modules enabled.', 'alert alert-warning py-2'));
+
+  const message = (value, error) => {
+    const node = document.getElementById('tenantHardwareMessage');
+    node.textContent = value || '';
+    node.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success');
+  };
+  const formData = (form) => Object.fromEntries(new FormData(form).entries());
+  const renderList = (target, rows, kind) => {
+    const host = document.getElementById(target);
+    host.replaceChildren();
+    if (!rows || !rows.length) { host.appendChild(text('p', 'No ' + kind + ' registered.', 'small text-muted')); return; }
+    rows.forEach((row) => {
+      const line = document.createElement('div');
+      line.className = 'd-flex justify-content-between align-items-center border rounded p-2 mb-2 gap-2';
+      const label = text('div', kind === 'router' ? row.router_name + ' — ' + row.host + ':' + row.api_port : row.olt_name + ' — ' + row.olt_type + ' — ' + row.ip_address, 'small');
+      const remove = text('button', 'Remove', 'btn btn-sm btn-outline-danger');
+      remove.type = 'button';
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('Remove this saved ' + kind + ' inventory record? This does not change the device itself.')) return;
+        try { await tenantApi('/api/tenant/hardware/' + (kind === 'router' ? 'routers/' : 'olts/') + encodeURIComponent(row.id), { method: 'DELETE' }); await loadHardware(); message('Inventory record removed.'); }
+        catch (error) { message(error.message, true); }
+      });
+      line.append(label, remove); host.appendChild(line);
+    });
+  };
+  async function loadHardware() {
+    try {
+      const data = await tenantApi('/api/tenant/hardware');
+      renderList('tenantRouterList', enabled('mikrotik') ? data.routers : [], 'router');
+      renderList('tenantOltList', enabled('olt') ? data.olts : [], 'OLT');
+      message('');
+    } catch (error) { message(error.message, true); }
+  }
+  document.getElementById('tenantHardwareRefresh').addEventListener('click', loadHardware);
+  document.getElementById('tenantRouterForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { await tenantApi('/api/tenant/hardware/routers', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); event.currentTarget.elements.api_port.value = '8728'; await loadHardware(); message('Router inventory saved.'); }
+    catch (error) { message(error.message, true); }
+  });
+  document.getElementById('tenantOltForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { await tenantApi('/api/tenant/hardware/olts', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); await loadHardware(); message('OLT inventory saved.'); }
+    catch (error) { message(error.message, true); }
+  });
+  loadHardware();
+})();
+</script>
+<% } %>
 </body>
 </html>
