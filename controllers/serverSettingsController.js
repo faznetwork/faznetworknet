@@ -106,7 +106,17 @@ async function createTenant(req, res) {
     return res.status(400).json({ success: false, message: 'A valid client contact email is required. No invitation was sent.' });
   }
   const requestedModules = req.body?.modules && typeof req.body.modules === 'object' ? req.body.modules : {};
-  const modules = { hotspot: requestedModules.hotspot !== false, sms_gateway: requestedModules.sms_gateway !== false, whatsapp: requestedModules.whatsapp !== false };
+  const modules = {
+    customers: requestedModules.customers !== false,
+    hotspot: requestedModules.hotspot !== false,
+    billing: requestedModules.billing !== false,
+    pppoe: requestedModules.pppoe !== false,
+    mikrotik: requestedModules.mikrotik !== false,
+    olt: requestedModules.olt !== false,
+    reports: requestedModules.reports !== false,
+    sms_gateway: requestedModules.sms_gateway !== false,
+    whatsapp: requestedModules.whatsapp !== false
+  };
   const invitationToken = crypto.randomBytes(32).toString('base64url');
   const invitationHash = crypto.createHash('sha256').update(invitationToken, 'utf8').digest('hex');
   const invitationUrl = 'https://isp.faznetwork.com/onboard?token=' + invitationToken;
@@ -175,7 +185,19 @@ async function updateTenant(req, res) {
       }
     } else if (action === 'modules') {
       const modules = req.body.modules || {};
-      const normalized = { hotspot: modules.hotspot === true, sms_gateway: modules.sms_gateway === true, whatsapp: modules.whatsapp === true };
+      let existingModules = tenant.rows[0].modules || {};
+      if (typeof existingModules === 'string') { try { existingModules = JSON.parse(existingModules); } catch (_) { existingModules = {}; } }
+      const normalized = {};
+      ['customers','hotspot','billing','pppoe','mikrotik','olt','reports'].forEach((key) => {
+        normalized[key] = Object.prototype.hasOwnProperty.call(modules, key)
+          ? modules[key] === true
+          : existingModules[key] !== false;
+      });
+      ['sms_gateway','whatsapp'].forEach((key) => {
+        normalized[key] = Object.prototype.hasOwnProperty.call(modules, key)
+          ? modules[key] === true
+          : existingModules[key] !== false;
+      });
       await client.query('UPDATE public.tenants SET modules=$2::jsonb, updated_at=NOW() WHERE id=$1', [tenantId, JSON.stringify(normalized)]);
     } else {
       throw new Error('Unsupported tenant action.');

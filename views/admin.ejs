@@ -1797,6 +1797,13 @@
 <style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
 </head>
+<% 
+  const tenantPage = typeof tenantContext !== 'undefined' && tenantContext === true && tenant && Number(tenant.id) > 0;
+  let tenantModuleConfig = tenantPage ? (tenant.enabled_modules || tenant.modules || {}) : {};
+  if (typeof tenantModuleConfig === 'string') { try { tenantModuleConfig = JSON.parse(tenantModuleConfig); } catch (_) { tenantModuleConfig = {}; } }
+  if (!tenantModuleConfig || typeof tenantModuleConfig !== 'object' || Array.isArray(tenantModuleConfig)) tenantModuleConfig = {};
+  const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true;
+%>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
@@ -1815,6 +1822,19 @@
             </select>
         </div>
 
+<% if (tenantPage) { %>
+        <ul class="sidebar-menu">
+            <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
+            <% if (tenantModuleEnabled('customers')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li><% } %>
+            <% if (tenantModuleEnabled('hotspot')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li><% } %>
+            <% if (tenantModuleEnabled('billing')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li><% } %>
+            <% if (tenantModuleEnabled('pppoe')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li><% } %>
+            <% if (tenantModuleEnabled('mikrotik')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li><% } %>
+            <% if (tenantModuleEnabled('olt')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li><% } %>
+            <% if (tenantModuleEnabled('reports')) { %><li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li><% } %>
+            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
+        </ul>
+<% } else { %>
         <ul class="sidebar-menu">
             <li class="menu-item">
                 <a href="javascript:void(0)" class="active" data-view-target="view-main-dashboard" onclick="event.preventDefault(); switchView('dashboard'); return false;"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
@@ -2014,8 +2034,7 @@
                 </ul>
             </li>
         </ul>
-
-        <div class="drawer-account">
+<% } %>        <div class="drawer-account">
             <div class="drawer-account-user d-md-none">
                 <i class="bi bi-person-circle"></i>
                 <span><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></span>
@@ -9518,9 +9537,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   // evaluated again by a partial navigation or template integration.
   if (window.__tenantDashboardInitialized) return;
   window.__tenantDashboardInitialized = true;
-  const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
+  const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
   const enabled = (key) => modules[key] === true;
+  window.openTenantModule = function (key) {
+    const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
+    if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
+    if (typeof switchView === 'function') switchView('general-settings');
+    window.setTimeout(() => {
+      const target = document.getElementById(map[key]) || document.getElementById('tenantDataWorkspace');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
   const tenantApi = async (path, options = {}) => {
     const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
@@ -9566,11 +9594,12 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   const dataPanel = document.createElement('section');
   dataPanel.id = 'tenantDataWorkspace';
   dataPanel.className = 'card border-0 shadow-sm m-3';
-  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
+  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantReportsPanel"><h6>Tenant Reports</h6><p class="small text-muted">Summaries are calculated from tenant-scoped customer, voucher, and billing records.</p><div id="tenantReportsSummary" class="row g-3"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
   const settings = document.getElementById('view-general-settings');
   if (settings) settings.prepend(dataPanel);
-  ['customers','hotspot','billing'].forEach((key) => {
-    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : 'tenantBillingPanel');
+  dataPanel.hidden = !['customers','hotspot','billing','pppoe','reports'].some(enabled);
+  ['customers','hotspot','billing','reports'].forEach((key) => {
+    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : key === 'billing' ? 'tenantBillingPanel' : 'tenantReportsPanel');
     if (panel) panel.hidden = !enabled(key);
   });
   const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
@@ -9622,14 +9651,27 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   async function loadTenantData() {
     try {
       const jobs = [];
-      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
+      let reportCustomers = [], reportVouchers = [], reportTransactions = [];
+      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => { reportCustomers = Array.isArray(d.customers) ? d.customers : []; dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],reportCustomers,'customers'); }));
       if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => {
-        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : [];
+        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : []; reportVouchers = tenantVoucherRows;
         dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
       }));
       if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
-      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],d.transactions,null)));
-      await Promise.all(jobs); dataMessage('Tenant records loaded.');
+      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => { reportTransactions = Array.isArray(d.transactions) ? d.transactions : []; dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],reportTransactions,null); }));
+      await Promise.all(jobs);
+      const reportHost = document.getElementById('tenantReportsSummary');
+      if (reportHost) {
+        reportHost.replaceChildren();
+        const total = reportTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+        [
+          ['Customers', enabled('customers') ? reportCustomers.length : 'Disabled'],
+          ['Hotspot vouchers', enabled('hotspot') ? reportVouchers.length : 'Disabled'],
+          ['Billing transactions', enabled('billing') ? reportTransactions.length : 'Disabled'],
+          ['Recorded payments', enabled('billing') ? total.toLocaleString(undefined, { style: 'currency', currency: 'BDT' }) : 'Disabled']
+        ].forEach(([label, value]) => { const col = document.createElement('div'); col.className = 'col-sm-6 col-xl-3'; const card = document.createElement('div'); card.className = 'border rounded-3 p-3 h-100'; card.appendChild(text('div', label, 'small text-muted')); card.appendChild(text('strong', value, 'fs-5')); col.appendChild(card); reportHost.appendChild(col); });
+      }
+      dataMessage('Tenant records loaded.');
     } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
   }
   document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
@@ -9668,9 +9710,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
     } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
   });
-  const pppoePanel = document.getElementById('tenantCustomersPanel');
+  const pppoePanel = document.querySelector('#tenantDataWorkspace .card-body .row.g-4');
   if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
-    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
+    const pppoe = document.createElement('section'); pppoe.className = 'col-12 mt-4';
     pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
     pppoePanel.appendChild(pppoe);
     pppoe.querySelector('form').addEventListener('submit', async event => {
@@ -9703,6 +9745,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   const oltCard = section.querySelector('#tenantOltCard');
   routerCard.hidden = !enabled('mikrotik');
   oltCard.hidden = !enabled('olt');
+  section.hidden = !enabled('mikrotik') && !enabled('olt');
   if (!enabled('mikrotik') && !enabled('olt')) section.querySelector('.card-body').prepend(text('div', 'Your tenant plan has no hardware modules enabled.', 'alert alert-warning py-2'));
 
   const message = (value, error) => {
