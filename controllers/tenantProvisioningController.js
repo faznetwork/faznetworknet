@@ -1,5 +1,6 @@
 'use strict';
 
+const db = require('../db');
 const { withTenantRouter } = require('../services/tenantRouterClient');
 
 function tenantId(req) {
@@ -16,6 +17,49 @@ function routerWord(value, label, max = 100) {
   if (!v || /[\r\n\0]/.test(v)) throw Object.assign(new Error(label + ' is required.'), { statusCode: 400, code: 'INVALID_ROUTER_INPUT' });
   return v;
 }
+function routerParams(params) { return Object.entries(params).map(([key, value]) => '=' + key + '=' + String(value)); }
+
+async function addRouterUser(client, kind, tid, body, username) {
+  const base = kind === 'hotspot' ? '/ip/hotspot/user' : '/ppp/secret';
+  const password = routerWord(body.password, 'Password', 128);
+  const profile = routerWord(body.profile, 'Profile', 100);
+  const params = { name: username, password, profile, comment: 'FAZ tenant ' + tid };
+  if (kind === 'pppoe') params.service = 'pppoe';
+  await client.write(base + '/add', routerParams(params));
+  return { base, password, profile };
+}
+async function removeRouterUser(client, base, username) {
+  const rows = await client.write(base + '/print', ['?name=' + username]);
+  const row = (Array.isArray(rows) ? rows : []).find(item => String(item.name || '').toLowerCase() === username.toLowerCase());
+  if (row && row['.id']) await client.write(base + '/remove', ['=.id=' + row['.id']]);
+}
+async function saveTenantRecord(kind, tid, body, username, password, profile) {
+  return db.withTransaction(async client => {
+    if (kind === 'hotspot') {
+      const validity = routerWord(body.validity, 'Validity', 50);
+      const price = Number(body.price ?? 0);
+      if (!Number.isFinite(price) || price < 0) throw Object.assign(new Error('Price must be non-negative.'), { statusCode: 400, code: 'INVALID_ROUTER_INPUT' });
+      const result = await client.query(
+        `INSERT INTO public.hotspot_vouchers(tenant_id,username,password,profile,validity,price,status,comment)
+         VALUES($1,$2,$3,$4,$5,$6,'unused',$7)
+         RETURNING id,tenant_id,username,profile,validity,price,status,comment,created_at`,
+        [tid, username, password, profile, validity, price, body.comment || null]
+      );
+      return result.rows[0];
+    }
+    const phone = routerWord(body.phone, 'Contact phone', 40);
+    const fullName = clean(body.full_name || username, 255);
+    const result = await client.query(
+      `INSERT INTO public.customers
+       (tenant_id,full_name,phone,connection_date,username,password,package_name,profile,monthly_bill,status,provisioning_status,remarks)
+       VALUES($1,$2,$3,CURRENT_DATE,$4,$5,$6,$7,0,'active','provisioned',$8)
+       RETURNING id,tenant_id,full_name,phone,username,package_name,profile,status,provisioning_status,created_at`,
+      [tid, fullName, phone, username, password, profile, profile, 'Provisioned via tenant PPPoE form']
+    );
+    return result.rows[0];
+  });
+}
+
 async function execute(req, res, kind) {
   const tid = tenantId(req);
   if (!tid) return res.status(403).json({ success: false, code: 'TENANT_CONTEXT_REQUIRED', message: 'A tenant-admin session is required.' });
@@ -29,18 +73,24 @@ async function execute(req, res, kind) {
       const base = kind === 'hotspot' ? '/ip/hotspot/user' : '/ppp/secret';
       if (action === 'print') {
         const rows = await client.write(base + '/print');
-        return (Array.isArray(rows) ? rows : []).map(row => ({ id: String(row['.id'] || ''), username: String(row.name || ''), profile: String(row.profile || ''), disabled: String(row.disabled || 'false') === 'true', service: String(row.service || '') })).filter(row => row.username);
+        return (Array.isArray(rows) ? rows : []).map(row => ({ id: String(row['.id'] || ''), username: String(row.name || ''), profile: String(row.profile || ''), disabled: ['true','yes'].includes(String(row.disabled || 'false').toLowerCase()), service: String(row.service || '') })).filter(row => row.username);
       }
       const matches = await client.write(base + '/print', ['?name=' + username]);
       const existing = (Array.isArray(matches) ? matches : []).find(row => String(row.name || '').toLowerCase() === username.toLowerCase());
       if (action === 'create') {
         if (existing) throw Object.assign(new Error('That username already exists on this tenant router.'), { statusCode: 409, code: 'ROUTER_USER_EXISTS' });
-        const password = routerWord(body.password, 'Password', 128);
-        const profile = routerWord(body.profile, 'Profile', 100);
-        const params = { name: username, password, profile, comment: 'FAZ tenant ' + tid };
-        if (kind === 'pppoe') params.service = 'pppoe';
-        await client.write(base + '/add', Object.entries(params).map(([k,v]) => '=' + k + '=' + String(v)));
-        return { username, profile, created: true };
+        const { password, profile } = await addRouterUser(client, kind, tid, body, username);
+        try {
+          const record = await saveTenantRecord(kind, tid, body, username, password, profile);
+          return { username, profile, created: true, record };
+        } catch (databaseError) {
+          try { await removeRouterUser(client, base, username); }
+          catch (rollbackError) {
+            console.error('[Tenant Provisioning] Router rollback failed after database error', { tenantId: tid, kind, username, error: rollbackError.message });
+            throw Object.assign(new Error('Database save failed and router rollback could not be confirmed. Check this account on the tenant router.'), { statusCode: 502, code: 'PROVISIONING_ROLLBACK_FAILED', cause: databaseError });
+          }
+          throw Object.assign(new Error('Database save failed; the router account was removed.'), { statusCode: databaseError.statusCode || 500, code: 'DATABASE_WRITE_FAILED', cause: databaseError });
+        }
       }
       if (!existing) throw Object.assign(new Error('User was not found on this tenant router.'), { statusCode: 404, code: 'ROUTER_USER_NOT_FOUND' });
       await client.write(base + '/set', ['=.id=' + existing['.id'], '=disabled=' + (action === 'disable' ? 'yes' : 'no')]);
