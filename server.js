@@ -51,7 +51,7 @@ app.get("/tenant",(req,res)=>res.redirect("/tenant/login"));
 app.get("/tenant/login",(req,res)=>res.redirect('/login'));
 app.post("/tenant/login",require("./controllers/tenantAuthController").login);
 app.post("/tenant/logout",require("./controllers/tenantAuthController").logout);
-app.get("/tenant/dashboard",require("./middleware/requireTenantAdmin"),(req,res)=>res.render("tenant-admin",{title:"Tenant Workspace",tenant:req.tenant}));
+app.get("/tenant/dashboard",(req,res)=>res.redirect("/dashboard"));
 app.get("/login",(req,res)=>{
   if(req.session?.tenantAdmin===true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
   if(isAdminAuthenticated(req)) return res.redirect('/admin');
@@ -112,7 +112,7 @@ app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 });
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
-app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
+app.get("/dashboard",(req,res,next)=>{ if(req.session?.tenantAdmin===true&&req.session?.tenantId) return require("./middleware/requireTenantAdmin")(req,res,()=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:"tenant_admin",currentAdminUser:req.session.adminUser||"tenant-admin",currentAdminId:req.session.userId||0,tenantContext:true,tenant:req.tenant})); if(req.session?.isAdmin===true) return res.redirect("/admin"); return res.redirect("/login"); });
 app.get("/hotspot/webhook",requireRole(["super_admin","admin"]),(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
 app.get("/",async (req,res)=>{
