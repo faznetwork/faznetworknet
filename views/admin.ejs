@@ -1799,10 +1799,8 @@
 </head>
 <% 
   const tenantPage = (typeof tenantContext !== 'undefined' && tenantContext === true) || (typeof tenant !== 'undefined' && tenant && Number(tenant.id) > 0) || (typeof user !== 'undefined' && user && Number(user.tenantId) > 0);
-  // PostgreSQL JSONB is the sole authority for tenant module access.
-  const tenantModuleConfig = tenantPage && typeof tenant !== 'undefined' && tenant.modules && typeof tenant.modules === 'object' && !Array.isArray(tenant.modules)
-    ? tenant.modules
-    : {};
+  // The dashboard route passes a normalized, flat, boolean-only module map.
+  const tenantModuleConfig = tenantPage ? normalizedModules : {};
   const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true;
 %>
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>

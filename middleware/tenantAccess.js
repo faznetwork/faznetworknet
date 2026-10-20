@@ -13,11 +13,14 @@ const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
 ]);
 
 function normalizeModules(input) {
-  // PostgreSQL's JSONB driver returns an object. Do not infer defaults, parse
-  // legacy aliases, or promote missing/malformed values to enabled.
+  // PostgreSQL JSONB may be either a flat module map or an enabled_modules wrapper.
+  // Unwrap only that known wrapper; never infer defaults or promote non-true values.
   if (!input || typeof input !== 'object' || Array.isArray(input)) return Object.freeze({});
+  const modules = input.enabled_modules && typeof input.enabled_modules === 'object' && !Array.isArray(input.enabled_modules)
+    ? input.enabled_modules
+    : input;
   return Object.freeze(Object.fromEntries(
-    Object.entries(input).map(([key, enabled]) => [String(key), enabled === true])
+    Object.entries(modules).map(([key, enabled]) => [String(key), enabled === true])
   ));
 }
 
