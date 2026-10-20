@@ -1804,7 +1804,21 @@
   const tenantModuleEnabled = (key) => !tenantPage || tenantModuleConfig[key] === true;
 %>
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
-<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
+<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>
+    <!-- TEMPORARY DEBUG: remove after diagnosis; exposes tenant context on the dashboard -->
+    <section id="tenant-module-debug" style="position:relative;z-index:99999;background:#fff3cd;color:#111;border:2px solid #dc3545;padding:16px;margin:10px;font:13px monospace;overflow-wrap:anywhere;">
+      <h3 style="color:#b91c1c;">TENANT MODULE DEBUG (TEMPORARY)</h3>
+      <p><strong>typeof tenantContext</strong></p>
+      <pre style="white-space:pre-wrap;"><%= typeof tenantContext %></pre>
+      <p><strong>tenant</strong></p>
+      <pre style="white-space:pre-wrap;"><%= typeof tenant !== 'undefined' ? JSON.stringify(tenant, null, 2) : 'tenant is UNDEFINED' %></pre>
+      <p><strong>normalizedModules</strong></p>
+      <pre style="white-space:pre-wrap;"><%= typeof normalizedModules !== 'undefined' ? JSON.stringify(normalizedModules, null, 2) : 'normalizedModules is UNDEFINED' %></pre>
+      <p><strong>tenantModuleConfig</strong></p>
+      <pre style="white-space:pre-wrap;"><%= typeof tenantModuleConfig !== 'undefined' ? JSON.stringify(tenantModuleConfig, null, 2) : 'tenantModuleConfig is UNDEFINED' %></pre>
+    </section>
+    <!-- END TEMPORARY DEBUG -->
+" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
