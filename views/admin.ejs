@@ -4860,10 +4860,11 @@ async function deletePlan(id,name){
         let generalSettingsLoaded=false;
         function generalSettingsResult(id,message,ok=true){const el=document.getElementById(id);if(el){el.className='small mt-3 '+(ok?'text-success':'text-danger')+' fw-semibold';el.textContent=message;}}
         function generalWebhookRenderUrl(){const input=document.getElementById('generalWebhookPath'),out=document.getElementById('generalWebhookFullUrl');if(!input||!out)return;const value=input.value.trim();if(!value){out.textContent='Enter an endpoint path';return;}try{out.textContent=value.startsWith('/')?location.origin+value:new URL(value,location.origin).href;}catch(_){out.textContent=value;}}
-        async function loadGeneralSettings(force=false){
+        async function loadGeneralSettings(force=false, signal=null){
           if(generalSettingsLoaded&&!force)return;
           try{
-            const response=await jsonFetch('/api/settings/general'),s=response.settings||response.data||response,r=s.router||{},w=s.webhook||{},m=s.mfs||{};
+            const response=await jsonFetch('/api/settings/general',{signal}),s=response.settings||response.data||response,r=s.router||{},w=s.webhook||{},m=s.mfs||{};
+            if(signal&&signal.aborted)return;
             const rawEnabled=w.enabled??w.webhookEnabled??s.webhookEnabled??s.personal_payment_webhook_enabled;const webhookEnabled=rawEnabled===true||String(rawEnabled).trim().toLowerCase()==='true'||rawEnabled===1||rawEnabled==='1';
             const webhookUrl=w.url??w.webhookUrl??s.webhookUrl??s.personal_payment_webhook_url;
             document.getElementById('generalRouterHost').value=r.host||'';document.getElementById('generalRouterPort').value=r.port||8728;document.getElementById('generalRouterUser').value=r.user||'';document.getElementById('generalRouterPassword').value='';
@@ -4873,7 +4874,7 @@ async function deletePlan(id,name){
             document.getElementById('generalWebhookBadge').textContent=webhookEnabled?'Enabled':'Disabled';document.getElementById('generalWebhookBadge').className='badge ms-auto '+(webhookEnabled?'bg-success':'bg-secondary');
             document.getElementById('generalMfsBkash').value=String(m.bkash??m.mfs_bkash_number??s.mfs_bkash_number??'');document.getElementById('generalMfsNagad').value=String(m.nagad??m.mfs_nagad_number??s.mfs_nagad_number??'');document.getElementById('generalMfsRocket').value=String(m.rocket??m.mfs_rocket_number??s.mfs_rocket_number??'');document.getElementById('generalMfsUpay').value=String(m.upay??m.mfs_upay_number??s.mfs_upay_number??'');
             generalWebhookRenderUrl();generalSettingsLoaded=true;
-          }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
+          }catch(error){if(signal&&signal.aborted||error&&error.name==='AbortError')return;generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
         function showGeneralSettingsSection(target) {
           const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
@@ -5369,50 +5370,195 @@ async function deletePlan(id,name){
 
         document.getElementById('paymentWebhookSettingsForm')?.addEventListener('submit',async function(event){event.preventDefault();const btn=document.getElementById('paymentWebhookSaveBtn'),result=document.getElementById('paymentWebhookSettingsResult');if(btn)btn.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving settings...';}try{const payload={webhookUrl:document.getElementById('paymentWebhookUrl')?.value.trim()||'',webhookSecret:document.getElementById('paymentWebhookSecret')?.value||'',webhookEnabled:Boolean(document.getElementById('paymentWebhookEnabled')?.checked)};const response=await fetch('/api/settings/hotspot-webhook',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});let data={};try{data=await response.json();}catch(_){}if(!response.ok||data.success===false)throw new Error(data.error||data.message||'Unable to save settings.');if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Webhook settings saved successfully.';}hotspotWebhookSettingsLoaded=true;if(document.getElementById('paymentWebhookSecret'))document.getElementById('paymentWebhookSecret').value='';}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save settings.';}}finally{if(btn)btn.disabled=false;}});
 
-        function switchView(viewName, channel = '') {
+        // Per-view lifecycle: abort stale requests and dispose resources on navigation.
+        (function installAdminViewLifecycle() {
+            if (window.adminViewLifecycle) return;
+
+            let sequence = 0;
+            let activeTarget = null;
+            let activeController = null;
+            const disposers = new Set();
+            const charts = new Set();
+            const dataTables = new Set();
+
+            function safeDispose(dispose, label) {
+                try { dispose(); }
+                catch (error) { console.error('[View lifecycle] ' + label + ' cleanup failed:', error); }
+            }
+
+            function disposePlugins() {
+                for (const chart of charts) safeDispose(() => chart && chart.destroy && chart.destroy(), 'Chart');
+                charts.clear();
+                for (const table of dataTables) safeDispose(() => table && table.destroy && table.destroy(), 'DataTable');
+                dataTables.clear();
+
+                if (!activeTarget) return;
+                const root = document.getElementById(activeTarget);
+                if (!root) return;
+                root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(element => {
+                    const instance = window.bootstrap && window.bootstrap.Tooltip
+                        ? window.bootstrap.Tooltip.getInstance(element) : null;
+                    if (instance) safeDispose(() => instance.dispose(), 'Tooltip');
+                });
+                root.querySelectorAll('[data-bs-toggle="popover"]').forEach(element => {
+                    const instance = window.bootstrap && window.bootstrap.Popover
+                        ? window.bootstrap.Popover.getInstance(element) : null;
+                    if (instance) safeDispose(() => instance.dispose(), 'Popover');
+                });
+            }
+
+            function teardown() {
+                if (activeController && !activeController.signal.aborted) {
+                    activeController.abort();
+                }
+                for (const dispose of Array.from(disposers)) safeDispose(dispose, 'View');
+                disposers.clear();
+                disposePlugins();
+            }
+
+            function begin(target) {
+                teardown();
+                activeTarget = target;
+                activeController = new AbortController();
+                return { id: ++sequence, target, signal: activeController.signal };
+            }
+
+            function isCurrent(context) {
+                return Boolean(context && context.id === sequence &&
+                    context.target === activeTarget && !context.signal.aborted);
+            }
+
+            function registerCleanup(dispose) {
+                if (typeof dispose !== 'function') return () => {};
+                disposers.add(dispose);
+                return () => disposers.delete(dispose);
+            }
+
+            function showRetry(target, retry) {
+                const root = document.getElementById(target);
+                if (!root) return;
+                root.querySelector('[data-view-error]')?.remove();
+
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-warning m-3';
+                alert.dataset.viewError = 'true';
+                alert.setAttribute('role', 'alert');
+
+                const message = document.createElement('p');
+                message.className = 'mb-2';
+                message.textContent = 'ভিউ লোড করা যায়নি - পুনরায় চেষ্টা করুন';
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-sm btn-outline-success';
+                button.textContent = 'পুনরায় চেষ্টা করুন';
+                button.addEventListener('click', () => {
+                    alert.remove();
+                    retry();
+                }, { once: true });
+
+                alert.append(message, button);
+                root.prepend(alert);
+            }
+
+            window.adminViewLifecycle = {
+                begin, teardown, isCurrent, registerCleanup, showRetry,
+                registerChart(chart) { if (chart) charts.add(chart); return chart; },
+                registerDataTable(table) { if (table) dataTables.add(table); return table; },
+                get current() {
+                    return activeController ? {
+                        id: sequence, target: activeTarget, signal: activeController.signal
+                    } : null;
+                },
+                get signal() { return activeController ? activeController.signal : null; },
+                get activeTarget() { return activeTarget; }
+            };
+        })();
+
+        async function switchView(viewName, channel = '') {
+            const lifecycle = window.adminViewLifecycle;
+            if (!lifecycle) {
+                console.error('[Navigation] View lifecycle manager is missing.');
+                return;
+            }
+
             purgeStuckBackdrops();
             currentCustomerTitleKey = '';
             currentPaymentTitleKey = '';
-            const target = viewName === 'dashboard' ? 'view-main-dashboard' :
-                (viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard' :
-                (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard'));
-            document.querySelectorAll('.admin-view').forEach(view => {
-                view.classList.add('hidden');
-                view.style.display = 'none';
-            });
-            if (typeof window.switchDashboardView === 'function') {
-                window.switchDashboardView(target);
-            }
+
+            const target = viewName === 'dashboard' ? 'view-main-dashboard'
+                : viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard'
+                : (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard');
             const targetElement = document.getElementById(target);
-            if (targetElement) {
+
+            if (!targetElement) {
+                console.error('[Navigation] Unknown view:', viewName, target);
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (dynamic) lifecycle.showRetry('dynamicPageContent', () => switchView(viewName, channel));
+                return;
+            }
+
+            if (lifecycle.activeTarget === target &&
+                targetElement.style.display !== 'none' &&
+                (viewName !== 'payments' || currentPaymentChannel === (channel || ''))) {
+                return;
+            }
+
+            const context = lifecycle.begin(target);
+            currentPaymentChannel = channel || '';
+
+            try {
+                document.querySelectorAll('.admin-view').forEach(view => {
+                    view.classList.add('hidden');
+                    view.style.display = 'none';
+                });
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (dynamic) dynamic.style.display = 'none';
+
                 targetElement.classList.remove('hidden');
                 targetElement.style.display = 'block';
-            }
-            document.querySelectorAll('.sidebar-menu [data-view-target]').forEach(link => {
-                link.classList.toggle('active', link.dataset.viewTarget === target);
-            });
+                targetElement.setAttribute('aria-busy', 'true');
 
-            const titleKey = target === 'view-main-dashboard' ? 'dashboard' :
-                (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
-            setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
-            currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
-                void refreshDashboard();
-                startTrafficPolling();
-            } else {
-                if (trafficTimer) {
-                    clearInterval(trafficTimer);
-                    trafficTimer = null;
+                document.querySelectorAll('.sidebar-menu [data-view-target]').forEach(link => {
+                    link.classList.toggle('active', link.dataset.viewTarget === target);
+                });
+
+                const titleKey = target === 'view-main-dashboard' ? 'dashboard'
+                    : target === 'view-hotspot-dashboard' ? 'hotspot-dashboard'
+                    : target.replace(/^view-/, '');
+                setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
+
+                if (typeof window.switchDashboardView === 'function') {
+                    window.switchDashboardView(target);
                 }
-                if (target === 'all-customer') {
-                    fetchCustomers();
-                } else if (target === 'payments') {
-                    fetchPayments(currentPaymentChannel);
-                } else if (target === 'general-settings') {
-                    loadGeneralSettings();
+
+                if (target === 'view-main-dashboard') {
+                    await refreshDashboard(context.signal);
+                    if (!lifecycle.isCurrent(context)) return;
+                    startTrafficPolling();
+                } else {
+                    if (trafficTimer) {
+                        clearInterval(trafficTimer);
+                        trafficTimer = null;
+                    }
+                    if (target === 'view-all-customer') {
+                        await fetchCustomers(context.signal);
+                    } else if (target === 'view-payments') {
+                        await fetchPayments(currentPaymentChannel, context.signal);
+                    } else if (target === 'view-general-settings') {
+                        await loadGeneralSettings(false, context.signal);
+                    }
                 }
+
+                if (!lifecycle.isCurrent(context)) return;
+                if (window.innerWidth < 768) closeSidebarMobile();
+            } catch (error) {
+                if (error && error.name === 'AbortError' || !lifecycle.isCurrent(context)) return;
+                console.error('[Navigation] View transition failed:', { viewName, target, error });
+                lifecycle.showRetry(target, () => switchView(viewName, channel));
+            } finally {
+                if (lifecycle.isCurrent(context)) targetElement.removeAttribute('aria-busy');
             }
-            if (window.innerWidth < 768) closeSidebarMobile();
         }
 
         window.switchView = switchView;
@@ -7537,9 +7683,10 @@ async function deletePlan(id,name){
             }
         }
 
-        async function fetchCustomers() {
+        async function fetchCustomers(signal = null) {
             try {
-                const data = await jsonFetch('/api/pppoe/users?filter=all');
+                const data = await jsonFetch('/api/pppoe/users?filter=all', { signal });
+                if (signal && signal.aborted) return;
                 const users = data.users || [];
                 const tbody = document.getElementById('pppoeUserList');
                 if (!tbody) return;
@@ -7556,6 +7703,7 @@ async function deletePlan(id,name){
                     '</tr>';
                 }).join('') : '<tr><td colspan="6" class="text-center py-3">No PPPoE users found.</td></tr>';
             } catch (error) {
+                if (signal && signal.aborted || error && error.name === 'AbortError') return;
                 const tbody = document.getElementById('pppoeUserList');
                 if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
             }
@@ -7935,12 +8083,13 @@ async function deletePlan(id,name){
 
 
 
-        async function fetchPayments(channel = '') {
+        async function fetchPayments(channel = '', signal = null) {
             const body = document.getElementById('paymentsBody');
             if (!body) return;
             try {
                 const gateway = channel || 'all';
-                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(gateway));
+                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(gateway), { signal });
+                if (signal && signal.aborted) return;
                 const rows = (data.transactions || []).slice(0, 500);
                 safeSetText('paymentFilterLabel', gateway.toUpperCase());
                 body.innerHTML = rows.length ? rows.map(t =>
@@ -7952,17 +8101,19 @@ async function deletePlan(id,name){
                     '<td>' + escapeHtml(t.created_at ? FazDate.formatDateTime(t.created_at) : '-') + '</td></tr>'
                 ).join('') : '<tr><td colspan="6" class="text-center py-3 text-muted">No payment records found.</td></tr>';
             } catch (error) {
+                if (signal && signal.aborted || error && error.name === 'AbortError') return;
                 body.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
             }
         }
 
-        async function refreshDashboard() {
+        async function refreshDashboard(signal = null) {
             try {
                 const [users, active, summary] = await Promise.all([
-                    jsonFetch('/api/pppoe/users'),
-                    jsonFetch('/api/pppoe/active'),
-                    jsonFetch('/api/payments/summary')
+                    jsonFetch('/api/pppoe/users', { signal }),
+                    jsonFetch('/api/pppoe/active', { signal }),
+                    jsonFetch('/api/payments/summary', { signal })
                 ]);
+                if (signal && signal.aborted) return;
                 const customerRows = Array.isArray(users.users) ? users.users : null;
                 const sessionRows = Array.isArray(active.sessions) ? active.sessions : (Array.isArray(active.active) ? active.active : null);
                 const usersAvailable = users.success !== false && customerRows !== null;
@@ -7979,16 +8130,18 @@ async function deletePlan(id,name){
                     ).join('') || '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
                 }
             } catch (error) {
+                if (signal && signal.aborted || error && error.name === 'AbortError') return;
                 console.error('[Dashboard]', error);
             }
-            await loadRouterMetrics();
+            if (!(signal && signal.aborted)) await loadRouterMetrics(signal);
         }
 
-        async function loadRouterMetrics() {
+        async function loadRouterMetrics(signal = null) {
             const dashboard = document.getElementById('view-main-dashboard');
             if (!dashboard || dashboard.style.display === 'none') return;
             try {
-                const data = await jsonFetch('/api/router/resources');
+                const data = await jsonFetch('/api/router/resources', { signal });
+                if (signal && signal.aborted) return;
                 const r = data.resources || {};
                 const cpu = Number(r.cpuLoad || 0);
                 const ram = Number(r.memoryUsagePercent || 0);
@@ -8003,6 +8156,7 @@ async function deletePlan(id,name){
                 safeSetText('dashboardRouterStatus', 'Online');
                 safeSetText('dashboardRoundRouterStatus', 'Online');
             } catch (error) {
+                if (signal && signal.aborted || error && error.name === 'AbortError') return;
                 safeSetText('metricCpu', '—');
                 safeSetText('metricRam', '—');
                 safeSetText('dashboardRoundRouterStatus', 'Offline');
