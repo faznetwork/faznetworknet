@@ -13,7 +13,6 @@ const adminUserRoutes=require("./routes/adminUserRoutes");
 const adminSecurityRoutes=require("./routes/adminSecurityRoutes");
 const appSettingsService=require("./services/appSettings");
 const settingsController=require("./controllers/settingsController");
-const serverSettingsRoutes=require("./routes/serverSettingsRoutes");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 
@@ -47,27 +46,11 @@ app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.statu
 app.get("/api/dashboard/stats",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.stats);
 app.get("/api/dashboard/hotspot-overview",requireAdmin,requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,dashboardController.hotspotOverview);
 app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
-app.get("/tenant",(req,res)=>res.redirect("/tenant/login"));
-app.get("/tenant/login",(req,res)=>res.redirect('/login'));
-app.post("/tenant/login",require("./controllers/tenantAuthController").login);
-app.post("/tenant/logout",require("./controllers/tenantAuthController").logout);
-app.get("/tenant/dashboard",(req,res)=>res.redirect("/dashboard"));
 app.get("/login",(req,res)=>{
-  if(req.session?.tenantAdmin===true && req.session?.tenantId) return res.redirect('/tenant/dashboard');
-  if(isAdminAuthenticated(req)) return res.redirect('/admin');
-  return res.set('Cache-Control','no-store').render('tenant-login',{error:req.query?.error==='inactive'?'This tenant is inactive or its 30-day subscription has expired.':null,tenantNumber:''});
+  if(isAdminAuthenticated(req)) return res.redirect("/admin");
+  return res.render("login",{next:String(req.query.next||"/admin"),error:null});
 });
-app.post("/login",async(req,res)=>{
-  const tenantAuth=require('./controllers/tenantAuthController');
-  const username=String(req.body?.username||req.body?.email||'').trim();
-  const password=String(req.body?.password||'');
-  try { const user=await tenantAuth.authenticate(username,password); if(user) return tenantAuth.startSession(req,res,user,false); }
-  catch(error) { console.warn('[Smart Login] Tenant lookup failed:',error.message); }
-  return rbacAuthController.login(req,res);
-});
-app.post('/api/auth/login',require('./controllers/tenantAuthController').apiLogin);
-app.get('/onboard',require('./controllers/tenantOnboardingController').show);
-app.post('/onboard',require('./controllers/tenantOnboardingController').submit);
+app.post("/login",rbacAuthController.login);
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
@@ -86,9 +69,6 @@ app.post("/logout",(req,res)=>{
 app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"];const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);const values=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:values.mfs_bkash_number||"",nagad:values.mfs_nagad_number||"",rocket:values.mfs_rocket_number||"",upay:values.mfs_upay_number||""}});}catch(error){console.warn("[Hotspot Portal] Payment account settings unavailable:",error.message);return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:"",nagad:"",rocket:"",upay:""}});}});
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
-app.get("/platform/settings",requireAdmin,requireRole(["super_admin"]),(req,res)=>res.render("platform-settings",{title:"FAZ NETWORK Platform Owner Console",currentRole:req.session.role||"super_admin"}));
-app.delete("/api/platform/tenants/:id",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").deleteTenant);
-app.post("/api/platform/tenants/:id/invite",requireAdmin,requireRole(["super_admin"]),require("./controllers/serverSettingsController").resendTenantInvitation);
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 
 app.get("/admin/reports/collection",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
@@ -112,7 +92,7 @@ app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 });
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
-app.get("/dashboard",(req,res,next)=>{ if(req.session?.tenantAdmin===true&&req.session?.tenantId) return require("./middleware/requireTenantAdmin")(req,res,()=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:"tenant_admin",currentAdminUser:req.session.adminUser||"tenant-admin",currentAdminId:req.session.userId||0,tenantContext:true,tenant:req.tenant})); if(req.session?.isAdmin===true) return res.redirect("/admin"); return res.redirect("/login"); });
+app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
 app.get("/hotspot/webhook",requireRole(["super_admin","admin"]),(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
 app.get("/",async (req,res)=>{
@@ -166,9 +146,7 @@ app.get("/",async (req,res)=>{
 app.get("/router",requireRole(["super_admin"]),(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
 // Resolve the configured webhook path before other POST routes so an admin-selected
 // custom endpoint remains usable even when its path overlaps an existing API path.
-// Tenant sessions are blocked from legacy global APIs until each query is tenant-scoped.
-app.use("/api",require("./middleware/tenantAccess").tenantLegacyApiGuard);
-app.use("/api/server-settings",requireAdmin,serverSettingsRoutes);app.post("/api/olt/sync-telemetry",require("./controllers/oltTelemetryController").syncTelemetry);app.post("/api/pppoe/sync-sessions",require("./controllers/pppoeController").syncSessions);app.use("/api/admin/hotspot-portal-settings",requireAdmin,require("./routes/hotspotPortalSettingsRoutes"));app.use("/api/tenant/hardware",require("./routes/tenantHardwareRoutes"));app.use("/api/tenant/data",require("./routes/tenantDataRoutes"));app.use("/api/tenant/provisioning",require("./routes/tenantProvisioningRoutes"));app.get("/api/public/portal-config",require("./controllers/hotspotPortalSettingsController").publicPortalConfig);app.get("/api/hotspot/public-branding",require("./controllers/hotspotPortalSettingsController").publicBranding);app.post("*",paymentController.dynamicWebhook);app.use("/api/notifications",requireRole(["super_admin","admin"]),require("./routes/notificationRoutes"));app.use("/api/admin/users",requireAdmin,adminUserRoutes);app.use("/api/admin/security",requireAdmin,adminSecurityRoutes);app.use("/api/hr",require("./routes/hrRoutes"));app.use("/api/router",requireRole(["super_admin"]),routerRoutes);app.use("/api/pppoe",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,pppoeRoutes);app.use("/api/customer",customerSelfCareRoutes);app.use("/api/hotspot-auth",require("./routes/hotspotAuthRoutes"));app.use("/api/payments-admin",requireRole(["super_admin","admin"]),paymentRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/packages",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/ip-pools",requireRole(["super_admin","admin"]),ipPoolRoutes);app.use("/api/mikrotik",requireRole(["super_admin","admin"]),require("./routes/routerDeviceRoutes"));app.use("/api/devices",requireRole(["super_admin","admin"]),devicesRoutes);app.use("/api/network-map",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./routes/networkMapRoutes"));app.use("/api/settings",requireRole(["super_admin"]),settingsRoutes);app.use("/api/reports",requireRole(["super_admin","admin"]),reportRoutes);app.post("/api/admin/diagnostics/mikrotik-test",requireRole(["super_admin"]),require("./controllers/adminDiagnosticsController").mikrotikTest);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireRole(["super_admin","admin"]),hotspotRoutes);
+app.post("/api/olt/sync-telemetry",require("./controllers/oltTelemetryController").syncTelemetry);app.post("/api/pppoe/sync-sessions",require("./controllers/pppoeController").syncSessions);app.use("/api/admin/hotspot-portal-settings",requireAdmin,require("./routes/hotspotPortalSettingsRoutes"));app.get("/api/public/portal-config",require("./controllers/hotspotPortalSettingsController").publicPortalConfig);app.get("/api/hotspot/public-branding",require("./controllers/hotspotPortalSettingsController").publicBranding);app.post("*",paymentController.dynamicWebhook);app.use("/api/notifications",requireRole(["super_admin","admin"]),require("./routes/notificationRoutes"));app.use("/api/admin/users",requireAdmin,adminUserRoutes);app.use("/api/admin/security",requireAdmin,adminSecurityRoutes);app.use("/api/hr",require("./routes/hrRoutes"));app.use("/api/router",requireRole(["super_admin"]),routerRoutes);app.use("/api/pppoe",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,pppoeRoutes);app.use("/api/customer",customerSelfCareRoutes);app.use("/api/hotspot-auth",require("./routes/hotspotAuthRoutes"));app.use("/api/payments-admin",requireRole(["super_admin","admin"]),paymentRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/packages",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/ip-pools",requireRole(["super_admin","admin"]),ipPoolRoutes);app.use("/api/mikrotik",requireRole(["super_admin","admin"]),require("./routes/routerDeviceRoutes"));app.use("/api/devices",requireRole(["super_admin","admin"]),devicesRoutes);app.use("/api/network-map",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./routes/networkMapRoutes"));app.use("/api/settings",requireRole(["super_admin"]),settingsRoutes);app.use("/api/reports",requireRole(["super_admin","admin"]),reportRoutes);app.post("/api/admin/diagnostics/mikrotik-test",requireRole(["super_admin"]),require("./controllers/adminDiagnosticsController").mikrotikTest);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireRole(["super_admin","admin"]),hotspotRoutes);
 app.get("/pppoe",requireRole(["super_admin","admin"]),(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireRole(["super_admin","admin"]),(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireRole(["super_admin","admin"]),(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));

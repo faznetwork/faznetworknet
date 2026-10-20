@@ -208,7 +208,7 @@ async function login(req, res) {
 
   try {
     const result = await db.query(
-      'SELECT id, username, email, password_hash, role, is_first_login, status FROM admin_users WHERE tenant_id IS NULL AND lower(username)=lower($1) LIMIT 1',
+      'SELECT id, username, email, password_hash, role, is_first_login, status FROM admin_users WHERE lower(username)=lower($1) LIMIT 1',
       [username]
     );
     const user = result.rows?.[0];

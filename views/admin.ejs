@@ -1892,12 +1892,6 @@
                 <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
 
-            <% if (typeof currentRole !== "undefined" && currentRole === "super_admin") { %>
-            <li class="menu-item">
-                <a href="/platform/settings"><i class="bi bi-shield-lock"></i><span>Server Settings</span></a>
-            </li>
-            <% } %>
-
             <li class="menu-item general-settings-menu">
                 <button class="dropdown-toggle general-settings-toggle" type="button" aria-expanded="false" aria-controls="general-settings-submenu" onclick="toggleSubmenu(event, this); return false;">
                     <i class="bi bi-sliders2-vertical"></i><span>General Settings</span>
@@ -2064,22 +2058,6 @@
 
         <div id="dynamicPageContent">
             <!-- VIEW 1: DASHBOARD — Enterprise NOC -->
-            <% if (typeof currentRole !== "undefined" && currentRole === "super_admin") { %>
-            <section id="view-server-settings" class="admin-view dashboard-view hidden" style="display:none" aria-labelledby="serverSettingsTitle">
-                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-                    <div><div class="text-uppercase small fw-bold text-success mb-1">Platform administration</div><h1 id="serverSettingsTitle" class="h4 fw-bold mb-1">Server Settings</h1><p class="text-muted small mb-0">Manage platform-level configuration and the master webhook token.</p></div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="serverSettingsRefresh"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
-                </div>
-                <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-key-fill"></i> Master Webhook Token</div><div class="card-body">
-                    <p class="text-muted small">Generate a new cryptographically random token. Only its SHA-256 hash is stored; the plaintext token is shown once.</p>
-                    <div id="serverSettingsTokenResult" class="alert d-none" role="status" aria-live="polite"></div>
-                    <div id="serverSettingsTokenReveal" class="d-none mb-3"><label for="serverSettingsGeneratedToken" class="form-label">New token (copy now; it will not be shown again)</label><div class="input-group"><input id="serverSettingsGeneratedToken" class="form-control font-monospace" type="password" readonly autocomplete="off"><button type="button" class="btn btn-outline-secondary" id="serverSettingsToggleToken" aria-label="Show token"><i class="bi bi-eye"></i></button><button type="button" class="btn btn-outline-secondary" id="serverSettingsCopyToken"><i class="bi bi-clipboard"></i> Copy</button></div></div>
-                    <button type="button" class="btn btn-theme" id="serverSettingsGenerateToken"><i class="bi bi-arrow-repeat me-1"></i>Generate New Token</button>
-                </div></div>
-                <div class="card card-custom"><div class="card-custom-header"><i class="bi bi-list-check"></i> Configuration Inventory</div><div class="card-body"><div id="serverSettingsStatus" class="small text-muted mb-3">Settings have not been loaded.</div><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th scope="col">Setting</th><th scope="col">Value</th><th scope="col">Updated</th></tr></thead><tbody id="serverSettingsTableBody"><tr><td colspan="3" class="text-muted">Loading settings…</td></tr></tbody></table></div></div></div>
-            </section>
-            <% } %>
-
             <section id="view-main-dashboard" class="admin-view dashboard-view">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="dashboardTrafficStatus" class="badge rounded-pill bg-secondary">Connecting…</span><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
               
@@ -2173,7 +2151,7 @@
             <section id="view-general-settings" class="admin-view" style="display:none">
               <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">System Settings</h2><p class="text-muted mb-0">Manage router connectivity, payment automation and subscriber-facing payment accounts in one place.</p></div><span class="badge rounded-pill text-bg-success px-3 py-2"><i class="bi bi-shield-check me-1"></i>Central configuration</span></div>
 
-              <div id="settings-portal" data-settings-section="hotspot-portal" class="general-settings-panel" style="display:none"><div class="card card-custom border-0 shadow-sm mb-3"><div class="card-custom-header"><i class="bi bi-wifi text-success fs-5"></i><div><div class="fw-semibold">Hotspot &amp; Captive Portal Settings</div><small class="text-muted">Branding, login methods, banner media and redirect settings.</small></div></div><div class="card-body p-3 p-md-4"><form id="hotspotPortalSettingsForm"><div class="row g-3">
+              <div id="general-settings-panel-hotspot-portal" class="general-settings-panel" style="display:none"><div class="card card-custom border-0 shadow-sm mb-3"><div class="card-custom-header"><i class="bi bi-wifi text-success fs-5"></i><div><div class="fw-semibold">Hotspot &amp; Captive Portal Settings</div><small class="text-muted">Branding, login methods, banner media and redirect settings.</small></div></div><div class="card-body p-3 p-md-4"><form id="hotspotPortalSettingsForm"><div class="row g-3">
 <div class="col-12"><strong>Branding &amp; display mode</strong><div class="d-flex flex-wrap gap-3 mt-2"><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="default" checked> Default Mode</label><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="banner"> Banner Image Mode</label><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="custom_code"> Custom HTML / Text Mode</label></div></div>
 <div class="col-12 border rounded-3 p-3"><label class="form-label fw-semibold" for="portalLogoFile">Captive Portal Logo (JPG/PNG/WEBP, max 2 MB)</label><div class="row g-2 align-items-center"><div class="col-12 col-md-7"><input id="portalLogoFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><div class="d-flex gap-2 mt-2"><button id="portalLogoUploadBtn" type="button" class="btn btn-success btn-sm">Upload Logo</button><button id="portalLogoRemoveBtn" type="button" class="btn btn-outline-danger btn-sm">Remove Logo</button></div></div><div class="col-12 col-md-5"><img id="portalLogoPreview" alt="Captive portal logo preview" class="img-fluid rounded" style="display:none;max-height:100px;max-width:180px"></div></div></div>
 <div id="portalBannerEditor" class="col-12" style="display:none"><label class="form-label">Banner image (JPG/PNG/WEBP, max 2 MB)</label><input id="portalBannerFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><img id="portalBannerPreview" alt="Banner preview" class="img-fluid rounded mt-3" style="display:none;max-height:220px"><div class="mt-2 d-flex gap-2"><button id="portalBannerUploadBtn" type="button" class="btn btn-success">Upload Banner</button><button id="portalBannerRemoveBtn" type="button" class="btn btn-outline-danger">Remove Banner</button></div><div id="portalBannerStatus" class="small mt-2"></div></div>
@@ -2189,7 +2167,7 @@
 <div class="col-12"><label class="form-label">লগইন সফল হলে রিডাইরেক্ট ইউআরএল (ঐচ্ছিক)</label><input id="portalRedirectUrl" type="url" class="form-control" maxlength="500"></div></div><div id="hotspotPortalSettingsStatus" class="small mt-3" role="status"></div><div class="text-end mt-3"><button id="hotspotPortalSaveBtn" type="submit" class="btn btn-success">Save Portal Settings</button></div></form></div></div>
 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><div class="fw-semibold">MikroTik External Redirect Snippet</div></div><div class="card-body"><pre id="portalMikrotikSnippet" class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;overflow-wrap:anywhere">&lt;!DOCTYPE html&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta http-equiv="refresh" content="0; url=https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)"&gt;&lt;/head&gt;
-&lt;body&gt;&lt;script&gt;window.location.href="https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only="+encodeURIComponent("$(link-login-only)")+"&amp;link-orig="+encodeURIComponent("$(link-orig)");&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre><button id="portalCopySnippetBtn" type="button" class="btn btn-outline-success">Copy Snippet</button><span id="portalCopySnippetStatus" class="small ms-2"></span></div></div></div><div id="settings-brand" data-settings-section="brand" class="general-settings-panel" style="display:none">
+&lt;body&gt;&lt;script&gt;window.location.href="https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only="+encodeURIComponent("$(link-login-only)")+"&amp;link-orig="+encodeURIComponent("$(link-orig)");&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre><button id="portalCopySnippetBtn" type="button" class="btn btn-outline-success">Copy Snippet</button><span id="portalCopySnippetStatus" class="small ms-2"></span></div></div></div><div id="general-settings-panel-brand" class="general-settings-panel" style="display:none">
                 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-palette text-success fs-5"></i><div><div class="fw-semibold">Brand &amp; Identity</div><small class="text-muted fw-normal">White-label details shared by public pages, customer portal, and invoices.</small></div></div>
                 <div class="card-body p-4"><form id="systemBrandForm" novalidate><div class="row g-3">
                   <div class="col-md-6"><label class="form-label" for="setCompanyName">Company / ISP Name</label><input id="setCompanyName" class="form-control" maxlength="160" required></div>
@@ -2203,7 +2181,7 @@
                   <div class="col-md-6"><label class="form-label" for="setCopyright">Footer Copyright Text</label><input id="setCopyright" class="form-control" maxlength="300" placeholder="© {year} {company_name}. All Rights Reserved."></div>
                 </div><div id="systemBrandResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemBrandSaveBtn" class="btn btn-success">Save Brand Settings</button></div></form></div></div>
               </div>
-              <div id="settings-billing" data-settings-section="billing" class="general-settings-panel" style="display:none">
+              <div id="general-settings-panel-billing" class="general-settings-panel" style="display:none">
                 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-calendar2-check text-success fs-5"></i><div><div class="fw-semibold">Billing &amp; Expiry Lifecycle</div><small class="text-muted fw-normal">These values are saved as policy settings; they do not immediately modify any active router secret.</small></div></div>
                 <div class="card-body p-4"><form id="systemBillingForm" novalidate><div class="row g-4">
                   <div class="col-md-6"><label class="form-label" for="setBillingCycle">Billing Cycle Type</label><select id="setBillingCycle" class="form-select"><option value="monthly_1st">Monthly calendar cycle (1st to month end)</option><option value="rolling_30">30-day rolling cycle</option></select></div>
@@ -2214,7 +2192,7 @@
                   </div>
                 </div><div id="systemBillingResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemBillingSaveBtn" class="btn btn-success">Save Billing Policy</button></div></form></div></div>
               </div>
-              <div id="settings-sms" data-settings-section="sms" class="general-settings-panel" style="display:none">
+              <div id="general-settings-panel-sms" class="general-settings-panel" style="display:none">
   <div class="card card-custom border-0 shadow-sm">
     <div class="card-custom-header"><i class="bi bi-broadcast-pin text-success fs-5"></i><div><div class="fw-semibold">Universal Notification Hub</div><small class="text-muted fw-normal">Configure SMS, WhatsApp, and Email independently. Notifications are sent asynchronously and never block billing actions.</small></div></div>
     <div class="card-body p-4">
@@ -2342,7 +2320,7 @@
     </div>
   </div>
 </div>
-<div id="settings-webhooks" data-settings-section="webhook" class="general-settings-panel" style="display:none">
+<div id="general-settings-panel-webhook" class="general-settings-panel" style="display:none">
                 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Universal Payment Webhook</div><small class="text-muted fw-normal">Works with MacroDroid, Tasker and custom SMS forwarders.</small></div><span id="generalWebhookBadge" class="badge bg-secondary ms-auto">Disabled</span></div>
                   <div class="card-body p-4"><form id="generalWebhookForm" novalidate><div class="row g-3">
                     <div class="col-12"><label class="form-label" for="generalWebhookPath">Inbound Endpoint Path or Full URL</label><input id="generalWebhookPath" class="form-control font-monospace" placeholder="/api/webhooks/macrodroid-sms" required><div class="form-text">Use a unique absolute path. Changes take effect immediately after saving; no server restart is needed.</div></div>
@@ -4297,8 +4275,6 @@ window.editHotspotUser=function(username,event){
                 arrow.classList.toggle('bi-chevron-down', !isOpen);
             }
         }
-        // Inline sidebar onclick handlers resolve functions on the global window object.
-        window.toggleSubmenu = toggleSubmenu;
         document.addEventListener('click', function(event) {
             if (window.innerWidth >= 768) return;
             const sidebar = document.getElementById('sidebar');
@@ -4899,99 +4875,19 @@ async function deletePlan(id,name){
             generalWebhookRenderUrl();generalSettingsLoaded=true;
           }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
-        let hotspotPortalSettingsLoaded = false;
-        async function loadHotspotPortalConfig(force = false) {
-          const form = document.getElementById('hotspotPortalSettingsForm');
-          if (!form || (hotspotPortalSettingsLoaded && !force)) return;
-          const status = document.getElementById('hotspotPortalSettingsStatus');
-          if (status) { status.className = 'small mt-3 text-muted'; status.textContent = 'Loading portal settings…'; }
-          try {
-            const response = await jsonFetch('/api/admin/hotspot-portal-settings');
-            const s = response.settings || response.data || response;
-            const setValue = (id, value) => { const el = document.getElementById(id); if (el && value != null) el.value = String(value); };
-            const setChecked = (id, value) => { const el = document.getElementById(id); if (el) el.checked = value === true || String(value).toLowerCase() === 'true' || value === 1 || value === '1'; };
-            const mode = String(s.display_mode || s.displayMode || 'default');
-            form.querySelectorAll('input[name="portalDisplayMode"]').forEach(el => { el.checked = el.value === mode; });
-            setValue('portalCustomHtml', s.custom_html ?? s.customHtml ?? '');
-            setValue('portalNoticeText', s.notice_text ?? s.noticeText ?? '');
-            setValue('portalBrandTitle', s.brand_title ?? s.portalTitle ?? 'FAZ NETWORK');
-            setValue('portalBrandSubtitle', s.brand_subtitle ?? s.brandSubtitle ?? '');
-            setValue('portalHelpline', s.helpline_number ?? s.helpline ?? '');
-            setValue('portalRedirectUrl', s.redirect_url ?? s.redirectUrl ?? '');
-            setChecked('portalEnablePayment', s.enable_online_payment ?? s.features?.online_payment ?? true);
-            setChecked('portalEnableVoucher', s.enable_voucher_pin ?? s.features?.voucher_pin ?? true);
-            setChecked('portalEnableQr', s.enable_qr_scan ?? s.features?.qr_scan ?? true);
-            const logo = s.portal_logo_url ?? s.logoUrl ?? '';
-            const logoPreview = document.getElementById('portalLogoPreview');
-            if (logoPreview) { logoPreview.src = logo; logoPreview.style.display = logo ? 'block' : 'none'; }
-            const banner = s.banner_url ?? s.bannerUrl ?? '';
-            const bannerPreview = document.getElementById('portalBannerPreview');
-            if (bannerPreview) { bannerPreview.src = banner; bannerPreview.style.display = banner ? 'block' : 'none'; }
-            const enabledProfiles = new Set(Array.isArray(s.enabledProfiles) ? s.enabledProfiles.map(String) : (Array.isArray(s.packages) ? s.packages.map(p => String(p.profileId || p.name || '')) : []));
-            const packageRows = document.getElementById('portalPackageRows');
-            if (packageRows && !packageRows.dataset.hydrated) {
-              try {
-                const profileData = await jsonFetch('/api/settings/hotspot-profiles');
-                const profiles = profileData.profiles || profileData.data || [];
-                packageRows.replaceChildren();
-                if (!profiles.length) {
-                  packageRows.textContent = 'No Hotspot profiles are available.';
-                } else {
-                  const table = document.createElement('table'); table.className = 'table table-sm align-middle mb-0';
-                  const tbody = document.createElement('tbody');
-                  profiles.forEach(profile => {
-                    const name = String(profile.name || profile.profile || '');
-                    if (!name) return;
-                    const tr = document.createElement('tr');
-                    const label = document.createElement('td'); label.textContent = name;
-                    const checkCell = document.createElement('td'); checkCell.className = 'text-end';
-                    const check = document.createElement('input'); check.type = 'checkbox'; check.className = 'form-check-input'; check.dataset.portalProfile = name; check.checked = enabledProfiles.has(name);
-                    const checkLabel = document.createElement('label'); checkLabel.className = 'form-check-label'; checkLabel.append(check); checkCell.append(checkLabel);
-                    tr.append(label, checkCell); tbody.append(tr);
-                  });
-                  table.append(tbody); packageRows.append(table);
-                }
-                packageRows.dataset.hydrated = 'true';
-              } catch (_) { packageRows.textContent = 'Unable to load Hotspot profiles. Refresh and try again.'; }
-            }
-            const mfs = Array.isArray(s.mfs) ? s.mfs : [];
-            const mfsMap = Object.fromEntries(mfs.map(item => [String(item.name || '').toLowerCase(), item]));
-            [['bkash','bKash'],['nagad','Nagad'],['rocket','Rocket']].forEach(([key,label]) => {
-              const item = mfsMap[key] || mfsMap[label.toLowerCase()] || {};
-              const title = key === 'bkash' ? 'bKash' : label;
-              setValue('portalMfs' + title + 'Number', item.number || '');
-              setChecked('portalMfs' + title + 'Enabled', item.enabled === true);
-            });
-            const snippet = document.getElementById('portalMikrotikSnippet');
-            if (snippet && s.redirect_url) snippet.dataset.redirectUrl = String(s.redirect_url);
-            hotspotPortalSettingsLoaded = true;
-            if (status) { status.className = 'small mt-3 text-success'; status.textContent = 'Portal settings loaded.'; }
-          } catch (error) {
-            if (status) { status.className = 'small mt-3 text-danger'; status.textContent = error.message || 'Unable to load portal settings.'; }
-          }
-        }
-        window.loadHotspotPortalConfig = loadHotspotPortalConfig;
-
         function showGeneralSettingsSection(target) {
           const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
           if (!validTargets.includes(target)) return false;
-          const panels = document.querySelectorAll('#view-general-settings .general-settings-panel');
-          panels.forEach(panel => {
-            const key = panel.dataset.settingsSection || panel.id.replace('general-settings-panel-', '');
+          document.querySelectorAll('.general-settings-panel').forEach(panel => {
+            const key = panel.id.replace('general-settings-panel-', '');
             const visible = key === target || (target === 'payments' && (key === 'webhook' || key === 'mfs'));
             panel.style.display = visible ? 'block' : 'none';
-            panel.classList.toggle('d-none', !visible);
           });
           if (['brand', 'billing', 'sms'].includes(target)) loadSystemSettings();
           if (target === 'payments') {
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
           }
-          if (target === 'hotspot-portal') loadHotspotPortalConfig();
-          document.querySelectorAll('#view-general-settings .general-settings-panel').forEach(panel => {
-            const key = panel.dataset.settingsSection || panel.id.replace('general-settings-panel-', '');
-            if (key === target || (target === 'payments' && (key === 'webhook' || key === 'mfs'))) panel.style.display = 'block';
-          });
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
@@ -5425,18 +5321,17 @@ async function deletePlan(id,name){
             const result=document.getElementById('paymentWebhookSettingsResult');
             try{const response=await jsonFetch('/api/settings/hotspot-webhook'),s=response.settings||response.data||response;const url=document.getElementById('paymentWebhookUrl'),secret=document.getElementById('paymentWebhookSecret'),enabled=document.getElementById('paymentWebhookEnabled');const savedUrl=s.webhookUrl??s.personal_payment_webhook_url??s.url;const rawEnabled=s.webhookEnabled??s.personal_payment_webhook_enabled??s.enabled;const isEnabled=rawEnabled===true||String(rawEnabled).trim().toLowerCase()==='true'||rawEnabled===1||rawEnabled==='1';if(url)url.value=savedUrl==null||String(savedUrl)===''?'/api/webhooks/macrodroid-sms':String(savedUrl);if(enabled)enabled.checked=isEnabled;if(secret)secret.value='';renderWebhookEndpointDisplay();const status=document.getElementById('paymentWebhookStatus');if(status){status.textContent=isEnabled?'Enabled':'Disabled';status.className='badge ms-auto '+(isEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('paymentWebhookSecretHint');if(hint)hint.textContent=s.secretConfigured?'A secret is already saved. Leave this field blank to keep it unchanged.':'No secret is saved yet.';hotspotWebhookSettingsLoaded=true;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Hotspot Webhook settings.';}}
         }
-        window.loadHotspotWebhookSettings = loadHotspotWebhookSettings;
         // Hydrate persisted payment settings on initial page load and whenever the Payments tab is opened.
         // This script is inline near the end of the document, so handle both loading states.
         function hydratePaymentSettingsOnReady(){
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
         }
-        // Keep initialization expression structurally simple to avoid parser ambiguity
-        // in the rendered inline script across EJS/template transformations.
-        document.readyState === 'loading'
-            ? document.addEventListener('DOMContentLoaded', hydratePaymentSettingsOnReady, { once: true })
-            : hydratePaymentSettingsOnReady();
+        if(document.readyState==='loading'){
+            document.addEventListener('DOMContentLoaded',hydratePaymentSettingsOnReady,{once:true});
+        }else{
+            hydratePaymentSettingsOnReady();
+        }
         document.querySelectorAll('[data-settings-tab="payments"]').forEach(tab=>tab.addEventListener('click',()=>{
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
@@ -5513,78 +5408,12 @@ async function deletePlan(id,name){
                     fetchCustomers();
                 } else if (target === 'payments') {
                     fetchPayments(currentPaymentChannel);
-                } else if (target === 'view-general-settings') {
+                } else if (target === 'general-settings') {
                     loadGeneralSettings();
-                    const sectionPanels = document.querySelectorAll('#view-general-settings .general-settings-panel[data-settings-section]');
-                    const hasVisibleSection = Array.from(sectionPanels).some(panel => panel.style.display === 'block' && !panel.classList.contains('d-none'));
-                    if (!hasVisibleSection) showGeneralSettingsSection('brand');
-                } else if (target === 'view-server-settings') {
-                    loadServerSettings();
                 }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
         }
-
-
-        // Server Settings UI is isolated from router and payment workflows.
-        async function loadServerSettings() {
-            const status = document.getElementById('serverSettingsStatus');
-            const body = document.getElementById('serverSettingsTableBody');
-            if (!status || !body) return;
-            status.textContent = 'Loading settings…';
-            try {
-                const response = await fetch('/api/server-settings', { headers: { Accept: 'application/json' }, cache: 'no-store' });
-                const data = await response.json();
-                if (!response.ok || data.success === false) throw new Error(data.message || 'Unable to load server settings.');
-                body.replaceChildren();
-                (Array.isArray(data.settings) ? data.settings : []).forEach(setting => {
-                    const tr = document.createElement('tr');
-                    const key = document.createElement('th'); key.scope = 'row'; key.textContent = String(setting.key || '');
-                    const value = document.createElement('td'); value.textContent = setting.isSecret ? (setting.configured ? 'Configured (masked)' : 'Not configured') : String(setting.value ?? '');
-                    const updated = document.createElement('td'); updated.className = 'text-muted small'; updated.textContent = setting.updatedAt ? new Date(setting.updatedAt).toLocaleString() : '—';
-                    tr.append(key, value, updated); body.appendChild(tr);
-                });
-                if (!body.children.length) body.innerHTML = '<tr><td colspan="3" class="text-muted">No server settings found.</td></tr>';
-                status.textContent = 'Loaded ' + (data.settings || []).length + ' setting(s). Secret values are never returned.';
-            } catch (error) {
-                status.textContent = error.message || 'Unable to load server settings.';
-                body.innerHTML = '<tr><td colspan="3" class="text-danger">Settings could not be loaded.</td></tr>';
-            }
-        }
-        function showServerSettingsTokenMessage(message, isError) {
-            const result = document.getElementById('serverSettingsTokenResult');
-            if (!result) return;
-            result.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
-            result.textContent = message;
-        }
-        document.getElementById('serverSettingsRefresh')?.addEventListener('click', loadServerSettings);
-        document.getElementById('serverSettingsGenerateToken')?.addEventListener('click', async function () {
-            if (!window.confirm('Generate a new master webhook token? Integrations using the previous token will need updating.')) return;
-            const button = this; button.disabled = true;
-            try {
-                const response = await fetch('/api/server-settings/generate-token', { method: 'POST', headers: { Accept: 'application/json' }, cache: 'no-store' });
-                const data = await response.json();
-                if (!response.ok || data.success === false || !data.token) throw new Error(data.message || 'Unable to generate token.');
-                const reveal = document.getElementById('serverSettingsTokenReveal');
-                const input = document.getElementById('serverSettingsGeneratedToken');
-                if (input) input.value = data.token;
-                if (reveal) reveal.classList.remove('d-none');
-                showServerSettingsTokenMessage('Token generated. Copy and securely store it now; it cannot be retrieved again.', false);
-                await loadServerSettings();
-            } catch (error) { showServerSettingsTokenMessage(error.message || 'Unable to generate token.', true); }
-            finally { button.disabled = false; }
-        });
-        document.getElementById('serverSettingsToggleToken')?.addEventListener('click', function () {
-            const input = document.getElementById('serverSettingsGeneratedToken'); if (!input) return;
-            input.type = input.type === 'password' ? 'text' : 'password';
-            this.setAttribute('aria-label', input.type === 'password' ? 'Show token' : 'Hide token');
-            this.innerHTML = input.type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
-        });
-        document.getElementById('serverSettingsCopyToken')?.addEventListener('click', async function () {
-            const input = document.getElementById('serverSettingsGeneratedToken'); if (!input || !input.value) return;
-            try { await navigator.clipboard.writeText(input.value); showServerSettingsTokenMessage('Token copied to clipboard. Store it securely; it will not be shown again.', false); }
-            catch (_) { input.type = 'text'; input.focus(); input.select(); showServerSettingsTokenMessage('Clipboard access was blocked. The token is selected so you can copy it manually.', true); }
-        });
 
         window.switchView = switchView;
 
@@ -9492,244 +9321,5 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
-
-<% if (typeof tenantContext !== 'undefined' && tenantContext) { %>
-<script>
-(function () {
-  'use strict';
-  const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
-  const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  const enabled = (key) => modules[key] === true;
-  const tenantApi = async (path, options = {}) => {
-    const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || data.code || ('Request failed (' + response.status + ')'));
-    return data;
-  };
-  const text = (tag, value, cls) => { const node = document.createElement(tag); node.textContent = value == null ? '' : String(value); if (cls) node.className = cls; return node; };
-
-  // Hide entire top-level sidebar groups when their feature is not licensed.
-  const sidebar = document.querySelector('.sidebar-menu');
-  if (sidebar) {
-    const rules = [
-      { match: /customer/i, module: 'customers' },
-      { match: /hotspot|voucher/i, module: 'hotspot' },
-      { match: /payment|billing|collection|due summary|expense/i, module: 'billing' },
-      { match: /pppoe/i, module: 'pppoe' },
-      { match: /olt/i, module: 'olt' },
-      { match: /router|mikrotik|network devices/i, module: 'mikrotik' },
-      { match: /report/i, module: 'reports' }
-    ];
-    Array.from(sidebar.children).forEach((item) => {
-      const label = (item.textContent || '').replace(/\s+/g, ' ').trim();
-      const rule = rules.find((candidate) => candidate.match.test(label));
-      if (rule && !enabled(rule.module)) item.hidden = true;
-    });
-  }
-
-  // Do not expose legacy operational views to tenant sessions: their actions still
-  // target platform-global APIs (including renew/provision/session controls). The
-  // tenant workspace below is the only enabled CRUD path until those workflows
-  // have a tenant-aware provisioning implementation.
-  const legacyTenantViews = ['view-add-customer','view-all-customer','view-hotspot-dashboard','view-payments','view-payment-ledger'];
-  legacyTenantViews.forEach((id) => {
-    const view = document.getElementById(id);
-    if (view) { view.hidden = true; view.setAttribute('aria-hidden','true'); }
-  });
-  const legacyTenantActions = document.querySelectorAll('[onclick*="/api/customers"], [onclick*="/api/hotspot"], [onclick*="/api/payments"]');
-  legacyTenantActions.forEach((node) => { node.hidden = true; node.setAttribute('aria-hidden','true'); });
-
-  // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
-  // legacy global CRUD controls are not used by this workspace.
-  const dataPanel = document.createElement('section');
-  dataPanel.id = 'tenantDataWorkspace';
-  dataPanel.className = 'card border-0 shadow-sm m-3';
-  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
-  const settings = document.getElementById('view-general-settings');
-  if (settings) settings.prepend(dataPanel);
-  ['customers','hotspot','billing'].forEach((key) => {
-    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : 'tenantBillingPanel');
-    if (panel) panel.hidden = !enabled(key);
-  });
-  const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
-  const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
-  let tenantVoucherRows = [];
-  const runProvisioningAction = async (kind, action, username) => {
-    await tenantApi('/api/tenant/provisioning/' + kind, { method: 'POST', body: JSON.stringify({ action, username }) });
-  };
-  const dataTable = (target, headers, rows, removePath, actionKind) => {
-    const host = document.getElementById(target); if (!host) return; host.replaceChildren();
-    if (!rows || !rows.length) { host.appendChild(text('div', 'No records yet.', 'small text-muted')); return; }
-    const table = document.createElement('table'); table.className = 'table table-sm align-middle';
-    const thead = document.createElement('thead'); const headRow = document.createElement('tr'); headers.forEach(h => headRow.appendChild(text('th', h))); thead.appendChild(headRow); table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    rows.forEach(row => {
-      const tr = document.createElement('tr');
-      const displayHeaders = headers.filter(h => !(actionKind && h === 'Router action') && !(removePath && h === 'Delete'));
-      displayHeaders.forEach(h => {
-        const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at','Router state':'disabled'})[h];
-        let value = key ? row[key] : '';
-        if (h === 'Router state') value = row.disabled ? 'Disabled' : 'Enabled';
-        tr.appendChild(text('td', value));
-      });
-      if (actionKind) {
-        const td = document.createElement('td');
-        const isDisabled = actionKind === 'hotspot' ? String(row.status || '').toLowerCase() !== 'active' : Boolean(row.disabled);
-        const button = text('button', isDisabled ? 'Enable' : 'Disable', 'btn btn-sm ' + (isDisabled ? 'btn-outline-success' : 'btn-outline-warning'));
-        button.type = 'button';
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          try { await runProvisioningAction(actionKind, isDisabled ? 'enable' : 'disable', row.username); await loadTenantData(); dataMessage((isDisabled ? 'Enabled ' : 'Disabled ') + row.username + '.'); }
-          catch (e) { dataMessage(e.message || 'Router action failed.', true); button.disabled = false; }
-        });
-        td.appendChild(button); tr.appendChild(td);
-      }
-      if (removePath) {
-        const td = document.createElement('td'); const button = text('button','Delete','btn btn-sm btn-outline-danger'); button.type='button';
-        button.addEventListener('click', async () => {
-          if (!window.confirm('Delete this tenant-owned record?')) return;
-          try { await dataRequest(removePath + '/' + encodeURIComponent(row.id), {method:'DELETE'}); await loadTenantData(); dataMessage('Record deleted.'); }
-          catch(e) { dataMessage(e.message,true); }
-        });
-        td.appendChild(button); tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody); host.appendChild(table);
-  };
-  async function loadTenantData() {
-    try {
-      const jobs = [];
-      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
-      if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => {
-        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : [];
-        dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
-      }));
-      if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
-      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],d.transactions,null)));
-      await Promise.all(jobs); dataMessage('Tenant records loaded.');
-    } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
-  }
-  document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
-  document.getElementById('tenantVoucherPrint')?.addEventListener('click', async () => {
-    if (!tenantVoucherRows.length) { dataMessage('There are no tenant vouchers to print.', true); return; }
-    let printableVouchers;
-    try { printableVouchers = (await dataRequest('vouchers/print-data')).vouchers || []; }
-    catch (e) { dataMessage(e.message || 'Unable to load voucher print data.', true); return; }
-    const popup = window.open('', '_blank');
-    if (!popup) { dataMessage('Allow pop-ups to print voucher cards.', true); return; }
-    const doc = popup.document;
-    doc.title = 'Tenant Hotspot Vouchers';
-    const style = doc.createElement('style');
-    style.textContent = '@page{size:A4 portrait;margin:8mm}body{font:12px Arial,sans-serif;color:#111}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{border:1px dashed #555;padding:12px;break-inside:avoid;min-height:110px}.brand{font-weight:800;font-size:14px}.credential{font: bold 17px monospace;margin:10px 0}.muted{color:#555;font-size:11px}';
-    doc.head.appendChild(style);
-    const grid = doc.createElement('main'); grid.className = 'grid';
-    printableVouchers.forEach(voucher => {
-      const card = doc.createElement('section'); card.className = 'card';
-      const brand = doc.createElement('div'); brand.className = 'brand'; brand.textContent = 'HOTSPOT VOUCHER'; card.appendChild(brand);
-      const profile = doc.createElement('div'); profile.className = 'muted'; profile.textContent = 'Profile: ' + (voucher.profile || '—') + ' · Validity: ' + (voucher.validity || '—'); card.appendChild(profile);
-      const username = doc.createElement('div'); username.className = 'credential'; username.textContent = 'User: ' + (voucher.username || ''); card.appendChild(username);
-      const password = doc.createElement('div'); password.className = 'credential'; password.textContent = 'Pass: ' + (voucher.password || ''); card.appendChild(password);
-      const price = doc.createElement('div'); price.className = 'muted'; price.textContent = 'Price: ' + (voucher.price ?? 0) + ' · Status: ' + (voucher.status || ''); card.appendChild(price);
-      grid.appendChild(card);
-    });
-    doc.body.appendChild(grid); popup.focus(); popup.print();
-  });
-  const bindCreate = (formId, endpoint) => document.getElementById(formId)?.addEventListener('submit', async event => { event.preventDefault(); const form=event.currentTarget; const body=Object.fromEntries(new FormData(form).entries()); try { await dataRequest(endpoint,{method:'POST',body:JSON.stringify(body)}); form.reset(); await loadTenantData(); dataMessage('Saved successfully.'); } catch(e) { dataMessage(e.message || 'Save failed.',true); } });
-  bindCreate('tenantCustomerForm','customers');
-  document.getElementById('tenantVoucherForm')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const body = Object.fromEntries(new FormData(form).entries());
-    try {
-      await tenantApi('/api/tenant/provisioning/hotspot', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) });
-      form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
-    } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
-  });
-  const pppoePanel = document.getElementById('tenantCustomersPanel');
-  if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
-    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
-    pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
-    pppoePanel.appendChild(pppoe);
-    pppoe.querySelector('form').addEventListener('submit', async event => {
-      event.preventDefault(); const form = event.currentTarget; const body = Object.fromEntries(new FormData(form).entries());
-      try { await tenantApi('/api/tenant/provisioning/pppoe', { method: 'POST', body: JSON.stringify({ action: 'create', ...body }) }); form.reset(); await loadTenantData(); dataMessage('PPPoE account and tenant customer record created atomically.'); }
-      catch (e) { dataMessage(e.message || 'PPPoE provisioning failed.', true); }
-    });
-  }
-  if (enabled('hotspot')) {
-    const heading = document.querySelector('#tenantVouchersPanel h6');
-    if (heading && !document.getElementById('tenantVoucherPrint')) {
-      const print = text('button', 'Batch print vouchers', 'btn btn-sm btn-outline-primary float-end');
-      print.id = 'tenantVoucherPrint'; print.type = 'button'; heading.appendChild(print);
-    }
-  }
-  bindCreate('tenantTransactionForm','transactions');
-  loadTenantData();
-
-  // Tenant users must never interact with legacy shared/global hardware settings.
-  document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
-  document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
-  const settings = document.getElementById('view-general-settings');
-  if (!settings || document.getElementById('tenantHardwareManager')) return;
-  const section = document.createElement('section');
-  section.id = 'tenantHardwareManager';
-  section.className = 'card border-0 shadow-sm m-3';
-  section.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>My Network Hardware</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="tenantHardwareRefresh">Refresh</button></div><div class="card-body"><p class="small text-muted">Router and OLT records are isolated to this tenant. Saving credentials stores encrypted inventory data; it does not connect to or change a live device.</p><div id="tenantHardwareMessage" class="small mb-3" role="status"></div><div class="row g-3"><div class="col-lg-6" id="tenantRouterCard"><h6>MikroTik Routers</h6><form id="tenantRouterForm" class="row g-2"><div class="col-12"><input class="form-control" name="router_name" placeholder="Router name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="host" placeholder="Host / IP" required maxlength="253"></div><div class="col-6"><input class="form-control" name="api_port" type="number" value="8728" min="1" max="65535" required></div><div class="col-6"><input class="form-control" name="username" placeholder="API username" required maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="API password" required autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Router</button></div></form><div id="tenantRouterList" class="mt-3"></div></div><div class="col-lg-6" id="tenantOltCard"><h6>OLT Devices</h6><form id="tenantOltForm" class="row g-2"><div class="col-12"><input class="form-control" name="olt_name" placeholder="OLT name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="olt_type" placeholder="Vendor / type" required maxlength="80"></div><div class="col-6"><input class="form-control" name="ip_address" placeholder="IP / hostname" required maxlength="253"></div><div class="col-6"><input class="form-control" name="username" placeholder="Management username" maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="Password (optional)" autocomplete="new-password"></div><div class="col-12"><input class="form-control" name="snmp_community" type="password" placeholder="SNMP community (optional)" autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save OLT</button></div></form><div id="tenantOltList" class="mt-3"></div></div></div></div>';
-  settings.appendChild(section);
-  const routerCard = section.querySelector('#tenantRouterCard');
-  const oltCard = section.querySelector('#tenantOltCard');
-  routerCard.hidden = !enabled('mikrotik');
-  oltCard.hidden = !enabled('olt');
-  if (!enabled('mikrotik') && !enabled('olt')) section.querySelector('.card-body').prepend(text('div', 'Your tenant plan has no hardware modules enabled.', 'alert alert-warning py-2'));
-
-  const message = (value, error) => {
-    const node = document.getElementById('tenantHardwareMessage');
-    node.textContent = value || '';
-    node.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success');
-  };
-  const formData = (form) => Object.fromEntries(new FormData(form).entries());
-  const renderList = (target, rows, kind) => {
-    const host = document.getElementById(target);
-    host.replaceChildren();
-    if (!rows || !rows.length) { host.appendChild(text('p', 'No ' + kind + ' registered.', 'small text-muted')); return; }
-    rows.forEach((row) => {
-      const line = document.createElement('div');
-      line.className = 'd-flex justify-content-between align-items-center border rounded p-2 mb-2 gap-2';
-      const label = text('div', kind === 'router' ? row.router_name + ' — ' + row.host + ':' + row.api_port : row.olt_name + ' — ' + row.olt_type + ' — ' + row.ip_address, 'small');
-      const remove = text('button', 'Remove', 'btn btn-sm btn-outline-danger');
-      remove.type = 'button';
-      remove.addEventListener('click', async () => {
-        if (!window.confirm('Remove this saved ' + kind + ' inventory record? This does not change the device itself.')) return;
-        try { await tenantApi('/api/tenant/hardware/' + (kind === 'router' ? 'routers/' : 'olts/') + encodeURIComponent(row.id), { method: 'DELETE' }); await loadHardware(); message('Inventory record removed.'); }
-        catch (error) { message(error.message, true); }
-      });
-      line.append(label, remove); host.appendChild(line);
-    });
-  };
-  async function loadHardware() {
-    try {
-      const data = await tenantApi('/api/tenant/hardware');
-      renderList('tenantRouterList', enabled('mikrotik') ? data.routers : [], 'router');
-      renderList('tenantOltList', enabled('olt') ? data.olts : [], 'OLT');
-      message('');
-    } catch (error) { message(error.message, true); }
-  }
-  document.getElementById('tenantHardwareRefresh').addEventListener('click', loadHardware);
-  document.getElementById('tenantRouterForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    try { await tenantApi('/api/tenant/hardware/routers', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); event.currentTarget.elements.api_port.value = '8728'; await loadHardware(); message('Router inventory saved.'); }
-    catch (error) { message(error.message, true); }
-  });
-  document.getElementById('tenantOltForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    try { await tenantApi('/api/tenant/hardware/olts', { method: 'POST', body: JSON.stringify(formData(event.currentTarget)) }); event.currentTarget.reset(); await loadHardware(); message('OLT inventory saved.'); }
-    catch (error) { message(error.message, true); }
-  });
-  loadHardware();
-})();
-</script>
-<% } %>
 </body>
 </html>
