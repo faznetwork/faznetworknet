@@ -1801,7 +1801,8 @@
   // Resolve tenant context from every supported render-local shape. Prefer the
   // validated request tenant, and do not depend on a session/user object existing in EJS.
   const tenantRecord = (typeof tenant !== 'undefined' && tenant && Number(tenant.id) > 0) ? tenant : null;
-  const tenantPage = (typeof tenantContext !== 'undefined' && tenantContext === true)
+  const tenantPage = (typeof locals !== 'undefined' && locals.tenantPage === true)
+    || (typeof tenantContext !== 'undefined' && tenantContext === true)
     || Boolean(tenantRecord)
     || (typeof user !== 'undefined' && user && Number(user.tenantId) > 0)
     || (typeof currentRole !== 'undefined' && currentRole === 'tenant_admin');
@@ -1848,27 +1849,13 @@
 <% if (tenantPage) { %>
         <ul class="sidebar-menu">
             <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
-            <% if (tenantModuleEnabled('customers')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="customers" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('hotspot')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="hotspot" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('billing')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="billing" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing &amp; Payments</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('pppoe')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="pppoe" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('mikrotik')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="mikrotik" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>MikroTik Hardware</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('olt')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="olt" onclick="window.openTenantModule('olt'); return false;"><i class="bi bi-diagram-3"></i><span>OLT Hardware</span></a></li>
-            <% } %>
-            <% if (tenantModuleEnabled('reports')) { %>
             <li class="menu-item"><a href="javascript:void(0)" data-tenant-module="reports" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
-            <% } %>
             <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
         </ul>
 <% } else { %>
