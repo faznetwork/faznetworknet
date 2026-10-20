@@ -94,26 +94,16 @@ exports.listVouchers = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
     const result = await db.query('SELECT id,tenant_id,username,profile,validity,price,status,comment,transaction_id,created_at FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
-    const vouchers = Array.isArray(result?.rows) ? result.rows.filter(Boolean) : [];
-    return res.json({ success: true, vouchers });
-  } catch (error) {
-    // Keep the tenant UI usable even if the voucher table/query is unavailable.
-    console.error('[Tenant Data API] Voucher list query failed; returning an empty list:', error?.message || error);
-    return res.status(200).json({ success: true, vouchers: [] });
-  }
+    return res.json({ success: true, vouchers: result.rows });
+  } catch (error) { return fail(res, error); }
 };
 exports.printVouchers = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
   try {
     const result = await db.query('SELECT id,username,password,profile,validity,price,status FROM public.hotspot_vouchers WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1000', [tid]);
-    const vouchers = Array.isArray(result?.rows) ? result.rows.filter(Boolean) : [];
     res.set('Cache-Control', 'no-store, private');
-    return res.json({ success: true, vouchers });
-  } catch (error) {
-    console.error('[Tenant Data API] Voucher print-data query failed; returning an empty list:', error?.message || error);
-    res.set('Cache-Control', 'no-store, private');
-    return res.status(200).json({ success: true, vouchers: [] });
-  }
+    return res.json({ success: true, vouchers: result.rows });
+  } catch (error) { return fail(res, error); }
 };
 exports.createVoucher = async (req, res) => {
   const tid = requireTenant(req, res); if (!tid) return;
