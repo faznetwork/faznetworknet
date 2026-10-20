@@ -43,7 +43,7 @@ function requireTenantModule(moduleName) {
 
 function tenantLegacyApiGuard(req, res, next) {
   if (req.session?.tenantAdmin !== true) return next();
-  const path = String(req.path || '');
+  const path = String(req.originalUrl || req.path || '').split('?')[0];
   const blocked = LEGACY_GLOBAL_API_PREFIXES.some(prefix => path === prefix || path.startsWith(prefix + '/'));
   if (!blocked) return next();
   return res.status(403).json({
