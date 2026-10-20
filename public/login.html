@@ -378,12 +378,37 @@ body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;
 @media(max-width:360px){body{padding:10px}.portal-card{padding:18px 14px;border-radius:21px}.method-btn{font-size:10px}.packages-grid{gap:7px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 
-    </style>
+    /* Premium blue FAZ NETWORK portal refresh */
+:root{color-scheme:light;--primary:#126dff;--accent:#1685ff;--muted:#64748b;--line:#dce7f5}
+html{background:#f4f8fe;min-height:100%}body{display:block;min-height:100vh;min-height:100dvh;padding:0 16px 24px;margin:0;color:#10223e;background:linear-gradient(180deg,#061b3e 0,#073b7e 290px,#f4f8fe 290px,#f4f8fe 100%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.portal-card{position:relative;overflow:visible;width:100%;max-width:920px;margin:0 auto;padding:24px 30px 22px;border:1px solid #e2eaf5;border-radius:24px;background:#fff;box-shadow:0 18px 55px rgba(21,61,110,.12);text-align:left}
+.bismillah{display:none}.faz-hero{position:relative;margin:-24px -30px 24px;padding:25px 30px 22px;min-height:255px;overflow:hidden;border-radius:23px 23px 0 0;color:white;background:radial-gradient(ellipse at 82% 35%,rgba(0,153,255,.42),transparent 40%),linear-gradient(125deg,#061632 0%,#073a7b 58%,#0a65bd 100%)}
+.faz-hero:after{content:"";position:absolute;right:4%;top:35px;width:210px;height:160px;border:2px solid rgba(82,196,255,.65);border-radius:48% 52% 55% 45%;transform:rotate(-20deg);box-shadow:0 0 30px rgba(35,163,255,.35),inset 0 0 28px rgba(35,163,255,.15);pointer-events:none}
+.faz-brand-mark{position:relative;z-index:1;display:flex;align-items:center;gap:10px}.faz-wifi{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#147cff;color:#fff;font-size:34px;font-weight:900;line-height:1}.faz-brand-mark strong{display:block;font-size:22px;letter-spacing:-.5px}.faz-brand-mark em{font-style:normal;color:#55c9ff}.faz-brand-mark small{display:block;margin-top:3px;color:#b8d6f8;font-size:9px;letter-spacing:3px}
+.faz-hero-copy{position:relative;z-index:1;margin-top:28px}.faz-eyebrow{display:inline-block;padding:5px 10px;border:1px solid rgba(255,255,255,.25);border-radius:30px;background:rgba(255,255,255,.1);font-size:10px;letter-spacing:1.5px}.faz-hero-copy h1{margin:10px 0 5px;color:#fff;font-size:clamp(28px,5vw,43px);line-height:1.05;letter-spacing:-1.5px}.faz-hero-copy h1 span{color:#35b9ff}.faz-hero-copy p{margin:0;color:#e4f2ff;font-size:clamp(14px,2vw,18px);line-height:1.45}.faz-benefits{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:18px;color:#d9eaff;font-size:11px;font-weight:650}
+.logo-box{display:none}.brand-title,.brand-subtitle,.connection-chip{text-align:left}.brand-title{font-size:18px;color:#10223e}.brand-subtitle{color:#64748b;margin:4px 0 14px}.connection-chip{justify-content:flex-start;color:#16764b;margin:0 0 18px}
+.method-selector{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;border:0;border-radius:14px;background:#edf3fb;margin-bottom:22px}.method-btn{min-height:50px;padding:10px 8px;border-radius:11px;color:#506783;font-size:13px}.method-btn.active{background:linear-gradient(135deg,#167cff,#0862e7);color:#fff;box-shadow:0 7px 18px rgba(22,124,255,.24)}
+.payment-account-card{background:#f5f8fd;border:1px solid #e2eaf5}.payment-account-card>div:first-child{color:#536985!important}.account-number{color:#0b63db;background:#eaf3ff;border-color:#b9d5ff}
+.packages-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.pkg-card{min-height:86px;border-radius:14px;background:#f7faff!important;border:1px solid #e0e9f5!important}.pkg-time{color:#526783!important}.pkg-price{color:#0f67e9!important}
+.selected-package-summary{background:#eef6ff;border-color:#cfe3ff;border-left-color:#1685ff;color:#23548b}.input-group label{color:#344b68}.input-box input,.input-box select{background:#fff;color:#142944;border:1px solid #d4e0ef;border-radius:12px}.input-box input::placeholder{color:#8191a7}.input-box input:focus,.input-box select:focus{border-color:#1685ff;box-shadow:0 0 0 3px rgba(22,133,255,.12);background:#fff}
+.btn-main-action{min-height:58px;border:0;border-radius:14px;background:linear-gradient(100deg,#167cff,#0862e7);box-shadow:0 8px 22px rgba(22,124,255,.24);font-size:16px}.btn-main-action:hover{box-shadow:0 10px 26px rgba(22,124,255,.32)}.secondary-action{border:1px solid #d4e5fa;background:#eff6ff;color:#1269dd}#qr-reader-container{border-color:#b9d5ff;background:#f8fbff}.remember-row{color:#526783}.remember-row input{accent-color:#167cff}
+.alert-error{background:#fff1f2;color:#be123c;border-color:#fecdd3}.alert-success{background:#ecfdf5;color:#047857;border-color:#a7f3d0}.card-footer{border-color:#e5edf7;color:#75859b}.helpline{color:#1269dd}.footer-links a{color:#61748e}.footer-links a:hover{color:#1269dd}
+@media(min-width:760px){body{padding-top:28px}.portal-card{margin-top:0}.faz-hero{min-height:275px}.faz-hero-copy{margin-top:32px}.faz-hero:after{width:255px;height:190px;right:7%}}
+@media(max-width:600px){body{padding:0 10px 18px;background:linear-gradient(180deg,#061b3e 0,#073b7e 240px,#f4f8fe 240px,#f4f8fe 100%)}.portal-card{padding:18px 15px 17px;border-radius:20px}.faz-hero{margin:-18px -15px 20px;padding:20px 16px 18px;min-height:235px;border-radius:19px 19px 0 0}.faz-brand-mark strong{font-size:19px}.faz-brand-mark small{letter-spacing:2px}.faz-hero-copy{margin-top:25px}.faz-hero:after{width:115px;height:100px;right:-20px;top:70px;opacity:.75}.faz-benefits{gap:7px 12px;font-size:10px}.method-btn{font-size:11px;min-height:46px}.packages-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.brand-title{font-size:17px}}
+@media(max-width:360px){body{padding-left:7px;padding-right:7px}.portal-card{padding:15px 12px}.faz-hero{margin:-15px -12px 17px;padding:18px 12px}.method-btn{font-size:10px;padding:8px 3px}}
+
+</style>
 </head>
 <body>
 
 <div class="portal-card">
     <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+    <section class="faz-hero" aria-label="FAZ NETWORK welcome">
+      <div class="faz-brand-mark"><span class="faz-wifi">⌁</span><div><strong>FAZ <em>NETWORK</em></strong><small>FAST · SECURE · RELIABLE</small></div></div>
+      <div class="faz-hero-copy"><span class="faz-eyebrow">WELCOME TO</span><h1>FAZ <span>NETWORK</span></h1><p>দ্রুত, নিরাপদ এবং নির্ভরযোগ্য<br>ইন্টারনেট আপনার জন্য</p></div>
+      <div class="faz-benefits"><span>⚡ High Speed</span><span>🛡 Secure Access</span><span>◉ 24/7 Support</span></div>
+    </section>
+
 
     <div id="reseller-banner-box">
         <img id="reseller-banner-img" src="" alt="Banner">
@@ -402,7 +427,7 @@ body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;
 
     <!-- মেথড সিলেক্টর -->
     <div class="method-selector">
-        <button type="button" class="method-btn" id="m-btn-pin" aria-pressed="false">Voucher / PIN</button>
+        <button type="button" class="method-btn" id="m-btn-pin" aria-pressed="false">Voucher Login</button>
         <button type="button" class="method-btn" id="m-btn-member" aria-pressed="false">Member Login</button>
         <button type="button" class="method-btn active" id="m-btn-online" aria-pressed="true">Buy Online</button>
     </div>
@@ -440,15 +465,15 @@ body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;
     <!-- মেথড ২: ভাউচার পিন ফিল্ডস -->
     <div id="section-pin" style="display: none;">
         <div class="input-group" style="margin-top: 10px;">
-            <label for="voucher_pin">ভাউচার কোড / পিন (Voucher PIN)</label>
+            <label for="voucher_pin">Username / Voucher ID</label>
             <div class="input-box">
-                <input type="text" id="voucher_pin" autocomplete="off" autocapitalize="characters" maxlength="100" placeholder="যেমন: FAZ-8921-X3" style="text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">
+                <input type="text" id="voucher_pin" autocomplete="off" autocapitalize="characters" maxlength="100" placeholder="আপনার voucher username লিখুন" style="text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">
             </div>
         </div>
         <div class="input-group" style="margin-top: 10px;">
-            <label for="voucher_password">কার্ড পাসওয়ার্ড (Voucher Password)</label>
+            <label for="voucher_password">Password</label>
             <div class="input-box">
-                <input type="password" id="voucher_password" autocomplete="off" maxlength="160" placeholder="কার্ডের পাসওয়ার্ড লিখুন">
+                <input type="password" id="voucher_password" autocomplete="off" maxlength="160" placeholder="আপনার voucher password লিখুন">
             </div>
         </div>
         <div class="input-group" style="margin-top: 10px;">
@@ -458,7 +483,7 @@ body{min-height:100vh;min-height:100dvh;margin:0;padding:18px 14px;display:flex;
             </div>
         </div>
         <div class="remember-row"><input type="checkbox" id="remember-voucher"><label for="remember-voucher">এই ডিভাইসে PIN মনে রাখুন</label></div>
-        <div style="font-size:12px;color:#9bb4aa;line-height:1.55;text-align:left;margin-bottom:12px;">Scratch Card ব্যবহার করতে PIN ও Password দিন। আগে থেকে নিবন্ধিত গ্রাহক হলে PIN ফাঁকা রেখে ফোন নম্বর দিন।</div>
+        <div style="font-size:12px;color:#64748b;line-height:1.55;text-align:left;margin-bottom:12px;">আপনার ভাউচার কার্ডে দেওয়া Username এবং Password—দুটিই লিখুন।</div>
         <button type="button" class="secondary-action" id="open-qr-scanner">▦ QR কোড স্ক্যান করুন</button>
     </div>
 
@@ -770,7 +795,7 @@ if(subtitle)subtitle.textContent=data.brand_subtitle||'স্বয়ংক্�
 const phone=String(data.helpline||'').trim(),helpline=byId('reseller-helpline');
 if(helpline&&phone){helpline.textContent=phone;helpline.href='tel:'+phone.replace(/[^+0-9]/g,'');}
 const box=byId('reseller-banner-box'),image=byId('reseller-banner-img');
-if(data.display_mode==='banner'&&data.banner_url&&box&&image){image.src=data.banner_url;image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}
+if(data.banner_url&&box&&image){if(data.display_mode==='banner'){image.src=data.banner_url;image.alt=(data.brand_title||'FAZ NETWORK')+' promotional banner';box.style.display='block';}else{box.style.display='none';}}
 else if(box)box.style.display='none';
 if(data.display_mode==='custom_code'&&data.custom_html){
 let frame=byId('portal-custom-content');
@@ -803,11 +828,8 @@ if(!grid.querySelector('.pkg-card')){const note=document.createElement('div');no
 async function loadPackagesAndSettings(){
 const grid=byId('packages-grid'),accounts=byId('payment-accounts-list'),select=byId('cust_payment_method');
 try{
-const homeResponse=await fetch(BACKEND_BASE_URL+'/',{cache:'no-store',credentials:'omit'});
-if(!homeResponse.ok)throw new Error('প্যাকেজ সার্ভার অনুপলব্ধ।');
-const html=await homeResponse.text(),doc=new DOMParser().parseFromString(html,'text/html');
-let nodes=Array.from(doc.querySelectorAll('[data-buy-hotspot][data-profile][data-price]')).map(function(node){return {profile:node.getAttribute('data-profile'),price:Number(node.getAttribute('data-price')),validity:node.getAttribute('data-validity')||node.getAttribute('data-profile')};});
-if(!nodes.length)nodes=Array.from(doc.querySelectorAll('[data-profile][data-price]')).map(function(node){return {profile:node.getAttribute('data-profile'),price:Number(node.getAttribute('data-price')),validity:node.getAttribute('data-validity')||node.getAttribute('data-profile')};});
+const config=await requestJson(PUBLIC_PORTAL_CONFIG_URL,{method:'GET'});
+const nodes=Array.isArray(config.packages)?config.packages.filter(function(p){return Number.isFinite(p.price)&&p.price>0;}).map(function(p){return {profile:p.profileId||p.name,price:Number(p.price),validity:p.validity||p.name||p.profileId||'Internet access'};}):[];
 renderPackages(nodes);
 }catch(error){console.warn('[Hotspot Packages]',error.message);renderPackages([]);}
 try{
