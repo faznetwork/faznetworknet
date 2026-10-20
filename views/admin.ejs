@@ -4953,7 +4953,7 @@ async function deletePlan(id,name){
         }
         let hotspotPortalSettingsLoaded = false;
         async function loadHotspotPortalConfig(force = false) {
-          if (window.__isTenantPage) { hotspotPortalSettingsLoaded = true; return; }
+          if (window.__isTenantPage || window.location.pathname === '/tenant' || window.location.pathname.startsWith('/tenant/')) { hotspotPortalSettingsLoaded = true; return; }
           const form = document.getElementById('hotspotPortalSettingsForm');
           if (!form || (hotspotPortalSettingsLoaded && !force)) return;
           const status = document.getElementById('hotspotPortalSettingsStatus');
