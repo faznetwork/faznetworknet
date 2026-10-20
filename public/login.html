@@ -340,7 +340,7 @@
             <div class="send-money-alert">★ নির্বাচিত প্যাকেজের সঠিক টাকা Send Money করুন ★</div>
         </div>
 
-        <!-- Packages Grid -->
+        <!-- Live Server Packages Grid -->
         <div class="packages-grid" id="packages-grid">
             <div class="send-money-alert" style="grid-column: 1 / -1;">প্যাকেজ লোড হচ্ছে...</div>
         </div>
@@ -379,7 +379,7 @@
     </div>
 </div>
 
-<!-- Hidden MikroTik Auto-Login Form -->
+<!-- Hidden MikroTik Auto-Login Form (PAP Submission: MAC as User, Phone as Pass) -->
 <form id="mikrotik-auto-login" name="mikrotik-auto-login" action="$(link-login-only)" method="post" style="display:none;">
     <input type="hidden" name="username" id="mt-user" value="$(mac)">
     <input type="hidden" name="password" id="mt-pass">
@@ -395,16 +395,6 @@
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
 
-    // সার্ভার রেসপন্স না পেলে ডিফল্ট রেডি প্যাকেজ
-    const DEFAULT_PACKAGES = [
-        { profile: '1-Hour', price: 10, validity: '১ ঘণ্টা' },
-        { profile: '12-Hour', price: 20, validity: '১২ ঘণ্টা' },
-        { profile: '1-Day', price: 30, validity: '১ দিন' },
-        { profile: '3-Days', price: 60, validity: '৩ দিন' },
-        { profile: '7-Days', price: 120, validity: '৭ দিন' },
-        { profile: '30-Days', price: 350, validity: '৩০ দিন' }
-    ];
-
     let selectedPackage = null;
     let availablePaymentMethods = [];
 
@@ -417,7 +407,7 @@
 
     function formatTaka(value) {
         const amount = Number(value);
-        return Number.isFinite(amount) ? '৳ ' + amount : '৳ —';
+        return Number.isFinite(amount) ? '৳ ' + amount.toLocaleString('en-BD', { maximumFractionDigits: 2 }) : '৳ —';
     }
 
     function renderPackages(packages) {
@@ -427,20 +417,26 @@
         selectedPackage = null;
         summary.textContent = 'চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।';
 
-        packages.forEach((pkg, index) => {
+        const valid = packages.filter(pkg => pkg.profile && Number.isFinite(Number(pkg.price)) && Number(pkg.price) > 0);
+        if (!valid.length) {
+            const message = document.createElement('div');
+            message.className = 'send-money-alert';
+            message.style.gridColumn = '1 / -1';
+            message.textContent = 'এখন কোনো Hotspot প্যাকেজ উপলভ্য নেই। অনুগ্রহ করে সাপোর্টে যোগাযোগ করুন।';
+            grid.appendChild(message);
+            return;
+        }
+
+        valid.forEach(pkg => {
             const card = document.createElement('button');
             card.type = 'button';
             card.className = 'pkg-card';
-            if (index === 0) {
-                // ১ম প্যাকেজ ডিফল্ট সিলেক্ট
-                card.classList.add('selected');
-                selectedPackage = pkg;
-                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + pkg.validity + ' — ' + formatTaka(pkg.price);
-            }
+            card.setAttribute('aria-pressed', 'false');
+            card.setAttribute('aria-label', pkg.profile + ', ' + formatTaka(pkg.price));
 
             const time = document.createElement('div');
             time.className = 'pkg-time';
-            time.textContent = pkg.validity;
+            time.textContent = pkg.validity || pkg.profile;
 
             const price = document.createElement('div');
             price.className = 'pkg-price';
@@ -448,74 +444,100 @@
 
             card.append(time, price);
             card.addEventListener('click', () => {
-                selectedPackage = pkg;
-                grid.querySelectorAll('.pkg-card').forEach(item => item.classList.remove('selected'));
-                card.classList.add('selected');
-                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + pkg.validity + ' — ' + formatTaka(pkg.price);
+                selectedPackage = { profile: pkg.profile, price: Number(pkg.price), validity: pkg.validity || pkg.profile };
+                grid.querySelectorAll('.pkg-card').forEach(item => {
+                    const active = item === card;
+                    item.classList.toggle('selected', active);
+                    item.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + selectedPackage.validity + ' — ' + formatTaka(selectedPackage.price);
             });
             grid.appendChild(card);
         });
     }
 
-    function renderPaymentAccounts(accounts) {
+    async function loadPublicPortalData() {
+        const grid = document.getElementById('packages-grid');
         const accountList = document.getElementById('payment-accounts-list');
         const methodSelect = document.getElementById('cust_payment_method');
-        const labels = { bkash: 'bKash', nagad: 'Nagad', rocket: 'Rocket', upay: 'Upay' };
 
-        availablePaymentMethods = Object.keys(accounts).filter(k => accounts[k]);
-        accountList.replaceChildren();
-
-        if (!availablePaymentMethods.length) {
-            // যদি এপিআই থেকে না পায়, ডিফল্ট নম্বর শো
-            accounts = { bkash: '01339932887', nagad: '01339932887' };
-            availablePaymentMethods = ['bkash', 'nagad'];
-        }
-
-        availablePaymentMethods.forEach(k => {
-            const row = document.createElement('div');
-            row.className = 'account-row';
-            row.innerHTML = `<span class="account-provider">${labels[k] || k}:</span> <span class="account-number">${accounts[k]}</span>`;
-            accountList.appendChild(row);
-        });
-
-        methodSelect.replaceChildren();
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'পেমেন্ট মাধ্যম নির্বাচন করুন';
-        methodSelect.appendChild(placeholder);
-
-        availablePaymentMethods.forEach(k => {
-            const opt = document.createElement('option');
-            opt.value = k;
-            opt.textContent = labels[k] || k;
-            methodSelect.appendChild(opt);
-        });
-        methodSelect.disabled = false;
-    }
-
-    async function loadPublicData() {
         try {
-            const res = await fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store' });
-            if (res.ok) {
-                const data = await res.json();
-                const settings = data?.settings || {};
-                
-                // প্যাকেজ রেন্ডার
-                if (Array.isArray(settings.hotspot_packages) && settings.hotspot_packages.length > 0) {
-                    renderPackages(settings.hotspot_packages);
-                } else {
-                    renderPackages(DEFAULT_PACKAGES);
-                }
+            // সার্ভার থেকে লাইভ প্যাকেজ ও সেটিংস ফেচ করা হচ্ছে
+            const [homeResponse, settingsResponse] = await Promise.all([
+                fetch(BACKEND_BASE_URL + '/', { cache: 'no-store', credentials: 'omit' }),
+                fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store', credentials: 'omit' }).catch(() => null)
+            ]);
 
-                // পেমেন্ট অ্যাকাউন্টস রেন্ডার
-                renderPaymentAccounts(settings.payment_accounts || {});
-            } else {
-                throw new Error();
+            if (!homeResponse.ok) throw new Error('PACKAGE_LIST_UNAVAILABLE');
+
+            const html = await homeResponse.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const packages = Array.from(doc.querySelectorAll('[data-buy-hotspot][data-profile][data-price]')).map(button => ({
+                profile: String(button.getAttribute('data-profile') || '').trim(),
+                price: Number(button.getAttribute('data-price')),
+                validity: String(button.getAttribute('data-validity') || '').trim()
+            }));
+
+            renderPackages(packages);
+
+            let accounts = {};
+            if (settingsResponse && settingsResponse.ok) {
+                const settingsData = await settingsResponse.json().catch(() => ({}));
+                accounts = settingsData?.settings?.payment_accounts || {};
             }
-        } catch (e) {
-            // নেটওয়ার্ক বা CORS আটকে গেলেও ইউজার যেন পেমেন্ট দেখতে পারে
-            renderPackages(DEFAULT_PACKAGES);
-            renderPaymentAccounts({ bkash: '01339932887', nagad: '01339932887' });
+
+            const labels = { bkash: 'bKash', nagad: 'Nagad', rocket: 'Rocket', upay: 'Upay' };
+            availablePaymentMethods = Object.keys(labels).filter(key => String(accounts[key] || '').trim());
+            accountList.replaceChildren();
+
+            if (!availablePaymentMethods.length) {
+                const note = document.createElement('div');
+                note.className = 'send-money-alert';
+                note.textContent = 'পেমেন্ট নম্বর কনফিগার করা নেই। সাপোর্টে যোগাযোগ করুন।';
+                accountList.appendChild(note);
+            } else {
+                availablePaymentMethods.forEach(key => {
+                    const row = document.createElement('div');
+                    row.className = 'account-row';
+                    row.innerHTML = `<span class="account-provider">${labels[key]}:</span> <span class="account-number">${String(accounts[key]).trim()}</span>`;
+                    accountList.appendChild(row);
+                });
+            }
+
+            methodSelect.replaceChildren();
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = availablePaymentMethods.length ? 'পেমেন্ট মাধ্যম নির্বাচন করুন' : 'পেমেন্ট মাধ্যম অনুপলভ্য';
+            methodSelect.appendChild(placeholder);
+
+            availablePaymentMethods.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = labels[key];
+                methodSelect.appendChild(option);
+            });
+            methodSelect.disabled = !availablePaymentMethods.length;
+
+        } catch (err) {
+            grid.replaceChildren();
+            const message = document.createElement('div');
+            message.className = 'send-money-alert';
+            message.style.gridColumn = '1 / -1';
+            message.textContent = 'লাইভ প্যাকেজ লোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে পেজ রিফ্রেশ করুন।';
+            grid.appendChild(message);
+
+            accountList.replaceChildren();
+            const alertNote = document.createElement('div');
+            alertNote.className = 'send-money-alert';
+            alertNote.textContent = 'পেমেন্ট সেটিংস লোড করা যায়নি।';
+            accountList.appendChild(alertNote);
+
+            methodSelect.replaceChildren();
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'পেমেন্ট মাধ্যম অনুপলভ্য';
+            methodSelect.appendChild(option);
+            methodSelect.disabled = true;
         }
     }
 
@@ -559,6 +581,7 @@
             const response = await fetch(BACKEND_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'omit',
                 body: JSON.stringify({
                     username: routerMac || phoneInput,
                     account_phone: phoneInput,
@@ -575,7 +598,7 @@
 
             if (!response.ok || !data.success) {
                 const messages = {
-                    NOT_FOUND_OR_DELAYED: 'এই TrxID এখনো পাওয়া যায়নি। ১ মিনিট পর আবার চেষ্টা করুন।',
+                    NOT_FOUND_OR_DELAYED: 'এই TrxID এখনো পাওয়া যায়নি। SMS ফরোয়ার্ড হতে কিছুক্ষণ লাগতে পারে।',
                     ALREADY_CLAIMED: 'এই TrxID আগে ব্যবহার করা হয়েছে।',
                     AMOUNT_MISMATCH: 'টাকার পরিমাণ প্যাকেজ মূল্যের সাথে মিলছে না।',
                     PROFILE_NOT_FOUND_OR_AMBIGUOUS: 'প্যাকেজে সমস্যা হয়েছে। সাপোর্টে যোগাযোগ করুন।'
@@ -586,7 +609,7 @@
                 return;
             }
 
-            // সফল হলে সরাসরি মিক্রোটিকে সাবমিট (PAP)
+            // সফল হলে সরাসরি মিক্রোটিকে সাবমিট (PAP: User = MAC, Pass = Phone)
             const autoForm = document.getElementById('mikrotik-auto-login');
             document.getElementById('mt-user').value = String(data.username || routerMac);
             document.getElementById('mt-pass').value = String(data.password || phoneInput);
@@ -605,7 +628,7 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', loadPublicData);
+    document.addEventListener('DOMContentLoaded', loadPublicPortalData);
 </script>
 
 </body>
