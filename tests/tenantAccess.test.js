@@ -15,6 +15,7 @@ test('module policy defaults missing core flags to enabled and honors explicit f
   assert.equal(moduleEnabled({ modules: {} }, 'hotspot'), true);
   assert.equal(moduleEnabled({ modules: null }, 'customers'), true);
   assert.equal(moduleEnabled({ modules: { customers: false } }, 'customers'), false);
+  assert.equal(moduleEnabled({ enabled_modules: { billing: false } }, 'billing'), false);
   assert.equal(moduleEnabled({ modules: {} }, 'analytics'), false);
   assert.deepEqual(normalizeModules({ billing: true, hotspot: 1, customers: false }), {
     billing: true, hotspot: true, customers: false,
