@@ -17,5 +17,6 @@ router.put('/vouchers/:id', requireTenantModule('hotspot'), controller.updateVou
 router.delete('/vouchers/:id', requireTenantModule('hotspot'), controller.deleteVoucher);
 router.get('/transactions', requireTenantModule('billing'), controller.listTransactions);
 router.post('/transactions', requireTenantModule('billing'), controller.createTransaction);
+router.put('/transactions/:id', requireTenantModule('billing'), controller.updateTransaction);
 
 module.exports = router;
