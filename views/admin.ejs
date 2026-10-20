@@ -2697,6 +2697,17 @@
 
                 clearTimeout(timeoutId);
 
+                // Tenant APIs may legitimately return 401/403 for scoped permissions or
+                // module access. Never treat those responses as a platform-admin logout.
+                const tenantSession = <%= (typeof tenantContext !== 'undefined' && tenantContext) ? 'true' : 'false' %>;
+                if ((res.status === 401 || res.status === 403) && tenantSession) {
+                    const contentType = res.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        const payload = await res.json().catch(() => ({}));
+                        return { success: false, status: res.status, message: payload.message || payload.code || 'Tenant request is not authorized.', ...payload };
+                    }
+                    return { success: false, status: res.status, message: 'Tenant request is not authorized.' };
+                }
                 if (res.status === 401) {
                     window.location.href = '/login';
                     return { success: false, message: 'Unauthorized. Redirecting...' };
@@ -9278,19 +9289,25 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
         }
 
+        const tenantContextActive = <%= (typeof tenantContext !== 'undefined' && tenantContext) ? 'true' : 'false' %>;
         window.addEventListener('error', function (event) {
             console.error('[Admin Runtime Recovery] Client-side error detected:', event.error || event.message || 'Unknown error');
-            recoverAdminClickability();
+            // Tenant telemetry/API failures must not trigger legacy admin DOM recovery.
+            if (!tenantContextActive) recoverAdminClickability();
         });
         window.addEventListener('unhandledrejection', function (event) {
             console.error('[Admin Runtime Recovery] Unhandled promise rejection:', event.reason || 'Unknown rejection');
-            recoverAdminClickability();
+            if (!tenantContextActive) recoverAdminClickability();
         });
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', startRecovery, { once: true });
-        } else {
-            startRecovery();
+        // Tenant pages degrade locally; don't attach the legacy subtree observer or
+        // clickability recovery machinery to the tenant workspace.
+        if (!tenantContextActive) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startRecovery, { once: true });
+            } else {
+                startRecovery();
+            }
         }
     })();
     </script>
@@ -9497,6 +9514,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script>
 (function () {
   'use strict';
+  // Inline tenant mount must be idempotent even if this script is accidentally
+  // evaluated again by a partial navigation or template integration.
+  if (window.__tenantDashboardInitialized) return;
+  window.__tenantDashboardInitialized = true;
   const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
   const enabled = (key) => modules[key] === true;
