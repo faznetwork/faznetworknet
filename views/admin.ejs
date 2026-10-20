@@ -1803,9 +1803,9 @@
   if (typeof tenantModuleConfig === 'string') { try { tenantModuleConfig = JSON.parse(tenantModuleConfig); } catch (_) { tenantModuleConfig = {}; } }
   if (!tenantModuleConfig || typeof tenantModuleConfig !== 'object' || Array.isArray(tenantModuleConfig)) tenantModuleConfig = {};
   const tenantCoreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
-  const tenantModuleFlagsPresent = tenantCoreModules.some((key) => Object.prototype.hasOwnProperty.call(tenantModuleConfig, key));
-  // Missing/empty flags must not hide the tenant's operational menu. Only an explicit false disables a module.
-  const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleFlagsPresent ? tenantModuleConfig[key] !== false : tenantCoreModules.includes(key));
+  // Keep the sidebar policy aligned with tenantAccess.js: explicit false disables,
+  // explicit true enables, and missing flags fall back only for core modules.
+  const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleConfig[key] === false ? false : tenantModuleConfig[key] === true || tenantCoreModules.includes(key));
 %>
 <script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
@@ -9576,8 +9576,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   window.__tenantDashboardInitialized = true;
   const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  // Missing tenant module flags default to enabled; only an explicit false disables a module.
-  const enabled = (key) => modules[key] !== false;
+  // Match the server-side tenant module fallback: explicit false disables,
+  // explicit true enables, and missing flags enable core modules only.
+  const enabled = (key) => modules[key] === false ? false : modules[key] === true || ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'].includes(key);
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
