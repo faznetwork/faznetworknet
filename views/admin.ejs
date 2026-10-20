@@ -9576,7 +9576,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   window.__tenantDashboardInitialized = true;
   const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  const enabled = (key) => modules[key] === true;
+  // Missing tenant module flags default to enabled; only an explicit false disables a module.
+  const enabled = (key) => modules[key] !== false;
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
