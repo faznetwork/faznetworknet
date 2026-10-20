@@ -9612,8 +9612,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
   }
   document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
-  document.getElementById('tenantVoucherPrint')?.addEventListener('click', () => {
+  document.getElementById('tenantVoucherPrint')?.addEventListener('click', async () => {
     if (!tenantVoucherRows.length) { dataMessage('There are no tenant vouchers to print.', true); return; }
+    let printableVouchers;
+    try { printableVouchers = (await dataRequest('vouchers/print-data')).vouchers || []; }
+    catch (e) { dataMessage(e.message || 'Unable to load voucher print data.', true); return; }
     const popup = window.open('', '_blank');
     if (!popup) { dataMessage('Allow pop-ups to print voucher cards.', true); return; }
     const doc = popup.document;
@@ -9622,7 +9625,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     style.textContent = '@page{size:A4 portrait;margin:8mm}body{font:12px Arial,sans-serif;color:#111}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{border:1px dashed #555;padding:12px;break-inside:avoid;min-height:110px}.brand{font-weight:800;font-size:14px}.credential{font: bold 17px monospace;margin:10px 0}.muted{color:#555;font-size:11px}';
     doc.head.appendChild(style);
     const grid = doc.createElement('main'); grid.className = 'grid';
-    tenantVoucherRows.forEach(voucher => {
+    printableVouchers.forEach(voucher => {
       const card = doc.createElement('section'); card.className = 'card';
       const brand = doc.createElement('div'); brand.className = 'brand'; brand.textContent = 'HOTSPOT VOUCHER'; card.appendChild(brand);
       const profile = doc.createElement('div'); profile.className = 'muted'; profile.textContent = 'Profile: ' + (voucher.profile || '—') + ' · Validity: ' + (voucher.validity || '—'); card.appendChild(profile);
