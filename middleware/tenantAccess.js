@@ -13,15 +13,19 @@ const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
 ]);
 
 function normalizeModules(input) {
-  // PostgreSQL JSONB may be either a flat module map or an enabled_modules wrapper.
-  // Unwrap only that known wrapper; never infer defaults or promote non-true values.
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return Object.freeze({});
+  // PostgreSQL JSONB may be a flat map or an enabled_modules wrapper.
+  // Explicit false is respected; missing/malformed core flags retain legacy enabled defaults.
+  if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
   const modules = input.enabled_modules && typeof input.enabled_modules === 'object' && !Array.isArray(input.enabled_modules)
     ? input.enabled_modules
     : input;
-  return Object.freeze(Object.fromEntries(
-    Object.entries(modules).map(([key, enabled]) => [String(key), enabled === true])
-  ));
+  const normalized = Object.fromEntries(
+    Object.entries(modules).map(([key, enabled]) => [String(key), enabled === true ? true : enabled === false ? false : undefined])
+  );
+  for (const key of CORE_MODULES) {
+    if (normalized[key] !== true && normalized[key] !== false) normalized[key] = true;
+  }
+  return Object.freeze(normalized);
 }
 
 function moduleEnabled(tenant, moduleName) {
