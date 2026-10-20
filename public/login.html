@@ -6,7 +6,7 @@
     <title>FAZ NETWORK - Hotspot Portal</title>
     <style>
         :root {
-            --bg-color: #080c14;
+            --bg-color: #0b0f19;
             --card-bg: #111827;
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
@@ -510,7 +510,11 @@
             rocket: { name: 'Rocket', color: '#832b73', char: 'R' }, 
             upay: { name: 'Upay', color: '#0054a6', char: 'U' } 
         };
-        const activeProviders = Object.keys(labels).filter(k => accounts[k]);
+        const activeProviders = Object.keys(labels).filter(k => {
+            const value = accounts[k];
+            return typeof value === 'string' ? value.trim().length > 0 :
+                Boolean(value && (value.number || value.account_number || value.accountNumber || value.wallet));
+        });
 
         if (!activeProviders.length) {
             grid.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#fbbf24;">পেমেন্ট মাধ্যম কনফিগার করা নেই।</div>';
@@ -519,13 +523,22 @@
 
         activeProviders.forEach(prov => {
             const info = labels[prov];
+            const account = accounts[prov];
+            const number = typeof account === 'string' ? account : (account.number || account.account_number || account.accountNumber || account.wallet);
+            const enabled = typeof account === 'object' && account !== null
+                ? !(account.enabled === false || account.active === false || account.is_active === false)
+                : true;
+            if (!enabled || !String(number || '').trim()) return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = `mfs-btn ${prov}`;
             btn.innerHTML = `<span class="mfs-logo-icon" style="background:${info.color}">${info.char}</span> <span>${info.name}</span>`;
-            btn.addEventListener('click', () => openMfsModal(prov, accounts[prov], info.name + ' গেটওয়ে'));
+            btn.addEventListener('click', () => openMfsModal(prov, String(number).trim(), info.name + ' গেটওয়ে'));
             grid.appendChild(btn);
         });
+        if (!grid.children.length) {
+            grid.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#fbbf24;">সক্রিয় পেমেন্ট অ্যাকাউন্ট পাওয়া যায়নি।</div>';
+        }
     }
 
     async function loadPublicPortalData() {
@@ -561,8 +574,9 @@
                 }
             }
         } catch (err) {
-            renderPackages([{ profile: '1-Hour', price: 10, validity: '১ ঘণ্টা' }, { profile: '12-Hour', price: 20, validity: '১২ ঘণ্টা' }]);
-            renderMfsButtons({ bkash: '01339932887', nagad: '01339932887' });
+            console.error('Unable to load public hotspot portal data:', err);
+            renderPackages([]);
+            renderMfsButtons({});
         }
     }
 
@@ -584,34 +598,63 @@
         if (countdownTimer) clearInterval(countdownTimer);
     }
 
-    function copyWalletNumber() {
-        const num = document.getElementById('modal-wallet-number').textContent;
-        navigator.clipboard.writeText(num);
-        alert('অফিসিয়াল নম্বরটি কপি হয়েছে: ' + num);
+    async function copyWalletNumber() {
+        const num = document.getElementById('modal-wallet-number').textContent.trim();
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(num);
+            } else {
+                const field = document.createElement('textarea');
+                field.value = num;
+                field.setAttribute('readonly', '');
+                field.style.position = 'fixed';
+                field.style.opacity = '0';
+                document.body.appendChild(field);
+                field.select();
+                const copied = document.execCommand('copy');
+                field.remove();
+                if (!copied) throw new Error('Copy unavailable');
+            }
+            alert('অফিসিয়াল নম্বরটি কপি হয়েছে: ' + num);
+        } catch (_) {
+            alert('নম্বরটি কপি করা যায়নি। অনুগ্রহ করে হাতে কপি করুন: ' + num);
+        }
     }
 
     function startCountdown(durationSeconds) {
         if (countdownTimer) clearInterval(countdownTimer);
-        let timer = durationSeconds;
+        let timer = Math.max(0, Number(durationSeconds) || 0);
         const display = document.getElementById('payment-timer');
+        const verifyButton = document.getElementById('btn-verify-payment');
+        const renderTime = () => {
+            const minutes = String(Math.floor(timer / 60)).padStart(2, '0');
+            const seconds = String(timer % 60).padStart(2, '0');
+            display.textContent = minutes + ':' + seconds;
+        };
+        renderTime();
+        verifyButton.disabled = false;
         countdownTimer = setInterval(() => {
-            let minutes = parseInt(timer / 60, 10);
-            let seconds = parseInt(timer % 60, 10);
-            minutes = minutes < 10 ? "0" + minutes : minutes;
-            seconds = seconds < 10 ? "0" + seconds : seconds;
-            display.textContent = minutes + ":" + seconds;
-            if (--timer < 0) {
+            timer = Math.max(0, timer - 1);
+            renderTime();
+            if (timer === 0) {
                 clearInterval(countdownTimer);
-                alert('সময় শেষ! পেমেন্ট উইন্ডোটি বাতিল করা হলো।');
-                closeMfsModal();
+                countdownTimer = null;
+                verifyButton.disabled = true;
+                alert('সময় শেষ! পেমেন্ট উইন্ডোটি বন্ধ হয়েছে। নতুন করে পেমেন্ট শুরু করুন।');
             }
         }, 1000);
+    }
+
+    function normalizeRouterMac(value) {
+        const hex = String(value || '').trim().toUpperCase().replace(/[^0-9A-F]/g, '');
+        if (hex.length !== 12) return '';
+        return hex.match(/.{2}/g).join(':');
     }
 
     async function handleVerification() {
         const phoneInput = document.getElementById('cust_phone').value.trim();
         const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
-        const routerMac = document.getElementById('router-mac').value.trim();
+        const routerMac = normalizeRouterMac(document.getElementById('router-mac').value);
         const routerIp = document.getElementById('router-ip').value.trim();
         const btn = document.getElementById('btn-verify-payment');
 
@@ -704,7 +747,7 @@
 
     async function handleVoucherLogin() {
         const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
-        const routerMac = document.getElementById('router-mac').value.trim();
+        const routerMac = normalizeRouterMac(document.getElementById('router-mac').value);
         const routerIp = document.getElementById('router-ip').value.trim();
 
         if (!pin) {
@@ -733,7 +776,17 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', loadPublicPortalData);
+    document.addEventListener('DOMContentLoaded', () => {
+        const mac = normalizeRouterMac(document.getElementById('router-mac').value);
+        if (mac) {
+            document.getElementById('router-mac').value = mac;
+            document.getElementById('mt-user').value = mac;
+            document.getElementById('mt-pass').value = mac;
+            const badge = document.querySelector('.device-badge-corner');
+            if (badge) badge.textContent = 'MAC: ' + mac;
+        }
+        loadPublicPortalData();
+    });
 </script>
 
 </body>
