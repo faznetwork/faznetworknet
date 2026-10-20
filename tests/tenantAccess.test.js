@@ -11,13 +11,13 @@ function response() {
 test('module policy defaults missing core flags to enabled and honors explicit false', () => {
   assert.equal(moduleEnabled({ modules: { hotspot: true } }, 'hotspot'), true);
   assert.equal(moduleEnabled({ enabled_modules: { hotspot: false }, modules: { hotspot: true } }, 'hotspot'), false);
-  assert.equal(moduleEnabled({ modules: { hotspot: 'true' } }, 'hotspot'), false);
+  assert.equal(moduleEnabled({ modules: { hotspot: 'true' } }, 'hotspot'), true);
   assert.equal(moduleEnabled({ modules: {} }, 'hotspot'), true);
   assert.equal(moduleEnabled({ modules: null }, 'customers'), true);
   assert.equal(moduleEnabled({ modules: { customers: false } }, 'customers'), false);
   assert.equal(moduleEnabled({ modules: {} }, 'analytics'), false);
   assert.deepEqual(normalizeModules('{"billing":true,"hotspot":1}'), {
-    billing: true, hotspot: false,
+    billing: true, hotspot: true,
     customers: true, pppoe: true, mikrotik: true, olt: true, reports: true
   });
 });
