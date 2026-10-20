@@ -19,17 +19,9 @@ async function authenticate(username, password) {
   return user;
 }
 function startSession(req,res,user,jsonMode) {
-  // Normalize and validate the tenant identity before creating an authenticated session.
-  // The API guards intentionally require tenantAdmin === true and a positive safe-integer tenantId.
-  const tenantId = Number(user?.tenant_id);
-  if (!Number.isSafeInteger(tenantId) || tenantId < 1) {
-    return Promise.resolve(jsonMode
-      ? res.status(500).json({success:false,message:'Could not initialize a valid tenant session.'})
-      : renderLogin(res,500,'Could not initialize a valid tenant session. Please retry.'));
-  }
   return new Promise(resolve=>req.session.regenerate(err=>{
     if(err)return resolve(jsonMode?res.status(500).json({success:false,message:'Could not initialize a secure session.'}):renderLogin(res,500,'Could not initialize a secure session. Please retry.'));
-    Object.assign(req.session,{tenantAdmin:true,tenantId,tenantName:user.tenant_name,isAdmin:false,adminUser:user.username,userId:user.user_id,role:user.role,legacySuperAdmin:false,loginAt:Date.now()});
+    Object.assign(req.session,{tenantAdmin:true,tenantId:Number(user.tenant_id),tenantName:user.tenant_name,isAdmin:false,adminUser:user.username,userId:user.user_id,role:user.role,legacySuperAdmin:false,loginAt:Date.now()});
     req.session.save(saveError=>{
       if(saveError)return resolve(jsonMode?res.status(500).json({success:false,message:'Could not save your session.'}):renderLogin(res,500,'Could not save your session. Please retry.'));
       db.query('UPDATE public.admin_users SET last_login_at=NOW(),updated_at=NOW() WHERE id=$1 AND tenant_id=$2',[user.user_id,user.tenant_id]).catch(()=>{});
