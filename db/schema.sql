@@ -964,24 +964,10 @@ CREATE TABLE IF NOT EXISTS tenants (
   contact_email VARCHAR(254),
   contact_phone VARCHAR(50),
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-  modules JSONB NOT NULL DEFAULT '{"customers":true,"hotspot":true,"billing":true,"pppoe":true,"mikrotik":true,"olt":true,"reports":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
+  modules JSONB NOT NULL DEFAULT '{"hotspot":true,"sms_gateway":true,"whatsapp":true}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- Human-facing tenant numbers are independent of the stable primary key.
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS tenant_number INTEGER;
-WITH numbered AS (
-  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC NULLS FIRST, id ASC)::INTEGER AS tenant_number
-  FROM public.tenants
-)
-UPDATE public.tenants AS t
-SET tenant_number = numbered.tenant_number
-FROM numbered
-WHERE numbered.id = t.id
-  AND (t.tenant_number IS NULL OR t.tenant_number <= 0);
-ALTER TABLE public.tenants ALTER COLUMN tenant_number SET NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_tenants_tenant_number ON public.tenants(tenant_number);
-
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_token_hash CHAR(64);
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMPTZ;
 
