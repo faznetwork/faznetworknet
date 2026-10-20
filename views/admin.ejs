@@ -1797,38 +1797,7 @@
 <style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
 </head>
-<%
-  // Resolve tenant context from every supported render-local shape. Prefer the
-  // validated request tenant, and do not depend on a session/user object existing in EJS.
-  const tenantRecord = (typeof tenant !== 'undefined' && tenant && Number(tenant.id) > 0) ? tenant : null;
-  const tenantPage = (typeof locals !== 'undefined' && locals.tenantPage === true)
-    || (typeof tenantContext !== 'undefined' && tenantContext === true)
-    || Boolean(tenantRecord)
-    || (typeof user !== 'undefined' && user && Number(user.tenantId) > 0)
-    || (typeof currentRole !== 'undefined' && currentRole === 'tenant_admin');
-  const tenantCoreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
-  const parseModuleObject = (value) => {
-    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { value = {}; } }
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  };
-  const rawTenantModules = parseModuleObject(
-    (typeof normalizedModules !== 'undefined' && normalizedModules) ||
-    (tenantRecord && (tenantRecord.modules || tenantRecord.enabled_modules)) ||
-    {}
-  );
-  const tenantModuleConfig = parseModuleObject(rawTenantModules.enabled_modules || rawTenantModules);
-  // Fail open only for unspecified core modules to preserve legacy tenant defaults;
-  // an explicit false in the database always disables that module.
-  const tenantModuleEnabled = (key) => {
-    const value = tenantModuleConfig[key];
-    return value === true || (value !== false && tenantCoreModules.includes(key));
-  };
-%>
-<script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
-
-
-
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -1846,18 +1815,6 @@
             </select>
         </div>
 
-<% if (tenantPage) { %>
-        <ul class="sidebar-menu" id="tenantSidebarMenu">
-            <li class="menu-item"><a href="javascript:void(0)" class="active" onclick="window.openTenantModule('dashboard'); return false;"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('customers'); return false;"><i class="bi bi-people"></i><span>Customer</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('billing'); return false;"><i class="bi bi-credit-card"></i><span>Billing</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('hotspot'); return false;"><i class="bi bi-wifi"></i><span>Hotspot</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('pppoe'); return false;"><i class="bi bi-router"></i><span>PPPoE</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('mikrotik'); return false;"><i class="bi bi-hdd-network"></i><span>Hardware</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('reports'); return false;"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
-            <li class="menu-item"><a href="javascript:void(0)" onclick="window.openTenantModule('support'); return false;"><i class="bi bi-person-gear"></i><span>Account &amp; Support</span></a></li>
-        </ul>
-<% } else { %>
         <ul class="sidebar-menu">
             <li class="menu-item">
                 <a href="javascript:void(0)" class="active" data-view-target="view-main-dashboard" onclick="event.preventDefault(); switchView('dashboard'); return false;"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
@@ -2057,7 +2014,8 @@
                 </ul>
             </li>
         </ul>
-<% } %>        <div class="drawer-account">
+
+        <div class="drawer-account">
             <div class="drawer-account-user d-md-none">
                 <i class="bi bi-person-circle"></i>
                 <span><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></span>
@@ -2739,17 +2697,6 @@
 
                 clearTimeout(timeoutId);
 
-                // Tenant APIs may legitimately return 401/403 for scoped permissions or
-                // module access. Never treat those responses as a platform-admin logout.
-                const tenantSession = <%= (typeof tenantContext !== 'undefined' && tenantContext) ? 'true' : 'false' %>;
-                if ((res.status === 401 || res.status === 403) && tenantSession) {
-                    const contentType = res.headers.get('content-type') || '';
-                    if (contentType.includes('application/json')) {
-                        const payload = await res.json().catch(() => ({}));
-                        return { success: false, status: res.status, message: payload.message || payload.code || 'Tenant request is not authorized.', ...payload };
-                    }
-                    return { success: false, status: res.status, message: 'Tenant request is not authorized.' };
-                }
                 if (res.status === 401) {
                     window.location.href = '/login';
                     return { success: false, message: 'Unauthorized. Redirecting...' };
@@ -4932,15 +4879,12 @@ async function deletePlan(id,name){
         let metricsTimer = null;
         let trafficPollInFlight = false;
         let metricsPollInFlight = false;
-        // Server-derived guard: tenant sessions must never run platform-admin polling loops.
-        const tenantPollingDisabled = <%= (tenantPage || (typeof user !== 'undefined' && user && user.tenantId)) ? 'true' : 'false' %>;
 
 
         let generalSettingsLoaded=false;
         function generalSettingsResult(id,message,ok=true){const el=document.getElementById(id);if(el){el.className='small mt-3 '+(ok?'text-success':'text-danger')+' fw-semibold';el.textContent=message;}}
         function generalWebhookRenderUrl(){const input=document.getElementById('generalWebhookPath'),out=document.getElementById('generalWebhookFullUrl');if(!input||!out)return;const value=input.value.trim();if(!value){out.textContent='Enter an endpoint path';return;}try{out.textContent=value.startsWith('/')?location.origin+value:new URL(value,location.origin).href;}catch(_){out.textContent=value;}}
         async function loadGeneralSettings(force=false){
-          if (window.__isTenantPage) { generalSettingsLoaded = true; return; }
           if(generalSettingsLoaded&&!force)return;
           try{
             const response=await jsonFetch('/api/settings/general'),s=response.settings||response.data||response,r=s.router||{},w=s.webhook||{},m=s.mfs||{};
@@ -4957,7 +4901,6 @@ async function deletePlan(id,name){
         }
         let hotspotPortalSettingsLoaded = false;
         async function loadHotspotPortalConfig(force = false) {
-          if (window.__isTenantPage || window.location.pathname === '/tenant' || window.location.pathname.startsWith('/tenant/')) { hotspotPortalSettingsLoaded = true; return; }
           const form = document.getElementById('hotspotPortalSettingsForm');
           if (!form || (hotspotPortalSettingsLoaded && !force)) return;
           const status = document.getElementById('hotspotPortalSettingsStatus');
@@ -5280,7 +5223,6 @@ async function deletePlan(id,name){
         document.getElementById('broadcastMessage')?.addEventListener('input',broadcastPreview);
         document.getElementById('broadcastStartBtn')?.addEventListener('click',startBulkBroadcast);
         async function loadSystemSettings(force=false){
-          if (window.__isTenantPage) return;
           if(systemSettingsLoaded&&!force)return;
           try{
             const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
@@ -5301,7 +5243,7 @@ async function deletePlan(id,name){
             toggleSmsProviderFields();toggleEmailProviderFields();systemSettingsLoaded=true;
           }catch(e){generalSettingsResult('systemBrandResult',e.message||'Unable to load system settings.',false);}
         }
-        async function saveSystemSettings(payload,buttonId,resultId){if (window.__isTenantPage) return;const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
+        async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
         document.getElementById('setSmsMode')?.addEventListener('change',()=>{toggleSmsProviderFields();if(document.getElementById('setSmsMode').value==='provider_preset')document.getElementById('smsProviderPreset')?.dispatchEvent(new Event('change'));});
         function toggleEmailProviderFields(){
           const mode=document.getElementById('emailProviderMode')?.value||'apps_script';
@@ -5391,7 +5333,6 @@ async function deletePlan(id,name){
           whatsappStatusPollInFlight=false;
         }
         function startWhatsAppStatusPolling(){
-          if(tenantPollingDisabled)return;
           if(whatsappStatusPollTimer!==null)return;
           whatsappStatusPollTimer=window.setInterval(async()=>{
             if(whatsappStatusPollInFlight)return;
@@ -5529,7 +5470,7 @@ async function deletePlan(id,name){
         }
         function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
         document.getElementById('hotspotProfilesRefreshBtn')?.addEventListener('click',loadHotspotProfileSettings);
-        if (!window.__isTenantPage) setInterval(function(){const view=document.getElementById('view-hotspot-webhook');if(view&&view.style.display!=='none'&&!document.hidden)loadHotspotProfileSettings();},15000);
+        setInterval(function(){const view=document.getElementById('view-hotspot-webhook');if(view&&view.style.display!=='none'&&!document.hidden)loadHotspotProfileSettings();},15000);
 
         document.getElementById('paymentWebhookSettingsForm')?.addEventListener('submit',async function(event){event.preventDefault();const btn=document.getElementById('paymentWebhookSaveBtn'),result=document.getElementById('paymentWebhookSettingsResult');if(btn)btn.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving settings...';}try{const payload={webhookUrl:document.getElementById('paymentWebhookUrl')?.value.trim()||'',webhookSecret:document.getElementById('paymentWebhookSecret')?.value||'',webhookEnabled:Boolean(document.getElementById('paymentWebhookEnabled')?.checked)};const response=await fetch('/api/settings/hotspot-webhook',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});let data={};try{data=await response.json();}catch(_){}if(!response.ok||data.success===false)throw new Error(data.error||data.message||'Unable to save settings.');if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Webhook settings saved successfully.';}hotspotWebhookSettingsLoaded=true;if(document.getElementById('paymentWebhookSecret'))document.getElementById('paymentWebhookSecret').value='';}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save settings.';}}finally{if(btn)btn.disabled=false;}});
 
@@ -7467,7 +7408,7 @@ async function deletePlan(id,name){
             const hubSetText=(id,v)=>{const e=hub()?.querySelector('#'+id);if(e)e.textContent=v??'—';};
             const refreshHubLive=async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username||m.getAttribute('aria-hidden')==='true')return;try{const d=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(username));const live=d.live||{},online=Boolean(live.online),pill=m.querySelector('#modalCustomerLivePill'),badge=m.querySelector('#cpLiveStatus');if(pill){pill.className='badge '+(online?'bg-success':'bg-secondary')+' rounded-pill px-3 py-2 ms-auto';pill.textContent=(online?'● Online':'○ Offline')+(online&&live.uptime?' · Uptime: '+live.uptime:'');}if(badge){badge.className='badge '+(online?'bg-success':'bg-secondary');badge.textContent=online?'Online':'Offline';}hubSetText('cpAssignedIp',live.ip||'—');hubSetText('cpCallerId',live.mac||'—');hubSetText('cpUptime',live.uptime||'—');hubSetText('cpRx',(()=>{const n=Number(live.bytesIn||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpTx',(()=>{const n=Number(live.bytesOut||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpLiveIp',live.ip||'—');}catch(_){/* keep last live state */}};
             const modalElement=hub();
-            if(!tenantPollingDisabled&&modalElement&&!modalElement.dataset.liveBound){modalElement.dataset.liveBound='1';modalElement.addEventListener('shown.bs.modal',()=>{refreshHubLive();clearInterval(modalElement._liveTimer);modalElement._liveTimer=setInterval(refreshHubLive,5000);});modalElement.addEventListener('hidden.bs.modal',()=>{clearInterval(modalElement._liveTimer);modalElement._liveTimer=null;});}
+            if(modalElement&&!modalElement.dataset.liveBound){modalElement.dataset.liveBound='1';modalElement.addEventListener('shown.bs.modal',()=>{refreshHubLive();clearInterval(modalElement._liveTimer);modalElement._liveTimer=setInterval(refreshHubLive,5000);});modalElement.addEventListener('hidden.bs.modal',()=>{clearInterval(modalElement._liveTimer);modalElement._liveTimer=null;});}
             const hubLoading=(button,on,label)=>{if(!button)return;if(on){button.dataset.originalText=button.innerHTML;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>'+label;}else{button.disabled=false;button.innerHTML=button.dataset.originalText||label;}};
             hub()?.querySelector('#cpPasswordToggle')?.addEventListener('click',()=>{const input=hub().querySelector('#cpPassword'),icon=hub().querySelector('#cpPasswordToggle i');if(input.type==='password'){input.type='text';icon.className='bi bi-eye-slash';}else{input.type='password';icon.className='bi bi-eye';}});
             hub()?.querySelector('#cpPlan')?.addEventListener('change',function(){const option=this.selectedOptions[0],price=Number(option?.dataset.price||0);const e=hub()?.querySelector('#cpBillAmount');if(e)e.value='৳ '+price.toFixed(2);});
@@ -8187,26 +8128,12 @@ async function deletePlan(id,name){
         }
 
         async function refreshDashboard() {
-            if (tenantPollingDisabled) return;
-            // Tenant sessions may receive 403/404 from platform-wide endpoints. Resolve each widget
-            // independently, with a timeout, so one denied or stalled request cannot strand the UI.
-            const dashboardRequest = async (url, fallback) => {
-                let timeoutId;
-                try {
-                    return await Promise.race([
-                        jsonFetch(url).catch(() => fallback),
-                        new Promise(resolve => { timeoutId = setTimeout(() => resolve(fallback), 8000); })
-                    ]);
-                } finally {
-                    clearTimeout(timeoutId);
-                }
-            };
-            const [users, active, summary] = await Promise.all([
-                dashboardRequest('/api/pppoe/users', { success: false, users: [] }),
-                dashboardRequest('/api/pppoe/active', { success: false, sessions: [] }),
-                dashboardRequest('/api/payments/summary', { success: false, summary: { today_collection: 0 }, recent: [] })
-            ]);
             try {
+                const [users, active, summary] = await Promise.all([
+                    jsonFetch('/api/pppoe/users'),
+                    jsonFetch('/api/pppoe/active'),
+                    jsonFetch('/api/payments/summary')
+                ]);
                 const customerRows = Array.isArray(users.users) ? users.users : null;
                 const sessionRows = Array.isArray(active.sessions) ? active.sessions : (Array.isArray(active.active) ? active.active : null);
                 const usersAvailable = users.success !== false && customerRows !== null;
@@ -8224,22 +8151,11 @@ async function deletePlan(id,name){
                 }
             } catch (error) {
                 console.error('[Dashboard]', error);
-            } finally {
-                // Always resolve the initial payment placeholder, including empty, denied, and failed responses.
-                const recentPaymentsBody = document.getElementById('recentPaymentsBody');
-                if (recentPaymentsBody && /Loading payments/i.test(recentPaymentsBody.textContent || '')) {
-                    recentPaymentsBody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
-                }
-                ['metricCustomers', 'metricSessions', 'metricOffline', 'metricCollection'].forEach(id => {
-                    const node = document.getElementById(id);
-                    if (node && /Loading|—/.test(node.textContent || '')) node.textContent = '—';
-                });
             }
             await loadRouterMetrics();
         }
 
         async function loadRouterMetrics() {
-            if (tenantPollingDisabled) return;
             const dashboard = document.getElementById('view-main-dashboard');
             if (!dashboard || dashboard.style.display === 'none') return;
             try {
@@ -8329,7 +8245,7 @@ async function deletePlan(id,name){
         }
 
         async function pollTraffic() {
-            if (tenantPollingDisabled || trafficPollInFlight) return;
+            if (trafficPollInFlight) return;
             const dashboard = document.getElementById('view-main-dashboard');
             if (!dashboard || dashboard.style.display === 'none') return;
             const select = document.getElementById('dashboardInterface');
@@ -8369,8 +8285,7 @@ async function deletePlan(id,name){
 
 
         function startTrafficPolling() {
-            if (trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
-            if (tenantPollingDisabled) return;
+            if (trafficTimer) clearInterval(trafficTimer);
             void loadInterfaces();
             trafficTimer = setInterval(() => { void pollTraffic(); }, 1000);
         }
@@ -8452,7 +8367,7 @@ function renderDashboardRecentRecharges(rows){
   if(!Array.isArray(rows)||!rows.length){root.innerHTML=dashboardOverviewEmpty('bi-receipt','No successful Hotspot recharges yet','Successful Hotspot payments will appear here.');return;}
   root.innerHTML='<table class="dashboard-activity-table"><thead><tr><th>User</th><th>Profile</th><th>Amount</th><th>Date &amp; Time</th></tr></thead><tbody>'+rows.map(row=>'<tr><td><span class="dashboard-user-cell">'+escapeHtml(row.matched_username||'—')+'</span><div class="dashboard-secondary-cell">'+escapeHtml(row.channel||'')+(row.trx_id?' · '+escapeHtml(row.trx_id):'')+'</div></td><td>'+escapeHtml(row.profile||'—')+'</td><td><strong>'+escapeHtml(dashboardMoney(row.amount))+'</strong></td><td>'+escapeHtml(dashboardOverviewDate(row.created_at))+'</td></tr>').join('')+'</tbody></table>';
 }
-async function pollHotspotOverview(){if(tenantPollingDisabled)return;
+async function pollHotspotOverview(){
   if(dashboardOverviewBusy||document.hidden)return;
   const view=document.getElementById('view-hotspot-dashboard');if(!view||view.style.display==='none'||view.classList.contains('hidden'))return;
   dashboardOverviewBusy=true;
@@ -8530,8 +8445,8 @@ function bindDashboardKpiEvents(){
 renderDashboardKpiCards();
 bindDashboardKpiEvents();
 
-async function pollNocStats(){if(tenantPollingDisabled||nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};safeSetText('nocSubscriberValue',Number(s.online||0)+' / '+Number(s.total||0)+' Online');safeSetText('nocAvailability',Number(s.availability||0).toFixed(1)+'% Network Availability');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge '+(f.oltOnline?'bg-success':'bg-warning text-dark');ob.textContent=f.oltOnline?'Online':'Stale / Offline';}safeSetText('nocOltName',f.oltName||f.oltId||'V-SOL V1600D4');safeSetText('nocOltAddress',f.oltAddress||'IP not reported by telemetry');safeSetText('nocOnuTotal',Number(f.total||0));safeSetText('nocPonActive',Number(f.activePonPorts||0)+' / '+Number(f.totalPonPorts||0));safeSetText('nocOltSeen',f.lastSeen?'Last telemetry '+new Date(f.lastSeen).toLocaleString():'No recent OLT telemetry');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
-function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStatsTimer);if(window.hotspotOverviewTimer)clearInterval(window.hotspotOverviewTimer);window.nocStatsTimer=null;window.hotspotOverviewTimer=null;if(tenantPollingDisabled)return;void pollNocStats();void pollHotspotOverview();window.nocStatsTimer=setInterval(()=>void pollNocStats(),5000);window.hotspotOverviewTimer=setInterval(()=>void pollHotspotOverview(),30000);}document.addEventListener('visibilitychange',()=>{if(!tenantPollingDisabled&&!document.hidden)void pollNocStats();});
+async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};safeSetText('nocSubscriberValue',Number(s.online||0)+' / '+Number(s.total||0)+' Online');safeSetText('nocAvailability',Number(s.availability||0).toFixed(1)+'% Network Availability');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge '+(f.oltOnline?'bg-success':'bg-warning text-dark');ob.textContent=f.oltOnline?'Online':'Stale / Offline';}safeSetText('nocOltName',f.oltName||f.oltId||'V-SOL V1600D4');safeSetText('nocOltAddress',f.oltAddress||'IP not reported by telemetry');safeSetText('nocOnuTotal',Number(f.total||0));safeSetText('nocPonActive',Number(f.activePonPorts||0)+' / '+Number(f.totalPonPorts||0));safeSetText('nocOltSeen',f.lastSeen?'Last telemetry '+new Date(f.lastSeen).toLocaleString():'No recent OLT telemetry');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
+function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStatsTimer);if(window.hotspotOverviewTimer)clearInterval(window.hotspotOverviewTimer);void pollNocStats();void pollHotspotOverview();window.nocStatsTimer=setInterval(()=>void pollNocStats(),5000);window.hotspotOverviewTimer=setInterval(()=>void pollHotspotOverview(),30000);}document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollNocStats();});
 
         async function safeAdminBootStep(label, task) {
             try { return await Promise.resolve().then(task); }
@@ -9272,9 +9187,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
 
             try {
-                if (metricsTimer) { clearInterval(metricsTimer); metricsTimer = null; }
-                if (!tenantPollingDisabled) {
                 startNocPolling();
+                if (metricsTimer) clearInterval(metricsTimer);
                 metricsTimer = setInterval(() => {
                     if (metricsPollInFlight) return;
                     metricsPollInFlight = true;
@@ -9297,7 +9211,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         }
                     })();
                 }, 15000);
-                }
             } catch (error) {
                 console.error('[Admin Boot] metrics timer failed:', error);
             }
@@ -9365,25 +9278,19 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
         }
 
-        const tenantContextActive = <%= (typeof tenantContext !== 'undefined' && tenantContext) ? 'true' : 'false' %>;
         window.addEventListener('error', function (event) {
             console.error('[Admin Runtime Recovery] Client-side error detected:', event.error || event.message || 'Unknown error');
-            // Tenant telemetry/API failures must not trigger legacy admin DOM recovery.
-            if (!tenantContextActive) recoverAdminClickability();
+            recoverAdminClickability();
         });
         window.addEventListener('unhandledrejection', function (event) {
             console.error('[Admin Runtime Recovery] Unhandled promise rejection:', event.reason || 'Unknown rejection');
-            if (!tenantContextActive) recoverAdminClickability();
+            recoverAdminClickability();
         });
 
-        // Tenant pages degrade locally; don't attach the legacy subtree observer or
-        // clickability recovery machinery to the tenant workspace.
-        if (!tenantContextActive) {
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', startRecovery, { once: true });
-            } else {
-                startRecovery();
-            }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', startRecovery, { once: true });
+        } else {
+            startRecovery();
         }
     })();
     </script>
@@ -9590,59 +9497,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script>
 (function () {
   'use strict';
-  // Inline tenant mount must be idempotent even if this script is accidentally
-  // evaluated again by a partial navigation or template integration.
-  if (window.__tenantDashboardInitialized) return;
-  window.__tenantDashboardInitialized = true;
-  const tenantModules = <%- JSON.stringify(tenantModuleConfig).replace(/</g, '\\u003c') %>;
+  const tenantModules = <%- JSON.stringify((tenant && (tenant.enabled_modules || tenant.modules)) || {}).replace(/</g, '\\u003c') %>;
   const modules = tenantModules && typeof tenantModules === 'object' && !Array.isArray(tenantModules) ? tenantModules : {};
-  // Match backend policy: missing core flags default to enabled; explicit false disables.
-  const coreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
-  const enabled = (key) => modules[key] === true || (modules[key] !== false && coreModules.includes(key));
-  // The server-rendered tenant menu is authoritative. Legacy platform navigation
-  // scripts may apply role/module visibility rules intended for the global admin UI;
-  // restore only the tenant menu entries that EJS actually rendered.
-  document.querySelectorAll('.sidebar-menu [data-tenant-module]').forEach((item) => {
-    item.hidden = false;
-    item.removeAttribute('aria-hidden');
-    item.style.removeProperty('display');
-    item.style.removeProperty('visibility');
-  });
-  window.openTenantModule = function (key) {
-    const map = { dashboard: 'view-main-dashboard', customers: 'view-tenant-customers', hotspot: 'view-tenant-hotspot', billing: 'view-tenant-billing', pppoe: 'view-tenant-pppoe', mikrotik: 'view-tenant-hardware', olt: 'view-tenant-hardware', reports: 'view-tenant-reports', support: 'view-support-tickets' };
-    const targetId = map[key] || 'view-support-tickets';
-    const viewName = targetId.replace(/^view-/, '');
-    if (key === 'mikrotik' || key === 'olt') {
-      if (typeof switchView === 'function') switchView('tenant-hardware');
-      const hardwareView = document.getElementById('view-tenant-hardware');
-      if (hardwareView) {
-        hardwareView.hidden = false;
-        hardwareView.classList.remove('hidden');
-        hardwareView.style.display = '';
-        hardwareView.setAttribute('aria-hidden', 'false');
-      }
-    } else if (typeof switchView === 'function') {
-      switchView(key === 'dashboard' ? 'dashboard' : viewName);
-    }
-    window.setTimeout(() => { const target = document.getElementById(targetId); if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
-  };
-
-  // Tenant menu items must never fall through to legacy platform-wide customer views.
-  // Those views are intentionally hidden for tenant sessions, so their old handlers can
-  // otherwise reveal an unrelated panel when a tenant clicks Customers.
-  document.addEventListener('click', function (event) {
-    if (!window.__isTenantPage) return;
-    const control = event.target && event.target.closest
-      ? event.target.closest('.sidebar-menu a, .sidebar-menu button, .sidebar-menu [role="button"]')
-      : null;
-    if (!control) return;
-    const label = (control.textContent || control.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
-    if (!/customer/i.test(label)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
-    window.openTenantModule('customers');
-  }, true);
+  const enabled = (key) => modules[key] === true;
   const tenantApi = async (path, options = {}) => {
     const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
@@ -9651,6 +9508,25 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     return data;
   };
   const text = (tag, value, cls) => { const node = document.createElement(tag); node.textContent = value == null ? '' : String(value); if (cls) node.className = cls; return node; };
+
+  // Hide entire top-level sidebar groups when their feature is not licensed.
+  const sidebar = document.querySelector('.sidebar-menu');
+  if (sidebar) {
+    const rules = [
+      { match: /customer/i, module: 'customers' },
+      { match: /hotspot|voucher/i, module: 'hotspot' },
+      { match: /payment|billing|collection|due summary|expense/i, module: 'billing' },
+      { match: /pppoe/i, module: 'pppoe' },
+      { match: /olt/i, module: 'olt' },
+      { match: /router|mikrotik|network devices/i, module: 'mikrotik' },
+      { match: /report/i, module: 'reports' }
+    ];
+    Array.from(sidebar.children).forEach((item) => {
+      const label = (item.textContent || '').replace(/\s+/g, ' ').trim();
+      const rule = rules.find((candidate) => candidate.match.test(label));
+      if (rule && !enabled(rule.module)) item.hidden = true;
+    });
+  }
 
   // Do not expose legacy operational views to tenant sessions: their actions still
   // target platform-global APIs (including renew/provision/session controls). The
@@ -9666,23 +9542,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 
   // Tenant customer, voucher and billing workspace. All operations use tenant-scoped APIs;
   // legacy global CRUD controls are not used by this workspace.
-  // Each tenant module gets its own top-level admin view; do not mount all
-  // module forms inside General Settings or render them simultaneously.
-  const dataPanel = document.createElement('div');
+  const dataPanel = document.createElement('section');
   dataPanel.id = 'tenantDataWorkspace';
-  dataPanel.className = 'tenant-workspace-shell';
-  dataPanel.innerHTML = `
-    <div id="tenantDataMessage" class="small mb-3" role="status" aria-live="polite"></div>
-    <section id="view-tenant-customers" class="admin-view hidden" style="display:none" aria-labelledby="tenantCustomersTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-people text-success"></i><strong id="tenantCustomersTitle">Customers</strong></div><div class="card-body"><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div></div></section>
-    <section id="view-tenant-hotspot" class="admin-view hidden" style="display:none" aria-labelledby="tenantHotspotTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-wifi text-success"></i><strong id="tenantHotspotTitle">Hotspot vouchers</strong></div><div class="card-body"><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div></div></section>
-    <section id="view-tenant-billing" class="admin-view hidden" style="display:none" aria-labelledby="tenantBillingTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-credit-card text-success"></i><strong id="tenantBillingTitle">Billing transactions</strong></div><div class="card-body"><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></section>
-    <section id="view-tenant-reports" class="admin-view hidden" style="display:none" aria-labelledby="tenantReportsTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-bar-chart text-success"></i><strong id="tenantReportsTitle">Tenant reports</strong></div><div class="card-body"><p class="small text-muted">Summaries are calculated from tenant-scoped customer, voucher, and billing records.</p><div id="tenantReportsSummary" class="row g-3"></div></div></div></section>
-    <section id="view-tenant-pppoe" class="admin-view hidden" style="display:none" aria-labelledby="tenantPppoeTitle"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-router text-success"></i><strong id="tenantPppoeTitle">PPPoE provisioning</strong></div><div class="card-body"><p class="small text-muted">Create and manage tenant-scoped PPPoE accounts.</p><div id="tenantPppoePanel"></div></div></div></section>`;
-  const tenantMainContent = document.getElementById('dynamicPageContent');
-  if (tenantMainContent) tenantMainContent.appendChild(dataPanel);
-  ['customers','hotspot','billing','reports','pppoe'].forEach((key) => {
-    const view = document.getElementById('view-tenant-' + key);
-    if (view) view.hidden = !enabled(key);
+  dataPanel.className = 'card border-0 shadow-sm m-3';
+  dataPanel.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Tenant Operations</strong><button type="button" id="tenantDataRefresh" class="btn btn-sm btn-outline-secondary">Refresh</button></div><div class="card-body"><div id="tenantDataMessage" class="small mb-3" role="status"></div><div class="row g-4"><div class="col-12" id="tenantCustomersPanel"><h6>Customers</h6><form id="tenantCustomerForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="full_name" placeholder="Full name" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="phone" placeholder="Phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="username" placeholder="Username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="255"></div><div class="col-md-2"><input class="form-control" name="package_name" placeholder="Package" required maxlength="100"></div><div class="col-md-1"><input class="form-control" name="monthly_bill" type="number" min="0" step="0.01" value="0" aria-label="Monthly bill"></div><div class="col-12"><button class="btn btn-sm btn-primary">Add customer</button></div></form><div id="tenantCustomersList" class="table-responsive"></div></div><div class="col-12" id="tenantVouchersPanel"><h6>Hotspot vouchers</h6><form id="tenantVoucherForm" class="row g-2 mb-3"><div class="col-md-3"><input class="form-control" name="username" placeholder="Voucher username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" placeholder="Password" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Profile" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="validity" placeholder="Validity (e.g. 1d)" required maxlength="50"></div><div class="col-md-2"><input class="form-control" name="price" type="number" min="0" step="0.01" value="0" aria-label="Voucher price"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Add</button></div></form><div id="tenantVouchersList" class="table-responsive"></div></div><div class="col-12" id="tenantBillingPanel"><h6>Billing transactions</h6><form id="tenantTransactionForm" class="row g-2 mb-3"><div class="col-md-2"><select class="form-select" name="channel" required><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="upay">Upay</option></select></div><div class="col-md-3"><input class="form-control" name="trx_id" placeholder="Transaction ID" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="sender_phone" placeholder="Sender phone" maxlength="40"></div><div class="col-md-2"><input class="form-control" name="amount" type="number" min="0" step="0.01" placeholder="Amount" required></div><div class="col-md-2"><button class="btn btn-sm btn-primary">Add transaction</button></div></form><div id="tenantTransactionsList" class="table-responsive"></div></div></div></div>';
+  const settings = document.getElementById('view-general-settings');
+  if (settings) settings.prepend(dataPanel);
+  ['customers','hotspot','billing'].forEach((key) => {
+    const panel = document.getElementById(key === 'customers' ? 'tenantCustomersPanel' : key === 'hotspot' ? 'tenantVouchersPanel' : 'tenantBillingPanel');
+    if (panel) panel.hidden = !enabled(key);
   });
   const dataMessage = (value, error = false) => { const el = document.getElementById('tenantDataMessage'); if (el) { el.textContent = value || ''; el.className = 'small mb-3 ' + (error ? 'text-danger' : 'text-success'); } };
   const dataRequest = (path, options = {}) => tenantApi('/api/tenant/data/' + path, options);
@@ -9733,27 +9601,14 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   async function loadTenantData() {
     try {
       const jobs = [];
-      let reportCustomers = [], reportVouchers = [], reportTransactions = [];
-      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => { reportCustomers = Array.isArray(d.customers) ? d.customers : []; dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],reportCustomers,'customers'); }));
+      if (enabled('customers')) jobs.push(dataRequest('customers').then(d => dataTable('tenantCustomersList',['Name','Phone','Username','Package','Bill','Delete'],d.customers,'customers')));
       if (enabled('hotspot')) jobs.push(dataRequest('vouchers').then(d => {
-        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : []; reportVouchers = tenantVoucherRows;
+        tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : [];
         dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
       }));
-      if (enabled('pppoe')) { const host = document.getElementById('tenantPppoeList'); if (host) { host.replaceChildren(); host.appendChild(text('div', 'PPPoE router status is loaded when you request a refresh or manage an account. If no tenant router is configured, the router API will return NO_ROUTER_CONFIGURED.', 'small text-muted')); } }
-      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => { reportTransactions = Array.isArray(d.transactions) ? d.transactions : []; dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],reportTransactions,null); }));
-      await Promise.all(jobs);
-      const reportHost = document.getElementById('tenantReportsSummary');
-      if (reportHost) {
-        reportHost.replaceChildren();
-        const total = reportTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
-        [
-          ['Customers', enabled('customers') ? reportCustomers.length : 'Disabled'],
-          ['Hotspot vouchers', enabled('hotspot') ? reportVouchers.length : 'Disabled'],
-          ['Billing transactions', enabled('billing') ? reportTransactions.length : 'Disabled'],
-          ['Recorded payments', enabled('billing') ? total.toLocaleString(undefined, { style: 'currency', currency: 'BDT' }) : 'Disabled']
-        ].forEach(([label, value]) => { const col = document.createElement('div'); col.className = 'col-sm-6 col-xl-3'; const card = document.createElement('div'); card.className = 'border rounded-3 p-3 h-100'; card.appendChild(text('div', label, 'small text-muted')); card.appendChild(text('strong', value, 'fs-5')); col.appendChild(card); reportHost.appendChild(col); });
-      }
-      dataMessage('Tenant records loaded.');
+      if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
+      if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],d.transactions,null)));
+      await Promise.all(jobs); dataMessage('Tenant records loaded.');
     } catch (e) { dataMessage(e.message || 'Unable to load tenant records.', true); }
   }
   document.getElementById('tenantDataRefresh')?.addEventListener('click', loadTenantData);
@@ -9792,9 +9647,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       form.reset(); await loadTenantData(); dataMessage('Voucher created on the tenant router and saved atomically.');
     } catch (e) { dataMessage(e.message || 'Voucher provisioning failed.', true); }
   });
-  const pppoePanel = document.getElementById('tenantPppoePanel');
+  const pppoePanel = document.getElementById('tenantCustomersPanel');
   if (pppoePanel && enabled('pppoe') && !document.getElementById('tenantPppoeForm')) {
-    const pppoe = document.createElement('section'); pppoe.className = 'col-12 mt-4';
+    const pppoe = document.createElement('section'); pppoe.className = 'mt-4';
     pppoe.innerHTML = '<h6>PPPoE account provisioning</h6><form id="tenantPppoeForm" class="row g-2"><div class="col-md-2"><input class="form-control" name="username" placeholder="PPPoE username" required maxlength="100"></div><div class="col-md-2"><input class="form-control" name="password" type="password" placeholder="Password" required maxlength="128"></div><div class="col-md-2"><input class="form-control" name="profile" placeholder="Router profile" required maxlength="100"></div><div class="col-md-3"><input class="form-control" name="phone" placeholder="Customer contact phone" required maxlength="40"></div><div class="col-md-2"><input class="form-control" name="full_name" placeholder="Customer name" maxlength="255"></div><div class="col-md-1"><button class="btn btn-sm btn-primary">Create</button></div></form><div id="tenantPppoeList" class="table-responsive mt-3"></div>';
     pppoePanel.appendChild(pppoe);
     pppoe.querySelector('form').addEventListener('submit', async event => {
@@ -9813,104 +9668,20 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   bindCreate('tenantTransactionForm','transactions');
   loadTenantData();
 
-  // The platform NOC endpoints are intentionally blocked for tenant sessions.
-  // Hydrate summaries from tenant-scoped APIs and replace legacy spinners with clear states.
-  async function hydrateTenantDashboard() {
-    const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
-    const setRows = (id, colspan, message) => {
-      const body = document.getElementById(id);
-      if (!body) return;
-      const row = document.createElement('tr'); const cell = document.createElement('td');
-      cell.colSpan = colspan; cell.className = 'text-center py-3 text-muted'; cell.textContent = message;
-      row.appendChild(cell); body.replaceChildren(row);
-    };
-    setText('dashboardTrafficStatus', 'Tenant mode');
-    setText('nocLastUpdated', 'Tenant-scoped data');
-    setText('nocAvailability', 'Tenant records only');
-    setText('nocInterfacePill', 'Live telemetry unavailable in tenant view');
-    setText('nocRouterUptime', 'Inventory only — no live device connection');
-    setText('dashboardRouterStatus', 'Inventory only');
-    setText('nocOltStatus', 'Inventory only');
-    setText('nocRouterModel', 'Saved router inventory');
-    setText('nocOltAddress', 'Saved OLT inventory; telemetry not connected');
-    setText('nocUrgentCount', 'Telemetry unavailable');
-    setRows('nocUrgentBody', 4, 'Live optical telemetry is not available in the tenant dashboard.');
-    setText('nocExpiringCount', 'Tenant records');
-    setRows('nocExpiringBody', 4, 'Loading tenant expiry records…');
-    setRows('recentPaymentsBody', 5, 'Loading tenant payments…');
-    setText('nocChartEmpty', 'Live interface samples are not available in the tenant dashboard.');
-    setText('nocPeakRx', '— Mbps');
-    setText('nocAvgRx', '— Mbps');
-    setText('nocTransferred', 'Live telemetry unavailable');
-    try {
-      const jobs = [];
-      let customers = [], transactions = [], vouchers = [];
-      if (enabled('customers')) jobs.push(tenantApi('/api/tenant/data/customers').then(d => { customers = Array.isArray(d.customers) ? d.customers : []; }));
-      if (enabled('hotspot')) jobs.push(tenantApi('/api/tenant/data/vouchers').then(d => { vouchers = Array.isArray(d.vouchers) ? d.vouchers : []; }));
-      if (enabled('billing')) jobs.push(tenantApi('/api/tenant/data/transactions').then(d => { transactions = Array.isArray(d.transactions) ? d.transactions : []; }));
-      await Promise.all(jobs);
-      setText('nocSubscriberValue', customers.length + ' tenant customers');
-      setText('nocAvailability', enabled('customers') ? 'Tenant customer records loaded' : 'Customer module disabled');
-      setText('nocBillingToday', '৳ ' + transactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toLocaleString('en-BD', {minimumFractionDigits:2,maximumFractionDigits:2}));
-      setText('nocBillingSub', transactions.length + ' tenant transactions');
-      setText('nocFiberValue', 'Inventory only');
-      setText('nocFiberSub', 'Live optical metrics are not connected to this tenant view');
-      setText('nocPonSummary', '—');
-      setText('nocOnuTotal', '—');
-      setText('nocPonActive', '—');
-      setText('nocOltSeen', 'No live telemetry in tenant view');
-      const expiring = customers.filter(row => row.expiry_date);
-      setText('nocExpiringCount', expiring.length + ' with expiry dates');
-      setRows('nocExpiringBody', 4, expiring.length ? 'Expiry dates are available in Customer records.' : 'No tenant expiry records available.');
-      const body = document.getElementById('recentPaymentsBody');
-      if (body) {
-        body.replaceChildren();
-        const escape = value => String(value ?? '—').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-        if (!transactions.length) setRows('recentPaymentsBody', 5, 'No tenant transactions found.');
-        else transactions.slice(0, 10).forEach(row => {
-          const tr = document.createElement('tr');
-          [row.trx_id, row.channel, (Number(row.amount)||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}), row.status, row.created_at].forEach(value => { const td = document.createElement('td'); td.textContent = escape(value); tr.appendChild(td); });
-          body.appendChild(tr);
-        });
-      }
-      setText('dashboardTrafficStatus', 'Tenant data loaded');
-      setText('nocLastUpdated', 'Updated ' + new Date().toLocaleTimeString());
-      setText('nocInterfacePill', vouchers.length + ' hotspot vouchers');
-      setText('nocUrgentCount', 'Live telemetry off');
-    } catch (error) {
-      console.warn('[Tenant Dashboard]', error.message || error);
-      setText('dashboardTrafficStatus', 'Tenant data unavailable');
-      setText('nocLastUpdated', 'Tenant API request failed');
-      setRows('recentPaymentsBody', 5, 'Tenant payments could not be loaded. Open Billing and use Refresh to retry.');
-      setText('nocAvailability', 'Tenant API request failed');
-    }
-  }
-  void hydrateTenantDashboard();
-
   // Tenant users must never interact with legacy shared/global hardware settings.
   document.getElementById('general-settings-panel-router')?.setAttribute('hidden', 'hidden');
   document.getElementById('devices-management-view')?.setAttribute('hidden', 'hidden');
-  const tenantHardwareSettingsView = document.getElementById('dynamicPageContent');
-  if (!tenantHardwareSettingsView || document.getElementById('view-tenant-hardware')) return;
+  const settings = document.getElementById('view-general-settings');
+  if (!settings || document.getElementById('tenantHardwareManager')) return;
   const section = document.createElement('section');
-  section.id = 'view-tenant-hardware';
-  section.className = 'admin-view hidden card border-0 shadow-sm m-3';
-  section.style.display = 'none';
-  section.setAttribute('aria-hidden', 'true');
+  section.id = 'tenantHardwareManager';
+  section.className = 'card border-0 shadow-sm m-3';
   section.innerHTML = '<div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>My Network Hardware</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="tenantHardwareRefresh">Refresh</button></div><div class="card-body"><p class="small text-muted">Router and OLT records are isolated to this tenant. Saving credentials stores encrypted inventory data; it does not connect to or change a live device.</p><div id="tenantHardwareMessage" class="small mb-3" role="status"></div><div class="row g-3"><div class="col-lg-6" id="tenantRouterCard"><h6>MikroTik Routers</h6><form id="tenantRouterForm" class="row g-2"><div class="col-12"><input class="form-control" name="router_name" placeholder="Router name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="host" placeholder="Host / IP" required maxlength="253"></div><div class="col-6"><input class="form-control" name="api_port" type="number" value="8728" min="1" max="65535" required></div><div class="col-6"><input class="form-control" name="username" placeholder="API username" required maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="API password" required autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Router</button></div></form><div id="tenantRouterList" class="mt-3"></div></div><div class="col-lg-6" id="tenantOltCard"><h6>OLT Devices</h6><form id="tenantOltForm" class="row g-2"><div class="col-12"><input class="form-control" name="olt_name" placeholder="OLT name" required maxlength="120"></div><div class="col-6"><input class="form-control" name="olt_type" placeholder="Vendor / type" required maxlength="80"></div><div class="col-6"><input class="form-control" name="ip_address" placeholder="IP / hostname" required maxlength="253"></div><div class="col-6"><input class="form-control" name="username" placeholder="Management username" maxlength="160"></div><div class="col-6"><input class="form-control" name="password" type="password" placeholder="Password (optional)" autocomplete="new-password"></div><div class="col-12"><input class="form-control" name="snmp_community" type="password" placeholder="SNMP community (optional)" autocomplete="new-password"></div><div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save OLT</button></div></form><div id="tenantOltList" class="mt-3"></div></div></div></div>';
-  // Append a true sibling view: switchView() only toggles .admin-view containers.
-  tenantHardwareSettingsView.appendChild(section);
-  const showTenantHardwareView = () => {
-    section.hidden = false;
-    section.classList.remove('hidden');
-    section.style.display = '';
-    section.setAttribute('aria-hidden', 'false');
-  };
+  settings.appendChild(section);
   const routerCard = section.querySelector('#tenantRouterCard');
   const oltCard = section.querySelector('#tenantOltCard');
   routerCard.hidden = !enabled('mikrotik');
   oltCard.hidden = !enabled('olt');
-  section.hidden = !enabled('mikrotik') && !enabled('olt');
   if (!enabled('mikrotik') && !enabled('olt')) section.querySelector('.card-body').prepend(text('div', 'Your tenant plan has no hardware modules enabled.', 'alert alert-warning py-2'));
 
   const message = (value, error) => {
