@@ -200,11 +200,9 @@ footer .border-t{border-color:#cbd5e1!important}
 
 
 /* Unified online payment navigation */
-.online-payment-nav{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(16,185,129,.28);border-radius:10px;padding:9px 12px;background:#ecfdf5;color:#065f46!important;font-weight:800;white-space:nowrap}
-.online-payment-nav:hover{background:#d1fae5;color:#064e3b!important}
 .online-payment-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #065f46;border-radius:11px;padding:10px 12px;background:#065f46;color:#fff!important;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 3px 9px rgba(6,95,70,.14)}
 .online-payment-cta:hover{background:#064e3b}
-@media(max-width:767px){header nav.hidden{gap:10px!important;flex-wrap:wrap}.online-payment-nav{padding:7px 9px;font-size:12px}.online-payment-cta{padding:8px 9px;font-size:11px}header>div>div:last-child{flex-wrap:wrap}}
+@media(max-width:767px){.online-payment-cta{padding:8px 9px;font-size:11px}header>div>div:last-child{flex-wrap:wrap}}
 
 </style>
 <script src="/js/date-format.js"></script>
@@ -217,10 +215,9 @@ footer .border-t{border-color:#cbd5e1!important}
       <a href="#packages" class="hover:text-cyan-600">Packages</a>
       <a href="#coverage" class="hover:text-cyan-600">Coverage</a>
       <a href="#support" class="hover:text-cyan-600">Support</a>
-      <a href="/payment.html" class="online-payment-nav" aria-label="Online Payment">অনলাইন পেমেন্ট</a>
     </nav>
     <div class="flex items-center gap-2">
-      <a href="/payment.html" class="online-payment-cta">Online Payment ↗</a>
+      <a href="/payment" class="online-payment-cta" aria-label="Online Payment">অনলাইন পেমেন্ট ↗</a>
       <button id="supportBtn" class="hidden rounded-xl border border-white/15 px-3 py-2 text-sm font-bold text-white hover:border-emerald-300 md:block">Support</button>
       <button id="customerLoginBtn" class="rounded-xl px-3 py-2 text-sm font-bold text-white hover:bg-cyan-700">Customer Login</button>
       <a href="/login" class="hidden rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-white hover:bg-white/10 sm:block">Admin Login</a>
