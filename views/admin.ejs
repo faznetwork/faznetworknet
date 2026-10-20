@@ -9710,7 +9710,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
         tenantVoucherRows = Array.isArray(d.vouchers) ? d.vouchers : []; reportVouchers = tenantVoucherRows;
         dataTable('tenantVouchersList',['Username','Profile','Validity','Price','Status','Router action','Delete'],tenantVoucherRows,'vouchers','hotspot');
       }));
-      if (enabled('pppoe')) jobs.push(tenantApi('/api/tenant/provisioning/pppoe',{method:'POST',body:JSON.stringify({action:'print'})}).then(d => dataTable('tenantPppoeList',['Username','Profile','Router state','Router action'],d.result || [],null,'pppoe')));
+      if (enabled('pppoe')) { const host = document.getElementById('tenantPppoeList'); if (host) { host.replaceChildren(); host.appendChild(text('div', 'PPPoE router status is loaded when you request a refresh or manage an account. If no tenant router is configured, the router API will return NO_ROUTER_CONFIGURED.', 'small text-muted')); } }
       if (enabled('billing')) jobs.push(dataRequest('transactions').then(d => { reportTransactions = Array.isArray(d.transactions) ? d.transactions : []; dataTable('tenantTransactionsList',['Channel','Transaction ID','Amount','Status','Created'],reportTransactions,null); }));
       await Promise.all(jobs);
       const reportHost = document.getElementById('tenantReportsSummary');
