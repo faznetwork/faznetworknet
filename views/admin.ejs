@@ -9566,7 +9566,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
     const tbody = document.createElement('tbody');
     rows.forEach(row => {
       const tr = document.createElement('tr');
-      const displayHeaders = removePath ? headers.slice(0, -1) : headers;
+      const displayHeaders = headers.filter(h => !(actionKind && h === 'Router action') && !(removePath && h === 'Delete'));
       displayHeaders.forEach(h => {
         const key = ({'Name':'full_name','Phone':'phone','Username':'username','Package':'package_name','Bill':'monthly_bill','Profile':'profile','Validity':'validity','Price':'price','Status':'status','Channel':'channel','Transaction ID':'trx_id','Amount':'amount','Created':'created_at','Router state':'disabled'})[h];
         let value = key ? row[key] : '';
