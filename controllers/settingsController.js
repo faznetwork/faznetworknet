@@ -46,6 +46,30 @@ async function saveHotspotEngine(req,res){
 }
 
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
+const HOTSPOT_PORTAL_SETTINGS_KEY = "hotspot_portal_settings";
+
+async function getHotspotPortalSettings(req,res){
+ try {
+  const result=await db.query("SELECT value FROM app_settings WHERE key=$1 LIMIT 1",[HOTSPOT_PORTAL_SETTINGS_KEY]);
+  let settings={};
+  if(result.rows[0]?.value){settings=JSON.parse(result.rows[0].value);}
+  if(!settings||typeof settings!=="object"||Array.isArray(settings))throw new Error("Stored portal settings must be a JSON object.");
+  return res.set("Cache-Control","no-store").json({success:true,settings});
+ }catch(error){return errorResponse(res,error,500);}
+}
+
+async function saveHotspotPortalSettings(req,res){
+ try {
+  const settings=req.body?.settings??req.body;
+  if(!settings||typeof settings!=="object"||Array.isArray(settings))throw new Error("Portal settings must be a JSON object.");
+  const serialized=JSON.stringify(settings);
+  if(!serialized||serialized.length>50000)throw new Error("Portal settings payload is invalid or exceeds 50 KB.");
+  const normalized=JSON.parse(serialized);
+  await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[HOTSPOT_PORTAL_SETTINGS_KEY,JSON.stringify(normalized)]);
+  return res.set("Cache-Control","no-store").json({success:true,message:"Hotspot portal settings saved successfully.",settings:normalized});
+ }catch(error){return errorResponse(res,error,400);}
+}
+
 async function saveHotspotWebhookSettings(req,res){
  try{
   const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();
@@ -254,4 +278,4 @@ async function testWhatsApp(req,res){
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect({freshQr:true})});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
+module.exports={getHotspotPortalSettings,saveHotspotPortalSettings,testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
