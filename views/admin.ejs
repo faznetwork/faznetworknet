@@ -1807,7 +1807,7 @@
   // Missing/empty flags must not hide the tenant's operational menu. Only an explicit false disables a module.
   const tenantModuleEnabled = (key) => !tenantPage || (tenantModuleFlagsPresent ? tenantModuleConfig[key] !== false : tenantCoreModules.includes(key));
 %>
-<script>window.__isTenantPage = <%= Boolean(tenantPage) %>;</script>
+<script>window.__isTenantPage = <%= Boolean(locals.tenantPage || tenantPage) %>;</script>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
     <div class="sidebar" id="sidebar">
