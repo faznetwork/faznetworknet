@@ -934,3 +934,16 @@ CREATE INDEX IF NOT EXISTS idx_hotspot_direct_subscriber_phone
 CREATE INDEX IF NOT EXISTS idx_hotspot_direct_subscriber_mac
   ON hotspot_vouchers (LOWER(mac_address), id DESC)
   WHERE subscriber_type='direct_subscriber' AND mac_address IS NOT NULL;
+
+
+-- Short-lived server-authoritative sessions for public PPPoE bill payments.
+CREATE TABLE IF NOT EXISTS public_payment_sessions (
+  session_id VARCHAR(128) PRIMARY KEY,
+  username VARCHAR(100) NOT NULL,
+  provider VARCHAR(20) NOT NULL CHECK (provider IN ('bkash','nagad','rocket','upay')),
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_public_payment_sessions_expires_at
+  ON public_payment_sessions(expires_at);

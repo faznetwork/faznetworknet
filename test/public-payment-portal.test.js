@@ -21,12 +21,12 @@ test("payment portal is English-only and dedicated to PPPoE with a five-minute p
   assert.match(page, /PPPoE Broadband Bill Payment/);
   assert.match(page, /Check Bill/);
   assert.match(page, /Submit TrxID & Verify Payment/);
-  assert.match(page, /\/api\/public\/portal-config/);
-  assert.match(page, /\/api\/settings\/public/);
+  assert.match(page, /\/api\/public\/payment\/settings/);
   assert.match(page, /startTimer\(\)/);
   assert.match(page, /300000/);
-  assert.match(page, /\/api\/pppoe\/check-subscriber/);
-  assert.match(page, /\/api\/pppoe\/verify-renewal/);
+  assert.match(page, /\/api\/public\/payment\/check-bill/);
+  assert.match(page, /\/api\/public\/payment\/session/);
+  assert.match(page, /\/api\/public\/payment\/confirm/);
   assert.doesNotMatch(page, /hotspot|hotspot-mac|hotspot-phone|hotspot-packages|\/api\/verify-trx|submitMikrotik/i);
   assert.doesNotMatch(page, /[\u0980-\u09FF]/, "all visible copy and markup must use English");
 });
