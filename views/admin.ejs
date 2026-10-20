@@ -9522,7 +9522,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       { match: /report/i, module: 'reports' }
     ];
     Array.from(sidebar.children).forEach((item) => {
-      const label = (item.textContent || '').replace(/\\s+/g, ' ').trim();
+      const label = (item.textContent || '').replace(/\s+/g, ' ').trim();
       const rule = rules.find((candidate) => candidate.match.test(label));
       if (rule && !enabled(rule.module)) item.hidden = true;
     });
