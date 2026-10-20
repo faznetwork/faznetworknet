@@ -1802,7 +1802,6 @@
   // validated request tenant, and do not depend on a session/user object existing in EJS.
   const tenantRecord = (typeof tenant !== 'undefined' && tenant && Number(tenant.id) > 0) ? tenant : null;
   const tenantPage = (typeof tenantContext !== 'undefined' && tenantContext === true)
-    || (typeof tenantPage !== 'undefined' && tenantPage === true)
     || Boolean(tenantRecord)
     || (typeof user !== 'undefined' && user && Number(user.tenantId) > 0)
     || (typeof currentRole !== 'undefined' && currentRole === 'tenant_admin');
