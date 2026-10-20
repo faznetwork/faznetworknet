@@ -27,11 +27,7 @@ async function requireTenantAdmin(req, res, next) {
         return res.redirect('/tenant/login?error=inactive');
       });
     }
-    // Publish the freshly queried tenant record through both request context (API guards)
-    // and Express render locals (EJS). This is the single canonical dashboard data handoff.
     req.tenant = result.rows[0];
-    res.locals.tenant = req.tenant;
-    res.locals.tenantContext = true;
     res.set('Cache-Control', 'no-store, private');
     return next();
   } catch (error) {
