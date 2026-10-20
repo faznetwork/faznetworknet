@@ -1,226 +1,79 @@
-<!DOCTYPE html>
-<html lang="bn">
+<!doctype html>
+<html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAZ NETWORK - Hotspot Login</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background: linear-gradient(135deg, #0d324d 0%, #7f5a83 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
-        }
-        .card {
-            background: #ffffff;
-            width: 100%;
-            max-width: 400px;
-            padding: 25px 20px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-            text-align: center;
-        }
-        .logo-title {
-            font-size: 24px;
-            font-weight: 800;
-            color: #0d324d;
-            margin-bottom: 4px;
-            letter-spacing: 0.5px;
-        }
-        .sub-title {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 20px;
-        }
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        .input-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 15px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .input-group input:focus {
-            border-color: #0d324d;
-        }
-        .btn-submit {
-            width: 100%;
-            padding: 13px;
-            background: #0d324d;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-            margin-top: 5px;
-        }
-        .btn-submit:hover {
-            background: #1b4b6e;
-        }
-        .btn-submit:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-        }
-        .alert-box {
-            display: none;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-bottom: 15px;
-        }
-        .alert-error {
-            background: #ffe6e6;
-            color: #d63031;
-            border: 1px solid #fab1a0;
-        }
-        .alert-success {
-            background: #e8f8f5;
-            color: #27ae60;
-            border: 1px solid #a3e4d7;
-        }
-        .notice {
-            margin-top: 18px;
-            font-size: 12px;
-            color: #555;
-            line-height: 1.5;
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 6px;
-            text-align: left;
-            border-left: 3px solid #0d324d;
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internet hotspot - Log in</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
-<div class="card">
-    <div class="logo-title">FAZ NETWORK</div>
-    <div class="sub-title">স্বয়ংক্রিয় হটস্পট লগইন পোর্টাল</div>
+    <!-- two other colors
 
-    <!-- স্ট্যাটাস / মেসেজ নোটিফিকেশন বক্স -->
-    <div id="status-box" class="alert-box"></div>
+<body class="lite">
+<body class="dark">
 
-    <!-- ইনপুট ফর্ম -->
-    <div class="input-group">
-        <label for="cust_phone">মোবাইল নম্বর (যে নম্বর থেকে টাকা পাঠিয়েছেন)</label>
-        <input type="tel" id="cust_phone" placeholder="017xxxxxxxx" maxlength="11" />
-    </div>
+-->
 
-    <div class="input-group">
-        <label for="cust_trx">ট্রানজেকশন আইডি (TrxID)</label>
-        <input type="text" id="cust_trx" placeholder="যেমন: BLK78ABC9" style="text-transform: uppercase;" />
-    </div>
+    $(if chap-id)
+    <form name="sendin" action="$(link-login-only)" method="post" style="display:none">
+        <input type="hidden" name="username" />
+        <input type="hidden" name="password" />
+        <input type="hidden" name="dst" value="$(link-orig)" />
+        <input type="hidden" name="popup" value="true" />
+    </form>
 
-    <button type="button" id="btn-login" class="btn-submit" onclick="handleVerification()">প্যাকেজ চালু ও লগইন করুন</button>
-
-    <div class="notice">
-        <b>প্যাকেজ অ্যাক্টিভেশন নিয়ম:</b><br>
-        ১. bKash বা Nagad দিয়ে প্যাকেজের সঠিক টাকা পাঠান।<br>
-        ২. ফিরতি SMS থেকে প্রাপ্ত TrxID ও নম্বর দিয়ে বাটনে চাপ দিন।
-    </div>
-</div>
-
-<!-- মাইক্রোটিকের আসল লগইন ফর্ম (যা ব্যাকগ্রাউন্ডে রাউটারে লগইন সম্পন্ন করবে) -->
-<form id="mikrotik-login-form" name="login" action="$(link-login-only)" method="post" style="display:none;">
-    <input type="hidden" name="username" id="mt-user" />
-    <input type="hidden" name="password" id="mt-pass" />
-    <input type="hidden" name="dst" value="$(link-orig)" />
-    <input type="hidden" name="popup" value="true" />
-</form>
-
-<script>
-    // আপনার রেন্ডার সার্ভার ব্যাকএন্ড API
-    const BACKEND_API_URL = 'https://faznetwork.onrender.com/api/verify-trx';
-
-    function showStatus(text, isError = false) {
-        const box = document.getElementById('status-box');
-        box.style.display = 'block';
-        box.className = 'alert-box ' + (isError ? 'alert-error' : 'alert-success');
-        box.innerText = text;
-    }
-
-    async function handleVerification() {
-        const phoneInput = document.getElementById('cust_phone').value.trim();
-        const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
-        const btn = document.getElementById('btn-login');
-
-        // প্রাথমিক ভ্যালিডেশন
-        if (!phoneInput || phoneInput.length < 11) {
-            showStatus('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।', true);
-            return;
+    <script src="/md5.js"></script>
+    <script>
+        function doLogin() {
+            document.sendin.username.value = document.login.username.value;
+            document.sendin.password.value = hexMD5('$(chap-id)' + document.login.password.value + '$(chap-challenge)');
+            document.sendin.submit();
+            return false;
         }
 
-        if (!trxInput || trxInput.length < 5) {
-            showStatus('সঠিক TrxID প্রদান করুন।', true);
-            return;
-        }
+    </script>
+    $(endif)
+    <div class="ie-fixMinHeight">
+        <div class="main">
+            <div class="wrap animated fadeIn">
+                <form name="login" action="$(link-login-only)" method="post" $(if chap-id) onSubmit="return doLogin()" $(endif)>
+                    <input type="hidden" name="dst" value="$(link-orig)" />
+                    <input type="hidden" name="popup" value="true" />
+                    <svg class="logo" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 174 42">
+                        <path fill="#fff" d="M7.32 13.66L0 41.74 3.12 41.74 9.49 15.94 9.58 15.94 15.01 41.74 18.22 41.74 36.86 16.34 36.95 16.34 30.02 41.74 33.18 41.74 40.4 13.66 35.73 13.66 17.23 38.87 11.99 13.66 7.32 13.66zM43.43 21.45L38.19 41.74 41.16 41.74 46.4 21.45 43.43 21.45zM50.68 21.45L45.5 41.74 48.47 41.74 50.36 34.39 55.55 30.77 62.02 41.74 65.27 41.74 57.91 29.28 69.43 21.45 65.46 21.45 51.21 31.36 51.12 31.28 53.66 21.45 50.68 21.45z" />
+                        <path d="M71.18 21.45L65.94 41.74h3l2.74-10.62c1-3.81 3.82-7.39 9.16-7.47.56 0 1.13 0 1.7 0l.66-2.48c-.52 0-1.09 0-1.61 0-4.34 0-6.94 2-8.82 5h-.1l1.23-4.68zM103.8 28.8c0-5-4-7.94-9.63-7.94-8.69 0-13.59 6.37-13.59 13 0 5.07 3.44 8.45 9.72 8.45 9 0 13.5-6.68 13.5-13.53m-3 .52c0 4.72-3.44 10.93-9.95 10.93-5 0-7.32-2.68-7.32-6.61 0-4.76 3.59-10.7 10.1-10.7 4.77 0 7.17 2.6 7.17 6.38M132.33 21.43L134.26 13.66 105.19 13.66 103.27 21.45 112.59 21.45 112.59 21.45 122.99 21.45 122.99 21.45 132.33 21.43zM111.67 25.17L107.55 41.74 117.93 41.74 122.06 25.17 122.06 25.16 111.67 25.16 111.67 25.17zM134 25.17l-4.11 16.57h9.35l4.1-16.57zm10.28-3.73l1.94-7.78h-9.34l-2 7.79zM150.09 13.66L143.11 41.74 152.45 41.74 153.91 35.92 156.04 34.34 159.34 41.74 169.49 41.74 163.26 29.55 174.26 21.33 163.07 21.33 156.18 27.3 156.09 27.3 159.44 13.66 150.09 13.66zM47.45 0c1.14 7.93 5.39 12.74 14.07 13.14A10.69 10.69 0 0 1 47.45 0" fill="#fff" fill-rule="evenodd" />
+                        <path d="M42.91,1.4c.1,0,.11,0,.12.11A16.55,16.55,0,0,0,48.26,13a16.6,16.6,0,0,0,12,4.66c-10,4-20.55-5.6-17.33-16.28" fill="#fff" fill-rule="evenodd" /></svg>
 
-        // বাটন লোডিং স্টেট
-        btn.disabled = true;
-        btn.innerText = 'যাচাই করা হচ্ছে... অপেক্ষা করুন';
-        showStatus('পেমেন্ট ও রাউটার ভেরিফাই করা হচ্ছে...');
 
-        try {
-            const response = await fetch(BACKEND_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    username: phoneInput,
-                    trxId: trxInput
-                })
-            });
+                    <p class="info $(if error)alert$(endif)">
+                        $(if error == "")Please log in to use the internet hotspot service $(if trial == 'yes')<br />Free trial available, <a href="$(link-login-only)?dst=$(link-orig-esc)&amp;username=T-$(mac-esc)">click here</a>.$(endif)
+                        $(endif)
 
-            const data = await response.json();
+                        $(if error)$(error)$(endif)
+                    </p>
+                    <label>
+                        <img class="ico" src="img/user.svg" alt="#" />
+                        <input name="username" type="text" value="$(username)" placeholder="Username" />
+                    </label>
 
-            if (response.ok && data.success) {
-                showStatus('পেমেন্ট সফল! ইন্টারনেট কানেক্ট করা হচ্ছে...');
+                    <label>
+                        <img class="ico" src="img/password.svg" alt="#" />
+                        <input name="password" type="password" placeholder="Password" />
+                    </label>
 
-                // মাইক্রোটিকের হিডেন ফর্মে ইউজার ও পাসওয়ার্ড বসানো
-                document.getElementById('mt-user').value = data.username;
-                document.getElementById('mt-pass').value = data.password;
+                    <input type="submit" value="Connect" />
 
-                // মাইক্রোটিক ফর্মে অটো-সাবমিট
-                setTimeout(() => {
-                    document.getElementById('mikrotik-login-form').submit();
-                }, 800);
+                </form>
+                <p class="info bt">Powered by MikroTik RouterOS</p>
 
-            } else {
-                showStatus(data.message || 'যাচাই ব্যর্থ হয়েছে। TrxID সঠিক কি না নিশ্চিত করুন।', true);
-                btn.disabled = false;
-                btn.innerText = 'প্যাকেজ চালু ও লগইন করুন';
-            }
-        } catch (err) {
-            console.error(err);
-            showStatus('সার্ভারের সাথে সংযোগ করা যায়নি। ওয়াইফাই নেটওয়ার্ক চেক করুন।', true);
-            btn.disabled = false;
-            btn.innerText = 'প্যাকেজ চালু ও লগইন করুন';
-        }
-    }
-</script>
-
+            </div>
+        </div>
+    </div>
 </body>
+
 </html>
