@@ -3,8 +3,6 @@
 // Tenant access policy deliberately fails closed for legacy APIs whose tables and
 // controller queries are not yet tenant-scoped. Never promote a tenant session
 // to isAdmin or let it inherit platform-owner access.
-const CORE_MODULES = Object.freeze(['customers', 'hotspot', 'billing', 'pppoe', 'mikrotik', 'olt', 'reports']);
-
 const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
   '/api/customers', '/api/hotspot', '/api/pppoe', '/api/payments-admin',
   '/api/payments', '/api/reports', '/api/devices', '/api/mikrotik',
@@ -13,26 +11,21 @@ const LEGACY_GLOBAL_API_PREFIXES = Object.freeze([
 ]);
 
 function normalizeModules(input) {
-  // PostgreSQL JSONB may be a flat map or an enabled_modules wrapper.
-  // Explicit false is respected; missing/malformed core flags retain legacy enabled defaults.
-  if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
-  const modules = input.enabled_modules && typeof input.enabled_modules === 'object' && !Array.isArray(input.enabled_modules)
-    ? input.enabled_modules
-    : input;
-  const normalized = Object.fromEntries(
-    Object.entries(modules).map(([key, enabled]) => [String(key), enabled === true ? true : enabled === false ? false : undefined])
-  );
-  for (const key of CORE_MODULES) {
-    if (normalized[key] !== true && normalized[key] !== false) normalized[key] = true;
+  let value = input;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch (_) { value = {}; }
   }
-  return Object.freeze(normalized);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) value = {};
+  // enabled_modules is the canonical name; legacy rows continue to read modules.
+  const enabled = value.enabled_modules && typeof value.enabled_modules === 'object'
+    ? value.enabled_modules
+    : value;
+  return Object.freeze(Object.fromEntries(Object.entries(enabled).map(([key, on]) => [String(key), on === true])));
 }
 
 function moduleEnabled(tenant, moduleName) {
-  const moduleConfig = tenant && Object.prototype.hasOwnProperty.call(tenant, 'modules')
-    ? tenant.modules
-    : tenant?.enabled_modules;
-  return normalizeModules(moduleConfig)[moduleName] === true;
+  const raw = tenant?.enabled_modules ?? tenant?.modules;
+  return normalizeModules(raw)[moduleName] === true;
 }
 
 function requireTenantModule(moduleName) {
@@ -60,4 +53,4 @@ function tenantLegacyApiGuard(req, res, next) {
   });
 }
 
-module.exports = { normalizeModules, moduleEnabled, requireTenantModule, tenantLegacyApiGuard, LEGACY_GLOBAL_API_PREFIXES, CORE_MODULES };
+module.exports = { normalizeModules, moduleEnabled, requireTenantModule, tenantLegacyApiGuard, LEGACY_GLOBAL_API_PREFIXES };
