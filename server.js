@@ -17,6 +17,7 @@ const serverSettingsRoutes=require("./routes/serverSettingsRoutes");
 const { normalizeModules } = require("./middleware/tenantAccess");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
+app.get("/favicon.ico",(req,res)=>res.status(204).end());
 
 // Render liveness probe intentionally runs before session, PostgreSQL, branding, and other middleware.
 // It only confirms that the Node.js process can answer HTTP requests; database health is checked separately.

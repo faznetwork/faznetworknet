@@ -9613,6 +9613,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
   // Match backend policy: missing core flags default to enabled; explicit false disables.
   const coreModules = ['customers', 'hotspot', 'pppoe', 'billing', 'mikrotik', 'olt', 'reports'];
   const enabled = (key) => modules[key] === true || (modules[key] !== false && coreModules.includes(key));
+  // The server-rendered tenant menu is authoritative. Legacy platform navigation
+  // scripts may apply role/module visibility rules intended for the global admin UI;
+  // restore only the tenant menu entries that EJS actually rendered.
+  document.querySelectorAll('.sidebar-menu [data-tenant-module]').forEach((item) => {
+    item.hidden = false;
+    item.removeAttribute('aria-hidden');
+    item.style.removeProperty('display');
+    item.style.removeProperty('visibility');
+  });
   window.openTenantModule = function (key) {
     const map = { dashboard: 'view-main-dashboard', customers: 'tenantCustomersPanel', hotspot: 'tenantVouchersPanel', billing: 'tenantBillingPanel', pppoe: 'tenantPppoeForm', mikrotik: 'tenantRouterCard', olt: 'tenantOltCard', reports: 'tenantReportsPanel', support: 'tenantDataMessage' };
     if (key === 'dashboard') { if (typeof switchView === 'function') switchView('dashboard'); return; }
