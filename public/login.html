@@ -1,79 +1,279 @@
-<!doctype html>
-<html lang="en">
-
+<!DOCTYPE html>
+<html lang="bn">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="pragma" content="no-cache" />
-    <meta http-equiv="expires" content="-1" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Internet hotspot - Log in</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-
-<body>
-
-    <!-- two other colors
-
-<body class="lite">
-<body class="dark">
-
--->
-
-    $(if chap-id)
-    <form name="sendin" action="$(link-login-only)" method="post" style="display:none">
-        <input type="hidden" name="username" />
-        <input type="hidden" name="password" />
-        <input type="hidden" name="dst" value="$(link-orig)" />
-        <input type="hidden" name="popup" value="true" />
-    </form>
-
-    <script src="/md5.js"></script>
-    <script>
-        function doLogin() {
-            document.sendin.username.value = document.login.username.value;
-            document.sendin.password.value = hexMD5('$(chap-id)' + document.login.password.value + '$(chap-challenge)');
-            document.sendin.submit();
-            return false;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAZ NETWORK - Hotspot Login</title>
+    <style>
+        :root {
+            --primary-color: #0ea5e9;
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at top right, #1e3a8a, transparent 40%), radial-gradient(circle at bottom left, #0ea5e9, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            margin-top: 40px;
+            text-align: center;
+        }
+        .header h1 { margin: 0; font-size: 2.5rem; color: var(--primary-color); }
+        .header p { margin: 5px 0 20px; color: var(--text-muted); }
+        
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 40px;
         }
 
-    </script>
-    $(endif)
-    <div class="ie-fixMinHeight">
-        <div class="main">
-            <div class="wrap animated fadeIn">
-                <form name="login" action="$(link-login-only)" method="post" $(if chap-id) onSubmit="return doLogin()" $(endif)>
-                    <input type="hidden" name="dst" value="$(link-orig)" />
-                    <input type="hidden" name="popup" value="true" />
-                    <svg class="logo" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 174 42">
-                        <path fill="#fff" d="M7.32 13.66L0 41.74 3.12 41.74 9.49 15.94 9.58 15.94 15.01 41.74 18.22 41.74 36.86 16.34 36.95 16.34 30.02 41.74 33.18 41.74 40.4 13.66 35.73 13.66 17.23 38.87 11.99 13.66 7.32 13.66zM43.43 21.45L38.19 41.74 41.16 41.74 46.4 21.45 43.43 21.45zM50.68 21.45L45.5 41.74 48.47 41.74 50.36 34.39 55.55 30.77 62.02 41.74 65.27 41.74 57.91 29.28 69.43 21.45 65.46 21.45 51.21 31.36 51.12 31.28 53.66 21.45 50.68 21.45z" />
-                        <path d="M71.18 21.45L65.94 41.74h3l2.74-10.62c1-3.81 3.82-7.39 9.16-7.47.56 0 1.13 0 1.7 0l.66-2.48c-.52 0-1.09 0-1.61 0-4.34 0-6.94 2-8.82 5h-.1l1.23-4.68zM103.8 28.8c0-5-4-7.94-9.63-7.94-8.69 0-13.59 6.37-13.59 13 0 5.07 3.44 8.45 9.72 8.45 9 0 13.5-6.68 13.5-13.53m-3 .52c0 4.72-3.44 10.93-9.95 10.93-5 0-7.32-2.68-7.32-6.61 0-4.76 3.59-10.7 10.1-10.7 4.77 0 7.17 2.6 7.17 6.38M132.33 21.43L134.26 13.66 105.19 13.66 103.27 21.45 112.59 21.45 112.59 21.45 122.99 21.45 122.99 21.45 132.33 21.43zM111.67 25.17L107.55 41.74 117.93 41.74 122.06 25.17 122.06 25.16 111.67 25.16 111.67 25.17zM134 25.17l-4.11 16.57h9.35l4.1-16.57zm10.28-3.73l1.94-7.78h-9.34l-2 7.79zM150.09 13.66L143.11 41.74 152.45 41.74 153.91 35.92 156.04 34.34 159.34 41.74 169.49 41.74 163.26 29.55 174.26 21.33 163.07 21.33 156.18 27.3 156.09 27.3 159.44 13.66 150.09 13.66zM47.45 0c1.14 7.93 5.39 12.74 14.07 13.14A10.69 10.69 0 0 1 47.45 0" fill="#fff" fill-rule="evenodd" />
-                        <path d="M42.91,1.4c.1,0,.11,0,.12.11A16.55,16.55,0,0,0,48.26,13a16.6,16.6,0,0,0,12,4.66c-10,4-20.55-5.6-17.33-16.28" fill="#fff" fill-rule="evenodd" /></svg>
+        /* Login Box Styles */
+        .login-box, .packages-box {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 30px;
+            flex: 1;
+            min-width: 300px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
 
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+        .tab.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            font-weight: bold;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; text-align: center; }
 
-                    <p class="info $(if error)alert$(endif)">
-                        $(if error == "")Please log in to use the internet hotspot service $(if trial == 'yes')<br />Free trial available, <a href="$(link-login-only)?dst=$(link-orig-esc)&amp;username=T-$(mac-esc)">click here</a>.$(endif)
-                        $(endif)
+        /* Form Inputs */
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.2);
+            color: white;
+            box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: var(--primary-color); }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+        button:hover { background: #0284c7; }
 
-                        $(if error)$(error)$(endif)
-                    </p>
-                    <label>
-                        <img class="ico" src="img/user.svg" alt="#" />
-                        <input name="username" type="text" value="$(username)" placeholder="Username" />
-                    </label>
+        /* QR Scanner Placeholder */
+        .qr-placeholder {
+            width: 200px;
+            height: 200px;
+            border: 2px dashed var(--primary-color);
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            border-radius: 10px;
+        }
 
-                    <label>
-                        <img class="ico" src="img/password.svg" alt="#" />
-                        <input name="password" type="password" placeholder="Password" />
-                    </label>
+        /* Packages Styles */
+        .packages-box h2 {
+            margin-top: 0;
+            text-align: center;
+            color: var(--primary-color);
+        }
+        .package-item {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .package-info h3 { margin: 0; font-size: 1.2rem; }
+        .package-info p { margin: 5px 0 0; color: var(--text-muted); font-size: 0.9rem; }
+        .package-price { font-size: 1.5rem; font-weight: bold; color: #10b981; }
+        
+        /* Payment Methods */
+        .payment-methods {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .payment-numbers {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .payment-card {
+            background: rgba(0,0,0,0.2);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .bkash { color: #e11471; font-weight: bold; }
+        .nagad { color: #f97316; font-weight: bold; }
 
-                    <input type="submit" value="Connect" />
+    </style>
+</head>
+<body>
 
-                </form>
-                <p class="info bt">Powered by MikroTik RouterOS</p>
+    <div class="header">
+        <h1>FAZ NETWORK</h1>
+        <p>High-Speed Internet Connectivity</p>
+    </div>
 
+    <div class="container">
+        <!-- Login Section -->
+        <div class="login-box">
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('voucher')">ভাউচার</div>
+                <div class="tab" onclick="switchTab('member')">মেম্বার</div>
+                <div class="tab" onclick="switchTab('qr')">QR স্ক্যান</div>
+            </div>
+
+            <!-- Mikrotik Login Form Form Action -> $(link-login-only) -->
+            <form name="login" action="" method="post">
+                <input type="hidden" name="dst" value="" />
+                <input type="hidden" name="popup" value="true" />
+
+                <!-- Voucher Tab -->
+                <div id="voucher" class="tab-content active">
+                    <h3>ভাউচার কোড দিন</h3>
+                    <input type="text" name="username" placeholder="ভাউচার পিন" id="voucherInput">
+                    <!-- Mikrotik usually uses the voucher as both username and password -->
+                    <input type="hidden" name="password" id="voucherPass">
+                    <button type="submit" onclick="setVoucherPass()">লগইন করুন</button>
+                </div>
+
+                <!-- Member Tab -->
+                <div id="member" class="tab-content">
+                    <h3>মেম্বার লগইন</h3>
+                    <input type="text" name="username" placeholder="ইউজারনেম">
+                    <input type="password" name="password" placeholder="পাসওয়ার্ড">
+                    <button type="submit">লগইন করুন</button>
+                </div>
+
+                <!-- QR Scan Tab -->
+                <div id="qr" class="tab-content">
+                    <h3>QR কোড স্ক্যান করুন</h3>
+                    <div class="qr-placeholder">
+                        <span>ক্যামেরা ওপেন হচ্ছে...</span>
+                        <!-- Here you will integrate html5-qrcode or similar JS library -->
+                    </div>
+                    <button type="button">ক্যামেরা চালু করুন</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Packages & Payment Section -->
+        <div class="packages-box">
+            <h2>ইন্টারনেট প্যাকেজ</h2>
+            
+            <div class="package-item">
+                <div class="package-info">
+                    <h3>5 Mbps স্পিড</h3>
+                    <p>আনলিমিটেড ডাটা • ৩০ দিন</p>
+                </div>
+                <div class="package-price">৳৫০০</div>
+            </div>
+
+            <div class="package-item">
+                <div class="package-info">
+                    <h3>10 Mbps স্পিড</h3>
+                    <p>আনলিমিটেড ডাটা • ৩০ দিন</p>
+                </div>
+                <div class="package-price">৳৮০০</div>
+            </div>
+
+            <div class="package-item">
+                <div class="package-info">
+                    <h3>1 Day Access</h3>
+                    <p>হটস্পট ভাউচার</p>
+                </div>
+                <div class="package-price">৳২০</div>
+            </div>
+
+            <div class="payment-methods">
+                <p>প্যাকেজ কিনতে নিচের নাম্বারে সেন্ড মানি করুন (অটোমেটিক অ্যাক্টিভেশন):</p>
+                <div class="payment-numbers">
+                    <div class="payment-card">
+                        <span class="bkash">bKash</span><br>
+                        01XXXXXXXXX
+                    </div>
+                    <div class="payment-card">
+                        <span class="nagad">Nagad</span><br>
+                        01XXXXXXXXX
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</body>
 
+    <script>
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function setVoucherPass() {
+            // In Mikrotik, often the username and password are the same for vouchers
+            var voucher = document.getElementById('voucherInput').value;
+            document.getElementById('voucherPass').value = voucher;
+        }
+    </script>
+</body>
 </html>
