@@ -20,7 +20,7 @@ test("payment portal is English-only and dedicated to PPPoE with a five-minute p
   assert.match(page, /<title>Online Payment/);
   assert.match(page, /PPPoE Broadband Bill Payment/);
   assert.match(page, /Check Bill/);
-  assert.match(page, /Confirm Payment & Renew/);
+  assert.match(page, /Verify TrxID & Renew/);
   assert.match(page, /\/api\/public\/payment\/settings/);
   assert.match(page, /startTimer\(\)/);
   assert.match(page, /300000/);
