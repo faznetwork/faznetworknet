@@ -8920,17 +8920,39 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return true;
             }
 
+            function renderNavigationFailure(name, error) {
+                const message = error && error.message ? error.message : 'An unexpected error prevented this page from loading.';
+                console.error('[Admin Navigation] Failed to load ' + name + ':', error);
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!dynamic) return false;
+                document.querySelectorAll('.admin-view').forEach(view => {
+                    view.classList.add('hidden');
+                    view.style.display = 'none';
+                });
+                dynamic.style.display = 'block';
+                dynamic.innerHTML = '<section class="admin-view" style="display:block"><div class="alert alert-danger d-flex flex-wrap align-items-center justify-content-between gap-3" role="alert"><div><strong>Unable to load this page.</strong><div class="small mt-1" data-navigation-error-message></div></div><button type="button" class="btn btn-outline-danger btn-sm" data-navigation-retry>Retry</button></div></section>';
+                const messageNode = dynamic.querySelector('[data-navigation-error-message]');
+                if (messageNode) messageNode.textContent = message;
+                dynamic.querySelector('[data-navigation-retry]')?.addEventListener('click', () => {
+                    if (typeof window.__fazRestoreAdminRoute === 'function') window.__fazRestoreAdminRoute();
+                }, { once: true });
+                if (typeof window.showToast === 'function') window.showToast(message, 'error');
+                return false;
+            }
             function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
                 try {
                     const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
+                    if (result && typeof result.then === 'function') {
+                        return result.catch(error => {
+                            renderNavigationFailure(normalized.view + (normalized.section ? ':' + normalized.section : ''), error);
+                            return false;
+                        });
                     }
                     return result;
                 } catch (error) {
-                    console.error('[Admin Routing] View restore failed:', error);
+                    renderNavigationFailure(normalized.view + (normalized.section ? ':' + normalized.section : ''), error);
                     return false;
                 } finally {
                     state.restoring = false;
@@ -9005,10 +9027,20 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         result = original.apply(this, args);
                     } catch (error) {
                         state.depth--;
+                        if (isTopLevel && route && !state.restoring) {
+                            renderNavigationFailure(name, error);
+                            return false;
+                        }
                         throw error;
                     }
                     state.depth--;
                     if (isTopLevel && !state.restoring) closeDrawerAfterNavigation();
+                    if (result && typeof result.then === 'function') {
+                        return result.catch(error => {
+                            renderNavigationFailure(name, error);
+                            return false;
+                        });
+                    }
                     return result;
                 };
                 wrapped.__fazRouteWrapped = true;
