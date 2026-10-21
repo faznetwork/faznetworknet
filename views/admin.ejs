@@ -1855,17 +1855,18 @@
                 </ul>
             </li>
 
-            <li class="menu-item billing-payments-menu">
-                <button class="dropdown-toggle" type="button" aria-expanded="false" onclick="toggleSubmenu(event, this)">
-                    <i class="bi bi-wallet2"></i> <span>Billing &amp; Payments</span>
+            <li class="menu-item">
+                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
+                    <i class="bi bi-credit-card"></i> <span data-key="payments">Payments</span>
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="window.loadRevenueAnalytics?.(); return false;"><i class="bi bi-graph-up-arrow me-2"></i><span>Revenue Analytics</span><span class="badge bg-primary ms-auto">NEW</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('all', 'all_payments'); return false;"><i class="bi bi-arrow-left-right me-2"></i><span>All Transactions</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('pending', 'pending_invoice'); return false;"><i class="bi bi-receipt me-2"></i><span>Pending Invoices</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('requests', 'payment_request'); return false;"><i class="bi bi-send me-2"></i><span>Payment Requests</span></a></li>
-                    <li><a href="/admin/payment-gateways"><i class="bi bi-shield-lock me-2"></i><span>Payment Gateways &amp; MFS Setup</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('pending', 'pending_invoice')"><span data-key="pending_invoice">Pending Invoice</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('all', 'all_payments')"><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('requests', 'payment_request')"><span data-key="payment_request">Payment Request</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('bkash', 'bkash_payments')"><span data-key="bkash_payments">bKash Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('nagad', 'nagad_payments')"><span data-key="nagad_payments">Nagad Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('rocket', 'rocket_payments')"><span data-key="rocket_payments">Rocket Payments</span></a></li>
                 </ul>
             </li>
 
