@@ -31,7 +31,7 @@ test("payment portal uses the four public API endpoints and does not submit a br
   assert.match(page, /\/api\/public\/payment\/check-bill/);
   assert.match(page, /\/api\/public\/payment\/session/);
   assert.match(page, /\/api\/public\/payment\/confirm/);
-  assert.match(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId\}\)/);
+  assert.match(page, /JSON\.stringify\(payload\)/);\n  assert.match(page, /payload\.transactionId/);\n  assert.doesNotMatch(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId,amount/);
 });
 
 test("public PPPoE payment session returns the configured receiving number and falls back to customer bill when package price is zero", () => {
@@ -47,7 +47,7 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(page, /#832b73/);
   assert.match(page, /#0054a6/);
   assert.match(page, /Verify TrxID & Renew/);
-  assert.match(page, /id="modal-amount"/);\n  assert.match(page, /assets\\/images\\/bkash-logo\\.png/);\n  assert.match(page, /assets\\/images\\/nagad-logo\\.png/);\n  assert.doesNotMatch(page, /<svg/);
+  assert.match(page, /id="modal-amount"/);\n  assert.match(page, /assets\\/images\\/bkash-logo\\.png/);\n  assert.match(page, /assets\\/images\\/nagad-logo\\.png/);\n  assert.doesNotMatch(page, /<svg/);\n  assert.match(page, /assets\\/images\\/bkash-logo\\.png/);\n  assert.match(page, /assets\\/images\\/nagad-logo\\.png/);\n  assert.doesNotMatch(page, /<svg/);
 });
 
 
