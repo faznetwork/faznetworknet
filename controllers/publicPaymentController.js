@@ -81,27 +81,6 @@ async function getPaymentSettings() {
   }
   return providers;
 }
-let paymentSessionSchemaPromise = null;
-async function ensurePaymentSessionSchema() {
-  if (!paymentSessionSchemaPromise) {
-    paymentSessionSchemaPromise = (async () => {
-      await db.query(`CREATE TABLE IF NOT EXISTS public_payment_sessions (
-        session_id VARCHAR(128) PRIMARY KEY,
-        username VARCHAR(100) NOT NULL,
-        provider VARCHAR(20) NOT NULL CHECK (provider IN ('bkash','nagad','rocket','upay')),
-        amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )`);
-      await db.query("CREATE INDEX IF NOT EXISTS idx_public_payment_sessions_expires_at ON public_payment_sessions(expires_at)");
-    })().catch(error => {
-      paymentSessionSchemaPromise = null;
-      throw error;
-    });
-  }
-  return paymentSessionSchemaPromise;
-}
-
 async function paymentSettings(req, res) {
   try {
     const providers = await getPaymentSettings();
@@ -140,26 +119,13 @@ async function createPaymentSession(req, res) {
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, 400, "The current monthly bill is not configured correctly.");
     const providers = await getPaymentSettings();
     if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
-    // The main schema bootstrap can be interrupted by unrelated legacy migrations; ensure this additive table independently.
-    await ensurePaymentSessionSchema();
     const paymentSessionId = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + SESSION_TTL_MS;
-    // Keep session cleanup and insertion atomic; always release the pooled connection.
-    const client = await db.getPool().connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("DELETE FROM public_payment_sessions WHERE expires_at <= NOW()");
-      await client.query(
-        "INSERT INTO public_payment_sessions(session_id,username,provider,amount,expires_at) VALUES($1,$2,$3,$4,to_timestamp($5 / 1000.0))",
-        [paymentSessionId, String(customer.username), provider, amount, expiresAt]
-      );
-      await client.query("COMMIT");
-    } catch (transactionError) {
-      await client.query("ROLLBACK").catch(() => {});
-      throw transactionError;
-    } finally {
-      client.release();
-    }
+    await db.query(
+      "INSERT INTO public_payment_sessions(session_id,username,provider,amount,expires_at) VALUES($1,$2,$3,$4,to_timestamp($5 / 1000.0))",
+      [paymentSessionId, String(customer.username), provider, amount, expiresAt]
+    );
+    await db.query("DELETE FROM public_payment_sessions WHERE expires_at <= NOW()");
     const providerNames = { bkash: "bKash", nagad: "Nagad", rocket: "Rocket", upay: "Upay" };
     return res.set("Cache-Control", "no-store, max-age=0").status(201).json({
       success: true,
