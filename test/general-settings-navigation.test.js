@@ -22,25 +22,23 @@ const settingsPaths = [
 test('every General Settings sidebar link has a client target and an Express page route', () => {
   for (const [url, target] of settingsPaths) {
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
-    assert.ok(mainScript.includes("new Set(['brand', 'billing', 'payments', 'sms', 'hotspot-portal'])"), 'settings click targets must be allowlisted');
-    assert.ok(mainScript.includes("__fazNavigateAdminRoute({ view: 'settings', section: target })"), 'settings links must use the shared router');
+    assert.ok(mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
   }
   assert.ok(serverSource.includes('hotspot-portal'), 'shared settings route must include the Hotspot portal');
-  assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'legacy Webhooks URL must use the authenticated settings route');
+  assert.ok(!serverSource.includes('hotspot-portal|webhooks'), 'legacy Webhooks page route must be removed');
   assert.ok(!adminView.includes('data-settings-nav="webhooks"'), 'legacy Webhooks sidebar link must be removed');
   assert.ok(!mainScript.includes('/admin/settings/webhooks'), 'legacy Webhooks client route must be removed');
   assert.ok(serverSource.includes('renderAdminSettingsPage'), 'shared settings page renderer must exist');
 });
 
-test('settings submenu click and browser history use one shared router', () => {
-  assert.match(mainScript, /const validTargets = new Set\(\['brand', 'billing', 'payments', 'sms', 'hotspot-portal'\]\)/);
-  assert.match(mainScript, /__fazNavigateAdminRoute\(\{ view: 'settings', section: target \}\)/);
-  assert.doesNotMatch(mainScript, /window\.addEventListener\('popstate'/);
-  assert.match(adminView, /async function restoreRoute\(route, replace\)/);
-  assert.match(adminView, /window\.addEventListener\('popstate', function\(\)/);
-  assert.match(adminView, /item\.dataset\.settingsNav === target/);
-  assert.match(adminView, /syncGeneralSettingsSidebar\(r\.section\)/);
-  assert.doesNotMatch(adminView, /initializeGeneralSettingsRoute\(\);/);
+test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
+  assert.match(mainScript, /const validTargets = Object\.keys\(pathsByTarget\)/);
+  assert.match(mainScript, /window\.history\.pushState/);
+  assert.match(mainScript, /addEventListener\('popstate'/);
+  assert.match(mainScript, /window\.location\.reload\(\)/);
+  assert.match(mainScript, /item\.dataset\.settingsNav === target/);
+  assert.match(adminView, /function initializeGeneralSettingsRoute\(\)/);
+  assert.match(adminView, /syncGeneralSettingsSidebar\(target\)/);
 });
 
 test('settings save forms submit asynchronously and have matching API handlers', () => {
