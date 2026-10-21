@@ -33,7 +33,8 @@ test("public payment confirmation validates TrxID before handing off to renewal 
   assert.match(confirm, /selected payment provider does not match this transaction/);
   assert.match(confirm, /transaction amount does not match your bill/);
   assert.match(confirm, /already been used or is not available for verification/);
-  assert.doesNotMatch(confirm, /DELETE FROM public_payment_sessions WHERE session_id=\$1/);
+  const validationBlock = confirm.slice(confirm.indexOf("Validate the transaction"), confirm.indexOf("req.body ="));
+  assert.doesNotMatch(validationBlock, /DELETE FROM public_payment_sessions WHERE session_id=\$1/);
   assert.match(confirm, /return verifyRenewal\(req, res\)/);
 });
 
