@@ -496,7 +496,7 @@ footer .border-t{border-color:#cbd5e1!important}
     $("copyPaymentReceiver").disabled=!number;
   };
   $("hotspotMfsGrid")?.addEventListener("click",event=>{const button=event.target.closest("[data-hotspot-provider]");if(button)updateHotspotProvider(button.dataset.hotspotProvider);});
-  document.querySelectorAll("[data-buy-hotspot]").forEach(button=>button.addEventListener("click",()=>{
+  document.querySelectorAll("[data-buy-hotspot]").forEach(button=>button.addEventListener("click",async()=>{
     selectedHotspotPackage={name:button.dataset.profile||"",price:Number(button.dataset.price||0),validity:button.dataset.validity||""};
     $("purchasePackageName").textContent=selectedHotspotPackage.name;
     $("purchasePackageValidity").textContent=selectedHotspotPackage.validity;
