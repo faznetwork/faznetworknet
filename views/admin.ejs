@@ -5342,7 +5342,11 @@ async function deletePlan(id,name){
             currentPaymentTitleKey = '';
             const target = viewName === 'dashboard' ? 'view-main-dashboard' :
                 (viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard' :
-                (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard'));
+                (document.getElementById('view-' + viewName) ? 'view-' + viewName : null));
+            if (!target || !document.getElementById(target)) {
+                console.error('[Admin Navigation] Refusing to replace the current view with an unknown target:', viewName);
+                return false;
+            }
             document.querySelectorAll('.admin-view').forEach(view => {
                 view.classList.add('hidden');
                 view.style.display = 'none';
@@ -5363,19 +5367,19 @@ async function deletePlan(id,name){
                 (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
             setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
             currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
-                void refreshDashboard();
+            if (target === 'view-main-dashboard') {
+                void safeAdminBootStep('dashboard refresh', () => refreshDashboard());
                 startTrafficPolling();
             } else {
                 if (trafficTimer) {
                     clearInterval(trafficTimer);
                     trafficTimer = null;
                 }
-                if (target === 'all-customer') {
-                    fetchCustomers();
-                } else if (target === 'payments') {
-                    fetchPayments(currentPaymentChannel);
-                } else if (target === 'general-settings') {
+                if (target === 'view-all-customer') {
+                    void fetchCustomers();
+                } else if (target === 'view-payments') {
+                    void fetchPayments(currentPaymentChannel);
+                } else if (target === 'view-general-settings') {
                     loadGeneralSettings();
                 }
             }
@@ -8584,6 +8588,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function cleanRoute(route) {
                 if (!route || typeof route !== 'object') return { view: 'dashboard' };
+                if (route.view === 'not-found') return { view: 'not-found', path: String(route.path || '/admin').slice(0, 240) };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
@@ -8869,6 +8874,23 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return false;
             }
+            function showAdminRouteNotFound(path) {
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!dynamic) return false;
+                if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
+                if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+                document.querySelectorAll('.admin-view').forEach(view => {
+                    view.classList.add('hidden');
+                    view.style.display = 'none';
+                });
+                dynamic.style.display = 'block';
+                dynamic.innerHTML = '<section class="admin-view p-3"><div class="card card-custom"><div class="card-body"><div class="alert alert-warning mb-3" role="status"><strong>Page not found.</strong><div class="small mt-1">No admin view is registered for this URL.</div></div><code></code></div></div></section>';
+                const code = dynamic.querySelector('code');
+                if (code) code.textContent = String(path || window.location.pathname);
+                setPageTitleSafe('Page Not Found');
+                return true;
+            }
+
             function showAdminModulePlaceholder(moduleKey) {
                 const title = moduleTitles[moduleKey];
                 const dynamic = document.getElementById('dynamicPageContent');
