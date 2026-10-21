@@ -34,16 +34,16 @@ function rateLimit(req, key, limit = 12) {
 
 async function getMfsSettings() {
   const keys = {
-    bkash: { number: "mfs_bkash_number", enabled: "mfs_bkash_enabled" },
-    nagad: { number: "mfs_nagad_number", enabled: "mfs_nagad_enabled" },
-    rocket: { number: "mfs_rocket_number", enabled: "mfs_rocket_enabled" },
-    upay: { number: "mfs_upay_number", enabled: "mfs_upay_enabled" }
+    bkash: "mfs_bkash_number",
+    nagad: "mfs_nagad_number",
+    rocket: "mfs_rocket_number",
+    upay: "mfs_upay_number"
   };
-  const result = await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])", [Object.values(keys).flatMap(item => [item.number, item.enabled])]);
+  const result = await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])", [Object.values(keys)]);
   const values = Object.fromEntries((result.rows || []).map(row => [row.key, String(row.value || "").trim()]));
   return Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, {
-    enabled: Object.prototype.hasOwnProperty.call(values, key.enabled) ? ["true", "1"].includes(values[key.enabled].toLowerCase()) : Boolean(values[key.number]),
-    number: values[key.number] || ""
+    enabled: Boolean(values[key]),
+    number: values[key] || ""
   }]));
 }
 
