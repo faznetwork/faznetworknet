@@ -59,7 +59,7 @@ test('customer submenu routes resolve to the expected SPA filters and server fal
     '/admin/customers/expiring-today-yesterday': "loadCustomerSection('expire_today_yesterday', 'expire_today_yesterday')",
     '/admin/customers/expiring-next-7-days': "loadCustomerSection('expire_7_days', 'expire_7_days')",
     '/admin/customers/new': "loadCustomerSection('new', 'new_customer')",
-    '/admin/customers/due': "loadCustomerSection('due', 'due_collection')'
+    '/admin/customers/due': "loadCustomerSection('due', 'due_collection')"
   };
   for (const [url, handler] of Object.entries(routes)) {
     assert.ok(adminView.includes(url), `admin route map is missing ${url}`);
