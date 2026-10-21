@@ -93,15 +93,22 @@ async function persistCustomerRenewal(query,c,renewal){await query("UPDATE custo
 async function webhook(req,res){
  let claimedTransactionId=null,routerSucceeded=false;
  try{
-  const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret','mfs_bkash_number','mfs_nagad_number','mfs_rocket_number','mfs_upay_number')");
-  const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
-  let webhookConfig={secret:String(settings.personal_payment_webhook_secret||""),senders:require("../services/paymentWebhookParser").OFFICIAL_SENDERS,recipients:{bkash:settings.mfs_bkash_number,nagad:settings.mfs_nagad_number,rocket:settings.mfs_rocket_number,upay:settings.mfs_upay_number}};
-  // Do not let a settings-table bootstrap failure turn a disabled legacy webhook into HTTP 400.
-  // Existing app_settings remain a safe compatibility fallback while the singleton table initializes.
-  try { webhookConfig=await require("../services/webhookSettingsService").get(); }
-  catch(error) { console.error("[Payment Webhook] Could not load webhook_settings; using legacy configuration fallback:", error.message); }
-  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
-  const expected=String(webhookConfig.secret||settings.personal_payment_webhook_secret||"").trim();
+  let webhookConfig;
+  try{
+   webhookConfig=await require("../services/webhookSettingsService").get();
+  }catch(error){
+   console.error("[Payment Webhook] Could not load canonical payment webhook settings; using app_settings fallback:",error.message);
+   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret','mfs_bkash_number','mfs_nagad_number','mfs_rocket_number','mfs_upay_number')");
+   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
+   webhookConfig={
+    webhookEnabled:String(settings.personal_payment_webhook_enabled||"").trim().toLowerCase()==="true",
+    secret:String(settings.personal_payment_webhook_secret||""),
+    senders:require("../services/paymentWebhookParser").OFFICIAL_SENDERS,
+    recipients:{bkash:settings.mfs_bkash_number,nagad:settings.mfs_nagad_number,rocket:settings.mfs_rocket_number,upay:settings.mfs_upay_number}
+   };
+  }
+  if(!webhookConfig.webhookEnabled)return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Payment and Webhooks settings."});
+  const expected=String(webhookConfig.secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
   if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected)))return res.status(401).json({success:false,error:"Unauthorized webhook."});
   const payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
