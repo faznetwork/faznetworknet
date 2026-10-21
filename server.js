@@ -81,18 +81,41 @@ app.get("/admin/reports/expenses",requireRole(["super_admin","admin"]),(req,res)
  app.get(/^\/admin\/expenses\/(add|all|report)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Expense Sheet"}));
 app.get(/^\/admin\/hr\/.*/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/monitor\/(usage|online)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
-app.get(/^\/admin\/monitor\/(usage|online)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/(staff|resellers\/sub-staff)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/account\/(dashboard|manage)\/?$/,requireRole(["super_admin","admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 app.get(/^\/admin\/vpn(?:\/port-forwarding)?\/?$/,requireRole(["super_admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 const renderAdminSettingsPage=(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 app.get("/admin/settings",requireRole(["super_admin"]),(req,res)=>res.redirect(302,"/admin/settings/general"));
-app.get(/^\/admin\/settings\/(general|brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal)\/?$/,requireRole(["super_admin"]),renderAdminSettingsPage);
+app.get(/^\/admin\/settings\/(general|brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal|webhooks)\/?$/,requireRole(["super_admin"]),renderAdminSettingsPage);
 app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   const adminPath=String(req.path||"").replace(/\/+$/,"")||"/admin";
   const customerRoute=adminPath.match(/^\/admin\/customers\/([^/]+)$/);
   const customerSectionSlugs=new Set(["add","all","online","offline","active","expired","expiring-today-yesterday","expiring-next-7-days","new","due"]);
   if(customerRoute&&!customerSectionSlugs.has(decodeURIComponent(customerRoute[1]).toLowerCase())) return next();
+
+  // Render the SPA shell only for paths explicitly implemented by routeFromPath().
+  // Unknown /admin URLs must not be disguised as successful Dashboard navigation.
+  const supportedAdminPaths=new Set([
+    "/admin/dashboard",
+    "/admin/customers/add","/admin/customers/all","/admin/customers/online","/admin/customers/offline",
+    "/admin/customers/active","/admin/customers/expired","/admin/customers/expiring-today-yesterday",
+    "/admin/customers/expiring-next-7-days","/admin/customers/new","/admin/customers/due",
+    "/admin/payments/pending","/admin/payments/all","/admin/payments/requests",
+    "/admin/payments/bkash","/admin/payments/nagad","/admin/payments/rocket",
+    "/admin/hotspot/dashboard","/admin/hotspot/add-user","/admin/hotspot/users/all",
+    "/admin/hotspot/users/active","/admin/hotspot/users/offline","/admin/hotspot/profiles",
+    "/admin/hotspot/vouchers/generate","/admin/hotspot/vouchers/manage","/admin/hotspot/vouchers/cleanup",
+    "/admin/hotspot/sales","/admin/network/mikrotik-devices","/admin/packages","/admin/network/ip-pools",
+    "/admin/network/olt","/admin/network/olt/onts","/admin/network/olt/topology","/admin/staff",
+    "/admin/audit-logs","/admin/network/maps","/admin/support/tickets",
+    "/admin/settings/general","/admin/settings/brand-identity","/admin/settings/billing-expiry",
+    "/admin/settings/payment-webhooks","/admin/settings/sms-alerts","/admin/settings/hotspot-portal",
+    "/admin/settings/webhooks","/admin/monitor/usage","/admin/monitor/online","/admin/network/diagram",
+    "/admin/vpn","/admin/vpn/port-forwarding","/admin/account/dashboard","/admin/account/manage",
+    "/admin/support/software","/admin/support/website","/admin/hr/departments","/admin/hr/employees",
+    "/admin/hr/employees/added","/admin/resellers/sub-staff"
+  ]);
+  if(!supportedAdminPaths.has(adminPath)) return next();
   return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 });
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
