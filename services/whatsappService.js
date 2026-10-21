@@ -733,6 +733,20 @@ async function unlink(options = {}) {
   return getStatus();
 }
 
+// Render sends SIGTERM during deploys. Close the socket and release the PostgreSQL
+// advisory lock/lease before exiting so the replacement instance can connect promptly.
+let shutdownSignalHandled = false;
+async function handleShutdownSignal(signal) {
+  if (shutdownSignalHandled) return;
+  shutdownSignalHandled = true;
+  console.log("[WhatsApp] Received " + signal + "; releasing socket ownership.");
+  try { await shutdown(); }
+  catch (error) { console.warn("[WhatsApp] Graceful shutdown cleanup failed:", error.message); }
+  process.exit(0);
+}
+process.once("SIGTERM", () => { handleShutdownSignal("SIGTERM"); });
+process.once("SIGINT", () => { handleShutdownSignal("SIGINT"); });
+
 module.exports = {
   connect,
   restoreSession,
