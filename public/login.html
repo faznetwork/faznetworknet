@@ -693,7 +693,7 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
         currentProvider = provider;
         document.getElementById('modal-mfs-title').textContent = title;
         document.getElementById('modal-wallet-number').textContent = number;
-        document.getElementById('mfs-modal').style.display = 'flex';
+        paymentSessionExpiresAt=Date.now()+300000;\n        document.getElementById('mfs-modal').style.display = 'flex';
         startCountdown(300); // ৫ মিনিট
     }
 
