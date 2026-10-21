@@ -14,7 +14,7 @@ test("notification history client script is loaded outside inline JavaScript tem
   assert.ok(scriptIndex < view.lastIndexOf("</body>"), "history client script must be loaded before the document body closes");
   const printTemplateStart = view.indexOf('<div class="slip">${card.innerHTML}</div>');
   assert.notEqual(printTemplateStart, -1, "print template marker must remain intact");
-  const printTemplateEnd = view.indexOf("</body></html>`);", printTemplateStart);
+  const printTemplateEnd = view.indexOf("</html>`);", printTemplateStart);
   assert.notEqual(printTemplateEnd, -1, "print template must close cleanly");
   const printTemplate = view.slice(printTemplateStart, printTemplateEnd);
   assert.doesNotMatch(printTemplate, /<script\b/i, "printable receipt HTML must not contain script tags inside the parent inline script");
