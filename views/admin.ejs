@@ -5342,7 +5342,13 @@ async function deletePlan(id,name){
             currentPaymentTitleKey = '';
             const target = viewName === 'dashboard' ? 'view-main-dashboard' :
                 (viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard' :
-                (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard'));
+                (document.getElementById('view-' + viewName) ? 'view-' + viewName : null));
+            const targetElement = target ? document.getElementById(target) : null;
+            // Never hide the current screen until the requested target is confirmed to exist.
+            if (!targetElement) {
+                console.error('[Admin Navigation] Unknown view; preserving current content:', viewName);
+                return false;
+            }
             document.querySelectorAll('.admin-view').forEach(view => {
                 view.classList.add('hidden');
                 view.style.display = 'none';
@@ -5350,11 +5356,8 @@ async function deletePlan(id,name){
             if (typeof window.switchDashboardView === 'function') {
                 window.switchDashboardView(target);
             }
-            const targetElement = document.getElementById(target);
-            if (targetElement) {
-                targetElement.classList.remove('hidden');
-                targetElement.style.display = 'block';
-            }
+            targetElement.classList.remove('hidden');
+            targetElement.style.display = 'block';
             document.querySelectorAll('.sidebar-menu [data-view-target]').forEach(link => {
                 link.classList.toggle('active', link.dataset.viewTarget === target);
             });
@@ -5363,7 +5366,7 @@ async function deletePlan(id,name){
                 (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
             setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
             currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
+            if (target === 'view-main-dashboard') {
                 void refreshDashboard();
                 startTrafficPolling();
             } else {
@@ -7232,35 +7235,43 @@ async function deletePlan(id,name){
 
         async function loadCustomerSection(filterType, titleKey) {
             const requestId = (window.__customerSectionRequestId = (window.__customerSectionRequestId || 0) + 1);
-            purgeStuckBackdrops();
-            currentCustomerFilter = filterType;
-            currentCustomerTitleKey = titleKey;
-
             const dynamic = document.getElementById('dynamicPageContent');
             const customerView = document.getElementById('view-customer-filter');
-            if (!dynamic || !customerView) return;
 
-            dynamic.style.display = 'block';
-            dynamic.hidden = false;
-            document.querySelectorAll('.admin-view').forEach(function(view) {
-                view.style.display = 'none';
-                view.hidden = false;
-            });
-            customerView.style.display = 'block';
-            customerView.hidden = false;
-            setPageTitleSafe(customerTitle(titleKey));
-            customerView.innerHTML = `
-                <div class="card card-custom">
-                    <div class="card-custom-header">
-                        <i class="bi bi-hourglass-split text-success fs-5"></i>
-                        <span data-key="loading_customers">Loading current customer records...</span>
-                    </div>
-                    <div class="card-body text-center py-5">
-                        <div class="spinner-border text-success" role="status"></div>
-                    </div>
-                </div>`;
+            // Validate the destination before hiding any existing admin content.
+            if (!dynamic || !customerView) {
+                console.error('[Customer Section] Required view container is missing.', {
+                    dynamicPageContent: Boolean(dynamic),
+                    customerFilterView: Boolean(customerView)
+                });
+                return false;
+            }
 
             try {
+                purgeStuckBackdrops();
+                currentCustomerFilter = filterType;
+                currentCustomerTitleKey = titleKey;
+
+                dynamic.style.display = 'block';
+                dynamic.hidden = false;
+                document.querySelectorAll('.admin-view').forEach(function(view) {
+                    view.style.display = 'none';
+                    view.hidden = false;
+                });
+                customerView.style.display = 'block';
+                customerView.hidden = false;
+                setPageTitleSafe(customerTitle(titleKey));
+                customerView.innerHTML = `
+                    <div class="card card-custom">
+                        <div class="card-custom-header">
+                            <i class="bi bi-hourglass-split text-success fs-5"></i>
+                            <span data-key="loading_customers">Loading current customer records...</span>
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <div class="spinner-border text-success" role="status"></div>
+                        </div>
+                    </div>`;
+
                 // Use the billing panel's canonical customers table for every customer
                 // submenu. The PPPoE-only endpoint can include orphaned, old RouterOS
                 // records and omit current panel customers without a matching secret.
