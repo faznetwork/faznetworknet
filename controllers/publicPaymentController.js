@@ -71,7 +71,7 @@ function publicSubscriber(customer) {
   };
 }
 async function getPaymentSettings() {
-  const keys = ["mfs_bkash_number", "mfs_nagad_number", "mfs_rocket_number", "mfs_upay_number"];
+  const keys = ["mfs_bkash_number", "mfs_nagad_number", "mfs_rocket_number", "mfs_upay_number", "payment_verification_method"];
   const result = await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])", [keys]);
   const values = Object.fromEntries((result.rows || []).map(row => [row.key, row.value]));
   const providers = {};
@@ -79,14 +79,16 @@ async function getPaymentSettings() {
     const number = clean(values["mfs_" + id + "_number"], 80);
     providers[id] = { enabled: Boolean(number), number };
   }
-  return providers;
+  const configuredMethod = clean(values.payment_verification_method, 24).toLowerCase();
+  const verificationMethod = ["sender_phone", "phone", "phone_number"].includes(configuredMethod) ? "senderPhoneNumber" : "transactionId";
+  return { providers, verificationMethod };
 }
 async function paymentSettings(req, res) {
   try {
-    const providers = await getPaymentSettings();
+    const { providers, verificationMethod } = await getPaymentSettings();
     const accounts = Object.fromEntries(Object.entries(providers).map(([id, item]) => [id, item.number]));
     const mfs = Object.entries(providers).filter(([, item]) => item.enabled).map(([id, item]) => ({ id, name: id, enabled: true, number: item.number }));
-    return res.set("Cache-Control", "no-store").json({ success: true, providers, accounts, mfs });
+    return res.set("Cache-Control", "no-store").json({ success: true, providers, accounts, mfs, verificationMethod });
   } catch (error) {
     console.error("[Public Payment Settings]", error?.message || error);
     return fail(res, 503, "Payment methods are temporarily unavailable.");
@@ -117,7 +119,7 @@ async function createPaymentSession(req, res) {
     if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found.");
     const amount = getBillAmount(customer);
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, 400, "The current monthly bill is not configured correctly.");
-    const providers = await getPaymentSettings();
+    const { providers, verificationMethod } = await getPaymentSettings();
     if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
     const paymentSessionId = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -136,6 +138,7 @@ async function createPaymentSession(req, res) {
       providerName: providerNames[provider],
       amount,
       receivingNumber: providers[provider].number,
+      verificationMethod,
       instructions: {
         title: providerNames[provider] + " payment",
         primaryAction: "Send Money",
@@ -151,7 +154,8 @@ async function confirmPayment(req, res) {
   if (!limited(req, "pppoe-payment-confirm", 6)) return fail(res, 429, "Too many payment confirmation attempts. Please try again later.");
   const paymentSessionId = clean(req.body?.paymentSessionId, 128);
   const trxId = clean(req.body?.transactionId || req.body?.trxId || req.body?.trx_id, 80).toUpperCase();
-  if (!paymentSessionId || !trxId) return fail(res, 400, "A payment session and transaction ID are required.");
+  const senderPhoneNumber = normalizePhone(req.body?.senderPhoneNumber || req.body?.phoneNumber || req.body?.senderPhone || "");
+  if (!paymentSessionId) return fail(res, 400, "A valid payment session is required.");
   let sessionResult;
   try {
     sessionResult = await db.query(
@@ -168,17 +172,57 @@ async function confirmPayment(req, res) {
     await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]).catch(() => {});
     return fail(res, 410, "Payment session has expired. Start a new payment session.");
   }
-  // The server owns the username, provider, amount, and expiry. Never trust browser-submitted amounts.
-  await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]);
-  req.body = {
-    ...req.body,
-    username: session.username,
-    amount: Number(session.amount),
-    paymentMethod: session.provider,
-    trxId,
-    service_type: "pppoe"
-  };
-  return verifyRenewal(req, res);
+  try {
+    const settings = await getPaymentSettings();
+    let verifiedTrxId = trxId;
+    if (settings.verificationMethod === "senderPhoneNumber") {
+      if (!senderPhoneNumber || senderPhoneNumber.length < 10 || senderPhoneNumber.length > 13) {
+        return fail(res, 400, "Enter the phone number you used to send the payment.");
+      }
+      const matches = await db.query(
+        `SELECT trx_id FROM transactions
+          WHERE channel=$1
+            AND REGEXP_REPLACE(COALESCE(sender_phone,''),'[^0-9]','','g') IN
+                ($2, CASE WHEN LEFT($2,1)='0' THEN '88'||SUBSTRING($2 FROM 2) ELSE $2 END)
+            AND ROUND(amount::numeric,2)=ROUND($3::numeric,2)
+            AND LOWER(TRIM(status))='unmatched'
+            AND COALESCE(used,FALSE)=FALSE
+            AND created_at >= NOW() - INTERVAL '30 minutes'
+          ORDER BY created_at DESC
+          LIMIT 2`,
+        [String(session.provider).toLowerCase(), senderPhoneNumber, Number(session.amount)]
+      );
+      if (!matches.rows.length) {
+        return fail(res, 404, "No matching incoming SMS was found for this phone number and amount yet. Wait for the SMS forwarder, then retry.");
+      }
+      if (matches.rows.length > 1) {
+        return fail(res, 409, "More than one payment matches this phone number and amount. Please switch to TrxID verification or contact support.");
+      }
+      verifiedTrxId = clean(matches.rows[0].trx_id, 80).toUpperCase();
+    } else if (!verifiedTrxId || verifiedTrxId.length < 4) {
+      return fail(res, 400, "Enter a valid payment Transaction ID (TrxID).");
+    }
+
+    // Keep the session available for retries after a not-yet-received or mismatched SMS.
+    // The transaction itself is claimed atomically by manualMatch before provisioning.
+    req.body = {
+      ...req.body,
+      username: session.username,
+      amount: Number(session.amount),
+      paymentMethod: session.provider,
+      trxId: verifiedTrxId,
+      service_type: "pppoe"
+    };
+    const response = await verifyRenewal(req, res);
+    // verifyRenewal writes the HTTP response; delete the session only after successful provisioning.
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]).catch(() => {});
+    }
+    return response;
+  } catch (error) {
+    console.error("[Public Payment Confirmation]", error?.message || error);
+    return fail(res, 503, "Payment verification is temporarily unavailable.");
+  }
 }
 async function verifyRenewal(req, res) {
   if (!limited(req, "pppoe-renewal", 6)) return fail(res, 429, "Too many attempts. Please try again in one minute.");
