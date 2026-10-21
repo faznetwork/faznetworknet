@@ -200,8 +200,10 @@ footer .border-t{border-color:#cbd5e1!important}
 
 
 /* Unified online payment navigation */
-.online-payment-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #065f46;border-radius:11px;padding:10px 12px;background:#065f46;color:#fff!important;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 3px 9px rgba(6,95,70,.14)}
-.online-payment-cta:hover{background:#064e3b}
+.online-payment-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #065f46;border-radius:11px;padding:10px 12px;background:#065f46;color:#fff!important;-webkit-text-fill-color:#fff;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 3px 9px rgba(6,95,70,.14);transition:background-color .15s ease,border-color .15s ease}
+.online-payment-cta:visited{color:#fff!important;-webkit-text-fill-color:#fff}
+.online-payment-cta:hover,.online-payment-cta:focus,.online-payment-cta:focus-visible,.online-payment-cta:active{background:#064e3b;border-color:#064e3b;color:#fff!important;-webkit-text-fill-color:#fff}
+.online-payment-cta:focus-visible{outline:2px solid #0e7490;outline-offset:2px}
 @media(max-width:767px){.online-payment-cta{padding:8px 9px;font-size:11px}header>div>div:last-child{flex-wrap:wrap}}
 
 </style>
