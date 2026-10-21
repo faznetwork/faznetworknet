@@ -16,5 +16,8 @@ test("notification history client script is loaded outside inline JavaScript tem
   assert.notEqual(printTemplateStart, -1, "print template marker must remain intact");
   const printTemplateEnd = view.indexOf("</body></html>`);", printTemplateStart);
   assert.notEqual(printTemplateEnd, -1, "print template must close cleanly");
+  const printTemplate = view.slice(printTemplateStart, printTemplateEnd);
+  assert.doesNotMatch(printTemplate, /<script\b/i, "printable receipt HTML must not contain script tags inside the parent inline script");
+  assert.doesNotMatch(printTemplate, /<%[=\-]?/, "printable receipt HTML must not contain uncompiled EJS directives");
   assert.ok(scriptIndex > printTemplateEnd, "history script must not be injected into the printable receipt HTML template");
 });
