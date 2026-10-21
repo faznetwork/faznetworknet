@@ -339,7 +339,7 @@ process.on("unhandledRejection", (reason) => {
   const stack = String(reason?.stack || "");
   const statusCode = Number(reason?.output?.statusCode || reason?.data?.statusCode || 0);
   const isBaileysTimeout = /Timed Out|Request Time-out/i.test(message)
-    && /@whiskeysockets\\/baileys\\/lib\\/Utils\\/generics\\.js/.test(stack)
+    && stack.includes("@whiskeysockets/baileys/lib/Utils/generics.js")
     && (statusCode === 408 || /statusCode: 408/.test(stack));
   if (!isBaileysTimeout || (reason && typeof reason === "object" && handledBaileysTimeouts.has(reason))) return;
   if (reason && typeof reason === "object") handledBaileysTimeouts.add(reason);
