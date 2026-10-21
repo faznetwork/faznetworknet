@@ -1898,11 +1898,11 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon" aria-hidden="true"></i>
                 </button>
                 <ul id="general-settings-submenu" class="submenu general-settings-submenu" aria-label="General Settings sections">
-                    <li><a href="javascript:void(0)" data-settings-nav="brand" onclick="event.preventDefault(); return false;"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="billing" onclick="event.preventDefault(); return false;"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="payments" onclick="event.preventDefault(); return false;"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="sms" onclick="event.preventDefault(); return false;"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="hotspot-portal" onclick="event.preventDefault(); return false;"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
+                    <li><a href="/admin/settings/brand-identity" data-settings-nav="brand"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
+                    <li><a href="/admin/settings/billing-expiry" data-settings-nav="billing"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
+                    <li><a href="/admin/settings/payment-webhooks" data-settings-nav="payments"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
+                    <li><a href="/admin/settings/sms-alerts" data-settings-nav="sms"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
+                    <li><a href="/admin/settings/hotspot-portal" data-settings-nav="hotspot-portal"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
                     <li><a href="/admin/settings/webhooks" data-settings-nav="webhooks"><i class="bi bi-shield-lock me-2"></i><span>Webhooks &amp; API</span></a></li>
                 </ul>
             </li>
@@ -4895,29 +4895,42 @@ async function deletePlan(id,name){
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
-        // Keep sidebar navigation self-contained on admin.ejs; main.js may not be loaded
-        // by this server-rendered page, and both paths share a guard against double binding.
-        // General Settings stay within the existing admin view; submenu items switch panels only.
+        // Every General Settings item has a real URL. Keep SPA transitions fast, while
+        // history + direct loads restore the correct section after reload or browser navigation.
+        const settingsPathByTarget = { brand:'/admin/settings/brand-identity', billing:'/admin/settings/billing-expiry', payments:'/admin/settings/payment-webhooks', sms:'/admin/settings/sms-alerts', 'hotspot-portal':'/admin/settings/hotspot-portal', webhooks:'/admin/settings/webhooks' };
+        const settingsTargetByPath = Object.fromEntries(Object.entries(settingsPathByTarget).map(([key,path])=>[path,key]));
+        function activateGeneralSettingsTarget(target, updateHistory) {
+          if (!Object.prototype.hasOwnProperty.call(settingsPathByTarget,target)) target = 'brand';
+          if (updateHistory && location.pathname !== settingsPathByTarget[target]) history.pushState({settingsTarget:target},'',settingsPathByTarget[target]);
+          document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
+            const active = item.dataset.settingsNav === target;
+            item.classList.toggle('active', active);
+            if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current');
+          });
+          if (typeof window.switchView === 'function') window.switchView('general-settings');
+          window.showGeneralSettingsSection(target);
+        }
         if (!window.__generalSettingsSidebarNavigationBound) {
           window.__generalSettingsSidebarNavigationBound = true;
           document.addEventListener('click', event => {
             const link = event.target.closest('#sidebar [data-settings-nav]');
             if (!link) return;
-            event.preventDefault();
             const target = link.dataset.settingsNav;
-            const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
-            if (!validTargets.includes(target)) return;
-            document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
-              const active = item === link;
-              item.classList.toggle('active', active);
-              if (active) item.setAttribute('aria-current', 'page');
-              else item.removeAttribute('aria-current');
-            });
-            if (typeof window.switchView === 'function') window.switchView('general-settings');
-            window.showGeneralSettingsSection(target);
+            if (!Object.prototype.hasOwnProperty.call(settingsPathByTarget,target)) return;
+            event.preventDefault();
+            activateGeneralSettingsTarget(target,true);
+          });
+          window.addEventListener('popstate', () => {
+            const path = location.pathname.replace(/\/$/,'');
+            const target = settingsTargetByPath[path] || (path === '/admin/settings/general' ? 'brand' : null);
+            if (target) activateGeneralSettingsTarget(target,false);
           });
         }
-        if (location.pathname.replace(/\/$/, '') === '/admin/settings/webhooks') { if (typeof window.switchView === 'function') window.switchView('general-settings'); window.showGeneralSettingsSection('webhooks'); document.querySelector('#general-settings-submenu [data-settings-nav="webhooks"]')?.classList.add('active'); }
+        const initialSettingsPath = location.pathname.replace(/\/$/,'');
+        if (initialSettingsPath.startsWith('/admin/settings/')) {
+          const initialTarget = settingsTargetByPath[initialSettingsPath] || 'brand';
+          activateGeneralSettingsTarget(initialTarget,false);
+        }
         document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
         document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
