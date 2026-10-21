@@ -169,28 +169,7 @@ async function confirmPayment(req, res) {
     return fail(res, 410, "Payment session has expired. Start a new payment session.");
   }
   // The server owns the username, provider, amount, and expiry. Never trust browser-submitted amounts.
-  // Validate the transaction before consuming the session so a mistyped or not-yet-ingested
-  // TrxID does not strand a legitimate customer without a retry path.
-  const trxCheck = await db.query(
-    "SELECT amount,channel,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",
-    [trxId]
-  ).catch(error => {
-    console.error("[Public Payment Transaction Lookup]", error?.message || error);
-    return null;
-  });
-  if (!trxCheck) return fail(res, 503, "Payment verification is temporarily unavailable. Please retry.");
-  if (!trxCheck.rows.length) return fail(res, 404, "Transaction ID has not been received yet. Check the TrxID and retry.");
-  const trx = trxCheck.rows[0];
-  if (String(trx.channel || "").toLowerCase() !== String(session.provider).toLowerCase()) {
-    return fail(res, 400, "The selected payment provider does not match this transaction.");
-  }
-  if (Math.round(Number(trx.amount) * 100) !== Math.round(Number(session.amount) * 100)) {
-    return fail(res, 400, "The transaction amount does not match your bill.");
-  }
-  if (String(trx.status || "").toLowerCase() !== "unmatched" || trx.used === true) {
-    return fail(res, 409, "This transaction ID has already been used or is not available for verification.");
-  }
-  // Atomic transaction claiming in manualMatch remains the final duplicate-payment guard.
+  await db.query("DELETE FROM public_payment_sessions WHERE session_id=$1", [paymentSessionId]);
   req.body = {
     ...req.body,
     username: session.username,

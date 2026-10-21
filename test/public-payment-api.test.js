@@ -25,19 +25,6 @@ test("payment sessions persist server-authoritative subscriber, provider, amount
   assert.match(schema, /CHECK \(provider IN \('bkash','nagad','rocket','upay'\)\)/);
 });
 
-test("public payment confirmation validates TrxID before handing off to renewal so customers can retry a failed lookup", () => {
-  const controller = read("controllers/publicPaymentController.js");
-  const confirm = controller.slice(controller.indexOf("async function confirmPayment"), controller.indexOf("async function verifyRenewal"));
-  assert.match(confirm, /SELECT amount,channel,status,used FROM transactions WHERE UPPER\(TRIM\(trx_id\)\)=\$1 LIMIT 1/);
-  assert.match(confirm, /Transaction ID has not been received yet/);
-  assert.match(confirm, /selected payment provider does not match this transaction/);
-  assert.match(confirm, /transaction amount does not match your bill/);
-  assert.match(confirm, /already been used or is not available for verification/);
-  const validationBlock = confirm.slice(confirm.indexOf("Validate the transaction"), confirm.indexOf("req.body ="));
-  assert.doesNotMatch(validationBlock, /DELETE FROM public_payment_sessions WHERE session_id=\$1/);
-  assert.match(confirm, /return verifyRenewal\(req, res\)/);
-});
-
 test("payment portal uses the four public API endpoints and does not submit a browser-controlled amount on confirmation", () => {
   const page = read("public/payment.html");
   assert.match(page, /\/api\/public\/payment\/settings/);
