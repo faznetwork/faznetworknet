@@ -40,7 +40,7 @@ async function resolveSubscriber(identifier) {
        FROM customers c
        LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name)
       WHERE LOWER(c.username)=LOWER($1)
-         OR ($2<>'' AND REGEXP_REPLACE(COALESCE(c.phone,''),'[^0-9]','','g') IN ($2, CASE WHEN LEFT($2,1)='0' THEN '88'||SUBSTRING($2 FROM 2) ELSE $2 END))
+         OR ($2<>'' AND REGEXP_REPLACE(COALESCE(c.phone,''),'[^0-9]','','g') IN ($2, CASE WHEN LEFT($2,1)='0' THEN '880'||SUBSTRING($2 FROM 2) ELSE $2 END))
       ORDER BY CASE WHEN LOWER(c.username)=LOWER($1) THEN 0 ELSE 1 END
       LIMIT 2`,
     [input, phone]
