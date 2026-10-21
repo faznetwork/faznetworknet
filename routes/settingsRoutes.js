@@ -6,8 +6,6 @@ router.get("/general",controller.generalSettings);
 router.post("/mikrotik/test",controller.testMikrotik);
 router.post("/mikrotik/sync",controller.syncMikrotik);
 router.post("/mikrotik",controller.saveMikrotik);
-router.get("/website",controller.website);
-router.post("/website",controller.saveWebsite);
 router.get("/hotspot-profiles",controller.hotspotProfiles);
 router.get("/hotspot-profile-settings",controller.getHotspotProfileSettings);
 router.post("/hotspot-profile-settings",controller.saveHotspotProfileSettings);
