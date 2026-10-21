@@ -41,3 +41,13 @@ test("admin hotspot portal settings safely falls back when either settings store
  assert.match(controller,/function readPublicConfig\(\).*catch\(_\)\{return \{\};\}/);
  assert.doesNotMatch(controller,/DELETE FROM (?:app_settings|hotspot_portal_settings)/i);
 });
+
+test("dashboard live traffic retries interface discovery after transient router/API failures",()=>{
+ const admin=fs.readFileSync(path.join(__dirname,"..","views","admin.ejs"),"utf8");
+ assert.match(admin,/async function retryLoadTrafficInterfaces\(\)/);
+ assert.match(admin,/trafficInterfaceLoadInFlight/);
+ assert.match(admin,/trafficInterfaceRetryTimer = setInterval/);
+ assert.match(admin,/dataset\.nocOptionsLoaded !== '1'/);
+ assert.match(admin,/textContent = 'LIVE'/);
+ assert.match(admin,/nocTrafficHistory\.push\(\{ rx: downloadMbps, tx: uploadMbps \}\)/);
+});
