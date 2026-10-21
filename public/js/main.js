@@ -519,82 +519,30 @@
 })();
 
 
-/* General Settings sidebar router.
- * Keep URL, visible panel, active link, and accordion state in sync for click,
- * reload, and browser back/forward navigation. */
+/* General Settings links delegate to the single admin SPA router in admin.ejs.
+ * Do not maintain a second popstate router here: two independent history handlers
+ * caused duplicate renders and settings requests on browser Back/Forward. */
 (() => {
   if (window.__generalSettingsSidebarNavigationBound) return;
   window.__generalSettingsSidebarNavigationBound = true;
 
-  const targetsByPath = {
-    '/admin/settings': 'brand',
-    '/admin/settings/general': 'brand',
-    '/admin/settings/brand-identity': 'brand',
-    '/admin/settings/billing-expiry': 'billing',
-    '/admin/settings/payment-webhooks': 'payments',
-    '/admin/settings/sms-alerts': 'sms',
-    '/admin/settings/hotspot-portal': 'hotspot-portal',
-  };
-  const pathsByTarget = {
-    brand: '/admin/settings/brand-identity',
-    billing: '/admin/settings/billing-expiry',
-    payments: '/admin/settings/payment-webhooks',
-    sms: '/admin/settings/sms-alerts',
-    'hotspot-portal': '/admin/settings/hotspot-portal',
-  };
-  const validTargets = Object.keys(pathsByTarget);
-
-  const expandSettingsMenu = () => {
-    const toggle = document.querySelector('#sidebar .general-settings-toggle');
-    const submenu = document.getElementById('general-settings-submenu');
-    if (!toggle || !submenu) return;
-    submenu.classList.add('show');
-    toggle.setAttribute('aria-expanded', 'true');
-    const arrow = toggle.querySelector('.arrow-icon');
-    if (arrow) {
-      arrow.classList.remove('bi-chevron-down');
-      arrow.classList.add('bi-chevron-up');
-    }
-  };
-
-  const activateTarget = (target, updateHistory = false) => {
-    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return false;
-    expandSettingsMenu();
-    document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach((item) => {
-      const active = item.dataset.settingsNav === target;
-      item.classList.toggle('active', active);
-      if (active) item.setAttribute('aria-current', 'page');
-      else item.removeAttribute('aria-current');
-    });
-    if (typeof window.switchView === 'function') window.switchView('general-settings');
-    const shown = window.showGeneralSettingsSection(target);
-    if (shown === false) return false;
-    if (updateHistory) {
-      const path = pathsByTarget[target];
-      if (path && window.location.pathname !== path) window.history.pushState({ settingsTarget: target }, '', path);
-    }
-    return true;
-  };
+  const validTargets = new Set(['brand', 'billing', 'payments', 'sms', 'hotspot-portal']);
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('#sidebar [data-settings-nav]');
     if (!link) return;
-    const target = link.dataset.settingsNav;
-    // Do not swallow normal navigation for an unrecognized/future menu item.
-    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return;
-    event.preventDefault();
-    activateTarget(target, true);
-  });
 
-  window.addEventListener('popstate', () => {
-    const path = window.location.pathname.replace(/\/$/, '') || '/';
-    const target = targetsByPath[path];
-    if (target) {
-      activateTarget(target, false);
-      return;
-    }
-    // The previous history entry may be a different admin view. Let Express
-    // render that route rather than leaving the settings panel visible at a new URL.
-    window.location.reload();
+    const target = link.dataset.settingsNav;
+    // Unknown/future links retain normal browser navigation.
+    if (!validTargets.has(target) || typeof window.__fazNavigateAdminRoute !== 'function') return;
+
+    event.preventDefault();
+    Promise.resolve(window.__fazNavigateAdminRoute({ view: 'settings', section: target }))
+      .catch((error) => {
+        console.error('[General Settings Navigation] Failed to open section:', error);
+        if (typeof window.showToast === 'function') {
+          window.showToast(error && error.message ? error.message : 'Unable to open settings section.', 'error');
+        }
+      });
   });
 })();
