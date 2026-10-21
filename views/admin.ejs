@@ -2890,9 +2890,12 @@
             if (!dynamic) return;
             dynamic.style.display = 'block';
             dynamic.innerHTML = html;
-            if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
             const view = dynamic.querySelector('.hotspot-dynamic-view');
-            if (view) view.style.display = 'block';
+            if (view) {
+                if (!view.querySelector('.hotspot-subnav')) view.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
+                view.classList.remove('hidden');
+                view.style.display = 'block';
+            }
             if(window.innerWidth<=768) {
                 closeSidebarMobile();
                 purgeStuckBackdrops();
