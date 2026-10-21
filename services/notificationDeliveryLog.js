@@ -1,11 +1,12 @@
 "use strict";
 
 const db = require("../db");
+const query = (...args) => db.getPool().query(...args);
 let tableReady = null;
 
 async function ensureTable() {
   if (!tableReady) {
-    tableReady = db.query(`
+    tableReady = query(`
       CREATE TABLE IF NOT EXISTS notification_delivery_logs (
         id BIGSERIAL PRIMARY KEY,
         channel VARCHAR(30) NOT NULL CHECK (channel IN ('whatsapp','sms','email','telegram','messenger')),
