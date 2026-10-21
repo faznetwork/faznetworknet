@@ -65,13 +65,13 @@ function channelFrom(text, sender = "") {
 }
 function toAsciiDigits(value) {
   const bangla = "০১২৩৪৫৬৭৮৯";
-  return String(value || "").replace(/[০-৯]/g, ch => String(bangla.indexOf(ch))).replace(/[০-৯]/g, "");
+  return String(value || "").replace(/[০-৯]/g, ch => String(bangla.indexOf(ch)));
 }
 function extractTransactionId(text) {
-  const t = toAsciiDigits(String(text || "").replace(/[\\u200b\\u200c\\u200d]/g, "")).replace(/\\u00a0/g, " ");
+  const t = toAsciiDigits(String(text || "").replace(/[\u200b\u200c\u200d]/g, "")).replace(/\u00a0/g, " ");
   const patterns = [
-    /\\b(?:trx\\s*id|trxid|transaction\\s*(?:id|no|number)|txn\\s*(?:id|no|number)|txnid|trans\\s*id|transaction\\s*ref(?:erence)?)\\s*[:#=\\-]?\\s*([A-Z0-9][A-Z0-9._-]{5,39})\\b/i,
-    /\\b(?:trx|txn)\\s*[:#=\\-]\\s*([A-Z0-9][A-Z0-9._-]{5,39})\\b/i
+    /\b(?:trx\s*id|trxid|transaction\s*(?:id|no|number)|txn\s*(?:id|no|number)|txnid|trans\s*id|transaction\s*ref(?:erence)?)\s*[:#=\-]?\s*([A-Z0-9][A-Z0-9._-]{5,39})\b/i,
+    /\b(?:trx|txn)\s*[:#=\-]\s*([A-Z0-9][A-Z0-9._-]{5,39})\b/i
   ];
   for (const re of patterns) {
     const m = t.match(re);
@@ -83,34 +83,36 @@ function extractTransactionId(text) {
   return "";
 }
 function extractAmount(text) {
-  const t = toAsciiDigits(String(text || "").replace(/\\u00a0/g, " "));
+  const t = toAsciiDigits(String(text || "").replace(/\u00a0/g, " "));
   const number = "((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?)";
-  // Prefer explicitly labelled transaction/payment amounts. Never treat Fee or Balance as
-  // the recharge amount when an SMS contains multiple currency values.
+  const currency = "(?:BDT|Tk\\.?|Taka|৳)";
+  // First prefer explicit amount/payment labels, then provider wording where amount is
+  // adjacent to currency. Do not use generic currency matches before fee/balance.
   const explicit = [
-    new RegExp("(?:amount\\s*(?:received|credited|paid)?|received\\s*amount|payment\\s*amount|cash\\s*in\\s*amount|credited\\s*amount)\\s*[:=\\-]?\\s*(?:(?:BDT|Tk\\.?|Taka|৳)\\s*)?" + number, "i"),
-    new RegExp("(?:received|credited|paid|payment|cash\\s*in|cashin|recharge|deposit)\\s*(?:of|amount)?\\s*[:=\\-]?\\s*(?:BDT|Tk\\.?|Taka|৳)\\s*" + number, "i"),
-    new RegExp("(?:BDT|Tk\\.?|Taka|৳)\\s*" + number + "\\s*(?:has\\s+been\\s+)?(?:received|credited|paid|successful|successfully)", "i")
+    new RegExp("(?:transaction\\s+)?amount\\s*[:=\\-]\\s*(?:" + currency + "\\s*)?" + number + "(?:\\s*" + currency + ")?", "i"),
+    new RegExp("(?:received|credited|paid|payment|cash\\s*in|cashin|recharge|deposit)\\s+(?:amount\\s*)?(?:of\\s*)?(?:" + currency + "\\s*)?" + number + "\\s*" + currency, "i"),
+    new RegExp("(?:" + currency + "\\s*)" + number + "\\s*(?:has\\s+been\\s+)?(?:received|credited|paid|successful|successfully)", "i")
   ];
   for (const re of explicit) {
     const m = t.match(re);
-    if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; }
+    if (m) {
+      // The number pattern has one capture group nested inside the full match.
+      const value = m.slice(1).find(v => v !== undefined && /^[0-9][0-9,.]*$/.test(v));
+      const n = normalizeAmount(value);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
   }
-  // Common MFS templates put the amount immediately before the currency marker:
-  // "You have received 10.00 Tk from ...", "Cash In 10 BDT ...".
-  const contextual = [
-    new RegExp("(?:received|credited|cash\\s*in|cashin|recharge|deposit|payment)\\s+(?:of\\s+)?" + number + "\\s*(?:BDT|Tk\\.?|Taka|৳)", "i"),
-    new RegExp("(?:BDT|Tk\\.?|Taka|৳)\\s*" + number, "i")
-  ];
-  for (const re of contextual) {
-    const m = t.match(re);
-    if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; }
+  // If labels are absent, allow the first currency amount only when the surrounding
+  // clause signals receipt/cash-in, and stop before fee/balance fields.
+  const receipt = t.match(/(?:received|credited|cash\s*in|cashin|recharge|deposit|payment)[^.;\n]{0,35}/i);
+  if (receipt) {
+    const m = receipt[0].match(new RegExp("(?:" + currency + "\\s*)?" + number + "\\s*(?:" + currency + ")?", "i"));
+    if (m) {
+      const value = m.slice(1).find(v => v !== undefined && /^[0-9][0-9,.]*$/.test(v));
+      const n = normalizeAmount(value);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
   }
-  // MacroDroid payloads sometimes normalize the SMS into fields like "Amount 10 BDT".
-  // Permit a plain amount label only when the nearby token is a currency or numeric value;
-  // exclude Fee, Charge, Balance, Available, and remaining amounts.
-  const labelled = t.match(new RegExp("(?:^|[\\n;|,])\\s*(?:transaction\\s+)?amount\\s*[:=\\-]\\s*(?:(?:BDT|Tk\\.?|Taka|৳)\\s*)?" + number + "(?:\\s*(?:BDT|Tk\\.?|Taka|৳))?(?=$|[\\s,;|.])", "i"));
-  if (labelled) { const n = normalizeAmount(labelled[1]); if (Number.isFinite(n) && n > 0) return n; }
   return NaN;
 }
 function extractRecipientPhone(text) {
