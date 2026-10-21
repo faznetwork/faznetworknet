@@ -6,11 +6,11 @@
     <title>FAZ NETWORK - Hotspot Portal</title>
     <style>
         :root {
-            --bg-color: #080c14;
-            --card-bg: #111827;
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.85);
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
-            --border-color: rgba(255, 255, 255, 0.12);
+            --border-color: rgba(255, 255, 255, 0.1);
             --bkash: #e2136e;
             --nagad: #f7941d;
             --rocket: #832b73;
@@ -27,8 +27,8 @@
         body {
             background-color: var(--bg-color);
             background-image: 
-                radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.12) 0%, transparent 50%),
-                radial-gradient(circle at 100% 100%, rgba(245, 158, 11, 0.08) 0%, transparent 50%);
+                radial-gradient(circle at 50% 0%, rgba(13, 148, 136, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(217, 119, 6, 0.1) 0%, transparent 50%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -41,13 +41,13 @@
         .rgb-wrapper {
             position: relative;
             width: 100%;
-            max-width: 400px;
-            border-radius: 22px;
+            max-width: 390px;
+            border-radius: 20px;
             padding: 2px;
             background: linear-gradient(60deg, #ef4444, #f59e0b, #10b981, #06b6d4, #3b82f6, #8b5cf6, #ec4899);
             background-size: 400% 400%;
             animation: rgbBorderGlow 8s ease infinite;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
         }
 
         @keyframes rgbBorderGlow {
@@ -58,10 +58,11 @@
 
         .main-card {
             background: var(--card-bg);
-            border-radius: 20px;
-            padding: 22px 18px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 18px;
+            padding: 20px 16px;
             text-align: center;
-            position: relative;
         }
 
         .device-badge-corner {
@@ -70,19 +71,19 @@
             right: 12px;
             font-size: 9px;
             color: var(--text-muted);
-            background: rgba(255, 255, 255, 0.07);
-            padding: 3px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 8px;
             border-radius: 20px;
             border: 1px solid var(--border-color);
         }
 
         .bismillah {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             color: #fbbf24;
             letter-spacing: 0.5px;
             margin-bottom: 6px;
-            font-family: 'Amiri', 'Traditional Arabic', sans-serif;
+            font-family: 'Amiri', 'TraditionalArabic', sans-serif;
         }
 
         .logo-box {
@@ -90,17 +91,17 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 48px;
+            min-height: 45px;
         }
 
         .logo-img {
-            max-width: 85px;
+            max-width: 80px;
             height: auto;
             object-fit: contain;
         }
 
         .brand-title {
-            font-size: 21px;
+            font-size: 20px;
             font-weight: 900;
             letter-spacing: 1px;
             color: #ffffff;
@@ -114,7 +115,7 @@
 
         .tab-switcher {
             display: flex;
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 10px;
             padding: 3px;
             margin-bottom: 14px;
@@ -123,11 +124,11 @@
 
         .tab-btn {
             flex: 1;
-            padding: 8px;
+            padding: 7px;
             border: none;
             background: transparent;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             border-radius: 7px;
             cursor: pointer;
@@ -137,7 +138,7 @@
         .tab-btn.active {
             background: #ffffff;
             color: #0f172a;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .packages-grid {
@@ -148,10 +149,10 @@
         }
 
         .pkg-card {
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.03);
             border: 1.5px solid var(--border-color);
             border-radius: 8px;
-            padding: 9px 4px;
+            padding: 8px 4px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -163,18 +164,18 @@
 
         .pkg-card.selected {
             border-color: #10b981;
-            background: rgba(16, 185, 129, 0.2);
-            box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+            background: rgba(16, 185, 129, 0.15);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
         }
 
         .pkg-time {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            color: #f8fafc;
+            color: #e2e8f0;
         }
 
         .pkg-price {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 800;
             color: #fbbf24;
             margin-top: 2px;
@@ -183,11 +184,11 @@
         .selected-package {
             margin: 0 0 12px;
             color: #34d399;
-            font-size: 12px;
+            font-size: 11px;
             text-align: left;
             font-weight: 600;
-            background: rgba(16, 185, 129, 0.12);
-            padding: 6px 10px;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 5px 8px;
             border-radius: 6px;
             border-left: 3px solid #10b981;
         }
@@ -201,58 +202,65 @@
         }
 
         .mfs-btn {
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.05);
             border: 1.5px solid var(--border-color);
             border-radius: 10px;
-            padding: 10px;
+            padding: 10px 8px;
             font-size: 12px;
             font-weight: 700;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
             transition: all 0.2s ease;
             color: #ffffff;
         }
 
-        .mfs-btn.bkash:hover { background: rgba(226, 19, 110, 0.2); border-color: var(--bkash); }
-        .mfs-btn.nagad:hover { background: rgba(247, 148, 29, 0.2); border-color: var(--nagad); }
-        .mfs-btn.rocket:hover { background: rgba(131, 43, 115, 0.2); border-color: var(--rocket); }
-        .mfs-btn.upay:hover { background: rgba(0, 84, 166, 0.2); border-color: var(--upay); }
+        .mfs-btn.bkash { border-color: rgba(226, 19, 110, 0.4); }
+        .mfs-btn.bkash:hover { background: rgba(226, 19, 110, 0.15); border-color: var(--bkash); }
+
+        .mfs-btn.nagad { border-color: rgba(247, 148, 29, 0.4); }
+        .mfs-btn.nagad:hover { background: rgba(247, 148, 29, 0.15); border-color: var(--nagad); }
+
+        .mfs-btn.rocket { border-color: rgba(131, 43, 115, 0.4); }
+        .mfs-btn.rocket:hover { background: rgba(131, 43, 115, 0.15); border-color: var(--rocket); }
+
+        .mfs-btn.upay { border-color: rgba(0, 84, 166, 0.4); }
+        .mfs-btn.upay:hover { background: rgba(0, 84, 166, 0.15); border-color: var(--upay); }
 
         .mfs-logo-icon {
-            width: 22px;
-            height: 22px;
-            border-radius: 5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 900;
             color: #fff;
         }
 
         .input-group {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             text-align: left;
         }
 
         .input-group label {
             display: block;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
-            color: #cbd5e1;
-            margin-bottom: 4px;
+            color: var(--text-muted);
+            margin-bottom: 3px;
         }
 
-        .input-box input {
+        .input-box input, .payment-method-select {
             width: 100%;
-            padding: 10px 12px;
-            background: rgba(0, 0, 0, 0.4);
+            padding: 9px 10px;
+            background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             color: #ffffff;
             outline: none;
             transition: all 0.3s ease;
@@ -260,21 +268,21 @@
 
         .input-box input:focus {
             border-color: #10b981;
-            background: rgba(0, 0, 0, 0.6);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+            background: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
         }
 
         .btn-action {
             width: 100%;
-            padding: 12px;
+            padding: 11px;
             background: linear-gradient(135deg, #059669 0%, #047857 100%);
             border: none;
             color: #ffffff;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.35);
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
             transition: all 0.25s ease;
             margin-top: 4px;
         }
@@ -282,50 +290,61 @@
         .btn-action:hover { background: #047857; }
         .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        /* Professional Gateway Modal */
+        /* Professional Gateway Modal (SSLCommerz Style) */
         .modal-overlay {
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(6px);
             z-index: 999;
             align-items: center;
             justify-content: center;
-            padding: 14px;
+            padding: 12px;
         }
 
         .modal-card {
-            background: #1f2937;
+            background: #111827;
             width: 100%;
-            max-width: 380px;
-            border-radius: 18px;
-            padding: 20px;
+            max-width: 360px;
+            border-radius: 16px;
+            padding: 18px;
             text-align: center;
             border: 1px solid var(--border-color);
-            box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
         }
 
         .timer-box {
             background: rgba(239, 68, 68, 0.15);
             color: #f87171;
             font-weight: 800;
-            font-size: 16px;
-            padding: 6px 12px;
+            font-size: 15px;
+            padding: 5px 10px;
             border-radius: 8px;
             display: inline-block;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
+        .alert-box {
+            display: none;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .alert-error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+        .alert-success { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; }
+
         .card-footer {
-            margin-top: 16px;
-            padding-top: 12px;
+            margin-top: 14px;
+            padding-top: 10px;
             border-top: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
         }
 
@@ -353,6 +372,8 @@
         <div class="brand-title" id="brand-title-text">FAZ NETWORK</div>
         <div class="brand-subtitle" id="brand-subtitle-text">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</div>
 
+        <div id="status-box" class="alert-box"></div>
+
         <!-- Tab Switcher -->
         <div class="tab-switcher">
             <button type="button" id="tab-recharge-btn" class="tab-btn active" onclick="switchPortalTab('recharge')">অনলাইন পেমেন্ট (MFS)</button>
@@ -362,13 +383,13 @@
         <!-- 1. Online Recharge Tab -->
         <div id="section-recharge">
             <div class="packages-grid" id="packages-grid">
-                <div style="grid-column: 1 / -1; font-size: 12px; color: var(--text-muted);">প্যাকেজ লোড হচ্ছে...</div>
+                <div style="grid-column: 1 / -1; font-size: 11px; color: var(--text-muted);">প্যাকেজ লোড হচ্ছে...</div>
             </div>
             <div id="selected-package" class="selected-package">চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।</div>
 
-            <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; text-align: left;">অফিসিয়াল পেমেন্ট মাধ্যম:</div>
+            <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; text-align: left;">অফিসিয়াল পেমেন্ট মাধ্যম:</div>
             <div class="mfs-grid" id="mfs-buttons-grid">
-                <!-- Dynamic Official MFS Buttons -->
+                <!-- Dynamic Official MFS Buttons Loaded Here -->
             </div>
         </div>
 
@@ -377,8 +398,8 @@
             <div class="input-group">
                 <label for="voucher_pin">ভাউচার স্ক্র্যাচ পিন কোড</label>
                 <div style="display: flex; gap: 6px;">
-                    <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন" style="flex: 1; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: #fff; text-transform: uppercase;">
-                    <button type="button" class="btn-action" style="margin-top:0; width: auto; padding: 0 14px; font-size: 13px;" onclick="openQrScanner()">📷 স্ক্যান</button>
+                    <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন" style="flex: 1; padding: 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; color: #fff; text-transform: uppercase;">
+                    <button type="button" class="btn-action" style="margin-top:0; width: auto; padding: 0 12px; font-size: 12px;" onclick="openQrScanner()">📷 স্ক্যান</button>
                 </div>
             </div>
             <button type="button" class="btn-action" onclick="handleVoucherLogin()">ভাউচার দিয়ে ইন্টারনেট চালু করুন</button>
@@ -394,29 +415,28 @@
 <!-- Professional MFS Payment Gateway Modal -->
 <div class="modal-overlay" id="mfs-modal">
     <div class="modal-card">
-        <h3 id="modal-mfs-title" style="margin-bottom: 6px; color: #ffffff; font-size: 17px;">পেমেন্ট গেটওয়ে</h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">নিচের অফিসিয়াল নম্বরে সেন্ড মানি করুন:</p>
+        <h3 id="modal-mfs-title" style="margin-bottom: 6px; color: #ffffff; font-size: 16px;">পেমেন্ট গেটওয়ে</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">নিচের অফিসিয়াল নম্বরে সেন্ড মানি করুন:</p>
         
-        <div style="background: rgba(255,255,255,0.06); padding: 12px; border-radius: 10px; margin-bottom: 12px; border: 1px dashed rgba(255,255,255,0.25);">
-            <div id="modal-package-info" style="font-size: 12px; color: #34d399; font-weight: 700; margin-bottom: 4px;">প্যাকেজ: ৳০</div>
-            <span id="modal-wallet-number" style="font-size: 19px; font-weight: 800; color: #fbbf24; letter-spacing: 1px;">01XXXXXXXXX</span>
-            <button type="button" onclick="copyWalletNumber()" style="display: block; margin: 6px auto 0; background: none; border: none; color: #60a5fa; font-size: 11px; cursor: pointer; font-weight: 700;">নম্বর কপি করুন</button>
+        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px dashed rgba(255,255,255,0.2);">
+            <span id="modal-wallet-number" style="font-size: 17px; font-weight: 800; color: #34d399; letter-spacing: 1px;">01XXXXXXXXX</span>
+            <button type="button" onclick="copyWalletNumber()" style="display: block; margin: 4px auto 0; background: none; border: none; color: #60a5fa; font-size: 10px; cursor: pointer; font-weight: 700;">নম্বর কপি করুন</button>
         </div>
 
         <div class="timer-box" id="payment-timer">05:00</div>
 
         <div class="input-group">
-            <label for="cust_phone">আপনার মোবাইল নম্বর (যেটিতে নেট চালাবেন)</label>
+            <label for="cust_phone">আপনার মোবাইল নম্বর</label>
             <div class="input-box"><input type="tel" id="cust_phone" placeholder="017xxxxxxxx" maxlength="11"></div>
         </div>
 
         <div class="input-group">
-            <label for="cust_trx">বিকাশ/নগদের TrxID দিন</label>
+            <label for="cust_trx">TrxID প্রদান করুন</label>
             <div class="input-box"><input type="text" id="cust_trx" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;"></div>
         </div>
 
         <button type="button" class="btn-action" id="btn-verify-payment" onclick="handleVerification()">পেমেন্ট নিশ্চিত ও সংযোগ করুন</button>
-        <button type="button" onclick="closeMfsModal()" style="background: none; border: none; color: var(--text-muted); font-size: 12px; margin-top: 12px; cursor: pointer;">বাতিল করুন</button>
+        <button type="button" onclick="closeMfsModal()" style="background: none; border: none; color: var(--text-muted); font-size: 11px; margin-top: 10px; cursor: pointer;">বাতিল করুন</button>
     </div>
 </div>
 
@@ -475,7 +495,7 @@
 
         const valid = packages.filter(pkg => pkg.profile && Number(pkg.price) > 0);
         if (!valid.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#f87171;">কোনো প্যাকেজ পাওয়া যায়নি।</div>';
+            grid.innerHTML = '<div style="grid-column:1/-1;font-size:11px;color:red;">কোনো প্যাকেজ পাওয়া যায়নি।</div>';
             return;
         }
 
@@ -513,7 +533,7 @@
         const activeProviders = Object.keys(labels).filter(k => accounts[k]);
 
         if (!activeProviders.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#fbbf24;">পেমেন্ট মাধ্যম কনফিগার করা নেই।</div>';
+            grid.innerHTML = '<div style="grid-column:1/-1;font-size:11px;color:orange;">কোনো পেমেন্ট মাধ্যম কনফিগার করা নেই।</div>';
             return;
         }
 
@@ -522,7 +542,7 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = `mfs-btn ${prov}`;
-            btn.innerHTML = `<span class="mfs-logo-icon" style="background:${info.color}">${info.char}</span> <span>${info.name}</span>`;
+            btn.innerHTML = `<span class="mfs-logo-icon" style="background:${info.color}">${info.char}</span> <span>${info.name} দিয়ে পেমেন্ট</span>`;
             btn.addEventListener('click', () => openMfsModal(prov, accounts[prov], info.name + ' গেটওয়ে'));
             grid.appendChild(btn);
         });
@@ -574,7 +594,6 @@
         currentProvider = provider;
         document.getElementById('modal-mfs-title').textContent = title;
         document.getElementById('modal-wallet-number').textContent = number;
-        document.getElementById('modal-package-info').textContent = `নির্বাচিত প্যাকেজ: ${selectedPackage.validity} (${formatTaka(selectedPackage.price)})`;
         document.getElementById('mfs-modal').style.display = 'flex';
         startCountdown(300); // ৫ মিনিট
     }
@@ -587,7 +606,7 @@
     function copyWalletNumber() {
         const num = document.getElementById('modal-wallet-number').textContent;
         navigator.clipboard.writeText(num);
-        alert('অফিসিয়াল নম্বরটি কপি হয়েছে: ' + num);
+        alert('নম্বরটি কপি হয়েছে: ' + num);
     }
 
     function startCountdown(durationSeconds) {
