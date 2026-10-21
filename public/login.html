@@ -640,9 +640,10 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 
     async function loadPublicPortalData() {
         try {
-            const [homeRes, setRes] = await Promise.all([
+            const [homeRes, setRes, paymentRes] = await Promise.all([
                 fetch(BACKEND_BASE_URL + '/', { cache: 'no-store' }),
-                fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store' }).catch(() => null)
+                fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store' }).catch(() => null),
+                fetch(BACKEND_BASE_URL + '/api/public/payment/settings', { cache: 'no-store' }).catch(() => null)
             ]);
 
             if (homeRes.ok) {
@@ -669,6 +670,14 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
                     hp.textContent = settings.helpline;
                     hp.href = 'tel:' + settings.helpline;
                 }
+            }
+            if (paymentRes && paymentRes.ok) {
+                const paymentSettings = await paymentRes.json().catch(() => ({}));
+                if (paymentSettings.providers) {
+                    paymentAccounts = Object.fromEntries(Object.entries(paymentSettings.providers).filter(([,v]) => v && v.enabled && v.number).map(([k,v]) => [k,v.number]));
+                    renderMfsButtons(paymentAccounts);
+                }
+                verificationMethod = paymentSettings.verificationMethod === 'senderPhoneNumber' ? 'senderPhoneNumber' : 'transactionId';
             }
         } catch (err) {
             renderPackages([{ profile: '1-Hour', price: 10, validity: '১ ঘণ্টা' }, { profile: '12-Hour', price: 20, validity: '১২ ঘণ্টা' }]);
