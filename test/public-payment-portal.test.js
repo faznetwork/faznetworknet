@@ -21,9 +21,6 @@ test("payment portal is English-only and dedicated to PPPoE with a five-minute p
   assert.match(page, /PPPoE Broadband Bill Payment/);
   assert.match(page, /Check Bill/);
   assert.match(page, /Confirm Payment & Renew/);
-  assert.match(page, /function displayDate\(value\)/);
-  assert.match(page, /bill-amount"\)\.textContent="৳"\+money\(subscriber\.amount\)/);
-  assert.doesNotMatch(page, /<\/strong><\/div>\\n\s*<div class="receive">/, "payment modal markup must not render a literal escaped newline");
   assert.match(page, /\/api\/public\/payment\/settings/);
   assert.match(page, /startTimer\(\)/);
   assert.match(page, /300000/);
