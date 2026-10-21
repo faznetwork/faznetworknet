@@ -8113,10 +8113,33 @@ async function deletePlan(id,name){
         }
 
 
+        let trafficInterfaceRetryTimer = null;
+        let trafficInterfaceLoadInFlight = false;
+        async function retryLoadTrafficInterfaces() {
+            const select = document.getElementById('dashboardInterface');
+            if (trafficInterfaceLoadInFlight || (select && select.value && select.dataset.nocOptionsLoaded === '1')) return;
+            trafficInterfaceLoadInFlight = true;
+            try { await loadInterfaces(); }
+            catch (error) { console.warn('[Traffic] interface retry failed:', error && error.message || error); }
+            finally { trafficInterfaceLoadInFlight = false; }
+        }
+
         function startTrafficPolling() {
             if (trafficTimer) clearInterval(trafficTimer);
-            void loadInterfaces();
+            if (trafficInterfaceRetryTimer) clearInterval(trafficInterfaceRetryTimer);
+            const status = document.getElementById('dashboardTrafficStatus');
+            if (status) { status.className = 'badge bg-secondary ms-auto'; status.textContent = 'CONNECTING'; }
+            // Keep interface discovery retries independent from traffic samples. A transient
+            // router/API failure during initial inventory must not permanently stop telemetry.
+            void retryLoadTrafficInterfaces();
             trafficTimer = setInterval(() => { void pollTraffic(); }, 1000);
+            trafficInterfaceRetryTimer = setInterval(() => {
+                const dashboard = document.getElementById('view-main-dashboard');
+                const select = document.getElementById('dashboardInterface');
+                if (dashboard && dashboard.style.display !== 'none' && (!select || !select.value || select.dataset.nocOptionsLoaded !== '1')) {
+                    void retryLoadTrafficInterfaces();
+                }
+            }, 5000);
         }
 
 const nocTrafficHistory=[];let nocStatsBusy=false;function nocEsc(v){return String(v==null?'':v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}function nocMoney(v){return '৳'+Number(v||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});}
