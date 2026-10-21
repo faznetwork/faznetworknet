@@ -31,7 +31,9 @@ test("payment portal uses the four public API endpoints and does not submit a br
   assert.match(page, /\/api\/public\/payment\/check-bill/);
   assert.match(page, /\/api\/public\/payment\/session/);
   assert.match(page, /\/api\/public\/payment\/confirm/);
-  assert.match(page, /JSON\.stringify\(payload\)/);\n  assert.match(page, /payload\.transactionId/);\n  assert.doesNotMatch(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId,amount/);
+  assert.match(page, /JSON\.stringify\(payload\)/);
+  assert.match(page, /payload\.transactionId/);
+  assert.doesNotMatch(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId,amount/);
 });
 
 test("public PPPoE payment session returns the configured receiving number and falls back to customer bill when package price is zero", () => {
