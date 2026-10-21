@@ -30,6 +30,17 @@ test('switchView validates its target before hiding the current view and refresh
   assert.match(code, /Unknown view; preserving current content/);
 });
 
+test('Hotspot dynamic rendering validates its container before hiding existing views', () => {
+  const start = admin.indexOf('function appendHotspotView(html)');
+  const end = admin.indexOf('function loadHotspotDashboard', start);
+  assert.notEqual(start, -1, 'Hotspot view renderer exists');
+  assert.notEqual(end, -1, 'Hotspot view renderer ends before dashboard loader');
+  const renderer = admin.slice(start, end);
+  assert.ok(renderer.indexOf("if (!dynamic)") < renderer.indexOf('hideAdminViews()'), 'container validation must precede destructive view changes');
+  assert.match(renderer, /return false/);
+  assert.match(renderer, /dynamic\.hidden = false/);
+});
+
 test('settings links use the shared SPA router and the legacy webhooks URL opens Payment & Webhooks', () => {
   assert.match(admin, /section === 'webhooks' \? 'payments'/);
   assert.match(admin, /'\/admin\/settings\/webhooks': \{ view: 'settings', section: 'webhooks' \}/);
