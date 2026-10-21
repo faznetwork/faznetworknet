@@ -484,9 +484,10 @@ const device={
  chapId:params.get('chap-id')||'',
  chapChallenge:params.get('chap-challenge')||''
 };
-const BACKEND_BASE_URL='https://faznetwork.com';
+const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
 const VERIFY_API_URL=BACKEND_BASE_URL+'/api/verify-trx';
 const VOUCHER_CLAIM_URL=BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher';
+const ACTIVATE_API_URL=BACKEND_BASE_URL+'/api/hotspot-auth/activate';
 const DEVICE_LOOKUP_URL=BACKEND_BASE_URL+'/api/hotspot-auth/device-lookup';
 function normalizeMac(value){return String(value||'').trim().toUpperCase().replace(/-/g,':');}
 function chapIdentifierByte(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
@@ -504,6 +505,10 @@ function md5Hex(input){
  for(let i=0;i<64;i++){let F,g,s;if(i<16){F=(B&C)|(~B&D);g=i;s=shifts[i%4];}else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;s=shifts[4+i%4];}else if(i<48){F=B^C^D;g=(3*i+5)%16;s=shifts[8+i%4];}else{F=C^(B|~D);g=(7*i)%16;s=shifts[12+i%4];}const n=(A+F+K[i]+M[g])|0;const rot=(n<<s)|(n>>>(32-s));A=D;D=C;C=B;B=(B+rot)|0;}a0=(a0+A)|0;b0=(b0+B)|0;c0=(c0+C)|0;d0=(d0+D)|0;}
  return [a0,b0,c0,d0].map(n=>[0,8,16,24].map(s=>((n>>>s)&255).toString(16).padStart(2,'0')).join('')).join('');
 }
+function chapIdentifierByteForMd5(value){const s=String(value||'');if(/^\\\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
+function decodeChapChallengeForMd5(value){const s=String(value||'');if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');let out='';for(let i=0;i<s.length;i++){if(s[i]==='\\\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];}return out;}
+function chapIdentifierByte(value){return chapIdentifierByteForMd5(value);}
+function decodeChapChallenge(value){return decodeChapChallengeForMd5(value);}
 function submitMikrotikLogin(mac,redirectUrl){
  const form=document.getElementById('mikrotik-auto-login');if(!form)return;
  const loginUrl=device.login;
@@ -517,7 +522,7 @@ function byId(id){return document.getElementById(id);}
 function requestJson(url,options){return fetch(url,options).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data;});}
 function addNoticeTicker(text){const node=byId('status-box');if(node&&text){node.textContent=text;node.style.display='block';}}
 function applyFeatures(config){if(!config)return;const box=byId('portal-banner'),image=byId('portal-banner-image');if(data.banner_url&&box&&image){image.src=data.banner_url;box.hidden=false;} }
-async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
+async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;const packages=config.packages||data.packages||[];if(Array.isArray(packages)&&packages.length&&typeof renderPackages==='function')renderPackages(packages);if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
 const PALETTES=[{bg:'rgba(16,185,129,.12)'},{bg:'rgba(59,130,246,.12)'},{bg:'rgba(245,158,11,.12)'},{bg:'rgba(236,72,153,.12)'},{bg:'rgba(139,92,246,.12)'},{bg:'rgba(6,182,212,.12)'},{bg:'rgba(239,68,68,.12)'},{bg:'rgba(132,204,22,.12)'}];
 function renderPackagePalette(index,node){if(node)node.style.background=PALETTES[index%PALETTES.length].bg;}
 async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
@@ -532,17 +537,17 @@ async function handleMasterAction(){
  }
  if(currentMethod==='pin'){
   const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('ভাউচার পিন দিন।');return;}
-  const result=await requestJson(VOUCHER_CLAIM_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
+  const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
  return submitMemberLogin();
 }
 function submitMemberLogin(){const username=String(byId('member_username')?.value||'').trim();const password=String(byId('member_password')?.value||'');if(!username||!password){addNoticeTicker('Username ও password দিন।');return;}const form=byId('mikrotik-auto-login');if(!form)return;form.action=device.login;form.querySelector('[name="username"]').value=username;form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;form.submit();}
 window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
-document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}const button=byId('btn-master-action');if(button)button.addEventListener('click',handleMasterAction);loadPortalConfig();});
+document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}byId('btn-master-action').addEventListener('click',handleMasterAction);loadPortalConfig();});
 })();
 </script>
 <script>
-    const BACKEND_BASE_URL = 'https://faznetwork.com';
+    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/hotspot/verify-voucher';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
