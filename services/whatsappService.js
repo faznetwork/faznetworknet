@@ -329,6 +329,26 @@ async function handleConnectionClose(update, baileys, closedSocket) {
   return getStatus();
 }
 
+// Baileys can reject an internal passive-IQ promise with a transient 408 timeout
+// after the socket has otherwise connected. On Node versions that treat unhandled
+// rejections as fatal, contain only this known transport timeout and reconnect;
+// unrelated unhandled rejections retain Node's normal fatal behavior.
+const handledBaileysTimeouts = new WeakSet();
+process.on("unhandledRejection", (reason) => {
+  const message = String(reason?.message || reason || "");
+  const stack = String(reason?.stack || "");
+  const statusCode = Number(reason?.output?.statusCode || reason?.data?.statusCode || 0);
+  const isBaileysTimeout = /Timed Out|Request Time-out/i.test(message)
+    && /@whiskeysockets\\/baileys\\/lib\\/Utils\\/generics\\.js/.test(stack)
+    && (statusCode === 408 || /statusCode: 408/.test(stack));
+  if (!isBaileysTimeout || (reason && typeof reason === "object" && handledBaileysTimeouts.has(reason))) return;
+  if (reason && typeof reason === "object") handledBaileysTimeouts.add(reason);
+  lastError = "WhatsApp transport timed out; reconnecting without stopping the API server.";
+  console.warn("[WhatsApp] Contained transient Baileys 408 timeout; scheduling reconnect.");
+  if (connection === "connected" || connection === "connecting") connection = "disconnected";
+  scheduleReconnect();
+});
+
 function scheduleReconnect() {
   if (!reconnectAllowed || reconnectTimer || connection === "connected") return;
   const delay = Math.min(30000, 1000 * (2 ** Math.min(reconnectAttempt, 5)));
