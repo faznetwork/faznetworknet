@@ -1,6 +1,7 @@
 "use strict";
 
 const db = require("../db");
+const deliveryLog = require("./notificationDeliveryLog");
 
 let socket = null;
 let activeCreds = null;
@@ -517,6 +518,15 @@ async function connect(options = {}) {
     qrDataUrl = null;
     qrText = null;
 
+    socketForEvents.ev.on("messages.update", updates => {
+      if (socket !== socketForEvents || !Array.isArray(updates)) return;
+      for (const item of updates) {
+        const ack = Number(item?.update?.status);
+        if (item?.key?.id && ack >= 3) {
+          deliveryLog.markDeliveredByProviderMessageId(item.key.id).catch(() => {});
+        }
+      }
+    });
     socketForEvents.ev.on("creds.update", () => {
       saveCreds().catch(error => {
         lastError = "Could not persist WhatsApp credentials to PostgreSQL.";
@@ -712,15 +722,28 @@ function normalizeWhatsAppJid(value) {
   return normalizePhone(value) + "@s.whatsapp.net";
 }
 
-async function sendMessage({ to, message } = {}) {
-  if (!socket || connection !== "connected") {
-    throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
-  }
+async function sendMessage({ to, message, transactionId, variables = {} } = {}) {
   const jid = normalizeWhatsAppJid(to);
-  const result = await socket.sendMessage(jid, {
-    text: String(message || "").slice(0, 4000)
+  const body = String(message || "").slice(0, 4000);
+  const attemptId = await deliveryLog.createAttempt({
+    channel: "whatsapp",
+    provider: "WhatsApp",
+    recipient: String(to || "").slice(0, 40),
+    message: body,
+    transactionId: transactionId || variables.transaction_id || variables.trx_id || null
   });
-  return { success: true, messageId: result?.key?.id || null };
+  try {
+    if (!socket || connection !== "connected") {
+      throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
+    }
+    const result = await socket.sendMessage(jid, { text: body });
+    const messageId = result?.key?.id || null;
+    await deliveryLog.finishAttempt(attemptId, { status: "sent", providerMessageId: messageId });
+    return { success: true, messageId };
+  } catch (error) {
+    await deliveryLog.finishAttempt(attemptId, { status: "failed", error: error?.message || error });
+    throw error;
+  }
 }
 
 async function clearStoredAuth(database = db) {
