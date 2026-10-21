@@ -3474,11 +3474,17 @@
             await loadOptions();
         }
         async function loadHotspotDashboard(){
-            // Compatibility alias for any existing internal callers. Always use the
-            // canonical dashboard so the retired circular layout cannot be restored.
-            if (typeof window.switchView === 'function') window.switchView('hotspot-dashboard');
+            // Always show the canonical dashboard and immediately refresh its data.
+            currentHotspotMode = 'dashboard';
+            currentHotspotTitleKey = 'hotspot_dashboard';
+            if (typeof window.switchView === 'function') {
+                const shown = window.switchView('hotspot-dashboard');
+                if (shown === false) return false;
+            }
             if (typeof window.startNocPolling === 'function') window.startNocPolling();
-            return false;
+            void refreshHotspotDashboardMetrics();
+            if (typeof window.refreshHotspotVoucherStats === 'function') void window.refreshHotspotVoucherStats();
+            return true;
         }
         window.loadHotspotDashboard = loadHotspotDashboard;
         window.refreshHotspotVoucherStats = async function refreshHotspotVoucherStats(){
@@ -4881,6 +4887,7 @@ async function deletePlan(id,name){
           '/admin/settings/payment-webhooks':'payments',
           '/admin/settings/sms-alerts':'sms',
           '/admin/settings/hotspot-portal':'hotspot-portal',
+          '/admin/settings/webhooks':'payments',
         };
         function syncGeneralSettingsSidebar(target) {
           const parent = document.querySelector('#sidebar .general-settings-toggle');
