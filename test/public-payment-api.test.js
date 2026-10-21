@@ -50,11 +50,11 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(page, /#0054a6/);
   assert.match(page, /Verify TrxID & Renew/);
   assert.match(page, /id="modal-amount"/);
-  assert.match(page, /assets\\/images\\/bkash-logo\\.png/);
-  assert.match(page, /assets\\/images\\/nagad-logo\\.png/);
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
   assert.doesNotMatch(page, /<svg/);
-  assert.match(page, /assets\\/images\\/bkash-logo\\.png/);
-  assert.match(page, /assets\\/images\\/nagad-logo\\.png/);
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
   assert.doesNotMatch(page, /<svg/);
 });
 
