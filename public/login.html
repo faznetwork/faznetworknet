@@ -446,13 +446,108 @@
     <input type="hidden" name="password" id="mt-pass" value="$(mac)">
     <input type="hidden" name="dst" value="$(link-orig)">
     <input type="hidden" name="popup" value="true">
+    <input type="hidden" name="chap-id" value="$(chap-id)">
+    <input type="hidden" name="chap-challenge" value="$(chap-challenge)">
 </form>
 
 <input type="hidden" id="router-mac" value="$(mac)">
 <input type="hidden" id="router-ip" value="$(ip)">
 
+
+<!-- Compatible login modes: payment verification remains server-authoritative. -->
+<!-- Mobile-first FAZ NETWORK captive portal refresh: Connected to Fast Network -->
+<div class="portal-compat-controls" aria-label="Hotspot login options">
+ <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
+ <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
+ <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
+ <input id="member_username" autocomplete="username" aria-label="Member username" placeholder="Username">
+ <input id="member_password" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
+ <button type="button" id="toggle-member-password" onclick="const p=document.getElementById('member_password');p.type=p.type==='password'?'text':'password'">Show password</button>
+ <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
+ <input id="remember-member" type="checkbox" aria-label="Remember member">
+ <div id="router-error" role="alert"></div>
+ <div id="portal-banner" hidden><img id="portal-banner-image" alt="Network banner"></div>
+ <div id="custom-portal-slot"></div>
+ <button type="button" id="btn-master-action">Continue</button>
+</div>
+<style>@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}} .portal-compat-controls{display:none}</style>
+
 <script>
-    const BACKEND_BASE_URL = 'https://faznetwork.com';
+(function(){
+'use strict';
+const params=new URLSearchParams(window.location.search);
+const device={
+ mac:normalizeMac(params.get('mac')||document.getElementById('router-mac')?.value||''),
+ ip:params.get('ip')||document.getElementById('router-ip')?.value||'',
+ login:params.get('link-login-only')||'$(link-login-only)',
+ original:params.get('link-orig')||'$(link-orig)',
+ chapId:params.get('chap-id')||'',
+ chapChallenge:params.get('chap-challenge')||''
+};
+const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
+const VERIFY_API_URL=BACKEND_BASE_URL+'/api/verify-trx';
+const VOUCHER_CLAIM_URL=BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher';
+const ACTIVATE_API_URL=BACKEND_BASE_URL+'/api/hotspot-auth/activate';
+const DEVICE_LOOKUP_URL=BACKEND_BASE_URL+'/api/hotspot-auth/device-lookup';
+function normalizeMac(value){return String(value||'').trim().toUpperCase().replace(/-/g,':');}
+function chapIdentifierByte(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
+function decodeChapChallenge(value){
+ const s=String(value||''); if(!s)return '';
+ if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');
+ let out=''; for(let i=0;i<s.length;i++){if(s[i]==='\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];} return out;
+}
+function md5Hex(input){
+ const bytes=[];for(let i=0;i<input.length;i++){let c=input.charCodeAt(i);if(c<128)bytes.push(c);else if(c<2048)bytes.push((c>>6)|192,(c&63)|128);else if(c<55296||c>=57344)bytes.push((c>>12)|224,((c>>6)&63)|128,(c&63)|128);else{c=65536+(((c&1023)<<10)|(input.charCodeAt(++i)&1023));bytes.push((c>>18)|240,((c>>12)&63)|128,((c>>6)&63)|128,(c&63)|128);}}
+ const bitLen=bytes.length*8;bytes.push(128);while(bytes.length%64!==56)bytes.push(0);for(let i=0;i<8;i++)bytes.push(i<4?Math.floor(bitLen/Math.pow(256,i))&255:0);
+ let a0=0x67452301|0,b0=0xefcdab89|0,c0=0x98badcfe|0,d0=0x10325476|0;
+ const shifts=[7,12,17,22,5,9,14,20,4,11,16,23,6,10,15,21],K=Array.from({length:64},(_,i)=>Math.floor(Math.abs(Math.sin(i+1))*4294967296)|0);
+ for(let off=0;off<bytes.length;off+=64){const M=[];for(let i=0;i<16;i++)M[i]=(bytes[off+i*4]|(bytes[off+i*4+1]<<8)|(bytes[off+i*4+2]<<16)|(bytes[off+i*4+3]<<24))|0;let A=a0,B=b0,C=c0,D=d0;
+ for(let i=0;i<64;i++){let F,g,s;if(i<16){F=(B&C)|(~B&D);g=i;s=shifts[i%4];}else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;s=shifts[4+i%4];}else if(i<48){F=B^C^D;g=(3*i+5)%16;s=shifts[8+i%4];}else{F=C^(B|~D);g=(7*i)%16;s=shifts[12+i%4];}const n=(A+F+K[i]+M[g])|0;const rot=(n<<s)|(n>>>(32-s));A=D;D=C;C=B;B=(B+rot)|0;}a0=(a0+A)|0;b0=(b0+B)|0;c0=(c0+C)|0;d0=(d0+D)|0;}
+ return [a0,b0,c0,d0].map(n=>[0,8,16,24].map(s=>((n>>>s)&255).toString(16).padStart(2,'0')).join('')).join('');
+}
+function chapIdentifierByteForMd5(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
+function decodeChapChallengeForMd5(value){const s=String(value||'');if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');let out='';for(let i=0;i<s.length;i++){if(s[i]==='\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];}return out;}
+function chapIdentifierByte(value){return chapIdentifierByteForMd5(value);}
+function decodeChapChallenge(value){return decodeChapChallengeForMd5(value);}
+function submitMikrotikLogin(mac,redirectUrl){
+ const form=document.getElementById('mikrotik-auto-login');if(!form)return;
+ const loginUrl=device.login;
+ form.action=loginUrl;form.querySelector('[name="username"]').value=normalizeMac(mac||device.mac);form.querySelector('[name="password"]').value=normalizeMac(mac||device.mac);
+ const dst=form.querySelector('[name="dst"]');if(dst)dst.value=redirectUrl||device.original;
+ const password=form.querySelector('[name="password"]').value;
+ if(device.chapChallenge){password;form.querySelector('[name="password"]').value=md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge));}
+ form.submit();
+}
+function byId(id){return document.getElementById(id);}
+function requestJson(url,options){return fetch(url,options).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data;});}
+function addNoticeTicker(text){const node=byId('status-box');if(node&&text){node.textContent=text;node.style.display='block';}}
+function applyFeatures(config){if(!config)return;const data=config.config||config;const box=byId('portal-banner'),image=byId('portal-banner-image');if(data.banner_url&&box&&image){image.src=data.banner_url;box.hidden=false;} }
+async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;const packages=(config.packages||data.packages||[]).filter(p=>Number.isFinite(p.price)&&p.price>0);if(packages.length&&typeof renderPackages==='function')renderPackages(packages);if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
+const PALETTES=[{bg:'rgba(16,185,129,.12)'},{bg:'rgba(59,130,246,.12)'},{bg:'rgba(245,158,11,.12)'},{bg:'rgba(236,72,153,.12)'},{bg:'rgba(139,92,246,.12)'},{bg:'rgba(6,182,212,.12)'},{bg:'rgba(239,68,68,.12)'},{bg:'rgba(132,204,22,.12)'}];
+function renderPackagePalette(index,node){if(node)node.style.background=PALETTES[index%PALETTES.length].bg;}
+async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
+async function startQrScanner(){if(!navigator.mediaDevices?.getUserMedia)return;const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});try{const video=document.createElement('video');video.srcObject=stream;await video.play();const detector='BarcodeDetector'in window?new BarcodeDetector({formats:['qr_code']}):null;if(detector){const codes=await detector.detect(video);if(codes[0]&&byId('voucher_pin'))byId('voucher_pin').value=codes[0].rawValue.trim().toUpperCase();}}finally{stream.getTracks().forEach(t=>t.stop());}}
+async function handleMasterAction(){
+ const currentMethod=byId('m-btn-online')?.dataset.active==='true'?'online':byId('m-btn-pin')?.dataset.active==='true'?'pin':'member';
+ if(currentMethod==='online'){
+  const trx=String(byId('cust_trx')?.value||'').trim().toUpperCase();if(!trx){addNoticeTicker('TrxID দিন।');return;}
+  const selectedPackage=window.selectedPackage||{profile:byId('selected-package')?.dataset.profile||''};
+  const result=await requestJson(VERIFY_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trxId:trx,package_id:selectedPackage.profile,mac:device.mac,ip:device.ip})});
+  if(!result.success)throw new Error(result.message||'Payment verification failed');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
+ }
+ if(currentMethod==='pin'){
+  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('ভাউচার পিন দিন।');return;}
+  const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
+ }
+ return submitMemberLogin();
+}
+function submitMemberLogin(){const username=String(byId('member_username')?.value||'').trim();const password=String(byId('member_password')?.value||'');if(!username||!password){addNoticeTicker('Username ও password দিন।');return;}const form=byId('mikrotik-auto-login');if(!form)return;form.action=device.login;form.querySelector('[name="username"]').value=username;form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;form.submit();}
+window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
+document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}byId('btn-master-action').addEventListener('click',handleMasterAction);loadPortalConfig();});
+})();
+</script>
+<script>
+    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/hotspot/verify-voucher';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
