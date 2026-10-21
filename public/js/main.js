@@ -519,30 +519,11 @@
 })();
 
 
-/* General Settings sidebar router.
- * Keep URL, visible panel, active link, and accordion state in sync for click,
- * reload, and browser back/forward navigation. */
+/* General Settings sidebar submenu -> existing settings tab router.
+ * Delegate clicks so navigation works regardless of script initialization order. */
 (() => {
   if (window.__generalSettingsSidebarNavigationBound) return;
   window.__generalSettingsSidebarNavigationBound = true;
-
-  const targetsByPath = {
-    '/admin/settings': 'brand',
-    '/admin/settings/general': 'brand',
-    '/admin/settings/brand-identity': 'brand',
-    '/admin/settings/billing-expiry': 'billing',
-    '/admin/settings/payment-webhooks': 'payments',
-    '/admin/settings/sms-alerts': 'sms',
-    '/admin/settings/hotspot-portal': 'hotspot-portal',
-  };
-  const pathsByTarget = {
-    brand: '/admin/settings/brand-identity',
-    billing: '/admin/settings/billing-expiry',
-    payments: '/admin/settings/payment-webhooks',
-    sms: '/admin/settings/sms-alerts',
-    'hotspot-portal': '/admin/settings/hotspot-portal',
-  };
-  const validTargets = Object.keys(pathsByTarget);
 
   const expandSettingsMenu = () => {
     const toggle = document.querySelector('#sidebar .general-settings-toggle');
@@ -557,44 +538,24 @@
     }
   };
 
-  const activateTarget = (target, updateHistory = false) => {
-    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return false;
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('#sidebar [data-settings-nav]');
+    if (!link) return;
+    event.preventDefault();
+
+    const target = link.dataset.settingsNav;
+    const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
+    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return;
+
     expandSettingsMenu();
     document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach((item) => {
-      const active = item.dataset.settingsNav === target;
+      const active = item === link;
       item.classList.toggle('active', active);
       if (active) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
+
     if (typeof window.switchView === 'function') window.switchView('general-settings');
-    const shown = window.showGeneralSettingsSection(target);
-    if (shown === false) return false;
-    if (updateHistory) {
-      const path = pathsByTarget[target];
-      if (path && window.location.pathname !== path) window.history.pushState({ settingsTarget: target }, '', path);
-    }
-    return true;
-  };
-
-  document.addEventListener('click', (event) => {
-    const link = event.target.closest('#sidebar [data-settings-nav]');
-    if (!link) return;
-    const target = link.dataset.settingsNav;
-    // Do not swallow normal navigation for an unrecognized/future menu item.
-    if (!validTargets.includes(target) || typeof window.showGeneralSettingsSection !== 'function') return;
-    event.preventDefault();
-    activateTarget(target, true);
-  });
-
-  window.addEventListener('popstate', () => {
-    const path = window.location.pathname.replace(/\/$/, '') || '/';
-    const target = targetsByPath[path];
-    if (target) {
-      activateTarget(target, false);
-      return;
-    }
-    // The previous history entry may be a different admin view. Let Express
-    // render that route rather than leaving the settings panel visible at a new URL.
-    window.location.reload();
+    window.showGeneralSettingsSection(target);
   });
 })();
