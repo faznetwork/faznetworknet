@@ -22,7 +22,7 @@ const settingsPaths = [
 test('every General Settings sidebar link has a client target and an Express page route', () => {
   for (const [url, target] of settingsPaths) {
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
-    assert.ok(mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
+    assert.ok(adminView.includes(`'${url}': { view: 'settings', section: '${target}' }`), `SPA route missing for ${url}`);
   }
   assert.ok(serverSource.includes('hotspot-portal'), 'shared settings route must include the Hotspot portal');
   assert.ok(!serverSource.includes('hotspot-portal|webhooks'), 'legacy Webhooks page route must be removed');
@@ -32,11 +32,11 @@ test('every General Settings sidebar link has a client target and an Express pag
 });
 
 test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
-  assert.match(mainScript, /const validTargets = Object\.keys\(pathsByTarget\)/);
-  assert.match(mainScript, /window\.history\.pushState/);
-  assert.match(mainScript, /addEventListener\('popstate'/);
-  assert.match(mainScript, /window\.location\.reload\(\)/);
-  assert.match(mainScript, /item\.dataset\.settingsNav === target/);
+  assert.match(mainScript, /const validTargets = new Set\(\['brand', 'billing', 'payments', 'sms', 'hotspot-portal'\]\)/);
+  assert.match(adminView, /window\.history\.pushState/);
+  assert.match(adminView, /addEventListener\('popstate'/);
+  assert.match(adminView, /function restoreRoute\(/);
+  assert.match(adminView, /item\.dataset\.settingsNav === target/);
   assert.match(adminView, /function initializeGeneralSettingsRoute\(\)/);
   assert.match(adminView, /syncGeneralSettingsSidebar\(target\)/);
 });
