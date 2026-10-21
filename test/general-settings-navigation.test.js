@@ -33,6 +33,7 @@ test('settings submenu click and browser history keep route, panel, and active i
   assert.match(mainScript, /const validTargets = Object\.keys\(pathsByTarget\)/);
   assert.match(mainScript, /window\.history\.pushState/);
   assert.match(mainScript, /addEventListener\('popstate'/);
+  assert.match(mainScript, /window\.location\.reload\(\)/);
   assert.match(mainScript, /item\.dataset\.settingsNav === target/);
   assert.match(adminView, /function initializeGeneralSettingsRoute\(\)/);
   assert.match(adminView, /syncGeneralSettingsSidebar\(target\)/);
