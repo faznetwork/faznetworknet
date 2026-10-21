@@ -34,5 +34,5 @@ test("admin exposes one Payment and Webhooks module with secret visibility and r
  assert.doesNotMatch(admin,/id="general-settings-panel-mfs"/);
  assert.doesNotMatch(admin,/loadHotspotWebhookSettings/);
  assert.ok(admin.includes("/api/admin/webhook-settings"));
- assert.match(server,/payment-webhooks\|sms-alerts\|hotspot-portal\|webhooks\)/);
+ assert.match(server,/payment-webhooks\|sms-alerts\|hotspot-portal\)/);
 });
