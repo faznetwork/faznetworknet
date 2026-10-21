@@ -81,6 +81,27 @@ async function getPaymentSettings() {
   }
   return providers;
 }
+let paymentSessionSchemaPromise = null;
+async function ensurePaymentSessionSchema() {
+  if (!paymentSessionSchemaPromise) {
+    paymentSessionSchemaPromise = (async () => {
+      await db.query(`CREATE TABLE IF NOT EXISTS public_payment_sessions (
+        session_id VARCHAR(128) PRIMARY KEY,
+        username VARCHAR(100) NOT NULL,
+        provider VARCHAR(20) NOT NULL CHECK (provider IN ('bkash','nagad','rocket','upay')),
+        amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`);
+      await db.query("CREATE INDEX IF NOT EXISTS idx_public_payment_sessions_expires_at ON public_payment_sessions(expires_at)");
+    })().catch(error => {
+      paymentSessionSchemaPromise = null;
+      throw error;
+    });
+  }
+  return paymentSessionSchemaPromise;
+}
+
 async function paymentSettings(req, res) {
   try {
     const providers = await getPaymentSettings();
@@ -119,6 +140,8 @@ async function createPaymentSession(req, res) {
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, 400, "The current monthly bill is not configured correctly.");
     const providers = await getPaymentSettings();
     if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
+    // The main schema bootstrap can be interrupted by unrelated legacy migrations; ensure this additive table independently.
+    await ensurePaymentSessionSchema();
     const paymentSessionId = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + SESSION_TTL_MS;
     // Keep session cleanup and insertion atomic; always release the pooled connection.
