@@ -1876,15 +1876,15 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" data-view-target="view-hotspot-dashboard" onclick="event.preventDefault(); window.loadHotspotDashboard(); return false;"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadAddHotspotUserView(); return false;"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher &amp; Recharge Ledger</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('cleanup','Expired &amp; Cleanup'); return false;"><span>Expired &amp; Cleanup</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherSales(); return false;"><span>Voucher Sales History</span></a></li>
+                    <li><a href="javascript:void(0)" data-view-target="view-hotspot-dashboard" data-admin-route="/admin/hotspot/dashboard" onclick="event.preventDefault(); window.loadHotspotDashboard(); return false;"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/add-user" onclick="window.loadAddHotspotUserView(); return false;"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/users/all" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/users/active" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/profiles" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/vouchers/generate" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/vouchers/manage" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher &amp; Recharge Ledger</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/vouchers/cleanup" onclick="window.loadHotspotVoucherRecords('cleanup','Expired &amp; Cleanup'); return false;"><span>Expired &amp; Cleanup</span></a></li>
+                    <li><a href="javascript:void(0)" data-admin-route="/admin/hotspot/sales" onclick="window.loadHotspotVoucherSales(); return false;"><span>Voucher Sales History</span></a></li>
                 </ul>
             </li>
 
@@ -8618,8 +8618,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     return { view: 'page', page: route.page, channel: route.channel || '' };
                 }
                 if (route.view === 'settings') {
-                    const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
-                    return { view: 'settings', section: sections.includes(String(route.section || '')) ? String(route.section) : 'brand' };
+                    const requestedSection = String(route.section || '');
+                    // The legacy Webhooks URL now resolves to the unified Payment & Webhooks panel.
+                    const section = requestedSection === 'webhooks' ? 'payments' : requestedSection;
+                    const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal'];
+                    return { view: 'settings', section: sections.includes(section) ? section : 'brand' };
                 }
                 if (route.view === 'customers') {
                     const filter = has(allowed.customerFilters, route.filter) ? route.filter : 'all';
@@ -8819,6 +8822,40 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return '/admin/dashboard';
             }
+            function syncAdminSidebarForRoute(route) {
+                const normalized = cleanRoute(route);
+                const path = routeUrl(normalized);
+                const parentButton = normalized.view === 'hotspot'
+                    ? Array.from(document.querySelectorAll('#sidebar .menu-item > button.dropdown-toggle')).find(button => button.querySelector('[data-key="hotspot"]'))
+                    : normalized.view === 'settings'
+                        ? document.querySelector('#sidebar .general-settings-toggle')
+                        : null;
+                if (parentButton) {
+                    const submenu = parentButton.nextElementSibling;
+                    if (submenu) submenu.classList.add('show');
+                    parentButton.setAttribute('aria-expanded', 'true');
+                    const arrow = parentButton.querySelector('.arrow-icon');
+                    if (arrow) {
+                        arrow.classList.add('bi-chevron-up');
+                        arrow.classList.remove('bi-chevron-down');
+                    }
+                }
+                document.querySelectorAll('#sidebar a[href^="/admin/"]').forEach(link => {
+                    const active = link.pathname === path;
+                    link.classList.toggle('active', active);
+                    if (active) link.setAttribute('aria-current', 'page');
+                    else link.removeAttribute('aria-current');
+                });
+                document.querySelectorAll('#sidebar [data-admin-route]').forEach(link => {
+                    const active = link.dataset.adminRoute === path;
+                    link.classList.toggle('active', active);
+                    if (active) link.setAttribute('aria-current', 'page');
+                    else link.removeAttribute('aria-current');
+                });
+                if (normalized.view === 'settings' && typeof window.syncGeneralSettingsSidebar === 'function') {
+                    window.syncGeneralSettingsSidebar(normalized.section);
+                }
+            }
             function commitRoute(route, replace) {
                 const normalized = cleanRoute(route);
                 const url = routeUrl(normalized);
@@ -8829,6 +8866,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     window.history.replaceState({ fazAdminRoute: normalized }, '', url);
                 }
                 state.current = normalized;
+                syncAdminSidebarForRoute(normalized);
                 return normalized;
             }
             function callIfAvailable(name, args) {
