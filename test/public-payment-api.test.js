@@ -31,7 +31,9 @@ test("payment portal uses the four public API endpoints and does not submit a br
   assert.match(page, /\/api\/public\/payment\/check-bill/);
   assert.match(page, /\/api\/public\/payment\/session/);
   assert.match(page, /\/api\/public\/payment\/confirm/);
-  assert.match(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId\}\)/);
+  assert.match(page, /JSON\.stringify\(payload\)/);
+  assert.match(page, /payload\.transactionId/);
+  assert.doesNotMatch(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId,amount/);
 });
 
 test("public PPPoE payment session returns the configured receiving number and falls back to customer bill when package price is zero", () => {
@@ -46,6 +48,50 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(page, /#f7941d/);
   assert.match(page, /#832b73/);
   assert.match(page, /#0054a6/);
-  assert.match(page, /Confirm Payment & Renew/);
+  assert.match(page, /Verify TrxID & Renew/);
   assert.match(page, /id="modal-amount"/);
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
+  assert.doesNotMatch(page, /<svg/);
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
+  assert.doesNotMatch(page, /<svg/);
+});
+
+
+test("public payment confirmation supports backend-selected sender-phone matching without trusting client amount", () => {
+  const controller = read("controllers/publicPaymentController.js");
+  const page = read("public/payment.html");
+  assert.match(controller, /payment_verification_method/);
+  assert.match(controller, /if \(serviceType === "hotspot"\)/);
+  assert.match(controller, /payments\.verifyTrx\(req, res\)/);
+  assert.match(controller, /verificationMethod === "senderPhoneNumber"/);
+  assert.match(controller, /sender_phone/);
+  assert.match(controller, /ROUND\(amount::numeric,2\)=ROUND\(\$3::numeric,2\)/);
+  assert.match(controller, /LOWER\(TRIM\(status\)\)='unmatched'/);
+  assert.match(controller, /COALESCE\(used,FALSE\)=FALSE/);
+  assert.match(controller, /verifiedTrxId = clean\(matches\.rows\[0\]\.trx_id/);
+  assert.match(page, /id="sender-phone"/);
+  assert.match(page, /id="trx-id"/);
+  assert.match(page, /applyVerificationMethod/);
+  assert.match(page, /payload\.senderPhoneNumber/);
+  assert.match(page, /payload\.transactionId/);
+  assert.match(page, /#e2136e/);
+  assert.match(page, /#f7941d/);
+});
+
+
+test("Hotspot captive checkout uses local MFS image assets and submits MAC credentials with either verification input", () => {
+  const page = read("public/login.html");
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
+  assert.match(page, /assets\/images\/rocket-logo\.png/);
+  assert.match(page, /assets\/images\/upay-logo\.png/);
+  assert.doesNotMatch(page, /<svg/);
+  assert.match(page, /service_type: 'hotspot'/);
+  assert.match(page, /payload\.senderPhoneNumber = phoneInput/);
+  assert.match(page, /payload\.trxId = trxInput/);
+  assert.match(page, /document\.getElementById\('mt-user'\)\.value = routerMac/);
+  assert.match(page, /document\.getElementById\('mt-pass'\)\.value = routerMac/);
+  assert.match(page, /paymentSessionExpiresAt\s*=\s*Date\.now\(\)\s*\+\s*300000/);
 });

@@ -451,10 +451,28 @@ async function verifyTrx(req,res){
   // The phone is optional for captive-portal MFS verification. Older portal builds
   // may send the device MAC in "username"; never treat it as a customer phone.
   const submittedMac=macFromBody(body);
-  const normalizedPhone=normalizePhone(body.phone||body.account_phone||body.customer_phone||"");
+  const normalizedPhone=normalizePhone(body.senderPhoneNumber||body.phone||body.account_phone||body.customer_phone||"");
   const phone=/^01\d{9}$/.test(normalizedPhone)?normalizedPhone:"";
-  const cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
-  if(!cleanTrx)return fail(400,"TRXID_REQUIRED","TrxID/TxnID is required.");
+  let cleanTrx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.txnid||query.trxId||"").trim().toUpperCase();
+  if(!cleanTrx){
+   if(!phone)return fail(400,"TRXID_OR_PHONE_REQUIRED","Enter the TrxID or the sender phone number used for payment.");
+   const setting=await db.query("SELECT value FROM app_settings WHERE key='payment_verification_method' LIMIT 1");
+   const mode=String(setting.rows[0]?.value||"").trim().toLowerCase();
+   if(!["sender_phone","senderphonenumber","phone","phone_number"].includes(mode))return fail(400,"TRXID_REQUIRED","The configured verification method requires a TrxID.");
+   const method=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
+   const requestedAmount=Number(body.amount);
+   if(!["bkash","nagad","rocket","upay"].includes(method)||!Number.isFinite(requestedAmount)||requestedAmount<=0)return fail(400,"PAYMENT_DETAILS_REQUIRED","A valid provider and selected package amount are required.");
+   const matches=await db.query(`SELECT trx_id FROM transactions
+      WHERE channel=$1
+        AND REGEXP_REPLACE(COALESCE(sender_phone,''),'[^0-9]','','g') IN ($2,'880'||SUBSTRING($2 FROM 2))
+        AND ROUND(amount::numeric,2)=ROUND($3::numeric,2)
+        AND LOWER(TRIM(status))='unmatched' AND COALESCE(used,FALSE)=FALSE
+        AND created_at >= NOW()-INTERVAL '30 minutes'
+      ORDER BY created_at DESC LIMIT 2`,[method,phone,requestedAmount]);
+   if(!matches.rows.length)return fail(404,"NOT_FOUND_OR_DELAYED","No matching incoming SMS was found for this sender phone and amount yet. Wait for the SMS forwarder, then retry.");
+   if(matches.rows.length>1)return fail(409,"AMBIGUOUS_PHONE_MATCH","More than one payment matches this phone and amount. Please use TrxID verification or contact support.");
+   cleanTrx=String(matches.rows[0].trx_id||"").trim().toUpperCase();
+  }
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
   if(!found.rows.length)return fail(404,"NOT_FOUND_OR_DELAYED","Transaction not found yet. Wait for the SMS forwarder and try again.");
   const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
