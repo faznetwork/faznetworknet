@@ -3493,11 +3493,27 @@
             await loadOptions();
         }
         async function loadHotspotDashboard(){
-            // Compatibility alias for any existing internal callers. Always use the
-            // canonical dashboard so the retired circular layout cannot be restored.
-            if (typeof window.switchView === 'function') window.switchView('hotspot-dashboard');
-            if (typeof window.startNocPolling === 'function') window.startNocPolling();
-            return false;
+            // Switch the view and its polling mode together. Without this assignment,
+            // the shared metrics timer never refreshes the Hotspot dashboard after navigation.
+            currentHotspotMode = 'dashboard';
+            currentHotspotTitleKey = 'hotspot_dashboard';
+            setHotspotTitle('hotspot_dashboard');
+            const switched = typeof window.switchView === 'function' && window.switchView('hotspot-dashboard');
+            if (switched === false) return false;
+            if (typeof window.startNocPolling === 'function') {
+                try { window.startNocPolling(); }
+                catch (error) { console.error('[Hotspot Dashboard] NOC polling could not start:', error); }
+            }
+            // Render immediately; do not wait for the global 15-second polling cycle.
+            Promise.allSettled([
+                refreshHotspotDashboardMetrics(),
+                window.refreshHotspotVoucherStats()
+            ]).then(results => {
+                results.forEach(result => {
+                    if (result.status === 'rejected') console.error('[Hotspot Dashboard] Initial data load failed:', result.reason);
+                });
+            });
+            return true;
         }
         window.loadHotspotDashboard = loadHotspotDashboard;
         window.refreshHotspotVoucherStats = async function refreshHotspotVoucherStats(){
@@ -5400,44 +5416,57 @@ async function deletePlan(id,name){
             currentPaymentTitleKey = '';
             const target = viewName === 'dashboard' ? 'view-main-dashboard' :
                 (viewName === 'hotspot-dashboard' ? 'view-hotspot-dashboard' :
-                (document.getElementById('view-' + viewName) ? 'view-' + viewName : 'view-main-dashboard'));
+                (document.getElementById('view-' + viewName) ? 'view-' + viewName : null));
+            const targetElement = target ? document.getElementById(target) : null;
+
+            // Never silently fall back to the dashboard: an unknown view must not
+            // hide the current page or make the user think navigation succeeded.
+            if (!targetElement) {
+                console.error('[Admin Navigation] Refusing to switch to an unregistered view:', viewName);
+                return false;
+            }
+
             document.querySelectorAll('.admin-view').forEach(view => {
                 view.classList.add('hidden');
                 view.style.display = 'none';
             });
             if (typeof window.switchDashboardView === 'function') {
-                window.switchDashboardView(target);
+                try { window.switchDashboardView(target); }
+                catch (error) { console.error('[Admin Navigation] Dashboard transition hook failed:', error); }
             }
-            const targetElement = document.getElementById(target);
-            if (targetElement) {
-                targetElement.classList.remove('hidden');
-                targetElement.style.display = 'block';
-            }
+            targetElement.classList.remove('hidden');
+            targetElement.style.display = 'block';
+
             document.querySelectorAll('.sidebar-menu [data-view-target]').forEach(link => {
                 link.classList.toggle('active', link.dataset.viewTarget === target);
             });
 
             const titleKey = target === 'view-main-dashboard' ? 'dashboard' :
                 (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
-            setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
+            setPageTitleSafe(viewTitles[titleKey] || titleKey.replace(/-/g, ' '));
             currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
-                void refreshDashboard();
-                startTrafficPolling();
+
+            if (target === 'view-main-dashboard') {
+                Promise.resolve().then(() => refreshDashboard()).catch(error => {
+                    console.error('[Admin Navigation] Dashboard refresh failed:', error);
+                });
+                try { startTrafficPolling(); }
+                catch (error) { console.error('[Admin Navigation] Traffic polling could not start:', error); }
             } else {
                 if (trafficTimer) {
                     clearInterval(trafficTimer);
                     trafficTimer = null;
                 }
-                if (target === 'all-customer') {
-                    fetchCustomers();
-                } else if (target === 'payments') {
-                    fetchPayments(currentPaymentChannel);
-                } else if (target === 'general-settings') {
-                    loadGeneralSettings();
+                if (target === 'view-all-customer' && typeof fetchCustomers === 'function') {
+                    Promise.resolve().then(() => fetchCustomers()).catch(error => console.error('[Admin Navigation] Customer view load failed:', error));
+                } else if (target === 'view-payments' && typeof fetchPayments === 'function') {
+                    Promise.resolve().then(() => fetchPayments(currentPaymentChannel)).catch(error => console.error('[Admin Navigation] Payments view load failed:', error));
+                } else if (target === 'view-general-settings' && typeof loadGeneralSettings === 'function') {
+                    Promise.resolve().then(() => loadGeneralSettings()).catch(error => console.error('[Admin Navigation] Settings view load failed:', error));
                 }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
+            return true;
         }
 
         window.switchView = switchView;
