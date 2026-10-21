@@ -41,7 +41,7 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(controller, /packagePrice > 0 \? packagePrice : monthlyBill/);
   assert.match(controller, /providerName: providerNames\[provider\]/);
   assert.match(controller, /receivingNumber: providers\[provider\]\.number/);
-  assert.match(page, /modal\.dataset\.provider=provider\.id/);
+  assert.match(page, /modal\.querySelector\("\.modal"\)\.dataset\.provider=provider\.id/);
   assert.match(page, /#e2136e/);
   assert.match(page, /#f7941d/);
   assert.match(page, /#832b73/);
