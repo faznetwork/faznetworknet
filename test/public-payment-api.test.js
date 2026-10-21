@@ -91,5 +91,5 @@ test("Hotspot captive checkout uses local MFS image assets and submits MAC crede
   assert.match(page, /payload\.trxId = trxInput/);
   assert.match(page, /document\.getElementById\('mt-user'\)\.value = routerMac/);
   assert.match(page, /document\.getElementById\('mt-pass'\)\.value = routerMac/);
-  assert.match(page, /paymentSessionExpiresAt=Date\.now\(\)\+300000/);
+  assert.match(page, /paymentSessionExpiresAt\\s*=\\s*Date\\.now\\(\\)\\s*\\+\\s*300000/);
 });
