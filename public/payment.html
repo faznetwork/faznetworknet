@@ -30,6 +30,24 @@ h1{font-size:clamp(34px,5vw,48px);letter-spacing:-.055em;margin:17px 0 10px;line
 
 @media(min-width:900px){.shell{display:grid;grid-template-columns:minmax(0,.92fr) minmax(440px,1.08fr);column-gap:clamp(38px,5vw,72px);row-gap:0;align-items:center;max-width:1180px;margin-top:24px}.intro{grid-column:1;grid-row:1;align-self:end;margin:0 0 22px;max-width:480px}.intro p{max-width:440px}.glow-wrap{grid-column:2;grid-row:1 / span 2;max-width:none}.portal{padding:clamp(26px,3vw,38px)}.footer{grid-column:1;grid-row:2;align-self:start;text-align:left;max-width:420px;margin:18px 0 0}.section-title h2{font-size:20px}}
 @media(max-width:899px){.shell{display:block}.intro{text-align:center;margin:17px 0 22px}.intro p{margin:0 auto}.footer{text-align:center}.glow-wrap{max-width:650px;margin:0 auto}}
+
+/* ZiniPay-inspired hosted checkout: compact payment card, brand header, payment-method tiles */
+:root{--page:#f4f6fb;--primary:#3155c8;--primary-hover:#2445ae;--line:#e6eaf2;--shadow:0 18px 55px rgba(24,39,82,.10)}
+html{background:#f4f6fb}body{background:linear-gradient(180deg,#f9faff 0,#f3f5fa 340px);color:#1e293b}
+.topbar{max-width:1080px;padding:20px 24px}.brand-mark{background:#3155c8;color:#fff;border:0;border-radius:12px;box-shadow:0 5px 14px #3155c82b}.brand-name span{color:#3155c8}.back-link{border-radius:8px;background:#fff}
+.shell{max-width:520px;margin:20px auto 46px;padding:0 16px}
+.intro{text-align:center;margin:12px 0 20px}.eyebrow{background:#eef2ff;border-color:#dce4ff;color:#3155c8;letter-spacing:.07em}.dot{background:#20a879}
+h1{font-size:clamp(29px,6vw,36px);letter-spacing:-.045em;margin:13px 0 7px}.intro p{max-width:430px;font-size:13px;line-height:1.65}
+.glow-wrap{border:1px solid #e3e8f1;border-radius:16px;box-shadow:0 14px 45px rgba(23,37,84,.08);overflow:hidden}.portal{padding:clamp(18px,4vw,26px);border-radius:16px}
+.section-title{gap:11px;margin-bottom:19px}.section-icon{width:39px;height:39px;border-radius:10px;background:#eef2ff;border-color:#e1e7ff;color:#3155c8}.section-title h2{font-size:17px;letter-spacing:-.025em}.section-title p{font-size:11px;line-height:1.65}
+.field{margin:14px 0}.field label{font-size:11px;color:#475569}.field input{min-height:47px;border-radius:9px;border-color:#dce2ed;background:#fff;padding:12px 13px;font-size:13px}.field input:focus{border-color:#6683df;box-shadow:0 0 0 3px #3155c81a}
+.btn{min-height:43px;border-radius:9px;font-size:12px;padding:10px 14px}.btn-primary{background:#3155c8;border-color:#3155c8;box-shadow:none}.btn-primary:hover:not(:disabled){background:#2445ae;border-color:#2445ae;transform:none}
+.bill-card{margin-top:18px;padding:16px;border:1px solid #e0e7f5;border-radius:12px;background:#fff}.bill-head{align-items:center}.bill-head strong{font-size:13px}.bill-head small{font-size:11px}.bill-amount{font-size:26px;letter-spacing:-.04em;color:#1e293b}.bill-meta{margin-top:11px;gap:6px}.pill{font-size:10px;border-radius:6px;padding:6px 8px;background:#f8fafc;border-color:#e7ebf2}
+.mfs-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.mfs{min-height:70px;border-radius:10px;padding:9px 10px;gap:9px;border-color:#e2e7f0;background:#fff;box-shadow:none}.mfs:hover{background:#f8faff;border-color:#b9c8f0;transform:none;box-shadow:none}.mfs.active{border-color:#3155c8;background:#f0f4ff;box-shadow:0 0 0 2px #3155c815}.mfs-mark{width:65px;height:35px;border-radius:6px}.mfs-name{font-size:12px}.hint{font-size:11px;line-height:1.65}
+.status{border-radius:9px;font-size:11px;padding:11px 12px}.footer{font-size:10px;line-height:1.8;margin:16px 0;color:#7a8498}.footer a{color:#3155c8}
+.modal-backdrop{background:rgba(15,23,42,.46);backdrop-filter:blur(4px)}.modal{border-radius:15px;border-top:3px solid var(--modal-brand);padding:20px;box-shadow:0 24px 70px #0f172a35}.modal-head h2{font-size:19px;letter-spacing:-.03em}.modal-provider-logo{width:88px;height:42px;border-radius:8px}.payment-amount{margin-top:13px;padding:12px;border-radius:9px;background:#f8faff;border-color:#e6eaf3}.payment-amount strong{font-size:25px}.receive{margin:13px 0;padding:13px;border-radius:10px}.instructions{border-radius:9px;font-size:11px;line-height:1.75;padding:12px}.timer{font-size:22px}
+@media(min-width:700px){.shell{max-width:520px;display:block;margin:18px auto 46px}.intro{text-align:center;margin:12px 0 20px}.intro p{margin:0 auto}.glow-wrap{max-width:488px;margin:0 auto}.portal{padding:25px}.footer{text-align:center;max-width:488px;margin:16px auto 0}}
+@media(max-width:520px){.topbar{padding:13px 15px}.brand{font-size:16px;gap:8px}.brand-mark{width:35px;height:35px}.shell{padding:0 12px;margin-top:8px}.intro{text-align:center;margin:8px 0 16px}h1{font-size:30px}.intro p{font-size:12px}.portal{padding:16px}.mfs{min-height:67px;padding:8px;gap:6px}.mfs-mark{width:54px;height:31px}.mfs-name{font-size:11px}.modal{padding:16px}}
 </style>
 </head>
 <body>
