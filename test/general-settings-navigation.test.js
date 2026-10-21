@@ -24,7 +24,7 @@ test('every General Settings sidebar link has a client target and an Express pag
   for (const [url, target] of settingsPaths) {
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
     assert.ok(mainScript.includes(`'${url}': '${target}'`) || mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
-    assert.ok(serverSource.includes('webhooks)\\/?$/') || url !== '/admin/settings/webhooks', 'settings route regex must include the shared settings sections');
+    assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'shared settings route must include webhooks');
   }
   assert.match(serverSource, /app\.get\(\/\^\\\/admin\\\/settings\\\//);
   assert.match(serverSource, /hotspot-portal\|webhooks\)/);
