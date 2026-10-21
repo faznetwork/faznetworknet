@@ -6,9 +6,13 @@ const MFS = ["bkash", "nagad", "rocket", "upay"];
 const ENVIRONMENTS = new Set(["sandbox", "production"]);
 const SETTINGS = {
   bkashNumber: "mfs_bkash_number",
+  bkashEnabled: "mfs_bkash_enabled",
   nagadNumber: "mfs_nagad_number",
+  nagadEnabled: "mfs_nagad_enabled",
   rocketNumber: "mfs_rocket_number",
+  rocketEnabled: "mfs_rocket_enabled",
   upayNumber: "mfs_upay_number",
+  upayEnabled: "mfs_upay_enabled",
   sslStoreId: "sslcommerz_store_id",
   sslEnvironment: "sslcommerz_environment",
   sslEnabled: "sslcommerz_enabled",
@@ -45,7 +49,7 @@ async function getPaymentGateways(req, res) {
       success: true,
       settings: {
         mfs: Object.fromEntries(MFS.map(name => [name, {
-          enabled: Boolean(s[SETTINGS[name + "Number"]]),
+          enabled: Object.prototype.hasOwnProperty.call(s, SETTINGS[name + "Enabled"]) ? bool(s[SETTINGS[name + "Enabled"]]) : Boolean(s[SETTINGS[name + "Number"]]),
           number: s[SETTINGS[name + "Number"]] || ""
         }])),
         sslcommerz: {
@@ -72,7 +76,7 @@ async function savePaymentGateways(req, res) {
       const number = cleanNumber(mfs[provider]?.number, provider.toUpperCase());
       const enabled = bool(mfs[provider]?.enabled);
       if (enabled && !number) throw new Error(provider.toUpperCase() + " receiving number is required when enabled.");
-      values.push([SETTINGS[provider + "Number"], number]);
+      values.push([SETTINGS[provider + "Number"], number], [SETTINGS[provider + "Enabled"], enabled ? "true" : "false"]);
     }
     const storeId = String(ssl.storeId || "").trim().slice(0, 200);
     const environment = String(ssl.environment || "sandbox").trim().toLowerCase();
