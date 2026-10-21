@@ -16,8 +16,7 @@ const settingsPaths = [
   ['/admin/settings/billing-expiry', 'billing'],
   ['/admin/settings/payment-webhooks', 'payments'],
   ['/admin/settings/sms-alerts', 'sms'],
-  ['/admin/settings/hotspot-portal', 'hotspot-portal'],
-  ['/admin/settings/webhooks', 'webhooks']
+  ['/admin/settings/hotspot-portal', 'hotspot-portal']
 ];
 
 test('every General Settings sidebar link has a client target and an Express page route', () => {
@@ -25,7 +24,10 @@ test('every General Settings sidebar link has a client target and an Express pag
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
     assert.ok(mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
   }
-  assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'shared settings route must include webhooks');
+  assert.ok(serverSource.includes('hotspot-portal'), 'shared settings route must include the Hotspot portal');
+  assert.ok(!serverSource.includes('hotspot-portal|webhooks'), 'legacy Webhooks page route must be removed');
+  assert.ok(!adminView.includes('data-settings-nav="webhooks"'), 'legacy Webhooks sidebar link must be removed');
+  assert.ok(!mainScript.includes('/admin/settings/webhooks'), 'legacy Webhooks client route must be removed');
   assert.ok(serverSource.includes('renderAdminSettingsPage'), 'shared settings page renderer must exist');
 });
 
@@ -40,7 +42,7 @@ test('settings submenu click and browser history keep route, panel, and active i
 });
 
 test('settings save forms submit asynchronously and have matching API handlers', () => {
-  for (const id of ['systemBrandForm', 'systemBillingForm', 'systemSmsForm', 'generalWebhookForm', 'generalMfsForm', 'webhookApiSettingsForm', 'hotspotPortalSettingsForm']) {
+  for (const id of ['systemBrandForm', 'systemBillingForm', 'systemSmsForm', 'webhookApiSettingsForm', 'hotspotPortalSettingsForm']) {
     assert.ok(adminView.includes(`id="${id}"`), `settings form missing: ${id}`);
   }
   assert.match(adminView, /function saveSystemSettings\(payload,buttonId,resultId\)/);
