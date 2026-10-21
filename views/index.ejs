@@ -208,6 +208,32 @@ footer .border-t{border-color:#cbd5e1!important}
 
 </style>
 <script src="/js/date-format.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Keep Hotspot checkout visually aligned with public/payment.html Online Payment Portal. */
+#hotspotPurchaseModal{background:rgba(15,23,42,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+#hotspotPurchaseModal>.my-auto{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;border:1px solid #e0e6ed;border-radius:18px;background:#fff;box-shadow:0 22px 60px rgba(15,23,42,.20);}
+#hotspotPurchaseModal #hotspotPurchaseTitle{font-family:"Plus Jakarta Sans",Inter,sans-serif;letter-spacing:-.035em;color:#111827}
+#hotspotPurchaseModal .text-emerald-700{color:#1769aa!important}
+#hotspotPurchaseModal .bg-emerald-700{background:#1769aa!important}
+#hotspotPurchaseModal .hover\\:bg-emerald-800:hover{background:#12568d!important}
+#hotspotPurchaseModal .border-\\[\\#e5eaf1\\]{border-color:#dfe5ec!important}
+#hotspotPurchaseModal .bg-slate-50{background:#f8fafc!important}
+#hotspotPurchaseModal select,#hotspotPurchaseModal input{min-height:48px;border-color:#cfd8e3;background:#fff;color:#111827;border-radius:10px;font:400 14px Inter,system-ui,sans-serif;transition:border-color .15s,box-shadow .15s}
+#hotspotPurchaseModal select:focus,#hotspotPurchaseModal input:focus{border-color:#478bc7;outline:none;box-shadow:0 0 0 3px rgba(23,105,170,.12)}
+#hotspotPurchaseModal input::placeholder{color:#94a3b8}
+#hotspotPurchaseModal #copyPaymentReceiver{border-color:#d5dde7;background:#fff;color:#334155}
+#hotspotPurchaseModal #copyPaymentReceiver:hover{background:#f8fafc;border-color:#b9c6d6}
+#hotspotPurchaseModal #hotspotPurchaseSubmit{min-height:45px;border:1px solid #1769aa;border-radius:10px;background:#1769aa;color:#fff;box-shadow:0 2px 4px rgba(23,105,170,.12);transition:background .15s,border-color .15s}
+#hotspotPurchaseModal #hotspotPurchaseSubmit:hover:not(:disabled){background:#12568d;border-color:#12568d}
+#hotspotPurchaseModal #hotspotPurchaseSubmit:focus-visible{outline:2px solid #1769aa;outline-offset:3px}
+#hotspotPurchaseModal #hotspotPurchaseResult:not(.hidden){border:1px solid #c9def3;background:#f2f8ff;color:#245d8f}
+#hotspotPurchaseModal #hotspotPurchaseResult.bg-emerald-400\\/10{border-color:#bce5d0;background:#f0fbf5;color:#176b4b}
+#hotspotPurchaseModal #hotspotPurchaseResult.bg-red-400\\/10{border-color:#f3c5ce;background:#fff4f5;color:#9f2338}
+#hotspotPurchaseModal #paymentSetupWarning{border:1px solid #f5d99a;background:#fff8e8;color:#8a5a08}
+@media(max-width:520px){#hotspotPurchaseModal>.my-auto{border-radius:15px;padding:17px}}
+@media(prefers-reduced-motion:reduce){#hotspotPurchaseModal *{transition:none!important}}
+</style>
 </head>
 <body class="text-slate-100">
 <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
