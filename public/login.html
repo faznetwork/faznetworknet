@@ -353,7 +353,8 @@
             font-weight: 700;
             text-decoration: none;
         }
-        .mfs-official-logo{display:block;width:88px;height:38px;max-width:100%;object-fit:contain;background:#fff;border-radius:6px;padding:3px}.mfs-btn{display:flex;align-items:center;gap:10px;justify-content:flex-start}.mfs-logo-icon{display:grid;place-items:center;flex:none;width:96px;height:42px;background:#fff!important;border:1px solid var(--border-color);border-radius:8px;padding:2px}.modal-card{--mfs-brand:#e2136e;--mfs-tint:rgba(226,19,110,.12);border-top:4px solid var(--mfs-brand);text-align:left;max-width:420px}.modal-card[data-provider="bkash"]{--mfs-brand:#e2136e;--mfs-tint:rgba(226,19,110,.12)}.modal-card[data-provider="nagad"]{--mfs-brand:#f7941d;--mfs-tint:rgba(247,148,29,.12)}.modal-card[data-provider="rocket"]{--mfs-brand:#832b73;--mfs-tint:rgba(131,43,115,.12)}.modal-card[data-provider="upay"]{--mfs-brand:#0054a6;--mfs-tint:rgba(0,84,166,.12)}.modal-card .mfs-brand-logo{display:block;width:112px;height:48px;object-fit:contain;background:#fff;border-radius:8px;padding:4px;margin:0 auto 12px}.modal-card #modal-wallet-number{color:var(--mfs-brand)!important}.modal-card #btn-verify-payment{background:var(--mfs-brand);border-color:var(--mfs-brand)}.modal-card .timer-box{color:var(--mfs-brand);border-color:var(--mfs-brand);background:var(--mfs-tint)}.modal-card .instructions{font-size:12px;line-height:1.75;color:#e5e7eb;background:rgba(255,255,255,.04);padding:12px;border-radius:9px;margin:10px 0}.modal-card .verify-field[hidden]{display:none}.modal-card input{width:100%;padding:11px;border:1px solid var(--border-color);border-radius:8px;background:#0b1220;color:#fff}.modal-card .receive-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.modal-card .receive-row button{color:var(--mfs-brand);border:1px solid var(--mfs-brand);border-radius:7px;padding:7px 10px;background:transparent}\n    </style>
+        .mfs-official-logo{display:block;width:88px;height:38px;max-width:100%;object-fit:contain;background:#fff;border-radius:6px;padding:3px}.mfs-btn{display:flex;align-items:center;gap:10px;justify-content:flex-start}.mfs-logo-icon{display:grid;place-items:center;flex:none;width:96px;height:42px;background:#fff!important;border:1px solid var(--border-color);border-radius:8px;padding:2px}.modal-card{--mfs-brand:#e2136e;--mfs-tint:rgba(226,19,110,.12);border-top:4px solid var(--mfs-brand);text-align:left;max-width:420px}.modal-card[data-provider="bkash"]{--mfs-brand:#e2136e;--mfs-tint:rgba(226,19,110,.12)}.modal-card[data-provider="nagad"]{--mfs-brand:#f7941d;--mfs-tint:rgba(247,148,29,.12)}.modal-card[data-provider="rocket"]{--mfs-brand:#832b73;--mfs-tint:rgba(131,43,115,.12)}.modal-card[data-provider="upay"]{--mfs-brand:#0054a6;--mfs-tint:rgba(0,84,166,.12)}.modal-card .mfs-brand-logo{display:block;width:112px;height:48px;object-fit:contain;background:#fff;border-radius:8px;padding:4px;margin:0 auto 12px}.modal-card #modal-wallet-number{color:var(--mfs-brand)!important}.modal-card #btn-verify-payment{background:var(--mfs-brand);border-color:var(--mfs-brand)}.modal-card .timer-box{color:var(--mfs-brand);border-color:var(--mfs-brand);background:var(--mfs-tint)}.modal-card .instructions{font-size:12px;line-height:1.75;color:#e5e7eb;background:rgba(255,255,255,.04);padding:12px;border-radius:9px;margin:10px 0}.modal-card .verify-field[hidden]{display:none}.modal-card input{width:100%;padding:11px;border:1px solid var(--border-color);border-radius:8px;background:#0b1220;color:#fff}.modal-card .receive-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.modal-card .receive-row button{color:var(--mfs-brand);border:1px solid var(--mfs-brand);border-radius:7px;padding:7px 10px;background:transparent}
+    </style>
 </head>
 <body>
 
@@ -420,17 +421,16 @@
         
         <div style="background: var(--mfs-tint); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px dashed var(--mfs-brand);"><div class="receive-row">
             <span id="modal-wallet-number" style="font-size: 17px; font-weight: 800; color: #34d399; letter-spacing: 1px;">01XXXXXXXXX</span>
-            <button type="button" onclick="copyWalletNumber()" style="display: block; margin: 4px auto 0; background: none; border: none; color: #60a5fa; font-size: 10px; cursor: pointer; font-weight: 700;">নম্বর কপি করুন</button>
-        </div>
+            <button type="button" onclick="copyWalletNumber()" style="display: block; margin: 4px auto 0; background: none; border: none; color: #60a5fa; font-size: 10px; cursor: pointer; font-weight: 700;">নম্বর কপি করুন</button></div></div>
 
         <div class="instructions" id="mfs-payment-instructions">১. অ্যাপ খুলে Send Money নির্বাচন করুন।<br>২. নিচের নম্বরে সঠিক পরিমাণ পাঠান।<br>৩. TrxID অথবা প্রেরকের ফোন নম্বর দিয়ে যাচাই করুন।</div><div class="timer-box" id="payment-timer">05:00</div>
 
-        <div class="input-group">
-            <label for="cust_phone">আপনার মোবাইল নম্বর</label>
+        <div class="input-group verify-field" id="sender-phone-field" hidden>
+            <label for="cust_phone">যে নম্বর থেকে টাকা পাঠিয়েছেন</label>
             <div class="input-box"><input type="tel" id="cust_phone" placeholder="017xxxxxxxx" maxlength="11"></div>
         </div>
 
-        <div class="input-group">
+        <div class="input-group verify-field" id="trx-field">
             <label for="cust_trx">TrxID প্রদান করুন</label>
             <div class="input-box"><input type="text" id="cust_trx" placeholder="যেমন: DJ38C3MQHG" style="text-transform: uppercase;"></div>
         </div>
@@ -555,7 +555,9 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
     let selectedPackage = null;
     let currentProvider = '';
     let paymentAccounts = {};
-    let countdownTimer = null;\n    let verificationMethod = "transactionId";\n    let paymentSessionExpiresAt = 0;
+    let countdownTimer = null;
+    let verificationMethod = "transactionId";
+    let paymentSessionExpiresAt = 0;
 
     function switchPortalTab(tab) {
         const secRecharge = document.getElementById('section-recharge');
@@ -659,7 +661,9 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 
             if (setRes && setRes.ok) {
                 const setJson = await setRes.json().catch(() => ({}));
-                paymentAccounts = setJson?.settings?.payment_accounts || {};\n                const configuredMethod = String(setJson?.settings?.payment_verification_method || setJson?.settings?.verification_method || "").toLowerCase();\n                verificationMethod = ["sender_phone","senderphonenumber","phone","phone_number"].includes(configuredMethod) ? "senderPhoneNumber" : "transactionId";
+                paymentAccounts = setJson?.settings?.payment_accounts || {};
+                const configuredMethod = String(setJson?.settings?.payment_verification_method || setJson?.settings?.verification_method || "").toLowerCase();
+                verificationMethod = ["sender_phone","senderphonenumber","phone","phone_number"].includes(configuredMethod) ? "senderPhoneNumber" : "transactionId";
                 renderMfsButtons(paymentAccounts);
 
                 const settings = setJson?.settings || {};
