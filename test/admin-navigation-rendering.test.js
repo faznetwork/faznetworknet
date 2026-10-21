@@ -1,0 +1,80 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+const admin = read('views/admin.ejs');
+const server = read('server.js');
+
+function section(source, start, end) {
+  const from = source.indexOf(start);
+  assert.notEqual(from, -1, 'missing section start: ' + start);
+  const to = source.indexOf(end, from + start.length);
+  assert.notEqual(to, -1, 'missing section end: ' + end);
+  return source.slice(from, to);
+}
+
+test('switchView validates the requested view before hiding current content', () => {
+  const code = section(admin, 'function switchView(viewName, channel = \'\')', 'window.switchView = switchView;');
+  assert.match(code, /const targetElement = target \? document\.getElementById\(target\) : null/);
+  assert.match(code, /if \(!targetElement\)\s*\{[\s\S]*?return false;/);
+  assert.doesNotMatch(code, /: 'view-main-dashboard'\)\);/);
+  assert.match(code, /if \(target === 'view-main-dashboard'\)/);
+  assert.match(code, /if \(target === 'view-all-customer'/);
+  assert.match(code, /target === 'view-payments'/);
+  assert.match(code, /target === 'view-general-settings'/);
+});
+
+test('Hotspot dashboard sets its polling mode and starts data loading immediately', () => {
+  const code = section(admin, 'async function loadHotspotDashboard()', 'window.loadHotspotDashboard = loadHotspotDashboard;');
+  assert.match(code, /currentHotspotMode = 'dashboard'/);
+  assert.match(code, /window\.switchView\('hotspot-dashboard'\)/);
+  assert.match(code, /Promise\.allSettled\(/);
+  assert.match(code, /refreshHotspotDashboardMetrics\(\)/);
+  assert.match(code, /window\.refreshHotspotVoucherStats\(\)/);
+  assert.match(code, /return true/);
+});
+
+test('navigation boundary consumes async loader failures and renders a retry state', () => {
+  const code = section(admin, 'function renderNavigationFailure(name, error)', 'function routeForCall(name, args)');
+  assert.match(code, /data-navigation-retry/);
+  assert.match(code, /window\.__fazRestoreAdminRoute/);
+  assert.match(code, /result\.catch\(error =>/);
+  assert.match(code, /renderNavigationFailure\(name, error\)/);
+});
+
+test('every SPA route is explicitly accepted by the Express admin-shell allowlist', () => {
+  const routes = section(admin, 'function routeFromPath(path)', 'function readRoute()');
+  const routePaths = [...routes.matchAll(/'([^']+)'\s*:\s*\{/g)]
+    .map(match => match[1])
+    .filter(route => route.startsWith('/admin/'));
+  const allowlist = section(server, 'const supportedAdminPaths=new Set([', ']);');
+  const serverPaths = new Set([...allowlist.matchAll(/"([^"]+)"/g)].map(match => match[1]));
+  const missing = routePaths.filter(route => !serverPaths.has(route));
+  assert.deepEqual(missing, [], 'SPA routes missing from Express allowlist');
+  assert.match(server, /if\(!supportedAdminPaths\.has\(adminPath\)\) return next\(\)/);
+});
+
+test('Hotspot submenu routes remain active and the correct parent stays expanded', () => {
+  const sidebar = section(admin, '<li class="menu-item">\n                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">\n                    <i class="bi bi-wifi"></i>', '<li class="menu-item" data-rbac-roles="super_admin">');
+  for (const route of [
+    '/admin/hotspot/dashboard',
+    '/admin/hotspot/add-user',
+    '/admin/hotspot/users/all',
+    '/admin/hotspot/users/active',
+    '/admin/hotspot/profiles',
+    '/admin/hotspot/vouchers/generate',
+    '/admin/hotspot/vouchers/manage',
+    '/admin/hotspot/vouchers/cleanup',
+    '/admin/hotspot/sales'
+  ]) assert.ok(sidebar.includes('data-admin-route="' + route + '"'), 'missing sidebar route: ' + route);
+  assert.match(admin, /function syncAdminSidebarForRoute\(route\)/);
+  assert.match(admin, /syncAdminSidebarForRoute\(normalized\)/);
+});
+
+test('duplicate Monitor Express route is removed and Webhooks has an authenticated settings route', () => {
+  const monitor = 'app.get(/^\\/admin\\/monitor\\/(usage|online)';
+  assert.equal(server.split(monitor).length - 1, 1, 'Monitor page route must be registered once');
+  assert.match(server, /app\.get\(\/\^\\\/admin\\\/settings\\\/\(general\|brand-identity\|billing-expiry\|payment-webhooks\|sms-alerts\|hotspot-portal\|webhooks\)/);
+});
