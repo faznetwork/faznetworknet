@@ -58,7 +58,9 @@ test('every SPA route is explicitly accepted by the Express admin-shell allowlis
 test('legacy Webhooks URL resolves to the unified Payment & Webhooks settings panel', () => {
   const code = section(admin, 'if (route.view === \'settings\') {', 'if (route.view === \'customers\') {');
   assert.match(code, /requestedSection === 'webhooks' \? 'payments' : requestedSection/);
-  assert.ok(server.includes('hotspot-portal|webhooks'), 'legacy Webhooks URL must remain authenticated');
+  assert.ok(server.includes('payment-webhooks|sms-alerts|hotspot-portal)'), 'only the unified settings routes should be registered');
+  assert.ok(server.includes('if(adminPath==="/admin/settings/webhooks")'), 'legacy Webhooks alias should be explicit in the fallback');
+  assert.ok(server.includes('if(role!=="super_admin") return res.status(403).send("Forbidden")'), 'legacy alias must remain super-admin-only');
 });
 
 test('Hotspot voucher and sales views use the shared view lifecycle', () => {
