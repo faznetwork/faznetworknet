@@ -686,15 +686,32 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
     }
 
     function openMfsModal(provider, number, title) {
-        if (!selectedPackage) {
-            alert('দয়া করে প্রথমে একটি প্যাকেজ নির্বাচন করুন।');
-            return;
-        }
+        if (!selectedPackage) { alert('দয়া করে প্রথমে একটি প্যাকেজ নির্বাচন করুন।'); return; }
         currentProvider = provider;
+        const providerMeta = {
+            bkash: { name: 'bKash', logo: '/assets/images/bkash-logo.png' },
+            nagad: { name: 'Nagad', logo: '/assets/images/nagad-logo.png' },
+            rocket: { name: 'Rocket', logo: '/assets/images/rocket-logo.png' },
+            upay: { name: 'Upay', logo: '/assets/images/upay-logo.png' }
+        }[provider];
+        const modalCard = document.querySelector('#mfs-modal .modal-card');
+        modalCard.dataset.provider = provider;
+        const logo = document.getElementById('modal-mfs-logo');
+        logo.src = providerMeta.logo; logo.alt = providerMeta.name;
         document.getElementById('modal-mfs-title').textContent = title;
         document.getElementById('modal-wallet-number').textContent = number;
-        paymentSessionExpiresAt=Date.now()+300000;\n        document.getElementById('mfs-modal').style.display = 'flex';
-        startCountdown(300); // ৫ মিনিট
+        document.getElementById('mfs-payment-instructions').textContent =
+            '১. ' + providerMeta.name + ' অ্যাপ খুলে Send Money নির্বাচন করুন। ২. ' +
+            formatTaka(selectedPackage.price) + ' ঠিক এই নম্বরে পাঠান। ৩. কনফিগার করা যাচাই পদ্ধতি অনুযায়ী TrxID অথবা প্রেরকের নম্বর দিন।';
+        document.getElementById('trx-field').hidden = verificationMethod === 'senderPhoneNumber';
+        document.getElementById('cust_trx').required = verificationMethod !== 'senderPhoneNumber';
+        document.getElementById('sender-phone-field').hidden = verificationMethod !== 'senderPhoneNumber';
+        document.getElementById('cust_phone').required = verificationMethod === 'senderPhoneNumber';
+        document.getElementById('cust_trx').value = '';
+        document.getElementById('cust_phone').value = '';
+        paymentSessionExpiresAt = Date.now() + 300000;
+        document.getElementById('mfs-modal').style.display = 'flex';
+        startCountdown(300);
     }
 
     function closeMfsModal() {
