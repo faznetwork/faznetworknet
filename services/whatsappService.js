@@ -518,6 +518,15 @@ async function connect(options = {}) {
     qrDataUrl = null;
     qrText = null;
 
+    socketForEvents.ev.on("messages.update", updates => {
+      if (socket !== socketForEvents || !Array.isArray(updates)) return;
+      for (const item of updates) {
+        const ack = Number(item?.update?.status);
+        if (item?.key?.id && ack >= 3) {
+          deliveryLog.markDeliveredByProviderMessageId(item.key.id).catch(() => {});
+        }
+      }
+    });
     socketForEvents.ev.on("creds.update", () => {
       saveCreds().catch(error => {
         lastError = "Could not persist WhatsApp credentials to PostgreSQL.";
