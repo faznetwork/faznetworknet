@@ -520,7 +520,7 @@ footer .border-t{border-color:#cbd5e1!important}
   if(new URLSearchParams(location.search).get("customerLogin")==="1")modal("customerLoginModal",true);
   $("closeCustomerLogin")?.addEventListener("click",()=>modal("customerLoginModal",false));
   $("customerLoginModal")?.addEventListener("click",e=>{if(e.target.id==="customerLoginModal")modal("customerLoginModal",false)});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"){modal("supportModal",false);modal("customerLoginModal",false)}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){modal("supportModal",false);modal("customerLoginModal",false);if(!$("hotspotPurchaseModal").classList.contains("hidden")){stopHotspotTimer();modal("hotspotPurchaseModal",false);}}});
 
 
 
