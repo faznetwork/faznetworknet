@@ -8,16 +8,17 @@ const service=fs.readFileSync(path.join(__dirname,"..","services","webhookSettin
 const routes=fs.readFileSync(path.join(__dirname,"..","routes","settingsRoutes.js"),"utf8");
 const admin=fs.readFileSync(path.join(__dirname,"..","views","admin.ejs"),"utf8");
 const server=fs.readFileSync(path.join(__dirname,"..","server.js"),"utf8");
+const schema=fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8");
 
 test("payment, sender IDs, and webhook/API secret share app_settings as the canonical store",()=>{
- assert.match(service,/FROM app_settings WHERE key=ANY/);
- assert.match(service,/personal_payment_webhook_secret/);
- assert.match(service,/numberKey=k=>"mfs_\\"\+k\+"_number"/);
- assert.match(service,/senderKey=k=>"mfs_\\"\+k\+"_sender_ids"/);
- for(const key of ["mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8").includes(key));
- assert.match(service,/db\.withTransaction\(async tx=>/);
- assert.match(service,/ON CONFLICT\(key\) DO UPDATE SET value=EXCLUDED\.value/);
- assert.match(service,/DROP TABLE webhook_settings/);
+ assert.ok(service.includes("FROM app_settings WHERE key=ANY"));
+ assert.ok(service.includes("personal_payment_webhook_secret"));
+ assert.ok(service.includes('nk=k=>"mfs_"+k+"_number"'));
+ assert.ok(service.includes('sk=k=>"mfs_"+k+"_sender_ids"'));
+ for(const key of ["mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(schema.includes(key));
+ assert.ok(service.includes("db.withTransaction(async tx=>"));
+ assert.ok(service.includes("ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"));
+ assert.ok(service.includes("DROP TABLE webhook_settings"));
  assert.doesNotMatch(controller,/async function saveHotspotWebhookSettings/);
  assert.doesNotMatch(controller,/async function saveGeneralSettings/);
  assert.doesNotMatch(controller,/async function saveMfsAccounts/);
@@ -25,15 +26,15 @@ test("payment, sender IDs, and webhook/API secret share app_settings as the cano
 });
 
 test("admin exposes one Payment and Webhooks module with secret visibility and regeneration controls",()=>{
- assert.match(admin,/id="general-settings-panel-payments"/);
- assert.match(admin,/id="whSecretToggle"/);
- assert.match(admin,/id="whSecretRegenerate"/);
- assert.match(admin,/id="webhookApiSettingsForm"/);
+ assert.ok(admin.includes('id="general-settings-panel-payments"'));
+ assert.ok(admin.includes('id="whSecretToggle"'));
+ assert.ok(admin.includes('id="whSecretRegenerate"'));
+ assert.ok(admin.includes('id="webhookApiSettingsForm"'));
  assert.doesNotMatch(admin,/data-settings-nav="webhooks"/);
  assert.doesNotMatch(admin,/id="general-settings-panel-webhooks"/);
  assert.doesNotMatch(admin,/id="general-settings-panel-webhook"/);
  assert.doesNotMatch(admin,/id="general-settings-panel-mfs"/);
  assert.doesNotMatch(admin,/loadHotspotWebhookSettings/);
- assert.match(admin,/\/api\/admin\/webhook-settings/);
+ assert.ok(admin.includes("/api/admin/webhook-settings"));
  assert.match(server,/payment-webhooks\|sms-alerts\|hotspot-portal\)/);
 });
