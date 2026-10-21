@@ -49,19 +49,12 @@ function normalizeAmount(value) {
   return Number.isFinite(amount) ? amount : NaN;
 }
 function normalizeSender(value) { return String(value || "").normalize("NFKC").trim().replace(/[^a-z0-9]/gi, "").toLowerCase(); }
-function channelFrom(text, sender = "") {
-  const raw = String(sender || "").trim();
-  const normalizedPhone = normalizePhone(raw);
-  if (/^(?:\+?8801|01)\d{9}$/.test(raw.replace(/[\s-]/g, "")) || /^01\d{9}$/.test(normalizedPhone)) {
-    const error = new Error("Forwarding sender must be an official MFS service sender, not a personal phone number.");
-    error.code = "UNTRUSTED_FORWARDER_SENDER"; error.statusCode = 403; throw error;
-  }
-  const candidate = normalizeSender(raw);
-  for (const [channel, senders] of Object.entries(OFFICIAL_SENDERS)) {
-    if (senders.some(senderId => normalizeSender(senderId) === candidate)) return channel;
-  }
-  const error = new Error("Forwarding sender is not on the official MFS sender allowlist.");
-  error.code = "UNTRUSTED_FORWARDER_SENDER"; error.statusCode = 403; throw error;
+function channelFrom(text, sender = "", senderIdentifiers = null) {
+  const raw = String(sender || "").trim(), normalizedPhone = normalizePhone(raw);
+  if (/^(?:\+?8801|01)\d{9}$/.test(raw.replace(/[\s-]/g, "")) || /^01\d{9}$/.test(normalizedPhone)) { const error = new Error("Forwarding sender must be an official MFS service sender, not a personal phone number."); error.code="UNTRUSTED_FORWARDER_SENDER"; error.statusCode=403; throw error; }
+  const candidate=normalizeSender(raw), allowlists=senderIdentifiers&&typeof senderIdentifiers==="object"?senderIdentifiers:OFFICIAL_SENDERS;
+  for(const channel of ["bkash","nagad","rocket","upay"]){const values=Array.isArray(allowlists[channel])?allowlists[channel]:OFFICIAL_SENDERS[channel];if(values.some(id=>normalizeSender(id)===candidate))return channel;}
+  const error=new Error("Forwarding sender is not on the configured official MFS sender allowlist.");error.code="UNTRUSTED_FORWARDER_SENDER";error.statusCode=403;throw error;
 }
 function toAsciiDigits(value) {
   const bangla = "০১২৩৪৫৬৭৮৯";
@@ -131,7 +124,7 @@ function extractReference(text) {
 }
 function parseSms(body, query = {}, headers = {}, options = {}) {
   const payload = extractWebhookPayload(body, query, headers);
-  const channel = channelFrom(payload.text, payload.sender);
+  const channel = channelFrom(payload.text, payload.sender, options.senderIdentifiers);
   const trxId = extractTransactionId(payload.text);
   const amount = extractAmount(payload.text);
   if (!trxId || !Number.isFinite(amount) || amount <= 0) {
