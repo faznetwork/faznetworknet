@@ -242,7 +242,9 @@ test("socket ownership conflict releases the candidate DB client without touchin
   let lockQuery = false;
   const client = {
     async query(sql) {
-      lockQuery = sql.includes("pg_try_advisory_lock");
+      if (sql.includes("pg_try_advisory_lock")) lockQuery = true;
+      if (sql.includes("CREATE TABLE IF NOT EXISTS whatsapp_socket_lease")) return { rows: [] };
+      if (sql.includes("SELECT owner_pid")) return { rows: [] };
       return { rows: [{ locked: false }] };
     },
     release() { released = true; },
