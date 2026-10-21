@@ -2877,22 +2877,36 @@
         }
 
         function appendHotspotView(html) {
+            // Validate the destination before hiding the current page. A missing
+            // dynamic container must never turn a Hotspot click into a white screen.
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) {
+                console.error('[Hotspot Navigation] Required #dynamicPageContent container is missing.');
+                if (typeof window.showToast === 'function') {
+                    window.showToast('Hotspot view container is unavailable. The current page was preserved.', 'error');
+                }
+                return false;
+            }
             purgeStuckBackdrops();
             hideAdminViews();
             removeHotspotView();
             const dashboardView = document.getElementById('view-main-dashboard');
             if (dashboardView) dashboardView.style.display = 'none';
-            const dynamic = document.getElementById('dynamicPageContent');
-            if (!dynamic) return;
             dynamic.style.display = 'block';
+            dynamic.hidden = false;
             dynamic.innerHTML = html;
             if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
             const view = dynamic.querySelector('.hotspot-dynamic-view');
-            if (view) view.style.display = 'block';
+            if (view) {
+                view.classList.remove('hidden');
+                view.hidden = false;
+                view.style.display = 'block';
+            }
             if(window.innerWidth<=768) {
                 closeSidebarMobile();
                 purgeStuckBackdrops();
             }
+            return true;
         }
 
         function setHotspotTitle(key) {
