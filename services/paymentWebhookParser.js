@@ -63,22 +63,54 @@ function channelFrom(text, sender = "") {
   const error = new Error("Forwarding sender is not on the official MFS sender allowlist.");
   error.code = "UNTRUSTED_FORWARDER_SENDER"; error.statusCode = 403; throw error;
 }
+function toAsciiDigits(value) {
+  const bangla = "০১২৩৪৫৬৭৮৯";
+  return String(value || "").replace(/[০-৯]/g, ch => String(bangla.indexOf(ch))).replace(/[০-৯]/g, "");
+}
 function extractTransactionId(text) {
-  const t = String(text || "").replace(/[\u200b\u200c\u200d]/g, "");
+  const t = toAsciiDigits(String(text || "").replace(/[\\u200b\\u200c\\u200d]/g, "")).replace(/\\u00a0/g, " ");
   const patterns = [
-    /\b(?:trx\s*id|transaction\s*id|txn\s*id)\s*[:#=\-]?\s*([A-Z0-9][A-Z0-9._-]{5,39})\b/i,
-    /\b(?:trx|txn)\s*[:#=\-]\s*([A-Z0-9][A-Z0-9._-]{5,39})\b/i
+    /\\b(?:trx\\s*id|trxid|transaction\\s*(?:id|no|number)|txn\\s*(?:id|no|number)|txnid|trans\\s*id|transaction\\s*ref(?:erence)?)\\s*[:#=\\-]?\\s*([A-Z0-9][A-Z0-9._-]{5,39})\\b/i,
+    /\\b(?:trx|txn)\\s*[:#=\\-]\\s*([A-Z0-9][A-Z0-9._-]{5,39})\\b/i
   ];
-  for (const re of patterns) { const m = t.match(re); if (m) return normalizeTrxId(m[1]).replace(/[^A-Z0-9_-]/g, ""); }
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m) {
+      const candidate = normalizeTrxId(m[1]).replace(/[^A-Z0-9_-]/g, "");
+      if (candidate.length >= 6) return candidate;
+    }
+  }
   return "";
 }
 function extractAmount(text) {
-  const t = String(text || "").replace(/\u00a0/g, " ");
-  const patterns = [
-    /(?:amount|received|payment|paid|cash\s*in|cashin)\s*[:=\-]?\s*(?:tk|taka|৳)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?)/i,
-    /(?:tk|taka|৳)\s*[:=\-]?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?)/i
+  const t = toAsciiDigits(String(text || "").replace(/\\u00a0/g, " "));
+  const number = "((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?)";
+  // Prefer explicitly labelled transaction/payment amounts. Never treat Fee or Balance as
+  // the recharge amount when an SMS contains multiple currency values.
+  const explicit = [
+    new RegExp("(?:amount\\s*(?:received|credited|paid)?|received\\s*amount|payment\\s*amount|cash\\s*in\\s*amount|credited\\s*amount)\\s*[:=\\-]?\\s*(?:(?:BDT|Tk\\.?|Taka|৳)\\s*)?" + number, "i"),
+    new RegExp("(?:received|credited|paid|payment|cash\\s*in|cashin|recharge|deposit)\\s*(?:of|amount)?\\s*[:=\\-]?\\s*(?:BDT|Tk\\.?|Taka|৳)\\s*" + number, "i"),
+    new RegExp("(?:BDT|Tk\\.?|Taka|৳)\\s*" + number + "\\s*(?:has\\s+been\\s+)?(?:received|credited|paid|successful|successfully)", "i")
   ];
-  for (const re of patterns) { const m = t.match(re); if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; } }
+  for (const re of explicit) {
+    const m = t.match(re);
+    if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; }
+  }
+  // Common MFS templates put the amount immediately before the currency marker:
+  // "You have received 10.00 Tk from ...", "Cash In 10 BDT ...".
+  const contextual = [
+    new RegExp("(?:received|credited|cash\\s*in|cashin|recharge|deposit|payment)\\s+(?:of\\s+)?" + number + "\\s*(?:BDT|Tk\\.?|Taka|৳)", "i"),
+    new RegExp("(?:BDT|Tk\\.?|Taka|৳)\\s*" + number, "i")
+  ];
+  for (const re of contextual) {
+    const m = t.match(re);
+    if (m) { const n = normalizeAmount(m[1]); if (Number.isFinite(n) && n > 0) return n; }
+  }
+  // MacroDroid payloads sometimes normalize the SMS into fields like "Amount 10 BDT".
+  // Permit a plain amount label only when the nearby token is a currency or numeric value;
+  // exclude Fee, Charge, Balance, Available, and remaining amounts.
+  const labelled = t.match(new RegExp("(?:^|[\\n;|,])\\s*(?:transaction\\s+)?amount\\s*[:=\\-]\\s*(?:(?:BDT|Tk\\.?|Taka|৳)\\s*)?" + number + "(?:\\s*(?:BDT|Tk\\.?|Taka|৳))?(?=$|[\\s,;|.])", "i"));
+  if (labelled) { const n = normalizeAmount(labelled[1]); if (Number.isFinite(n) && n > 0) return n; }
   return NaN;
 }
 function extractRecipientPhone(text) {
