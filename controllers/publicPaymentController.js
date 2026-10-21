@@ -119,13 +119,21 @@ async function createPaymentSession(req, res) {
       [paymentSessionId, String(customer.username), provider, amount, expiresAt]
     );
     await db.query("DELETE FROM public_payment_sessions WHERE expires_at <= NOW()");
-    return res.set("Cache-Control", "no-store").status(201).json({
+    const providerNames = { bkash: "bKash", nagad: "Nagad", rocket: "Rocket", upay: "Upay" };
+    return res.set("Cache-Control", "no-store, max-age=0").status(201).json({
       success: true,
       paymentSessionId,
       expiresAt: new Date(expiresAt).toISOString(),
       expiresInSeconds: Math.floor(SESSION_TTL_MS / 1000),
       provider,
-      amount
+      providerName: providerNames[provider],
+      amount,
+      receivingNumber: providers[provider].number,
+      instructions: {
+        title: providerNames[provider] + " payment",
+        primaryAction: "Send Money",
+        note: "Send the exact bill amount and enter the transaction ID from the payment confirmation."
+      }
     });
   } catch (error) {
     console.error("[Public Payment Session]", error?.message || error);
