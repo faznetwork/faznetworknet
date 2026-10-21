@@ -409,7 +409,6 @@ footer .border-t{border-color:#cbd5e1!important}
       <ol class="hotspot-instructions mt-4 list-decimal space-y-2 pl-5 text-sm leading-6"><li>Open your selected MFS app and choose <b>Send Money</b>.</li><li>Send exactly <b id="paymentInstructionAmount">৳0</b> to the receiving number above.</li><li>Keep the payment confirmation SMS and enter its TrxID below.</li><li>Never share your MFS PIN or OTP.</li></ol>
     </section>
     <form id="hotspotPurchaseForm" class="mt-5 space-y-4">
-      <div><label for="hotspotBuyerPhone" class="mb-1 block text-sm font-bold">Mobile number (Hotspot password)</label><input id="hotspotBuyerPhone" type="tel" inputmode="numeric" autocomplete="tel" required pattern="01[0-9]{9}" maxlength="11" class="hotspot-checkout-input w-full px-4 py-3" placeholder="01XXXXXXXXX"><p class="mt-1 text-xs text-slate-500">Your phone is the Hotspot password. The device MAC will be bound on first captive login.</p></div>
       <div><label for="hotspotBuyerTrxId" class="mb-1 block text-sm font-bold">TrxID / TxnID</label><input id="hotspotBuyerTrxId" required maxlength="120" autocomplete="off" class="hotspot-checkout-input w-full px-4 py-3" placeholder="Enter the transaction ID"></div>
       <div id="hotspotPurchaseResult" class="hidden rounded-xl p-4 text-sm" role="status" aria-live="polite"></div>
       <button id="hotspotPurchaseSubmit" type="submit" class="hotspot-submit-button w-full px-5 py-3 font-black disabled:cursor-not-allowed disabled:opacity-60">Verify Payment &amp; Activate Package</button>
@@ -528,10 +527,10 @@ footer .border-t{border-color:#cbd5e1!important}
     if(!selectedHotspotPackage.name||!selectedHotspotPackage.price){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="Please select a valid package.";return;}
     btn.disabled=true;btn.textContent="Verifying payment…";box.className="rounded-xl p-4 text-sm";box.textContent="Checking payment and saving your pending Hotspot package…";
     try{
-      const response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({service_type:"hotspot",phone:$("hotspotBuyerPhone").value.trim(),account_phone:$("hotspotBuyerPhone").value.trim(),trxId:$("hotspotBuyerTrxId").value.trim(),amount:selectedHotspotPackage.price,profile_id:selectedHotspotPackage.name,paymentMethod:selectedHotspotProvider})});
+      const response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({service_type:"hotspot",trxId:$("hotspotBuyerTrxId").value.trim(),amount:selectedHotspotPackage.price,profile_id:selectedHotspotPackage.name,paymentMethod:selectedHotspotProvider})});
       const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||data.message||"Payment verification failed.");
       box.className="rounded-xl p-4 text-sm hotspot-result-success";
-      box.textContent="Payment verified. Connect to FAZ NETWORK Wi-Fi and enter this same 11-digit phone on the captive login page. Your device MAC will bind on first login, when package validity starts.";
+      box.textContent="Payment verified. Connect to FAZ NETWORK Wi-Fi and open the captive login page. Your device MAC is used as both username and password and is bound on first login, when package validity starts.";
       btn.textContent="Package Activated";
     }catch(error){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent=error.message||"Unable to verify payment. Check the TrxID and try again.";btn.textContent="Verify Payment & Activate Package";}
     finally{btn.disabled=Date.now()>=hotspotPaymentExpiresAt;if(btn.disabled&&btn.textContent!=="Package Activated")btn.textContent="Payment Session Expired";}
