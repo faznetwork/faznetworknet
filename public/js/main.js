@@ -591,6 +591,12 @@
   window.addEventListener('popstate', () => {
     const path = window.location.pathname.replace(/\/$/, '') || '/';
     const target = targetsByPath[path];
-    if (target) activateTarget(target, false);
+    if (target) {
+      activateTarget(target, false);
+      return;
+    }
+    // The previous history entry may be a different admin view. Let Express
+    // render that route rather than leaving the settings panel visible at a new URL.
+    window.location.reload();
   });
 })();
