@@ -183,7 +183,7 @@ async function confirmPayment(req, res) {
         `SELECT trx_id FROM transactions
           WHERE channel=$1
             AND REGEXP_REPLACE(COALESCE(sender_phone,''),'[^0-9]','','g') IN
-                ($2, CASE WHEN LEFT($2,1)='0' THEN '88'||SUBSTRING($2 FROM 2) ELSE $2 END)
+                ($2, CASE WHEN LEFT($2,1)='0' THEN '880'||SUBSTRING($2 FROM 2) ELSE $2 END)
             AND ROUND(amount::numeric,2)=ROUND($3::numeric,2)
             AND LOWER(TRIM(status))='unmatched'
             AND COALESCE(used,FALSE)=FALSE
