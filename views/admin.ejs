@@ -8593,7 +8593,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 if (route.view === 'settings') {
                     const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
-                    return { view: 'settings', section: sections.includes(String(route.section || '')) ? String(route.section) : 'brand' };
+                    const section = String(route.section || '');
+                    // The old /webhooks URL is an alias for the current Payment & Webhooks panel.
+                    return { view: 'settings', section: section === 'webhooks' ? 'payments' : (sections.includes(section) ? section : 'brand') };
                 }
                 if (route.view === 'customers') {
                     const filter = has(allowed.customerFilters, route.filter) ? route.filter : 'all';
@@ -8709,7 +8711,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 // then commitRoute replaces them with the canonical path-based URL.
                 const params = new URLSearchParams(window.location.search);
                 const view = params.get('view');
-                if (!view) return { view: 'dashboard' };
+                if (!view) {
+                    if (path === '/admin') return { view: 'dashboard' };
+                    return { view: 'not-found', path };
+                }
                 if (view === 'page') return cleanRoute({ view, page: params.get('page'), channel: params.get('channel') });
                 if (view === 'customers') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
                 if (view === 'payments') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
@@ -8719,6 +8724,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function routeUrl(route) {
                 const normalized = cleanRoute(route);
+                if (normalized.view === 'not-found') return normalized.path || '/admin';
                 if (normalized.view === 'dashboard') return '/admin/dashboard';
                 if (normalized.view === 'page') {
                     if (normalized.page === 'add-customer') return '/admin/customers/add';
@@ -8859,6 +8865,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         if (typeof window.syncGeneralSettingsSidebar === 'function') window.syncGeneralSettingsSidebar(r.section);
                         return true;
                     case 'module': return showAdminModulePlaceholder(r.module);
+                    case 'not-found': return showAdminRouteNotFound(r.path);
                 }
                 return false;
             }
@@ -8894,17 +8901,14 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return true;
             }
 
-            function restoreRoute(route, replace) {
+            async function restoreRoute(route, replace) {
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
                 try {
-                    const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
-                    }
-                    return result;
+                    return await dispatchRoute(normalized);
                 } catch (error) {
                     console.error('[Admin Routing] View restore failed:', error);
+                    if (typeof window.showToast === 'function') window.showToast(error?.message || 'Unable to open this admin page.', 'error');
                     return false;
                 } finally {
                     state.restoring = false;
@@ -8998,10 +9002,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             ].forEach(wrapNavigation);
 
             window.__fazRestoreAdminRoute = function() {
-                restoreRoute(readRoute(), true);
+                return restoreRoute(readRoute(), true);
+            };
+            // The shared entry point is also used by settings links. This keeps URL,
+            // visible panel and active sidebar state in one router/history stack.
+            window.__fazNavigateAdminRoute = function(route) {
+                return restoreRoute(route, false);
             };
             window.addEventListener('popstate', function() {
-                restoreRoute(readRoute(), true);
+                void restoreRoute(readRoute(), true);
                 closeDrawerAfterNavigation();
             });
         })();
