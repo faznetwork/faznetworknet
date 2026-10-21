@@ -69,3 +69,19 @@ test("public payment confirmation supports backend-selected sender-phone matchin
   assert.match(page, /#e2136e/);
   assert.match(page, /#f7941d/);
 });
+
+
+test("Hotspot captive checkout uses local MFS image assets and submits MAC credentials with either verification input", () => {
+  const page = read("public/login.html");
+  assert.match(page, /assets\/images\/bkash-logo\.png/);
+  assert.match(page, /assets\/images\/nagad-logo\.png/);
+  assert.match(page, /assets\/images\/rocket-logo\.png/);
+  assert.match(page, /assets\/images\/upay-logo\.png/);
+  assert.doesNotMatch(page, /<svg/);
+  assert.match(page, /service_type: 'hotspot'/);
+  assert.match(page, /payload\.senderPhoneNumber = phoneInput/);
+  assert.match(page, /payload\.trxId = trxInput/);
+  assert.match(page, /document\.getElementById\('mt-user'\)\.value = routerMac/);
+  assert.match(page, /document\.getElementById\('mt-pass'\)\.value = routerMac/);
+  assert.match(page, /paymentSessionExpiresAt=Date\.now\(\)\+300000/);
+});
