@@ -85,6 +85,17 @@ async function finishAttempt(id, {status, providerMessageId, error} = {}) {
   }
 }
 
+async function markDeliveredByProviderMessageId(messageId) {
+  const id = String(messageId || "").trim().slice(0,200);
+  if (!id) return;
+  try {
+    await ensureTable();
+    await db.query("UPDATE notification_delivery_logs SET status='delivered', delivered_at=COALESCE(delivered_at,NOW()), sent_at=COALESCE(sent_at,NOW()) WHERE channel='whatsapp' AND provider_message_id=$1 AND status IN ('pending','sent')", [id]);
+  } catch (error) {
+    console.warn("[Notification History] Could not record WhatsApp delivery acknowledgement:", error.message);
+  }
+}
+
 async function list({channel = "all", provider = "all", status = "all", search = "", limit = 100, offset = 0} = {}) {
   await ensureTable();
   const params = [];
@@ -94,9 +105,9 @@ async function list({channel = "all", provider = "all", status = "all", search =
   if (status !== "all") { params.push(status); where.push("status=$" + params.length); }
   const term = String(search || "").trim().slice(0,160);
   if (term) {
-    params.push("%" + term.replace(/[\\%_]/g, "\\$&") + "%");
+    params.push("%" + term + "%");
     const p = "$" + params.length;
-    where.push("(recipient ILIKE " + p + " ESCAPE '\\\\' OR COALESCE(transaction_id,'') ILIKE " + p + " ESCAPE '\\\\' OR message_body ILIKE " + p + " ESCAPE '\\\\' OR COALESCE(provider_message_id,'') ILIKE " + p + " ESCAPE '\\\\')");
+    where.push("(recipient ILIKE " + p + " OR COALESCE(transaction_id,'') ILIKE " + p + " OR message_body ILIKE " + p + " OR COALESCE(provider_message_id,'') ILIKE " + p + ")");
   }
   const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
   params.push(Math.max(1, Math.min(500, Number.parseInt(limit,10) || 100)));
@@ -118,4 +129,4 @@ async function list({channel = "all", provider = "all", status = "all", search =
   return {items: result.rows || [], total: Number(countResult.rows?.[0]?.total || 0), providers: (providerResult.rows || []).map(row => row.provider)};
 }
 
-module.exports = { ensureTable, providerLabel, createAttempt, finishAttempt, list };
+module.exports = { ensureTable, providerLabel, createAttempt, finishAttempt, markDeliveredByProviderMessageId, list };
