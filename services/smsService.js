@@ -1,6 +1,5 @@
 "use strict";
 const settingsService=require("./appSettings");
-const deliveryLog=require("./notificationDeliveryLog");
 const EVENT_CONFIG={
  expiry_warning:{enabled:"sms_event_expiry_warning",template:"sms_template_expiry_warning"},
  payment_receipt:{enabled:"sms_event_payment_receipt",template:"sms_template_payment_receipt"},
@@ -83,7 +82,7 @@ function presetConfig(settings){
  };
  return known[preset]||{endpoint:"",method:"POST_JSON",mapping:DEFAULT_MAPPING};
 }
-async function sendSmsCore({to,phone,message,event="manual",variables={},token:overrideToken,settings:providedSettings}={}){
+async function sendSms({to,phone,message,event="manual",variables={},token:overrideToken,settings:providedSettings}={}){
  const settings=providedSettings||await settingsService.getAllSettings();
  const mode=String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled");
  const recipient=safeText(phone||to,40),text=renderTemplate(message,variables);
@@ -121,26 +120,6 @@ async function sendSmsCore({to,phone,message,event="manual",variables={},token:o
  }
  const providerResponse=await requestProvider({url:endpoint,method,params,token:apiToken});
  return {success:true,mode,method,providerResponse};
-}
-async function sendSms(args={}) {
- const settings=args.settings||await settingsService.getAllSettings();
- const mode=String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled");
- if(mode==="disabled") return sendSmsCore({...args,settings});
- const recipient=safeText(args.phone||args.to,40);
- const body=renderTemplate(args.message,args.variables||{});
- if(!recipient||!body) return sendSmsCore({...args,settings});
- const provider=deliveryLog.providerLabel({channel:"sms",mode,preset:settings.sms_provider_preset,settings});
- const vars=args.variables||{};
- const transactionId=vars.transaction_id||vars.trx_id||vars.transactionId||null;
- const attemptId=await deliveryLog.createAttempt({channel:"sms",provider,recipient,message:body,transactionId});
- try {
-  const result=await sendSmsCore({...args,settings});
-  await deliveryLog.finishAttempt(attemptId,{status:result?.skipped?"skipped":"sent",providerMessageId:result?.providerResponse?.data?.messageId||result?.providerResponse?.data?.message_id||null});
-  return result;
- } catch(error) {
-  await deliveryLog.finishAttempt(attemptId,{status:"failed",error:error?.message||error});
-  throw error;
- }
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
  const settings=await settingsService.getAllSettings();const config=EVENT_CONFIG[event];
