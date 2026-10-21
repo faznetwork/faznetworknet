@@ -32,6 +32,7 @@ test('every General Settings sidebar link has a client target and an Express pag
 test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
   assert.match(mainScript, /const validTargets = Object\.keys\(pathsByTarget\)/);
   assert.match(mainScript, /window\.history\.pushState/);
+  assert.match(mainScript, /window\.showToast =/);
   assert.match(mainScript, /addEventListener\('popstate'/);
   assert.match(mainScript, /window\.location\.reload\(\)/);
   assert.match(mainScript, /item\.dataset\.settingsNav === target/);
