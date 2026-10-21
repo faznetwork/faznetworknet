@@ -16,7 +16,10 @@ let reconnectAllowed = true;
 let accountMetadata = null;
 let socketLockClient = null;
 let socketOwner = false;
+let socketHeartbeatTimer = null;
 const SOCKET_ADVISORY_LOCK_KEY = 20261017;
+const SOCKET_LOCK_STALE_MS = 90_000;
+const SOCKET_HEARTBEAT_MS = 20_000;
 const RESTORE_RETRY_DELAYS = [500, 1500];
 const INITIAL_HANDSHAKE_GRACE_MS = 15000;
 let handshakeGraceTimer = null;
@@ -260,25 +263,72 @@ async function resetUnregisteredAuthRows(database = db, baileys = getBaileys()) 
   return { reset: true, reason: raw ? "unregistered" : "missing_creds" };
 }
 
+async function ensureSocketLeaseTable(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_socket_lease (
+      lock_key BIGINT PRIMARY KEY,
+      owner_pid INTEGER NOT NULL,
+      heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function heartbeatSocketLease(client) {
+  try {
+    await client.query(
+      "UPDATE whatsapp_socket_lease SET heartbeat_at=NOW() WHERE lock_key=$1 AND owner_pid=pg_backend_pid()",
+      [SOCKET_ADVISORY_LOCK_KEY]
+    );
+  } catch (error) {
+    console.warn("[WhatsApp] Ownership heartbeat failed:", error.message);
+  }
+}
+
 async function acquireSocketOwnership() {
   if (socketLockClient && socketOwner) return;
   const pool = typeof db.getPool === "function" ? db.getPool() : null;
   if (!pool || typeof pool.connect !== "function") return;
   const client = await pool.connect();
   try {
-    const result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
+    await ensureSocketLeaseTable(client);
+    let result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
     if (!result.rows?.[0]?.locked) {
-      const error = new Error("WhatsApp socket is owned by another application instance.");
-      error.code = "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
-      throw error;
+      const lease = await client.query(
+        "SELECT owner_pid, (EXTRACT(EPOCH FROM (NOW()-heartbeat_at))*1000)::bigint AS age_ms FROM whatsapp_socket_lease WHERE lock_key=$1",
+        [SOCKET_ADVISORY_LOCK_KEY]
+      );
+      const owner = lease.rows?.[0];
+      if (owner && Number(owner.age_ms) > SOCKET_LOCK_STALE_MS && Number(owner.owner_pid) !== Number(client.processID)) {
+        const oldPid = Number(owner.owner_pid);
+        console.warn("[WhatsApp] Stale ownership heartbeat detected; terminating abandoned PostgreSQL lock backend.", { ownerPid: oldPid, staleMs: Number(owner.age_ms) });
+        await client.query("SELECT pg_terminate_backend($1) WHERE $1 <> pg_backend_pid()", [oldPid]);
+        await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=$2", [SOCKET_ADVISORY_LOCK_KEY, oldPid]);
+        result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
+      }
+      if (!result.rows?.[0]?.locked) {
+        const error = new Error("WhatsApp socket is owned by another application instance.");
+        error.code = "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
+        throw error;
+      }
     }
     socketLockClient = client;
     socketOwner = true;
+    const pidResult = await client.query("SELECT pg_backend_pid() AS pid");
+    await client.query(
+      `INSERT INTO whatsapp_socket_lease(lock_key, owner_pid, heartbeat_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT(lock_key) DO UPDATE SET owner_pid=EXCLUDED.owner_pid, heartbeat_at=NOW()`,
+      [SOCKET_ADVISORY_LOCK_KEY, Number(pidResult.rows[0].pid)]
+    );
+    if (socketHeartbeatTimer) clearInterval(socketHeartbeatTimer);
+    socketHeartbeatTimer = setInterval(() => { heartbeatSocketLease(client); }, SOCKET_HEARTBEAT_MS);
+    if (typeof socketHeartbeatTimer.unref === "function") socketHeartbeatTimer.unref();
     if (typeof client.on === "function") {
       client.on("error", error => {
         if (socketLockClient !== client) return;
         socketLockClient = null;
         socketOwner = false;
+        if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
         try { client.release(true); } catch (_) {}
         lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
         const activeSocket = socket;
@@ -301,9 +351,22 @@ async function releaseSocketOwnership() {
   const client = socketLockClient;
   socketLockClient = null;
   socketOwner = false;
+  if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
   if (!client) return;
+  try { await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=pg_backend_pid()", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
   try { await client.query("SELECT pg_advisory_unlock($1)", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
   try { client.release(); } catch (_) {}
+}
+
+async function shutdown() {
+  reconnectAllowed = false;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (handshakeGraceTimer) { clearTimeout(handshakeGraceTimer); handshakeGraceTimer = null; }
+  const activeSocket = socket;
+  socket = null;
+  if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
+  connection = "disconnected";
+  await releaseSocketOwnership();
 }
 
 async function handleConnectionClose(update, baileys, closedSocket) {
@@ -679,6 +742,7 @@ module.exports = {
   normalizePhone,
   normalizeWhatsAppJid,
   unlink,
+  shutdown,
   extractConnectedAccount,
   createDatabaseAuthState,
   _resetUnregisteredAuthRows: resetUnregisteredAuthRows,
@@ -686,5 +750,6 @@ module.exports = {
   _inspectStoredSession: inspectStoredSession,
   _isSocketReady: isSocketReady,
   _acquireSocketOwnership: acquireSocketOwnership,
-  _releaseSocketOwnership: releaseSocketOwnership
+  _releaseSocketOwnership: releaseSocketOwnership,
+  _shutdown: shutdown
 };
