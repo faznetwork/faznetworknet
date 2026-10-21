@@ -86,3 +86,27 @@ test("normalizes TrxID to uppercase and accepts only allowlisted service sender"
   assert.equal(result.channel,"bkash");
   assert.equal(result.trxId,"ABC1234567");
 });
+
+test("parses bKash 10 BDT SMS with fee and balance without confusing amounts",()=>{
+  const result=parseSms({sender:"bKash",message:"You have received Tk 10.00 from 01712345678. Fee Tk 0.00. Balance Tk 25.50. TrxID ABC123XYZ9."},{},{});
+  assert.equal(result.amount,10);
+  assert.equal(result.trxId,"ABC123XYZ9");
+});
+test("parses Nagad wording with amount before currency and TxnID",()=>{
+  const result=parseSms({sender:"16167",sms:"Money received 10.00 BDT from 01812345678. Charge: 0.00 BDT. Available Balance: 110.00 BDT. TxnID NAGAD123456"},{},{});
+  assert.equal(result.channel,"nagad");
+  assert.equal(result.amount,10);
+  assert.equal(result.trxId,"NAGAD123456");
+});
+test("parses Rocket and Upay transaction reference variants",()=>{
+  const rocket=parseSms({sender:"DBBL",message:"Cash In 10 BDT from 01812345678. Fee 0.00 Tk. Balance 30.00 Tk. Transaction ID: RKT12345678"},{},{});
+  const upay=parseSms({sender:"upay",message:"Payment received. Amount: BDT 10.00. Fee: BDT 0.00. Balance: BDT 50.00. Trx ID=UPY12345678"},{},{});
+  assert.equal(rocket.amount,10);
+  assert.equal(rocket.trxId,"RKT12345678");
+  assert.equal(upay.amount,10);
+  assert.equal(upay.trxId,"UPY12345678");
+});
+test("accepts Bangla digits and MacroDroid text fields",()=>{
+  assert.equal(extractAmount("Received ১০.০০ Tk. Fee ০.০০ Tk. Balance ২০.০০ Tk"),10);
+  assert.equal(extractTransactionId("TrxID: ABC1234567"),"ABC1234567");
+});
