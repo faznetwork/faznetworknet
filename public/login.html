@@ -538,7 +538,8 @@ function submitMemberLogin(){const username=String(byId('member_username')?.valu
 window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
 document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}const button=byId('btn-master-action');if(button)button.addEventListener('click',handleMasterAction);loadPortalConfig();});
 })();
-
+</script>
+<script>
     const BACKEND_BASE_URL = 'https://faznetwork.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/verify-trx';
     const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/hotspot/verify-voucher';
