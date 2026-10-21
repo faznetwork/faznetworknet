@@ -32,9 +32,12 @@ test("settings save only enabled profile names, and public config resolves exist
  assert.match(login,/Number\.isFinite\(p\.price\)&&p\.price>0/);
 });
 
-test("admin hotspot portal settings returns default JSON settings when the database table is unavailable",()=>{
- assert.match(controller,/async function getSettings\(_q,res\)\{let settings=\{\.\.\.defaults\}/);
- assert.match(controller,/Database settings unavailable; returning defaults/);
- assert.match(controller,/return res\.status\(200\)\.json\(\{success:true,settings\}\)/);
+test("admin hotspot portal settings safely falls back when either settings store is unavailable",()=>{
+ assert.match(controller,/async function getSettings\(_q,res\)\{try\{let settings=\{\.\.\.defaults\}/);
+ assert.match(controller,/Dedicated settings store unavailable; using safe defaults/);
+ assert.match(controller,/Public config unavailable; retaining safe settings/);
+ assert.match(controller,/GET handler failed; returning empty settings/);
+ assert.match(controller,/return res\.status\(200\)\.json\(\{success:true,settings:\{\}\}\)/);
  assert.match(controller,/function readPublicConfig\(\).*catch\(_\)\{return \{\};\}/);
+ assert.doesNotMatch(controller,/DELETE FROM (?:app_settings|hotspot_portal_settings)/i);
 });
