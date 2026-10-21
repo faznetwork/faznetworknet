@@ -56,6 +56,15 @@ test('every SPA route is explicitly accepted by the Express admin-shell allowlis
   assert.match(server, /if\(!supportedAdminPaths\.has\(adminPath\)\) return next\(\)/);
 });
 
+test('Hotspot voucher and sales screens use the shared view lifecycle', () => {
+  const records = section(admin, 'window.loadHotspotVoucherRecords = async function(filter,title){', 'window.kickHotspotVoucher =');
+  const sales = section(admin, 'window.loadHotspotVoucherSales = async function(){', 'let currentHotspotMode =');
+  assert.match(records, /appendHotspotView\('/);
+  assert.match(sales, /appendHotspotView\('/);
+  assert.match(records, /currentHotspotMode = String\(filter \|\| 'all'\)/);
+  assert.match(sales, /currentHotspotMode = 'sales'/);
+});
+
 test('Hotspot submenu routes remain active and the correct parent stays expanded', () => {
   const sidebar = section(admin, '<li class="menu-item">\n                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">\n                    <i class="bi bi-wifi"></i>', '<li class="menu-item" data-rbac-roles="super_admin">');
   for (const route of [
