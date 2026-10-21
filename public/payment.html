@@ -42,6 +42,9 @@ body{min-width:0}
  .payment-amount strong{font-size:20px}
 }
 
+
+/* PR #68: light-theme payment logos and mobile-first layout safeguards */
+html,body{width:100%;max-width:100%;overflow-x:clip}body{min-width:0}.topbar,.shell{width:100%;max-width:480px;margin-left:auto;margin-right:auto}.topbar{padding:16px clamp(12px,4vw,20px)}.shell{padding-inline:clamp(10px,3.5vw,16px);margin-top:6px}.glow-wrap,.portal,.modal,.modal-head,.modal-brand-row,.section-title,.bill-head,.payment-amount{min-width:0;max-width:100%}.portal{padding:clamp(14px,4vw,24px)}.mfs-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mfs{min-width:0;gap:8px;padding:9px;overflow:hidden}.mfs-mark{width:clamp(58px,19vw,82px);height:36px;min-width:0;padding:3px;background:#fff!important;border:1px solid #e2e8f0!important}.mfs-mark svg{display:block;width:100%;height:100%;overflow:hidden}.mfs-name{overflow-wrap:anywhere}.mfs[data-provider=bkash] .mfs-mark{border-color:#e2136e!important}.mfs[data-provider=nagad] .mfs-mark{border-color:#f7941d!important}.mfs[data-provider=rocket] .mfs-mark{border-color:#832b73!important}.mfs[data-provider=upay] .mfs-mark{border-color:#0054a6!important}.modal-backdrop{padding:10px}.modal{width:min(100%,440px);max-height:calc(100dvh - 20px);padding:clamp(14px,4vw,22px);overflow-y:auto;overscroll-behavior:contain}.modal-brand-row{gap:8px;flex:1}.modal-provider-logo{width:clamp(66px,21vw,94px);height:42px;padding:4px;background:#fff}.modal-head h2,.modal-head p,.receive-number strong{overflow-wrap:anywhere}.field input{min-width:0}@media(max-width:360px){.brand{font-size:16px;gap:7px}.brand-mark{width:34px;height:34px}.back-link{padding:8px 9px}.mfs{flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;min-height:76px}.mfs-mark{width:100%;max-width:100%;height:32px}.mfs-name{font-size:12px}.modal-head{gap:6px}.modal-provider-logo{width:62px;height:36px}.payment-amount strong{font-size:20px}}
 </style>
 </head>
 <body>
