@@ -152,6 +152,20 @@ async function createPaymentSession(req, res) {
 }
 async function confirmPayment(req, res) {
   if (!limited(req, "pppoe-payment-confirm", 6)) return fail(res, 429, "Too many payment confirmation attempts. Please try again later.");
+  const serviceType = clean(req.body?.service_type || req.body?.serviceType, 20).toLowerCase();
+  // Hotspot checkout has no PPPoE session row: its existing verifier checks the
+  // server-side package metadata/price and atomically claims the incoming SMS transaction.
+  if (serviceType === "hotspot") {
+    const mac = clean(req.body?.mac || req.body?.device_mac || req.body?.macAddress, 80);
+    const profileId = clean(req.body?.profile_id || req.body?.profileId || req.body?.package_id || req.body?.packageId, 120);
+    const amount = Number(req.body?.amount);
+    const provider = clean(req.body?.paymentMethod || req.body?.gateway, 20).toLowerCase();
+    if (!mac || !profileId || !Number.isFinite(amount) || amount <= 0 || !["bkash", "nagad", "rocket", "upay"].includes(provider)) {
+      return fail(res, 400, "A Hotspot MAC, package, amount, and payment provider are required.");
+    }
+    req.body = { ...req.body, service_type: "hotspot", mac, username: mac, password: mac, profile_id: profileId, amount, paymentMethod: provider };
+    return payments.verifyTrx(req, res);
+  }
   const paymentSessionId = clean(req.body?.paymentSessionId, 128);
   const trxId = clean(req.body?.transactionId || req.body?.trxId || req.body?.trx_id, 80).toUpperCase();
   const senderPhoneNumber = normalizePhone(req.body?.senderPhoneNumber || req.body?.phoneNumber || req.body?.senderPhone || "");
