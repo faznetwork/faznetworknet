@@ -12,8 +12,9 @@ const server=fs.readFileSync(path.join(__dirname,"..","server.js"),"utf8");
 test("payment, sender IDs, and webhook/API secret share app_settings as the canonical store",()=>{
  assert.match(service,/FROM app_settings WHERE key=ANY/);
  assert.match(service,/personal_payment_webhook_secret/);
- for(const key of ["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"])assert.ok(service.includes(key));
- for(const key of ["mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(service.includes(key));
+ assert.match(service,/numberKey=k=>"mfs_\\"\+k\+"_number"/);
+ assert.match(service,/senderKey=k=>"mfs_\\"\+k\+"_sender_ids"/);
+ for(const key of ["mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8").includes(key));
  assert.match(service,/db\.withTransaction\(async tx=>/);
  assert.match(service,/ON CONFLICT\(key\) DO UPDATE SET value=EXCLUDED\.value/);
  assert.match(service,/DROP TABLE webhook_settings/);
