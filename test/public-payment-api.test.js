@@ -49,3 +49,23 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(page, /Confirm Payment & Renew/);
   assert.match(page, /id="modal-amount"/);
 });
+
+
+test("public payment confirmation supports backend-selected sender-phone matching without trusting client amount", () => {
+  const controller = read("controllers/publicPaymentController.js");
+  const page = read("public/payment.html");
+  assert.match(controller, /payment_verification_method/);
+  assert.match(controller, /verificationMethod === "senderPhoneNumber"/);
+  assert.match(controller, /sender_phone/);
+  assert.match(controller, /ROUND\(amount::numeric,2\)=ROUND\(\$3::numeric,2\)/);
+  assert.match(controller, /LOWER\(TRIM\(status\)\)='unmatched'/);
+  assert.match(controller, /COALESCE\(used,FALSE\)=FALSE/);
+  assert.match(controller, /verifiedTrxId = clean\(matches\.rows\[0\]\.trx_id/);
+  assert.match(page, /id="sender-phone"/);
+  assert.match(page, /id="trx-id"/);
+  assert.match(page, /applyVerificationMethod/);
+  assert.match(page, /payload\.senderPhoneNumber/);
+  assert.match(page, /payload\.transactionId/);
+  assert.match(page, /#e2136e/);
+  assert.match(page, /#f7941d/);
+});
