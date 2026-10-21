@@ -63,6 +63,8 @@ test("public payment confirmation supports backend-selected sender-phone matchin
   const controller = read("controllers/publicPaymentController.js");
   const page = read("public/payment.html");
   assert.match(controller, /payment_verification_method/);
+  assert.match(controller, /if \(serviceType === "hotspot"\)/);
+  assert.match(controller, /payments\.verifyTrx\(req, res\)/);
   assert.match(controller, /verificationMethod === "senderPhoneNumber"/);
   assert.match(controller, /sender_phone/);
   assert.match(controller, /ROUND\(amount::numeric,2\)=ROUND\(\$3::numeric,2\)/);
