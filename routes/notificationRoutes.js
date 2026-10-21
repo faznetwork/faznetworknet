@@ -2,12 +2,14 @@
 const express=require("express");
 const controller=require("../controllers/broadcastController");
 const settingsController=require("../controllers/settingsController");
+const deliveryHistoryController=require("../controllers/notificationDeliveryHistoryController");
 const router=express.Router();
 router.get("/audience-count",controller.audienceCount);
 router.get("/whatsapp/status",settingsController.whatsappStatus);
 router.get("/whatsapp/qr",settingsController.whatsappQr);
 router.post("/whatsapp/connect",settingsController.whatsappConnect);
 router.post("/whatsapp/unlink",settingsController.whatsappUnlink);
+router.get("/delivery-history",deliveryHistoryController.list);
 router.get("/broadcast/history",controller.history);
 router.get("/broadcast/:id",controller.progress);
 router.post("/broadcast",controller.create);
