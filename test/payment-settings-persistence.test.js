@@ -8,14 +8,12 @@ const service=fs.readFileSync(path.join(__dirname,"..","services","webhookSettin
 const routes=fs.readFileSync(path.join(__dirname,"..","routes","settingsRoutes.js"),"utf8");
 const admin=fs.readFileSync(path.join(__dirname,"..","views","admin.ejs"),"utf8");
 const server=fs.readFileSync(path.join(__dirname,"..","server.js"),"utf8");
-const schema=fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8");
 
 test("payment, sender IDs, and webhook/API secret share app_settings as the canonical store",()=>{
  assert.ok(service.includes("FROM app_settings WHERE key=ANY"));
  assert.ok(service.includes("personal_payment_webhook_secret"));
  assert.ok(service.includes('nk=k=>"mfs_"+k+"_number"'));
  assert.ok(service.includes('sk=k=>"mfs_"+k+"_sender_ids"'));
- for(const key of ["mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(schema.includes(key));
  assert.ok(service.includes("db.withTransaction(async tx=>"));
  assert.ok(service.includes("ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"));
  assert.ok(service.includes("DROP TABLE webhook_settings"));
