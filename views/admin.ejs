@@ -2814,7 +2814,8 @@
         }
 
         window.loadHotspotVoucherRecords = async function(filter,title){
-            const container=document.getElementById('dynamicPageContent');
+            hideAdminViews();removeHotspotView();
+            const container=getAdminDynamicHost();
             if(document.getElementById('view-main-dashboard'))document.getElementById('view-main-dashboard').style.display='none';
             if(document.getElementById('view-hotspot-dashboard'))document.getElementById('view-hotspot-dashboard').style.display='none';
             if(!container)return false;
@@ -2851,7 +2852,8 @@
             catch(error){alert(error.message||'Unable to remove Hotspot credentials.');}
         };
         window.loadHotspotVoucherSales = async function(){
-            const container=document.getElementById('dynamicPageContent');
+            hideAdminViews();removeHotspotView();
+            const container=getAdminDynamicHost();
             if(document.getElementById('view-main-dashboard')) document.getElementById('view-main-dashboard').style.display='none';
             if(document.getElementById('view-hotspot-dashboard')) document.getElementById('view-hotspot-dashboard').style.display='none';
             if(!container)return false;container.style.display='block';if(typeof closeSidebarMobile==='function')closeSidebarMobile();
@@ -2876,6 +2878,23 @@
         function hotspotTitle(key) {
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
             return translations[lang]?.[key] || translations.en[key] || key;
+        }
+
+        // Static admin views must never share an innerHTML target with dynamic pages.
+        // Several loaders render into this isolated sibling so Hotspot navigation cannot
+        // delete the dashboard, settings panels, or event-bound DOM.
+        function getAdminDynamicHost() {
+            const staticRoot = document.getElementById('dynamicPageContent');
+            if (!staticRoot) return null;
+            let host = document.getElementById('adminDynamicHost');
+            if (!host) {
+                host = document.createElement('div');
+                host.id = 'adminDynamicHost';
+                host.className = 'admin-view admin-dynamic-host';
+                host.style.display = 'none';
+                staticRoot.insertAdjacentElement('afterend', host);
+            }
+            return host;
         }
 
         function hideAdminViews() {
@@ -2904,8 +2923,9 @@
             removeHotspotView();
             const dashboardView = document.getElementById('view-main-dashboard');
             if (dashboardView) dashboardView.style.display = 'none';
-            const dynamic = document.getElementById('dynamicPageContent');
+            const dynamic = getAdminDynamicHost();
             if (!dynamic) return;
+            dynamic.classList.remove('hidden');
             dynamic.style.display = 'block';
             dynamic.innerHTML = html;
             if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
@@ -4441,7 +4461,7 @@ window.editHotspotUser=function(username,event){
         async function loadDevices(){
             purgeStuckBackdrops(); currentCustomerTitleKey=''; currentPaymentTitleKey=''; setPageTitleSafe('MikroTik Management');
             hideAdminViews(); removeHotspotView();
-            const dynamic=document.getElementById('dynamicPageContent'); if(!dynamic)return; dynamic.style.display='block';
+            const dynamic=getAdminDynamicHost(); if(!dynamic)return; dynamic.classList.remove('hidden'); dynamic.style.display='block';
             const existingCorePanel=document.getElementById('general-settings-panel-router');
             dynamic.innerHTML='<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading network device inventory…</div></section>';
             const esc=escapeHtml;
@@ -8351,8 +8371,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             currentCustomerTitleKey = '';
             currentPaymentTitleKey = '';
             setPageTitleSafe('Google Maps');
-            const dynamic = document.getElementById('dynamicPageContent');
+            hideAdminViews(); removeHotspotView();
+            const dynamic = getAdminDynamicHost();
             if (!dynamic) return;
+            dynamic.classList.remove('hidden');
+            dynamic.style.display = 'block';
             dynamic.innerHTML = `
                 <section class="admin-view p-3">
                     <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
@@ -8887,13 +8910,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function showAdminModulePlaceholder(moduleKey) {
                 const title = moduleTitles[moduleKey];
-                const dynamic = document.getElementById('dynamicPageContent');
+                const dynamic = getAdminDynamicHost();
                 if (!title || !dynamic) return false;
                 if (typeof purgeStuckBackdrops === 'function') purgeStuckBackdrops();
                 if (typeof trafficTimer !== 'undefined' && trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
                 let root = document.getElementById('fazDynamicModuleRoot');
                 if (!root) { root = document.createElement('div'); root.id = 'fazDynamicModuleRoot'; root.className = 'admin-view'; dynamic.appendChild(root); }
                 document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+                dynamic.classList.remove('hidden');
+                dynamic.style.display = 'block';
                 root.style.display = 'block';
                 if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
                 if (typeof setPageTitleSafe === 'function') setPageTitleSafe(title);
