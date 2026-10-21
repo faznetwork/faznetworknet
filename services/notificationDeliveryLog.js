@@ -37,7 +37,7 @@ async function ensureTable() {
 function providerLabel({channel, mode, preset, settings = {}} = {}) {
   if (channel === "whatsapp") return "WhatsApp";
   if (channel === "email") return String(settings.email_provider_mode || "Email").toUpperCase() === "SMTP" ? "SMTP Email" : "Email";
-  const normalizedPreset = String(preset || settings.sms_provider_preset || "").toLowerCase();
+  const normalizedPreset = mode === "provider_preset" ? String(preset || settings.sms_provider_preset || "").toLowerCase() : "";
   const labels = { greenweb: "Greenweb", alpha_sms: "Alpha SMS", elitbuzz: "Elitbuzz", bulk_sms_bd: "Bulk SMS BD" };
   if (labels[normalizedPreset]) return labels[normalizedPreset];
   if (mode === "personal_device") return "Android SMS Gateway";
