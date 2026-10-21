@@ -52,8 +52,15 @@ async function resolveSubscriber(identifier) {
   }
   return result.rows[0];
 }
+function getBillAmount(customer) {
+  const packagePrice = Number(customer.price);
+  const monthlyBill = Number(customer.monthly_bill);
+  // A zero-priced or missing package row must not override a valid customer bill.
+  const amount = Number.isFinite(packagePrice) && packagePrice > 0 ? packagePrice : monthlyBill;
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
 function publicSubscriber(customer) {
-  const amount = Number(customer.price ?? customer.monthly_bill ?? 0);
+  const amount = getBillAmount(customer);
   return {
     username: String(customer.username),
     name: String(customer.full_name || customer.username),
@@ -108,7 +115,7 @@ async function createPaymentSession(req, res) {
     }
     const customer = await resolveSubscriber(username);
     if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found.");
-    const amount = Number(customer.price ?? customer.monthly_bill ?? 0);
+    const amount = getBillAmount(customer);
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, 400, "The current monthly bill is not configured correctly.");
     const providers = await getPaymentSettings();
     if (!providers[provider]?.enabled) return fail(res, 409, "This payment provider is not configured. Please choose another provider.");
@@ -119,13 +126,21 @@ async function createPaymentSession(req, res) {
       [paymentSessionId, String(customer.username), provider, amount, expiresAt]
     );
     await db.query("DELETE FROM public_payment_sessions WHERE expires_at <= NOW()");
-    return res.set("Cache-Control", "no-store").status(201).json({
+    const providerNames = { bkash: "bKash", nagad: "Nagad", rocket: "Rocket", upay: "Upay" };
+    return res.set("Cache-Control", "no-store, max-age=0").status(201).json({
       success: true,
       paymentSessionId,
       expiresAt: new Date(expiresAt).toISOString(),
       expiresInSeconds: Math.floor(SESSION_TTL_MS / 1000),
       provider,
-      amount
+      providerName: providerNames[provider],
+      amount,
+      receivingNumber: providers[provider].number,
+      instructions: {
+        title: providerNames[provider] + " payment",
+        primaryAction: "Send Money",
+        note: "Send the exact bill amount and enter the transaction ID from the payment confirmation."
+      }
     });
   } catch (error) {
     console.error("[Public Payment Session]", error?.message || error);
@@ -177,7 +192,7 @@ async function verifyRenewal(req, res) {
     }
     const customer = await resolveSubscriber(identifier);
     if (!customer || !customer.username || !customer.plan_name) return fail(res, 404, "Subscriber account not found.");
-    const expected = Number(customer.price ?? customer.monthly_bill ?? 0);
+    const expected = getBillAmount(customer);
     if (!Number.isFinite(expected) || expected <= 0 || Math.round(submittedAmount * 100) !== Math.round(expected * 100)) {
       return fail(res, 400, "The submitted bill amount does not match the current monthly bill.");
     }

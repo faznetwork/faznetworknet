@@ -33,3 +33,19 @@ test("payment portal uses the four public API endpoints and does not submit a br
   assert.match(page, /\/api\/public\/payment\/confirm/);
   assert.match(page, /JSON\.stringify\(\{paymentSessionId,transactionId:trxId\}\)/);
 });
+
+test("public PPPoE payment session returns the configured receiving number and falls back to customer bill when package price is zero", () => {
+  const controller = read("controllers/publicPaymentController.js");
+  const page = read("public/payment.html");
+  assert.match(controller, /function getBillAmount\(customer\)/);
+  assert.match(controller, /packagePrice > 0 \? packagePrice : monthlyBill/);
+  assert.match(controller, /providerName: providerNames\[provider\]/);
+  assert.match(controller, /receivingNumber: providers\[provider\]\.number/);
+  assert.match(page, /modal\.querySelector\("\.modal"\)\.dataset\.provider=provider\.id/);
+  assert.match(page, /#e2136e/);
+  assert.match(page, /#f7941d/);
+  assert.match(page, /#832b73/);
+  assert.match(page, /#0054a6/);
+  assert.match(page, /Confirm Payment & Renew/);
+  assert.match(page, /id="modal-amount"/);
+});
