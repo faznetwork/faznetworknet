@@ -31,3 +31,10 @@ test("settings save only enabled profile names, and public config resolves exist
  assert.match(login,/config\.packages/);
  assert.match(login,/Number\.isFinite\(p\.price\)&&p\.price>0/);
 });
+
+test("admin hotspot portal settings returns default JSON settings when the database table is unavailable",()=>{
+ assert.match(controller,/async function getSettings\(_q,res\)\{let settings=\{\.\.\.defaults\}/);
+ assert.match(controller,/Database settings unavailable; returning defaults/);
+ assert.match(controller,/return res\.status\(200\)\.json\(\{success:true,settings\}\)/);
+ assert.match(controller,/function readPublicConfig\(\).*catch\(_\)\{return \{\};\}/);
+});
