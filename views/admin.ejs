@@ -9007,6 +9007,17 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     }
                     state.depth--;
                     if (isTopLevel && !state.restoring) closeDrawerAfterNavigation();
+                    // Attach a rejection handler to every async navigation entry point;
+                    // inline onclick handlers otherwise leave rejected promises unobserved.
+                    if (result && typeof result.then === 'function') {
+                        return result.catch(error => {
+                            console.error('[Admin Navigation] Handler failed:', name, error);
+                            if (typeof window.showToast === 'function') {
+                                window.showToast(error?.message || 'Unable to load this admin view.', 'error');
+                            }
+                            return false;
+                        });
+                    }
                     return result;
                 };
                 wrapped.__fazRouteWrapped = true;
