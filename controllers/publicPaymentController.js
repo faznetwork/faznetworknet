@@ -71,13 +71,17 @@ function publicSubscriber(customer) {
   };
 }
 async function getPaymentSettings() {
-  const keys = ["mfs_bkash_number", "mfs_nagad_number", "mfs_rocket_number", "mfs_upay_number"];
+  const keys = ["bkash", "nagad", "rocket", "upay"].flatMap(id => ["mfs_" + id + "_number", "mfs_" + id + "_enabled"]);
   const result = await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])", [keys]);
   const values = Object.fromEntries((result.rows || []).map(row => [row.key, row.value]));
   const providers = {};
   for (const id of ["bkash", "nagad", "rocket", "upay"]) {
     const number = clean(values["mfs_" + id + "_number"], 80);
-    providers[id] = { enabled: Boolean(number), number };
+    const enabledKey = "mfs_" + id + "_enabled";
+    const enabled = Object.prototype.hasOwnProperty.call(values, enabledKey)
+      ? ["true", "1"].includes(String(values[enabledKey]).trim().toLowerCase())
+      : Boolean(number);
+    providers[id] = { enabled: enabled && Boolean(number), number };
   }
   return providers;
 }
