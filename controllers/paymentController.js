@@ -95,11 +95,12 @@ async function webhook(req,res){
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret','mfs_bkash_number','mfs_nagad_number','mfs_rocket_number','mfs_upay_number')");
   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
+  const webhookConfig=await require("../services/webhookSettingsService").get();
   if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
-  const expected=String(settings.personal_payment_webhook_secret||"").trim();
+  const expected=String(webhookConfig.secret||settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
   if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected)))return res.status(401).json({success:false,error:"Unauthorized webhook."});
-  const payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:{bkash:settings.mfs_bkash_number,nagad:settings.mfs_nagad_number,rocket:settings.mfs_rocket_number,upay:settings.mfs_upay_number}});
+  const payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
   payment.trxId=String(payment.trxId||"").trim().toUpperCase();
   if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
