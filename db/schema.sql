@@ -164,31 +164,6 @@ INSERT INTO app_settings(key,value) VALUES
  ('notification_rule_pppoe_expired_whatsapp_enabled','false')
 ON CONFLICT(key) DO NOTHING;
 
--- Durable outbound notification delivery history across direct and broadcast sends.
-CREATE TABLE IF NOT EXISTS notification_delivery_logs (
-  id BIGSERIAL PRIMARY KEY,
-  channel VARCHAR(30) NOT NULL CHECK (channel IN ('whatsapp','sms','email','telegram','messenger')),
-  provider VARCHAR(100) NOT NULL DEFAULT 'unknown',
-  recipient VARCHAR(40) NOT NULL,
-  message_body TEXT NOT NULL,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','sent','delivered','failed','skipped')),
-  transaction_id VARCHAR(160),
-  provider_message_id VARCHAR(200),
-  error_message TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  sent_at TIMESTAMPTZ,
-  delivered_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_created
-  ON notification_delivery_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_channel_provider
-  ON notification_delivery_logs(channel, provider, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_recipient
-  ON notification_delivery_logs(recipient);
-CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_transaction
-  ON notification_delivery_logs(transaction_id) WHERE transaction_id IS NOT NULL;
-
 -- Idempotency ledger for outbound SMS events; contains no payment transaction data.
 CREATE TABLE IF NOT EXISTS sms_notification_log (
   event_key TEXT PRIMARY KEY,
