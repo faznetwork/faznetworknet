@@ -252,8 +252,8 @@ footer .border-t{border-color:#cbd5e1!important}
 #hotspotPurchaseModal .hotspot-mfs-card{display:flex;min-width:0;align-items:center;gap:11px;border:1px solid #d9e1ea;border-radius:12px;background:#fff;padding:10px 12px;color:#1f2937;text-align:left;font-size:13px;font-weight:800;transition:border-color .15s,background .15s,box-shadow .15s}
 #hotspotPurchaseModal .hotspot-mfs-card:hover{background:#fafcff;border-color:#bac8d8}
 #hotspotPurchaseModal .hotspot-mfs-card[aria-pressed="true"]{border-color:var(--hotspot-brand);background:var(--hotspot-tint);box-shadow:0 0 0 2px color-mix(in srgb,var(--hotspot-brand) 12%,transparent)}
-#hotspotPurchaseModal .hotspot-mfs-logo{display:grid;place-items:center;flex:none;width:78px;height:38px;padding:3px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;overflow:hidden}
-#hotspotPurchaseModal .hotspot-mfs-logo img{display:block;width:100%;height:100%;object-fit:contain}
+#hotspotPurchaseModal .hotspot-mfs-logo{display:grid;place-items:center;flex:none;width:82px;height:38px;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden}
+#hotspotPurchaseModal .hotspot-mfs-logo img{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
 #hotspotPurchaseModal .hotspot-mfs-logo.logo-missing:after{font-size:12px;font-weight:900;letter-spacing:-.04em}
 #hotspotPurchaseModal [data-hotspot-provider="bkash"] .hotspot-mfs-logo.logo-missing:after{content:"bKash";color:#e2136e}
 #hotspotPurchaseModal [data-hotspot-provider="nagad"] .hotspot-mfs-logo.logo-missing:after{content:"Nagad";color:#f7941d}
@@ -278,7 +278,7 @@ footer .border-t{border-color:#cbd5e1!important}
 #hotspotPurchaseModal #hotspotPurchaseResult:not(.hidden){border:1px solid #c9def3;background:#f2f8ff;color:#245d8f}
 #hotspotPurchaseModal #hotspotPurchaseResult.hotspot-result-success{border-color:#bce5d0;background:#f0fbf5;color:#176b4b}
 #hotspotPurchaseModal #hotspotPurchaseResult.hotspot-result-error{border-color:#f3c5ce;background:#fff4f5;color:#9f2338}
-@media(max-width:480px){#hotspotPurchaseModal{padding:10px}#hotspotPurchaseModal .hotspot-checkout-card{max-height:calc(100dvh - 20px);padding:16px;border-radius:15px}#hotspotPurchaseModal .hotspot-mfs-card{gap:7px;padding:9px 7px;font-size:12px}#hotspotPurchaseModal .hotspot-mfs-logo{width:64px;height:34px}}
+@media(max-width:480px){#hotspotPurchaseModal{padding:10px}#hotspotPurchaseModal .hotspot-checkout-card{max-height:calc(100dvh - 20px);padding:16px;border-radius:15px}#hotspotPurchaseModal .hotspot-mfs-card{gap:7px;padding:9px 7px;font-size:12px}#hotspotPurchaseModal .hotspot-mfs-logo{width:68px;height:32px}}
 @media(prefers-reduced-motion:reduce){#hotspotPurchaseModal *{transition:none!important}}
 </style>
 </head>
@@ -397,12 +397,8 @@ footer .border-t{border-color:#cbd5e1!important}
     <div class="hotspot-package-summary mt-5 rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><p id="purchasePackageName" class="font-bold">Selected package</p><p id="purchasePackageValidity" class="mt-1 text-sm">Hotspot access</p></div><p id="purchasePackagePrice" class="text-2xl font-black">৳0</p></div></div>
     <section class="hotspot-payment-section mt-4 rounded-2xl p-4">
       <h3 class="text-sm font-bold">Select MFS Provider</h3>
-      <div id="hotspotMfsGrid" class="hotspot-mfs-grid mt-3" role="group" aria-label="Choose mobile financial service provider">
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="bkash" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/bkash-logo.png" alt="bKash logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>bKash</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="nagad" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/nagad-logo.png" alt="Nagad logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Nagad</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="rocket" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/rocket-logo.png" alt="Rocket logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Rocket</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="upay" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/upay-logo.png" alt="Upay logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Upay</span></button>
-      </div>
+      <div id="hotspotMfsGrid" class="hotspot-mfs-grid mt-3" role="group" aria-label="Choose mobile financial service provider"></div>
+      <p id="hotspotNoMfsMethods" class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status">No mobile payment methods are currently enabled. Please contact support.</p>
       <div class="hotspot-receive mt-4 rounded-xl p-4">
         <p class="hotspot-receive-label text-xs font-extrabold uppercase tracking-wider">Official Receiving Number</p>
         <div class="mt-2 flex flex-wrap items-center gap-2"><strong id="paymentReceiverNumber" class="min-w-0 flex-1 break-all text-xl font-black">Choose a provider</strong><button id="copyPaymentReceiver" type="button" class="hotspot-copy-button shrink-0 rounded-lg px-3 py-2 text-xs font-bold" disabled>Copy Number</button></div>
@@ -447,7 +443,7 @@ footer .border-t{border-color:#cbd5e1!important}
   const $=id=>document.getElementById(id);
   const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const modal=(id,open)=>{const el=$(id);if(!el)return;el.classList.toggle("hidden",!open);el.classList.toggle("flex",open);document.body.classList.toggle("overflow-hidden",open);};
-  const paymentAccounts=<%- JSON.stringify(paymentAccounts||{bkash:"",nagad:"",rocket:"",upay:""}).replace(/</g,"\\u003c") %>;
+  let paymentAccounts=<%- JSON.stringify(paymentAccounts||{bkash:"",nagad:"",rocket:"",upay:""}).replace(/</g,"\\u003c") %>;
   let selectedHotspotPackage={name:"",price:0,validity:""},selectedHotspotProvider="";
   const hotspotProviders={bkash:{name:"bKash",color:"#e2136e"},nagad:{name:"Nagad",color:"#f7941d"},rocket:{name:"Rocket",color:"#832b73"},upay:{name:"Upay",color:"#0054a6"}};
   let hotspotPaymentTimer=null,hotspotPaymentExpiresAt=0;
@@ -460,17 +456,46 @@ footer .border-t{border-color:#cbd5e1!important}
     if(left===0){stopHotspotTimer();$("hotspotPurchaseSubmit").disabled=true;$("hotspotPurchaseSubmit").textContent="Payment Session Expired";}
   };
   const startHotspotTimer=()=>{stopHotspotTimer();hotspotPaymentExpiresAt=Date.now()+300000;$("hotspotPurchaseSubmit").disabled=false;updateHotspotTimer();hotspotPaymentTimer=setInterval(updateHotspotTimer,1000);};
+  const renderHotspotProviders=()=>{
+    const grid=$("hotspotMfsGrid");
+    const available=Object.keys(hotspotProviders).filter(key=>String(paymentAccounts[key]||"").trim());
+    grid.replaceChildren();
+    available.forEach(key=>{
+      const info=hotspotProviders[key],button=document.createElement("button");
+      button.type="button";button.className="hotspot-mfs-card";button.dataset.hotspotProvider=key;button.setAttribute("aria-pressed",String(key===selectedHotspotProvider));
+      const logoWrap=document.createElement("span");logoWrap.className="hotspot-mfs-logo";
+      const img=document.createElement("img");img.src="/assets/images/"+key+"-logo.png";img.alt=info.name+" logo";img.loading="eager";img.onerror=()=>{img.hidden=true;logoWrap.classList.add("logo-missing");};logoWrap.appendChild(img);
+      const label=document.createElement("span");label.textContent=info.name;
+      button.append(logoWrap,label);grid.appendChild(button);
+    });
+    $("hotspotNoMfsMethods").classList.toggle("hidden",available.length>0);
+    if(!available.includes(selectedHotspotProvider))selectedHotspotProvider=available[0]||"";
+    updateHotspotProvider(selectedHotspotProvider);
+  };
+  const loadHotspotPaymentMethods=async()=>{
+    try{
+      const response=await fetch("/api/settings/public",{headers:{Accept:"application/json"},cache:"no-store"});
+      if(!response.ok)throw new Error("Public payment settings unavailable");
+      const data=await response.json();
+      if(data.success===false)throw new Error("Public payment settings unavailable");
+      paymentAccounts=data.settings?.payment_accounts||{};
+    }catch(_){
+      // On network/API failure, never expose stale server-rendered methods as enabled.
+      paymentAccounts={};
+    }
+    renderHotspotProviders();
+  };
   const updateHotspotProvider=(method)=>{
-    selectedHotspotProvider=hotspotProviders[method]?method:"";
+    selectedHotspotProvider=hotspotProviders[method]&&String(paymentAccounts[method]||"").trim()?method:"";
     const card=document.querySelector("#hotspotPurchaseModal .hotspot-checkout-card");
     if(card){if(selectedHotspotProvider)card.dataset.provider=selectedHotspotProvider;else delete card.dataset.provider;}
-    document.querySelectorAll("[data-hotspot-provider]").forEach(button=>{const active=button.dataset.hotspotProvider===selectedHotspotProvider;button.setAttribute("aria-pressed",String(active));});
+    document.querySelectorAll("#hotspotMfsGrid [data-hotspot-provider]").forEach(button=>{const active=button.dataset.hotspotProvider===selectedHotspotProvider;button.setAttribute("aria-pressed",String(active));});
     const number=String(paymentAccounts[selectedHotspotProvider]||"").trim();
-    $("paymentReceiverNumber").textContent=selectedHotspotProvider?(number||"Not configured"):"Choose a provider";
+    $("paymentReceiverNumber").textContent=selectedHotspotProvider?number:"Choose a provider";
     $("paymentSetupWarning").classList.toggle("hidden",!selectedHotspotProvider||Boolean(number));
     $("copyPaymentReceiver").disabled=!number;
   };
-  document.querySelectorAll("[data-hotspot-provider]").forEach(button=>button.addEventListener("click",()=>updateHotspotProvider(button.dataset.hotspotProvider)));
+  $("hotspotMfsGrid")?.addEventListener("click",event=>{const button=event.target.closest("[data-hotspot-provider]");if(button)updateHotspotProvider(button.dataset.hotspotProvider);});
   document.querySelectorAll("[data-buy-hotspot]").forEach(button=>button.addEventListener("click",()=>{
     selectedHotspotPackage={name:button.dataset.profile||"",price:Number(button.dataset.price||0),validity:button.dataset.validity||""};
     $("purchasePackageName").textContent=selectedHotspotPackage.name;
@@ -481,8 +506,10 @@ footer .border-t{border-color:#cbd5e1!important}
     $("hotspotPurchaseResult").textContent="";
     $("hotspotPurchaseForm").reset();
     $("hotspotPaymentTimer").textContent="05:00";$("hotspotPaymentTimerFill").style.width="100%";
-    updateHotspotProvider(selectedHotspotProvider||"bkash");
+    await loadHotspotPaymentMethods();
+    if(!selectedHotspotProvider){$("hotspotPurchaseSubmit").disabled=true;$("hotspotPurchaseSubmit").textContent="No Payment Methods Available";}
     startHotspotTimer();
+    if(!selectedHotspotProvider){$("hotspotPurchaseSubmit").disabled=true;$("hotspotPurchaseSubmit").textContent="No Payment Methods Available";}
     modal("hotspotPurchaseModal",true);
   }));
   $("closeHotspotPurchase")?.addEventListener("click",()=>{stopHotspotTimer();modal("hotspotPurchaseModal",false);});
@@ -496,8 +523,8 @@ footer .border-t{border-color:#cbd5e1!important}
   $("hotspotPurchaseForm")?.addEventListener("submit",async e=>{
     e.preventDefault();const btn=$("hotspotPurchaseSubmit"),box=$("hotspotPurchaseResult");
     if(Date.now()>=hotspotPaymentExpiresAt){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="Payment session expired. Close and reopen checkout to start a new five-minute session.";return;}
-    if(!selectedHotspotProvider){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="Please select an MFS provider.";return;}
-    if(!String(paymentAccounts[selectedHotspotProvider]||"").trim()){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="The selected provider has no receiving number configured. Please contact support.";return;}
+    if(!selectedHotspotProvider){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="No enabled payment method is available. Please contact support.";return;}
+    if(!String(paymentAccounts[selectedHotspotProvider]||"").trim()){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="This payment method is no longer enabled. Please reopen checkout and choose an available method.";return;}
     if(!selectedHotspotPackage.name||!selectedHotspotPackage.price){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent="Please select a valid package.";return;}
     btn.disabled=true;btn.textContent="Verifying payment…";box.className="rounded-xl p-4 text-sm";box.textContent="Checking payment and saving your pending Hotspot package…";
     try{
