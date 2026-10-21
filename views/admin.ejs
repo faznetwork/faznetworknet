@@ -4268,8 +4268,8 @@ window.editHotspotUser=function(username,event){
             if (!button) return;
             const submenu = button.nextElementSibling;
             const isGeneralSettingsParent = button.classList.contains('general-settings-toggle');
-            const currentPath = window.location.pathname.replace(/\\/$/, '') || '/';
-            const isInsideGeneralSettings = /^\\/admin\\/settings(?:\\/|$)/.test(currentPath);
+            const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+            const isInsideGeneralSettings = /^\/admin\/settings(?:\/|$)/.test(currentPath);
             // Keep General Settings expanded whenever any of its routes is active.
             const isOpen = isGeneralSettingsParent && isInsideGeneralSettings
                 ? true
@@ -4933,7 +4933,7 @@ async function deletePlan(id,name){
         }
         window.syncGeneralSettingsSidebar = syncGeneralSettingsSidebar;
         function initializeGeneralSettingsRoute() {
-          const path = location.pathname.replace(/\\/$/, '') || '/';
+          const path = location.pathname.replace(/\/$/, '') || '/';
           const target = settingsTargetByPath[path];
           if (!target || typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return;
           window.switchView('general-settings');
