@@ -8553,8 +8553,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 paymentFilters: ['pending', 'all', 'requests', 'bkash', 'nagad', 'rocket'],
                 paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments'],
                 hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales'],
-                hotspotFilters: ['all', 'active', 'offline'],
-                hotspotTitles: ['all_user', 'active_user', 'offline_user'],
+                hotspotFilters: ['all', 'online', 'active', 'offline', 'expired'],
+                hotspotTitles: ['all_user', 'online_user', 'active_user', 'offline_user', 'expired_user'],
                 voucherFilters: ['all', 'cleanup'],
                 oltModes: ['overview', 'onts', 'topology']
             };
@@ -8604,7 +8604,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'hotspot') {
                     const section = has(allowed.hotspotSections, route.section) ? route.section : 'dashboard';
                     const filter = has(allowed.hotspotFilters, route.filter) ? route.filter : 'all';
-                    const title = has(allowed.hotspotTitles, route.title) ? route.title : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : 'all_user');
+                    const title = has(allowed.hotspotTitles, route.title) ? route.title : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : filter === 'online' ? 'online_user' : filter === 'expired' ? 'expired_user' : 'all_user');
                     const voucherFilter = has(allowed.voucherFilters, route.filter) ? route.filter : 'all';
                     return { view: 'hotspot', section, filter: section === 'vouchers' ? voucherFilter : filter, title };
                 }
@@ -8654,8 +8654,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hotspot/dashboard': { view: 'hotspot', section: 'dashboard' },
                     '/admin/hotspot/add-user': { view: 'hotspot', section: 'add-user' },
                     '/admin/hotspot/users/all': { view: 'hotspot', section: 'users', filter: 'all', title: 'all_user' },
+                    '/admin/hotspot/users/online': { view: 'hotspot', section: 'users', filter: 'online', title: 'online_user' },
                     '/admin/hotspot/users/active': { view: 'hotspot', section: 'users', filter: 'active', title: 'active_user' },
                     '/admin/hotspot/users/offline': { view: 'hotspot', section: 'users', filter: 'offline', title: 'offline_user' },
+                    '/admin/hotspot/users/expired': { view: 'hotspot', section: 'users', filter: 'expired', title: 'expired_user' },
                     '/admin/hotspot/profiles': { view: 'hotspot', section: 'profiles' },
                     '/admin/hotspot/vouchers/generate': { view: 'hotspot', section: 'voucher-generator' },
                     '/admin/hotspot/vouchers/manage': { view: 'hotspot', section: 'vouchers', filter: 'all' },
@@ -8739,7 +8741,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 if (normalized.view === 'customers') {
                     const paths = {
-                        all: 'all', online: 'online', offline: 'offline', active: 'active',
+                        all: 'all', online: 'online', offline: 'offline', active: 'active', expired: 'expired',
                         expire: 'expired', expire_today_yesterday: 'expiring-today-yesterday',
                         expire_7_days: 'expiring-next-7-days', new: 'new', due: 'due'
                     };
@@ -8948,7 +8950,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'loadHotspotDashboard': return { view: 'hotspot', section: 'dashboard' };
                     case 'loadHotspotSection': {
                         const filter = has(allowed.hotspotFilters, args[0]) ? args[0] : 'all';
-                        return { view: 'hotspot', section: 'users', filter, title: has(allowed.hotspotTitles, args[1]) ? args[1] : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : 'all_user') };
+                        return { view: 'hotspot', section: 'users', filter, title: has(allowed.hotspotTitles, args[1]) ? args[1] : (filter === 'active' ? 'active_user' : filter === 'offline' ? 'offline_user' : filter === 'online' ? 'online_user' : filter === 'expired' ? 'expired_user' : 'all_user') };
                     }
                     case 'loadAddHotspotUserView': return { view: 'hotspot', section: 'add-user' };
                     case 'loadHotspotProfiles': return { view: 'hotspot', section: 'profiles' };
