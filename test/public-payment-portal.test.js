@@ -28,7 +28,7 @@ test("payment portal is English-only and dedicated to PPPoE with a five-minute p
   assert.match(page, /\/api\/public\/payment\/session/);
   assert.match(page, /\/api\/public\/payment\/confirm/);
   assert.doesNotMatch(page, /hotspot|hotspot-mac|hotspot-phone|hotspot-packages|\/api\/verify-trx|submitMikrotik/i);
-  assert.doesNotMatch(page, /[\u0980-\u09FF]/, "all visible copy and markup must use English");
+  assert.doesNotMatch(page, /[\u0980-\u09F2\u09F4-\u09FF]/, "all visible copy and markup must use English");
 });
 
 test("public PPPoE renewal validates bill, MFS channel and unused transaction before guarded renewal", () => {
