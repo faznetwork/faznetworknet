@@ -8625,7 +8625,12 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
                     if (route.page === 'payments') return { view: 'payments', filter: 'all', title: 'all_payments', channel: route.channel || '' };
+                    if (route.page === 'general-settings') return { view: 'settings', section: 'brand' };
                     return { view: 'page', page: route.page, channel: route.channel || '' };
+                }
+                if (route.view === 'settings') {
+                    const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
+                    return { view: 'settings', section: sections.includes(String(route.section || '')) ? String(route.section) : 'brand' };
                 }
                 if (route.view === 'customers') {
                     const filter = has(allowed.customerFilters, route.filter) ? route.filter : 'all';
@@ -8707,7 +8712,14 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/audit-logs': { view: 'audit' },
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support', category: 'all' },
-                    '/admin/settings': { view: 'page', page: 'general-settings' },
+                    '/admin/settings': { view: 'settings', section: 'brand' },
+                    '/admin/settings/general': { view: 'settings', section: 'brand' },
+                    '/admin/settings/brand-identity': { view: 'settings', section: 'brand' },
+                    '/admin/settings/billing-expiry': { view: 'settings', section: 'billing' },
+                    '/admin/settings/payment-webhooks': { view: 'settings', section: 'payments' },
+                    '/admin/settings/sms-alerts': { view: 'settings', section: 'sms' },
+                    '/admin/settings/hotspot-portal': { view: 'settings', section: 'hotspot-portal' },
+                    '/admin/settings/webhooks': { view: 'settings', section: 'webhooks' },
                     '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
                     '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
@@ -8747,9 +8759,20 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (normalized.view === 'dashboard') return '/admin/dashboard';
                 if (normalized.view === 'page') {
                     if (normalized.page === 'add-customer') return '/admin/customers/add';
-                    if (normalized.page === 'general-settings') return '/admin/settings';
+                    if (normalized.page === 'general-settings') return '/admin/settings/brand-identity';
                     if (normalized.page === 'all-customer') return '/admin/customers/all';
                     if (normalized.page === 'payments') return '/admin/payments/' + (normalized.channel || 'all');
+                }
+                if (normalized.view === 'settings') {
+                    const paths = {
+                        brand: '/admin/settings/brand-identity',
+                        billing: '/admin/settings/billing-expiry',
+                        payments: '/admin/settings/payment-webhooks',
+                        sms: '/admin/settings/sms-alerts',
+                        'hotspot-portal': '/admin/settings/hotspot-portal',
+                        webhooks: '/admin/settings/webhooks'
+                    };
+                    return paths[normalized.section] || paths.brand;
                 }
                 if (normalized.view === 'customers') {
                     const paths = {
@@ -8866,6 +8889,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'hr': return callIfAvailable('loadHRModule', [r.section]);
                     case 'network-diagram': return callIfAvailable('loadNetworkDiagram');
                     case 'monitor': return callIfAvailable('loadNetworkMonitor', [r.mode || 'online']);
+                    case 'settings':
+                        if (typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return false;
+                        window.switchView('general-settings');
+                        return window.showGeneralSettingsSection(r.section);
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
@@ -8926,7 +8953,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         if (page === 'add-customer') return { view: 'page', page: 'add-customer' };
                         if (page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
                         if (page === 'payments') return { view: 'payments', filter: args[1] || 'all', title: paymentTitleByFilter[args[1] || 'all'] || 'all_payments' };
-                        if (page === 'general-settings') return { view: 'page', page };
+                        if (page === 'general-settings') return { view: 'settings', section: 'brand' };
                         return null;
                     }
                     case 'showAddCustomerForm': return { view: 'page', page: 'add-customer' };
