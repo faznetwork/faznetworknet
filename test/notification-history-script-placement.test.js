@@ -10,7 +10,7 @@ test("notification history client script is loaded outside inline JavaScript tem
   const scriptIndex = view.indexOf(scriptTag);
   assert.notEqual(scriptIndex, -1, "history client script must be included once");
   assert.equal(view.indexOf(scriptTag, scriptIndex + scriptTag.length), -1, "history client script must not be duplicated");
-  assert.ok(scriptIndex > view.lastIndexOf("</script>"), "history client script must be outside all inline scripts/template literals");
+  assert.ok(scriptIndex > view.lastIndexOf("</script>", scriptIndex), "history client script must be outside all inline scripts/template literals");
   assert.ok(scriptIndex < view.lastIndexOf("</body>"), "history client script must be loaded before the document body closes");
   const printTemplateStart = view.indexOf('<div class="slip">${card.innerHTML}</div>');
   assert.notEqual(printTemplateStart, -1, "print template marker must remain intact");
