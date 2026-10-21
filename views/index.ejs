@@ -254,6 +254,11 @@ footer .border-t{border-color:#cbd5e1!important}
 #hotspotPurchaseModal .hotspot-mfs-card[aria-pressed="true"]{border-color:var(--hotspot-brand);background:var(--hotspot-tint);box-shadow:0 0 0 2px color-mix(in srgb,var(--hotspot-brand) 12%,transparent)}
 #hotspotPurchaseModal .hotspot-mfs-logo{display:grid;place-items:center;flex:none;width:78px;height:38px;padding:3px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;overflow:hidden}
 #hotspotPurchaseModal .hotspot-mfs-logo img{display:block;width:100%;height:100%;object-fit:contain}
+#hotspotPurchaseModal .hotspot-mfs-logo.logo-missing:after{font-size:12px;font-weight:900;letter-spacing:-.04em}
+#hotspotPurchaseModal [data-hotspot-provider="bkash"] .hotspot-mfs-logo.logo-missing:after{content:"bKash";color:#e2136e}
+#hotspotPurchaseModal [data-hotspot-provider="nagad"] .hotspot-mfs-logo.logo-missing:after{content:"Nagad";color:#f7941d}
+#hotspotPurchaseModal [data-hotspot-provider="rocket"] .hotspot-mfs-logo.logo-missing:after{content:"ROCKET";color:#832b73}
+#hotspotPurchaseModal [data-hotspot-provider="upay"] .hotspot-mfs-logo.logo-missing:after{content:"upay";color:#0054a6}
 #hotspotPurchaseModal .hotspot-receive{border:1px solid color-mix(in srgb,var(--hotspot-brand) 24%,white);background:var(--hotspot-tint)}
 #hotspotPurchaseModal .hotspot-receive-label{color:var(--hotspot-brand)}
 #hotspotPurchaseModal #paymentReceiverNumber{color:var(--hotspot-brand)}
@@ -393,10 +398,10 @@ footer .border-t{border-color:#cbd5e1!important}
     <section class="hotspot-payment-section mt-4 rounded-2xl p-4">
       <h3 class="text-sm font-bold">Select MFS Provider</h3>
       <div id="hotspotMfsGrid" class="hotspot-mfs-grid mt-3" role="group" aria-label="Choose mobile financial service provider">
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="bkash" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/bkash-logo.png" alt="bKash logo"></span><span>bKash</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="nagad" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/nagad-logo.png" alt="Nagad logo"></span><span>Nagad</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="rocket" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/rocket-logo.png" alt="Rocket logo"></span><span>Rocket</span></button>
-        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="upay" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/upay-logo.png" alt="Upay logo"></span><span>Upay</span></button>
+        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="bkash" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/bkash-logo.png" alt="bKash logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>bKash</span></button>
+        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="nagad" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/nagad-logo.png" alt="Nagad logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Nagad</span></button>
+        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="rocket" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/rocket-logo.png" alt="Rocket logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Rocket</span></button>
+        <button type="button" class="hotspot-mfs-card" data-hotspot-provider="upay" aria-pressed="false"><span class="hotspot-mfs-logo"><img src="/assets/images/upay-logo.png" alt="Upay logo" onerror="this.hidden=true;this.parentElement.classList.add('logo-missing')"></span><span>Upay</span></button>
       </div>
       <div class="hotspot-receive mt-4 rounded-xl p-4">
         <p class="hotspot-receive-label text-xs font-extrabold uppercase tracking-wider">Official Receiving Number</p>
@@ -502,7 +507,7 @@ footer .border-t{border-color:#cbd5e1!important}
       box.textContent="Payment verified. Connect to FAZ NETWORK Wi-Fi and enter this same 11-digit phone on the captive login page. Your device MAC will bind on first login, when package validity starts.";
       btn.textContent="Package Activated";
     }catch(error){box.className="rounded-xl p-4 text-sm hotspot-result-error";box.textContent=error.message||"Unable to verify payment. Check the TrxID and try again.";btn.textContent="Verify Payment & Activate Package";}
-    finally{btn.disabled=false;}
+    finally{btn.disabled=Date.now()>=hotspotPaymentExpiresAt;if(btn.disabled&&btn.textContent!=="Package Activated")btn.textContent="Payment Session Expired";}
   });
   [$("supportBtn"),$("supportBtnFooter")].forEach(b=>b&&b.addEventListener("click",()=>modal("supportModal",true)));
   document.querySelectorAll("[data-open-support]").forEach(b=>b.addEventListener("click",()=>modal("supportModal",true)));
