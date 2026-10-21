@@ -95,7 +95,11 @@ async function webhook(req,res){
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret','mfs_bkash_number','mfs_nagad_number','mfs_rocket_number','mfs_upay_number')");
   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
-  const webhookConfig=await require("../services/webhookSettingsService").get();
+  let webhookConfig={secret:String(settings.personal_payment_webhook_secret||""),senders:require("../services/paymentWebhookParser").OFFICIAL_SENDERS,recipients:{bkash:settings.mfs_bkash_number,nagad:settings.mfs_nagad_number,rocket:settings.mfs_rocket_number,upay:settings.mfs_upay_number}};
+  // Do not let a settings-table bootstrap failure turn a disabled legacy webhook into HTTP 400.
+  // Existing app_settings remain a safe compatibility fallback while the singleton table initializes.
+  try { webhookConfig=await require("../services/webhookSettingsService").get(); }
+  catch(error) { console.error("[Payment Webhook] Could not load webhook_settings; using legacy configuration fallback:", error.message); }
   if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
   const expected=String(webhookConfig.secret||settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
