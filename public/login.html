@@ -446,6 +446,8 @@
     <input type="hidden" name="password" id="mt-pass" value="$(mac)">
     <input type="hidden" name="dst" value="$(link-orig)">
     <input type="hidden" name="popup" value="true">
+    <input type="hidden" name="chap-id" value="$(chap-id)">
+    <input type="hidden" name="chap-challenge" value="$(chap-challenge)">
 </form>
 
 <input type="hidden" id="router-mac" value="$(mac)">
@@ -518,7 +520,7 @@ function applyFeatures(config){if(!config)return;const box=byId('portal-banner')
 async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
 const PALETTES=[{bg:'rgba(16,185,129,.12)'},{bg:'rgba(59,130,246,.12)'},{bg:'rgba(245,158,11,.12)'},{bg:'rgba(236,72,153,.12)'},{bg:'rgba(139,92,246,.12)'},{bg:'rgba(6,182,212,.12)'},{bg:'rgba(239,68,68,.12)'},{bg:'rgba(132,204,22,.12)'}];
 function renderPackagePalette(index,node){if(node)node.style.background=PALETTES[index%PALETTES.length].bg;}
-async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
+async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
 async function startQrScanner(){if(!navigator.mediaDevices?.getUserMedia)return;const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});try{const video=document.createElement('video');video.srcObject=stream;await video.play();const detector='BarcodeDetector'in window?new BarcodeDetector({formats:['qr_code']}):null;if(detector){const codes=await detector.detect(video);if(codes[0]&&byId('voucher_pin'))byId('voucher_pin').value=codes[0].rawValue.trim().toUpperCase();}}finally{stream.getTracks().forEach(t=>t.stop());}}
 async function handleMasterAction(){
  const currentMethod=byId('m-btn-online')?.dataset.active==='true'?'online':byId('m-btn-pin')?.dataset.active==='true'?'pin':'member';
