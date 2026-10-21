@@ -847,19 +847,7 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
         }
     }
 
-    // MikroTik hotspot default credentials: username = router MAC, password = router MAC.
-    function initializeMacAutoLogin() {
-        const mac = String(document.getElementById('router-mac')?.value || '$(mac)').trim();
-        const username = document.getElementById('mt-user');
-        const password = document.getElementById('mt-pass');
-        if (username) username.value = mac;
-        if (password) password.value = mac;
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeMacAutoLogin();
-        loadPublicPortalData();
-    });
+    document.addEventListener('DOMContentLoaded', loadPublicPortalData);
 </script>
 
 </body>
