@@ -2208,6 +2208,7 @@
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="rules">Notification Rules</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="templates"><i class="bi bi-file-earmark-text me-1"></i>Message Templates</button></li>
         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="broadcast"><i class="bi bi-megaphone me-1"></i>Bulk Broadcast</button></li>
+         <li class="nav-item"><button class="nav-link" type="button" data-notify-tab="history"><i class="bi bi-clock-history me-1"></i>Message History</button></li>
       </ul>
       <form id="systemSmsForm" novalidate>
         <section data-notify-panel="sms">
@@ -2320,6 +2321,27 @@
           <div class="mt-4"><div class="d-flex align-items-center justify-content-between gap-2 mb-2"><h6 class="fw-bold mb-0">Recent Broadcast History</h6><button type="button" id="broadcastHistoryRefresh" class="btn btn-sm btn-outline-secondary">Refresh history</button></div><div id="broadcastHistory" class="small text-muted">No history loaded.</div></div>
         </div></div>
       </section>
+      <section data-notify-panel="history" id="notificationHistoryPanel" style="display:none">
+  <div class="card border-0 shadow-sm"><div class="card-body p-3 p-lg-4">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+      <div><h5 class="fw-bold mb-1"><i class="bi bi-clock-history text-success me-2"></i>Message &amp; Notification History</h5><p class="small text-muted mb-0">Search outgoing WhatsApp and SMS gateway attempts, provider results, recipients, and transaction references.</p></div>
+      <div class="d-flex align-items-center gap-2"><div class="text-end"><div class="small text-muted">Matching records</div><div class="fs-4 fw-bold text-success" id="notificationHistoryTotal">0</div></div><button type="button" id="notificationHistoryRefresh" class="btn btn-outline-success"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-5"><label class="form-label small fw-semibold" for="notificationHistorySearch">Search recipient / transaction ID</label><div class="input-group"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="notificationHistorySearch" class="form-control" type="search" maxlength="160" placeholder="Phone number, transaction ID, or message text" autocomplete="off"></div></div>
+      <div class="col-6 col-lg-2"><label class="form-label small fw-semibold" for="notificationHistoryChannel">Channel</label><select id="notificationHistoryChannel" class="form-select"><option value="all">All channels</option><option value="whatsapp">WhatsApp</option><option value="sms">SMS Gateway</option><option value="email">Email</option></select></div>
+      <div class="col-6 col-lg-2"><label class="form-label small fw-semibold" for="notificationHistoryProvider">Provider / Gateway</label><select id="notificationHistoryProvider" class="form-select"><option value="all">All SMS gateways</option></select></div>
+      <div class="col-12 col-lg-3"><label class="form-label small fw-semibold" for="notificationHistoryStatus">Delivery status</label><select id="notificationHistoryStatus" class="form-select"><option value="all">All statuses</option><option value="pending">Pending</option><option value="sent">Sent</option><option value="delivered">Delivered</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select></div>
+    </div>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><div id="notificationHistoryResult" class="small text-muted" role="status" aria-live="polite">Open this tab to load recent notification attempts.</div><div class="d-flex align-items-center gap-2"><span id="notificationHistoryPage" class="small text-muted">Page 1</span><button id="notificationHistoryPrev" type="button" class="btn btn-sm btn-light border" disabled><i class="bi bi-chevron-left"></i><span class="visually-hidden">Previous page</span></button><button id="notificationHistoryNext" type="button" class="btn btn-sm btn-light border" disabled><i class="bi bi-chevron-right"></i><span class="visually-hidden">Next page</span></button></div></div>
+    <div class="table-responsive border rounded-3"><table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-light"><tr><th class="text-nowrap">Timestamp</th><th>Channel</th><th>Gateway</th><th>Recipient</th><th>Message</th><th>Transaction / Message ID</th><th>Status</th></tr></thead>
+      <tbody id="notificationHistoryRows"><tr><td colspan="7" class="text-center text-muted py-5">Open this tab to load history.</td></tr></tbody>
+    </table></div>
+    <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>“Sent” means the provider accepted the send request. A delivery confirmation is shown only when the provider reports one; failed attempts include the returned error where available.</div>
+  </div></div>
+</section>
+
       <div class="modal fade" id="notificationTestLogModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="notificationTestLogTitle">Notification Test Response</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><pre id="notificationTestLogBody" class="small text-wrap mb-0" style="max-height:55vh;overflow:auto"></pre></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
     </div>
   </div>
@@ -3015,6 +3037,7 @@
   }
 }
 </style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
+<script src="/js/notification-history.js?v=delivery-history-20261022" defer></script>
 </body></html>`);
             w.document.close();
         }
