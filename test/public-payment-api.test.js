@@ -49,3 +49,22 @@ test("public PPPoE payment session returns the configured receiving number and f
   assert.match(page, /Confirm Payment & Renew/);
   assert.match(page, /id="modal-amount"/);
 });
+
+
+test("public payment session schema is installed idempotently and creation uses an atomic transaction", () => {
+  const controller = read("controllers/publicPaymentController.js");
+  const schema = read("db/schema.sql");
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS public_payment_sessions/);
+  assert.match(schema, /CHECK \(provider IN \('bkash','nagad','rocket','upay'\)\)/);
+  assert.match(controller, /await client\.query\("BEGIN"\)/);
+  assert.match(controller, /await client\.query\("COMMIT"\)/);
+  assert.match(controller, /client\.query\("ROLLBACK"\)/);
+  assert.match(controller, /finally \{\s*client\.release\(\)/);
+});
+
+test("MFS provider SVGs are symbol-only and each button has one separate text label", () => {
+  const page = read("public/payment.html");
+  assert.doesNotMatch(page, /<text\b/);
+  assert.match(page, /name\.className="mfs-name";name\.textContent=p\.name;b\.append\(mark,name\)/);
+  assert.doesNotMatch(page, /\.mfs\[data-provider=(?:bkash|nagad|rocket|upay)\] \.mfs-mark\{background:/);
+});
