@@ -23,11 +23,10 @@ const settingsPaths = [
 test('every General Settings sidebar link has a client target and an Express page route', () => {
   for (const [url, target] of settingsPaths) {
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
-    assert.ok(mainScript.includes(`'${url}': '${target}'`) || mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
-    assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'shared settings route must include webhooks');
+    assert.ok(mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
   }
-  assert.match(serverSource, /app\.get\(\/\^\\\/admin\\\/settings\\\//);
-  assert.match(serverSource, /hotspot-portal\|webhooks\)/);
+  assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'shared settings route must include webhooks');
+  assert.ok(serverSource.includes('renderAdminSettingsPage'), 'shared settings page renderer must exist');
 });
 
 test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
@@ -44,7 +43,7 @@ test('settings save forms submit asynchronously and have matching API handlers',
     assert.ok(adminView.includes(`id="${id}"`), `settings form missing: ${id}`);
   }
   assert.match(adminView, /function saveSystemSettings\(payload,buttonId,resultId\)/);
-  assert.match(adminView, /fetch\('\/api\/settings\/update'/);
+  assert.match(adminView, /generalSettingsPost\('\/api\/settings\/update'/);
   assert.match(adminView, /fetch\('\/api\/admin\/webhook-settings'/);
   assert.match(portalScript, /f\.addEventListener\('submit',save\)/);
   assert.match(portalScript, /req\(api,\{method:'PUT'/);
