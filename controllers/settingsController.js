@@ -209,7 +209,9 @@ async function publicSettings(req,res){
  try{
   const brand=await appSettingsService.getBrandSettings();
   const all=await appSettingsService.getAllSettings();
-  return res.set("Cache-Control","public, max-age=30").json({success:true,settings:{...brand,payment_accounts:{bkash:all.mfs_bkash_number||"",nagad:all.mfs_nagad_number||"",rocket:all.mfs_rocket_number||"",upay:all.mfs_upay_number||""}}});
+  const paymentAccounts={bkash:String(all.mfs_bkash_number||"").trim(),nagad:String(all.mfs_nagad_number||"").trim(),rocket:String(all.mfs_rocket_number||"").trim(),upay:String(all.mfs_upay_number||"").trim()};
+  const activePaymentMethods=Object.keys(paymentAccounts).filter(method=>Boolean(paymentAccounts[method]));
+  return res.set("Cache-Control","no-store").json({success:true,settings:{...brand,payment_accounts:paymentAccounts,active_payment_methods:activePaymentMethods}});
  }catch(error){return res.status(503).json({success:false,message:"Public settings temporarily unavailable."});}
 }
 
