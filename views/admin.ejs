@@ -1898,11 +1898,11 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon" aria-hidden="true"></i>
                 </button>
                 <ul id="general-settings-submenu" class="submenu general-settings-submenu" aria-label="General Settings sections">
-                    <li><a href="javascript:void(0)" data-settings-nav="brand" onclick="event.preventDefault(); return false;"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="billing" onclick="event.preventDefault(); return false;"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="payments" onclick="event.preventDefault(); return false;"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="sms" onclick="event.preventDefault(); return false;"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
-                    <li><a href="javascript:void(0)" data-settings-nav="hotspot-portal" onclick="event.preventDefault(); return false;"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
+                    <li><a href="/admin/settings/brand-identity" data-settings-nav="brand"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
+                    <li><a href="/admin/settings/billing-expiry" data-settings-nav="billing"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
+                    <li><a href="/admin/settings/payment-webhooks" data-settings-nav="payments"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
+                    <li><a href="/admin/settings/sms-alerts" data-settings-nav="sms"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
+                    <li><a href="/admin/settings/hotspot-portal" data-settings-nav="hotspot-portal"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
                     <li><a href="/admin/settings/webhooks" data-settings-nav="webhooks"><i class="bi bi-shield-lock me-2"></i><span>Webhooks &amp; API</span></a></li>
                 </ul>
             </li>
@@ -4895,29 +4895,30 @@ async function deletePlan(id,name){
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
-        // Keep sidebar navigation self-contained on admin.ejs; main.js may not be loaded
-        // by this server-rendered page, and both paths share a guard against double binding.
-        // General Settings stay within the existing admin view; submenu items switch panels only.
-        if (!window.__generalSettingsSidebarNavigationBound) {
-          window.__generalSettingsSidebarNavigationBound = true;
-          document.addEventListener('click', event => {
-            const link = event.target.closest('#sidebar [data-settings-nav]');
-            if (!link) return;
-            event.preventDefault();
-            const target = link.dataset.settingsNav;
-            const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
-            if (!validTargets.includes(target)) return;
-            document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
-              const active = item === link;
-              item.classList.toggle('active', active);
-              if (active) item.setAttribute('aria-current', 'page');
-              else item.removeAttribute('aria-current');
-            });
-            if (typeof window.switchView === 'function') window.switchView('general-settings');
-            window.showGeneralSettingsSection(target);
+        // Use native links for navigation. The route is activated only after switchView is
+        // assigned below; invoking it earlier leaves the parent admin view hidden (white page).
+        const settingsTargetByPath = {
+          '/admin/settings/general':'brand',
+          '/admin/settings/brand-identity':'brand',
+          '/admin/settings/billing-expiry':'billing',
+          '/admin/settings/payment-webhooks':'payments',
+          '/admin/settings/sms-alerts':'sms',
+          '/admin/settings/hotspot-portal':'hotspot-portal',
+          '/admin/settings/webhooks':'webhooks'
+        };
+        function initializeGeneralSettingsRoute() {
+          const path = location.pathname.replace(/\/$/, '') || '/';
+          const target = settingsTargetByPath[path];
+          if (!target || typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return;
+          window.switchView('general-settings');
+          window.showGeneralSettingsSection(target);
+          document.querySelectorAll('#general-settings-submenu [data-settings-nav]').forEach(item => {
+            const active = item.dataset.settingsNav === target;
+            item.classList.toggle('active', active);
+            if (active) item.setAttribute('aria-current','page');
+            else item.removeAttribute('aria-current');
           });
         }
-        if (location.pathname.replace(/\/$/, '') === '/admin/settings/webhooks') { if (typeof window.switchView === 'function') window.switchView('general-settings'); window.showGeneralSettingsSection('webhooks'); document.querySelector('#general-settings-submenu [data-settings-nav="webhooks"]')?.classList.add('active'); }
         document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
         document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
@@ -5419,6 +5420,7 @@ async function deletePlan(id,name){
         }
 
         window.switchView = switchView;
+        initializeGeneralSettingsRoute();
 
         let currentSupportCategory = 'all';
         window.loadSupportTickets = async function(category = currentSupportCategory) {
