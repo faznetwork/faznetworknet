@@ -2811,6 +2811,8 @@
         }
 
         window.loadHotspotVoucherRecords = async function(filter,title){
+            currentHotspotMode = String(filter || 'all');
+            currentHotspotTitleKey = String(title || 'Voucher Management');
             const container=document.getElementById('dynamicPageContent');
             if(document.getElementById('view-main-dashboard'))document.getElementById('view-main-dashboard').style.display='none';
             if(document.getElementById('view-hotspot-dashboard'))document.getElementById('view-hotspot-dashboard').style.display='none';
@@ -2848,6 +2850,8 @@
             catch(error){alert(error.message||'Unable to remove Hotspot credentials.');}
         };
         window.loadHotspotVoucherSales = async function(){
+            currentHotspotMode = 'sales';
+            currentHotspotTitleKey = 'Voucher Sales History';
             const container=document.getElementById('dynamicPageContent');
             if(document.getElementById('view-main-dashboard')) document.getElementById('view-main-dashboard').style.display='none';
             if(document.getElementById('view-hotspot-dashboard')) document.getElementById('view-hotspot-dashboard').style.display='none';
