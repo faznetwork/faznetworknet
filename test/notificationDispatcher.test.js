@@ -63,7 +63,7 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
   assert.equal(result.success,true);
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].channel,"whatsapp");
-  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test"}]);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test",event:"pppoe_renewal"}]);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
