@@ -212,7 +212,8 @@ test("Email dispatch logs and skips customers without an email address",async()=
 
 test("SMS history instrumentation is shared by automatic notifications and live test SMS",()=>{
  const source=require("node:fs").readFileSync(require.resolve("../services/smsService"),"utf8");
+ const historySource=require("node:fs").readFileSync(require.resolve("../services/messageHistoryService"),"utf8");
  assert.match(source,/async function recordSmsDelivery/);
- assert.match(source,/INSERT INTO sms_delivery_logs/);
  assert.match(source,/finally\{[\s\S]*await recordSmsDelivery/);
+ assert.match(historySource,/INSERT INTO sms_delivery_logs/);
 });
