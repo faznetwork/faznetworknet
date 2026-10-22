@@ -313,7 +313,7 @@ async function createUser(req,res){
     const stored=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-phone:"+phone]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-username:"+username.toLowerCase()]);
-      const duplicateUsername=await client.query("SELECT id FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1::text) AND LOWER(COALESCE(status,''))<>'archived' AND COALESCE(subscriber_type,'legacy')='direct_subscriber' LIMIT 1 FOR UPDATE",[username]);
+      const duplicateUsername=await client.query("SELECT id FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1::text) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active') LIMIT 1 FOR UPDATE",[username]);
       if(duplicateUsername.rows?.length)throw hotspotError("USERNAME_ALREADY_EXISTS",409,"This username is already assigned to a Hotspot subscriber.");
       const phoneResult=await client.query("SELECT id,status,expires_at FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2)) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active') ORDER BY id DESC FOR UPDATE",[phone]);
       const livePhone=(phoneResult.rows||[]).some(row=>String(row.status||"").toLowerCase()!=="expired"&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now()));
