@@ -14,7 +14,7 @@ async function recordMessage({ channel, to, message, event = "manual", status, e
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())`,
       [phone, recipient, normalizedChannel, body, String(event || "manual").slice(0,80), status,
        gateway ? String(gateway).slice(0,40) : null, method ? String(method).slice(0,20) : null,
-       Number.isInteger(httpStatus) ? httpStatus : null, error ? String(error).replace(/[\\r\\n\\t]+/g," ").slice(0,1000) : null,
+       Number.isInteger(httpStatus) ? httpStatus : null, error ? String(error).replace(/[\r\n\t]+/g," ").slice(0,1000) : null,
        providerMessageId ? String(providerMessageId).slice(0,255) : null]
     );
   } catch (loggingError) {
