@@ -4925,17 +4925,6 @@ async function deletePlan(id,name){
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
-        // Use native links for navigation. The route is activated only after switchView is
-        // assigned below; invoking it earlier leaves the parent admin view hidden (white page).
-        const settingsTargetByPath = {
-          '/admin/settings/general':'brand',
-          '/admin/settings/brand-identity':'brand',
-          '/admin/settings/billing-expiry':'billing',
-          '/admin/settings/payment-webhooks':'payments',
-          '/admin/settings/sms-alerts':'sms',
-          '/admin/settings/hotspot-portal':'hotspot-portal',
-          '/admin/settings/webhooks':'webhooks'
-        };
         function syncGeneralSettingsSidebar(target) {
           const parent = document.querySelector('#sidebar .general-settings-toggle');
           const submenu = document.getElementById('general-settings-submenu');
@@ -4956,14 +4945,6 @@ async function deletePlan(id,name){
           });
         }
         window.syncGeneralSettingsSidebar = syncGeneralSettingsSidebar;
-        function initializeGeneralSettingsRoute() {
-          const path = location.pathname.replace(/\/$/, '') || '/';
-          const target = settingsTargetByPath[path];
-          if (!target || typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return;
-          window.switchView('general-settings');
-          window.showGeneralSettingsSection(target);
-          syncGeneralSettingsSidebar(target);
-        }
         document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
         document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
@@ -5509,7 +5490,6 @@ async function deletePlan(id,name){
         }
 
         window.switchView = switchView;
-        initializeGeneralSettingsRoute();
 
         let currentSupportCategory = 'all';
         window.loadSupportTickets = async function(category = currentSupportCategory) {
@@ -6087,8 +6067,6 @@ async function deletePlan(id,name){
                 return false;
             }
         };
-
-        if (window.location.hash === '#hotspot-webhook') switchView('general-settings');
 
         window.showSection = function(sectionId) {
             const id = String(sectionId || '').trim();
