@@ -157,6 +157,17 @@
             padding: 24px;
         }
 
+/* Desktop workspace must reserve the fixed sidebar's full width. */
+@media (min-width: 769px) {
+    #mainContent.main-content {
+        box-sizing: border-box;
+        width: calc(100% - var(--sidebar-width));
+        min-width: 0;
+        margin-left: var(--sidebar-width) !important;
+        position: relative;
+    }
+}
+
         .dashboard-shortcuts{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:18px;padding:8px 0}
         .dashboard-section-divider{border:0;border-top:2px solid #dbe5e1;opacity:1;margin:8px 0 24px}
         .dashboard-resource-card{border:1px solid #d1fae5;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden}
