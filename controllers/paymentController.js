@@ -92,6 +92,13 @@ async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=
 async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 async function webhook(req,res){
  let claimedTransactionId=null,routerSucceeded=false;
+ const requestId=String(req.get("x-request-id")||require("crypto").randomUUID());
+ const bodyKeys=req.body&&typeof req.body==="object"&&!Array.isArray(req.body)?Object.keys(req.body).slice(0,40):[];
+ const headerTokenPresent=Boolean(req.get("x-webhook-token")||req.get("x-macrodroid-token"));
+ const bodyTokenPresent=Boolean(req.body&&typeof req.body==="object"&&(req.body.token||req.body.secret));
+ const queryTokenPresent=Boolean(req.query?.token);
+ const safeContext={requestId,method:req.method,path:req.originalUrl?.split("?")[0]||req.path,contentType:String(req.get("content-type")||"").slice(0,80),bodyType:typeof req.body,bodyKeys,headerTokenPresent,bodyTokenPresent,queryTokenPresent,ipClass:req.ip?"present":"missing"};
+ console.info("[Payment Webhook] Incoming request",safeContext);
  try{
   let webhookConfig;
   try{
@@ -107,11 +114,42 @@ async function webhook(req,res){
     recipients:{bkash:settings.mfs_bkash_number,nagad:settings.mfs_nagad_number,rocket:settings.mfs_rocket_number,upay:settings.mfs_upay_number}
    };
   }
-  if(!webhookConfig.webhookEnabled)return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Payment and Webhooks settings."});
-  const expected=String(webhookConfig.secret||"").trim();
+  if(!webhookConfig.webhookEnabled){
+   console.warn("[Payment Webhook] Rejected: automation disabled",{requestId:safeContext.requestId,setting:"personal_payment_webhook_enabled"});
+   return res.status(403).json({success:false,code:"WEBHOOK_AUTOMATION_DISABLED",error:"Automation disabled",message:"Personal payment webhook automation is disabled in Payment and Webhooks settings."});
+  }
+  const dbSecret=String(webhookConfig.secret||"").trim();
+  const envSecret=String(process.env.MACRODROID_WEBHOOK_KEY||"").trim();
+  // Database settings are authoritative. The environment key is a compatibility fallback
+  // only when the database secret is blank; this avoids silently overriding an admin rotation.
+  const expected=dbSecret||envSecret;
+  const secretSource=dbSecret?"app_settings.personal_payment_webhook_secret":(envSecret?"env.MACRODROID_WEBHOOK_KEY":"missing");
+  if(dbSecret&&envSecret&&dbSecret!==envSecret){
+   console.warn("[Payment Webhook] Secret configuration mismatch; database setting takes precedence",{requestId:safeContext.requestId,dbSecretConfigured:true,envSecretConfigured:true,selectedSource:secretSource});
+  }
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
-  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected)))return res.status(401).json({success:false,error:"Unauthorized webhook."});
-  const payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
+  const equalSecret=(left,right)=>Boolean(left&&right)&&Buffer.byteLength(left)===Buffer.byteLength(right)&&require("crypto").timingSafeEqual(Buffer.from(left),Buffer.from(right));
+  if(!expected){
+   console.error("[Payment Webhook] Rejected: no webhook secret configured",{requestId:safeContext.requestId,dbSecretConfigured:false,envSecretConfigured:false});
+   return res.status(503).json({success:false,code:"WEBHOOK_SECRET_NOT_CONFIGURED",error:"Webhook secret is not configured."});
+  }
+  if(!provided){
+   console.warn("[Payment Webhook] Rejected: token missing",{requestId:safeContext.requestId,expectedHeader:"x-webhook-token or x-macrodroid-token",bodyTokenPresent,queryTokenPresent,secretSource});
+   return res.status(401).json({success:false,code:"WEBHOOK_TOKEN_MISSING",error:"Webhook token is required."});
+  }
+  if(!equalSecret(provided,expected)){
+   console.warn("[Payment Webhook] Rejected: token mismatch",{requestId:safeContext.requestId,secretSource,providedLength:Buffer.byteLength(provided),expectedLength:Buffer.byteLength(expected)});
+   return res.status(401).json({success:false,code:"WEBHOOK_TOKEN_MISMATCH",error:"Unauthorized webhook."});
+  }
+  console.info("[Payment Webhook] Authentication accepted",{requestId:safeContext.requestId,secretSource});
+  let payment;
+  try{
+   payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
+  }catch(parseError){
+   console.warn("[Payment Webhook] SMS parse/allowlist rejection",{requestId:safeContext.requestId,code:parseError?.code||"PARSER_ERROR",statusCode:parseError?.statusCode||400,message:parseError?.message||"Unknown parser error",senderPresent:Boolean(req.body?.sender||req.body?.from||req.get("x-sms-sender")||req.get("x-sender")),recipientPresent:Boolean(req.body?.recipient||req.body?.to||req.get("x-sms-recipient")),messagePresent:bodyKeys.some(k=>["message","sms","text","body","sms_body","sms_message","sms body","smsText","smsTextMessage","notification"].includes(k))||Boolean(req.get("x-sms-message")||req.get("x-sms-body")||req.get("x-sms-text")||req.query?.message||req.query?.text||req.query?.sms)});
+   throw parseError;
+  }
+  console.info("[Payment Webhook] SMS parsed",{requestId:safeContext.requestId,channel:payment.channel,amountParsed:Number.isFinite(payment.amount),trxIdPresent:Boolean(payment.trxId),senderPhonePresent:Boolean(payment.senderPhone),recipientPresent:Boolean(payment.recipientPhone),customerReferencePresent:Boolean(payment.customerRef)});
   payment.trxId=String(payment.trxId||"").trim().toUpperCase();
   if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
@@ -164,6 +202,7 @@ async function webhook(req,res){
   await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,renewalCompleted&&user?user.username:null,payment.rawSms,renewalCompleted]);
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
  }catch(error){
+  console.error("[Payment Webhook] Ingestion failed",{requestId:safeContext.requestId,code:error?.code||"WEBHOOK_PROCESSING_ERROR",statusCode:error?.statusCode||error?.status||500,message:error?.message||"Unknown webhook processing error",claimInProgress:claimedTransactionId!==null,routerSucceeded});
   if(claimedTransactionId!==null&&!routerSucceeded){
    try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
    catch(rollbackError){console.error("[Payment Webhook] Failed to release claim after RouterOS failure",claimedTransactionId,rollbackError?.message||rollbackError);}
