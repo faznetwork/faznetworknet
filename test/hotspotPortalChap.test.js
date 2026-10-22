@@ -8,15 +8,15 @@ const vm=require("node:vm");
 const html=fs.readFileSync(path.join(__dirname,"../public/login.html"),"utf8");
 
 test("RouterOS captive portal parses CHAP and redirect query parameters",()=>{
-  assert.match(html,/params\\.get\\('mac'\\)/);
-  assert.match(html,/params\\.get\\('ip'\\)/);
-  assert.match(html,/params\\.get\\('link-login-only'\\)/);
-  assert.match(html,/params\\.get\\('chap-id'\\)/);
-  assert.match(html,/params\\.get\\('chap-challenge'\\)/);
+  assert.match(html,/params\.get\('mac'\)/);
+  assert.match(html,/params\.get\('ip'\)/);
+  assert.match(html,/params\.get\('link-login-only'\)/);
+  assert.match(html,/params\.get\('chap-id'\)/);
+  assert.match(html,/params\.get\('chap-challenge'\)/);
   assert.match(html,/name="chap-id"/);
   assert.match(html,/name="chap-challenge"/);
-  assert.match(html,/decodeChapChallenge\\(device\\.chapChallenge\\)/);
-  assert.match(html,/form\\.submit\\(\\)/);
+  assert.match(html,/decodeChapChallenge\(device\.chapChallenge\)/);
+  assert.match(html,/form\.submit\(\)/);
 });
 
 test("embedded MD5 and RouterOS CHAP byte decoding match known vectors",()=>{
@@ -41,10 +41,10 @@ test("Force Provision checks the applicable RouterOS login-by profile and clears
   const end=service.indexOf("async rechargeHotspotUser(data)",start);
   assert.ok(start>=0&&end>start,"force provision method must exist");
   const source=service.slice(start,end);
-  assert.match(source,/\\/ip\\/hotspot\\/active\\/print/);
-  assert.match(source,/\\/ip\\/hotspot\\/active\\/remove/);
-  assert.match(source,/\\/ip\\/hotspot\\/cookie\\/print/);
-  assert.match(source,/\\/ip\\/hotspot\\/cookie\\/remove/);
-  assert.match(source,/includes\\("mac"\\)/);
+  assert.match(source,/\/ip\/hotspot\/active\/print/);
+  assert.match(source,/\/ip\/hotspot\/active\/remove/);
+  assert.match(source,/\/ip\/hotspot\/cookie\/print/);
+  assert.match(source,/\/ip\/hotspot\/cookie\/remove/);
+  assert.match(source,/includes\("mac"\)/);
   assert.match(source,/macAuthEnabled/);
 });
