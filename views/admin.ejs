@@ -8647,7 +8647,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             function syncRouteNavigationState(route) {
                 const normalized = cleanRoute(route);
                 const canonicalUrl = routeUrl(normalized);
-                const canonicalPath = String(canonicalUrl || '/admin/dashboard').split('?')[0].replace(/\\/+$/, '') || '/admin';
+                const canonicalPath = String(canonicalUrl || '/admin/dashboard').split('?')[0].replace(/\/+$/, '') || '/admin';
                 const sidebar = document.getElementById('sidebar');
                 if (!sidebar) return;
 
@@ -8659,7 +8659,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     try {
                         const target = new URL(link.getAttribute('href'), window.location.origin);
                         if (target.origin === window.location.origin) {
-                            targetPath = target.pathname.replace(/\\/+$/, '') || '/admin';
+                            targetPath = target.pathname.replace(/\/+$/, '') || '/admin';
                         }
                     } catch (_) {}
                     const active = Boolean(targetPath && targetPath === canonicalPath);
