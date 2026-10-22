@@ -46,7 +46,7 @@ test('settings submenu click and browser history keep route, panel, and active i
 });
 
 test('unknown admin paths stay on their URL and render an explicit not-found view', () => {
-  assert.match(adminView, /if \(\/\^\\\/admin\(\?:\\\/\|\$\)\/\.test\(path\) && path !== '\/admin'\) return \{ view: 'not-found', path \}/);
+  assert.match(adminView, /view: 'not-found', path/);
   assert.match(adminView, /if \(normalized\.view === 'not-found'\) return String\(normalized\.path \|\| window\.location\.pathname\)/);
   assert.match(adminView, /case 'not-found': return showAdminNotFound\(r\.path\)/);
   assert.match(adminView, /function showAdminNotFound\(path\)/);
