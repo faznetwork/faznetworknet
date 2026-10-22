@@ -157,17 +157,6 @@
             padding: 24px;
         }
 
-/* Desktop workspace must reserve the fixed sidebar's full width. */
-@media (min-width: 769px) {
-    #mainContent.main-content {
-        box-sizing: border-box;
-        width: calc(100% - var(--sidebar-width));
-        min-width: 0;
-        margin-left: var(--sidebar-width) !important;
-        position: relative;
-    }
-}
-
         .dashboard-shortcuts{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:18px;padding:8px 0}
         .dashboard-section-divider{border:0;border-top:2px solid #dbe5e1;opacity:1;margin:8px 0 24px}
         .dashboard-resource-card{border:1px solid #d1fae5;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden}
@@ -353,13 +342,6 @@
     
         .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:999}
         .sidebar-backdrop.show{display:block}
-        /* Keep the mobile menu control above the drawer so it can always close the sidebar. */
-        .mobile-sidebar-fab{display:none}
-        @media (max-width:767.98px){
-          .mobile-sidebar-fab{display:flex;position:fixed;top:calc(env(safe-area-inset-top, 0px) + 12px);right:12px;z-index:1105;width:44px;height:44px;align-items:center;justify-content:center;border:1px solid #d1fae5;border-radius:14px;background:#0a3d2e;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.22);font-size:21px;line-height:1;touch-action:manipulation}
-          .mobile-sidebar-fab:focus-visible{outline:3px solid #10b981;outline-offset:3px}
-          #mobileSidebarToggle{display:none!important}
-        }
         /* Mobile drawer/backdrop hardening: navigation must never leave an overlay behind. */
         @media (max-width:768px){
             .sidebar-backdrop{pointer-events:auto}
@@ -2042,7 +2024,6 @@
     </div>
 
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarMobile(); return false;" aria-hidden="true"></div>
-    <button id="mobileSidebarFab" class="mobile-sidebar-fab" type="button" aria-label="Open navigation menu" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(); return false;"><i class="bi bi-three-dots"></i></button>
 
     <div class="main-content" id="mainContent">
         <nav id="adminTopBar" class="navbar navbar-expand-lg navbar-light bg-white rounded shadow-sm mb-4 p-2">
@@ -4084,7 +4065,7 @@ window.editHotspotUser=function(username,event){
             }, true);
         }
 
-        function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),buttons=[document.getElementById('mobileSidebarToggle'),document.getElementById('mobileSidebarFab')];const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);buttons.filter(Boolean).forEach(button=>{button.setAttribute('aria-expanded',open?'true':'false');button.setAttribute('aria-label',open?'Close navigation menu':'Open navigation menu');const icon=button.querySelector('i');if(icon)icon.className=open?'bi bi-x-lg':'bi bi-three-dots';});}
+        function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);if(button)button.setAttribute('aria-expanded',open?'true':'false');}
         function closeSidebarMobile(){purgeStuckBackdrops();const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('show');const backdrop=document.getElementById('sidebarBackdrop');if(backdrop)backdrop.classList.remove('show');if(document.body)document.body.classList.remove('sidebar-open');syncMobileSidebarState();}
         function toggleSidebar(){const sidebar=document.getElementById('sidebar');if(!sidebar||window.innerWidth>=768)return;sidebar.classList.toggle('show');syncMobileSidebarState();}
 
@@ -8451,8 +8432,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return list.indexOf(String(value || '')) !== -1;
             }
             function cleanRoute(route) {
-                if (!route || typeof route !== 'object') return { view: 'route-error', path: window.location.pathname };
-                if (route.view === 'route-error') return { view: 'route-error', path: String(route.path || window.location.pathname) };
+                if (!route || typeof route !== 'object') return { view: 'dashboard' };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
@@ -8503,10 +8483,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
                     return { view: 'module', module: String(route.module) };
                 }
-                return { view: 'route-error', path: window.location.pathname };
+                return { view: 'dashboard' };
             }
             function routeFromPath(path) {
-                if (path === '/admin') return { view: 'dashboard' };
                 const routes = {
                     '/admin/dashboard': { view: 'dashboard' },
                     '/admin/customers/add': { view: 'page', page: 'add-customer' },
@@ -8567,21 +8546,19 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hr/employees/added': { view: 'hr', section: 'added' },
                     '/admin/resellers/sub-staff': { view: 'sub-staff' }
                 };
-                return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : { view: 'route-error', path };
+                return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
             function readRoute() {
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
                 const pathRoute = routeFromPath(path);
-                const hasLegacyView = new URLSearchParams(window.location.search).has('view');
-                if (pathRoute && !(path === '/admin' && hasLegacyView)) return pathRoute;
+                if (pathRoute) return pathRoute;
                 if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
 
                 // Backward compatibility: older shared links with ?view=... resolve once,
                 // then commitRoute replaces them with the canonical path-based URL.
                 const params = new URLSearchParams(window.location.search);
                 const view = params.get('view');
-                if (!view) return path === '/admin' ? { view: 'dashboard' } : { view: 'route-error', path };
-                if (!['page', 'customers', 'payments', 'hotspot', 'olt', 'settings', 'devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps', 'support', 'hr', 'network-diagram', 'monitor', 'sub-staff', 'account-dashboard', 'account-manage', 'vpn', 'vpn-port-forwarding', 'module'].includes(view)) return { view: 'route-error', path: window.location.pathname + window.location.search };
+                if (!view) return { view: 'dashboard' };
                 if (view === 'page') return cleanRoute({ view, page: params.get('page'), channel: params.get('channel') });
                 if (view === 'customers') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
                 if (view === 'payments') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
@@ -8665,33 +8642,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return '/admin/dashboard';
             }
-            function showAdminRouteError(message, detail) {
-                const main = document.getElementById('mainContent');
-                if (!main) { window.alert(message + (detail ? '\\n' + detail : '')); return; }
-                document.querySelectorAll('.admin-view').forEach(view => { view.style.display = 'none'; });
-                let panel = document.getElementById('fazAdminRouteError');
-                if (!panel) {
-                    panel = document.createElement('section');
-                    panel.id = 'fazAdminRouteError';
-                    panel.className = 'container-fluid py-4';
-                    panel.setAttribute('role', 'alert');
-                    panel.style.cssText = 'position:relative;z-index:2;max-width:960px;margin:24px auto;';
-                    main.appendChild(panel);
-                }
-                panel.replaceChildren();
-                const card = document.createElement('div'); card.className = 'alert alert-danger shadow-sm';
-                const heading = document.createElement('h2'); heading.className = 'h5 alert-heading'; heading.textContent = message || 'Unable to load this page';
-                const body = document.createElement('p'); body.className = 'mb-2'; body.textContent = detail || 'The requested page could not be opened. Please choose another menu item or return to the dashboard.';
-                const back = document.createElement('a'); back.className = 'btn btn-success btn-sm mt-2'; back.href = '/admin/dashboard'; back.textContent = 'Return to Dashboard';
-                card.append(heading, body, back); panel.appendChild(card); panel.style.display = 'block';
-            }
-            function clearAdminRouteError() {
-                const panel = document.getElementById('fazAdminRouteError');
-                if (panel) panel.remove();
-            }
             function commitRoute(route, replace) {
                 const normalized = cleanRoute(route);
-                if (normalized.view === 'route-error') { state.current = normalized; return normalized; }
                 const url = routeUrl(normalized);
                 if (window.location.pathname + window.location.search !== url) {
                     const method = replace ? 'replaceState' : 'pushState';
@@ -8706,30 +8658,12 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const fn = window[name];
                 if (typeof fn !== 'function') {
                     console.error('[Admin Routing] Required view handler is unavailable:', name);
-                    showAdminRouteError('Page could not be loaded', 'Required section loader "' + name + '" is not available. Please reload the admin panel or contact support.');
                     return false;
                 }
-                try {
-                    const result = fn.apply(window, args || []);
-                    if (result === false) { showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" reported that it could not render this page.'); return false; }
-                    if (result && typeof result.then === 'function') return result.then(value => {
-                        if (value === false) showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" could not render this page.');
-                        return value;
-                    }).catch(error => {
-                        console.error('[Admin Routing] Loader failed:', name, error);
-                        showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" failed. Please try again.');
-                        return false;
-                    });
-                    return result;
-                } catch (error) {
-                    console.error('[Admin Routing] Loader threw an error:', name, error);
-                    showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" failed. Please try again.');
-                    return false;
-                }
+                return fn.apply(window, args || []);
             }
             function dispatchRoute(route) {
                 const r = cleanRoute(route);
-                if (r.view === 'route-error') { showAdminRouteError('Page Not Found / Invalid Route', 'No admin page is registered for: ' + r.path); return false; }
                 switch (r.view) {
                     case 'dashboard':
                         return callIfAvailable('switchView', ['dashboard']);
@@ -8768,9 +8702,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'network-diagram': return callIfAvailable('loadNetworkDiagram');
                     case 'monitor': return callIfAvailable('loadNetworkMonitor', [r.mode || 'online']);
                     case 'settings':
-                        if (typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') { showAdminRouteError('Settings could not be loaded', 'The required settings loader is not available.'); return false; }
+                        if (typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return false;
                         window.switchView('general-settings');
-                        if (!window.showGeneralSettingsSection(r.section)) { showAdminRouteError('Settings could not be loaded', 'The settings section "' + r.section + '" could not be rendered.'); return false; }
+                        if (!window.showGeneralSettingsSection(r.section)) return false;
                         if (typeof window.syncGeneralSettingsSidebar === 'function') window.syncGeneralSettingsSidebar(r.section);
                         return true;
                     case 'module': return showAdminModulePlaceholder(r.module);
@@ -8813,17 +8747,13 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
                 try {
-                    clearAdminRouteError();
                     const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') return result.catch(error => {
-                        console.error('[Admin Routing] View restore failed:', error);
-                        showAdminRouteError('Page could not be loaded', 'The selected page failed while rendering. Please try again.');
-                        return false;
-                    });
+                    if (result && typeof result.catch === 'function') {
+                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
+                    }
                     return result;
                 } catch (error) {
                     console.error('[Admin Routing] View restore failed:', error);
-                    showAdminRouteError('Page could not be loaded', 'The selected page failed while rendering. Please try again.');
                     return false;
                 } finally {
                     state.restoring = false;

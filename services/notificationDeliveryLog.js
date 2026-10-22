@@ -66,45 +66,24 @@ async function createAttempt({channel, provider, recipient, message, transaction
 }
 
 async function finishAttempt(id, {status, providerMessageId, error} = {}) {
-  if (!id) return false;
-  const nextStatus = ["sent","delivered","failed","skipped"].includes(status) ? status : "failed";
-  const params = [
-    id, nextStatus,
-    providerMessageId ? String(providerMessageId).slice(0,200) : null,
-    error ? String(error).slice(0,1000) : null
-  ];
-  const sql = `UPDATE notification_delivery_logs
-       SET status=CASE
-             WHEN status='delivered' THEN 'delivered'
-             WHEN $2='delivered' THEN 'delivered'
-             ELSE $2
-           END,
+  if (!id) return;
+  try {
+    await ensureTable();
+    const nextStatus = ["sent","delivered","failed","skipped"].includes(status) ? status : "failed";
+    await db.query(
+      `UPDATE notification_delivery_logs
+       SET status=$2,
            provider_message_id=COALESCE($3,provider_message_id),
            error_message=$4,
            sent_at=CASE WHEN $2 IN ('sent','delivered') THEN COALESCE(sent_at,NOW()) ELSE sent_at END,
            delivered_at=CASE WHEN $2='delivered' THEN COALESCE(delivered_at,NOW()) ELSE delivered_at END
-       WHERE id=$1
-       RETURNING id,status`;
-  // A transient DB/pool issue must not silently leave a real send attempt as "pending".
-  // Retry once, and report a missing row separately from a SQL failure.
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      await ensureTable();
-      const result = await db.query(sql, params);
-      if (result.rowCount > 0) return true;
-      console.warn("[Notification History] No delivery log row found to finalize:", String(id));
-      return false;
-    } catch (updateError) {
-      console.warn("[Notification History] Delivery status update failed:", {
-        attempt,
-        id: String(id),
-        targetStatus: nextStatus,
-        error: String(updateError.message || updateError).slice(0, 240)
-      });
-      if (attempt === 2) return false;
-    }
+       WHERE id=$1`,
+      [id, nextStatus, providerMessageId ? String(providerMessageId).slice(0,200) : null,
+       error ? String(error).slice(0,1000) : null]
+    );
+  } catch (updateError) {
+    console.warn("[Notification History] Could not update delivery log:", updateError.message);
   }
-  return false;
 }
 
 async function markDeliveredByProviderMessageId(messageId) {
