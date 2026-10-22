@@ -45,6 +45,13 @@ test('settings submenu click and browser history keep route, panel, and active i
   assert.match(adminView, /syncGeneralSettingsSidebar\(r\.section\)/);
 });
 
+test('unknown admin paths stay on their URL and render an explicit not-found view', () => {
+  assert.match(adminView, /if \(\/\^\\\/admin\(\?:\\\/\|\$\)\/\.test\(path\) && path !== '\/admin'\) return \{ view: 'not-found', path \}/);
+  assert.match(adminView, /if \(normalized\.view === 'not-found'\) return String\(normalized\.path \|\| window\.location\.pathname\)/);
+  assert.match(adminView, /case 'not-found': return showAdminNotFound\(r\.path\)/);
+  assert.match(adminView, /function showAdminNotFound\(path\)/);
+});
+
 test('settings save forms submit asynchronously and have matching API handlers', () => {
   for (const id of ['systemBrandForm', 'systemBillingForm', 'systemSmsForm', 'generalWebhookForm', 'generalMfsForm', 'webhookApiSettingsForm', 'hotspotPortalSettingsForm']) {
     assert.ok(adminView.includes(`id="${id}"`), `settings form missing: ${id}`);
