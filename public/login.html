@@ -483,7 +483,7 @@ button{touch-action:manipulation}
         <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 
         <div class="logo-box">
-            <img id="brand-logo" src="logo-Faznetwork.png" alt="FAZ Network Logo" class="logo-img" onerror="this.style.display='none'">
+            <img id="brand-logo" src="/assets/images/faznetwork-logo.png" alt="FAZ Network Logo" class="logo-img" onerror="this.remove()">
         </div>
 
         <div class="brand-title" id="brand-title-text">FAZ NETWORK</div>
@@ -1059,3 +1059,61 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
 </style>
 </body>
 </html>
+
+
+<style id="faz-mobile-compact-fix">
+/* Compact hotspot portal for phone screens; keep payment and voucher logic unchanged. */
+#section-recharge > div:first-child:not(.packages-grid){
+  color:#244a3b!important;
+  font-size:14px!important;
+  font-weight:800!important;
+  line-height:1.5!important;
+  text-align:left!important;
+  margin:0 0 8px!important;
+  padding:8px 10px!important;
+  border-radius:9px!important;
+  background:#eaf5ed!important;
+  border:1px solid #c8dfd0!important;
+}
+.packages-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin:9px 0 12px!important;
+}
+.packages-grid .pkg-card{
+  min-height:88px!important;
+  padding:11px 10px!important;
+  border-radius:13px!important;
+  box-shadow:0 3px 0 #c49a27,0 5px 12px rgba(8,47,39,.07)!important;
+}
+.packages-grid .pkg-card.selected{
+  box-shadow:0 3px 0 #08784f,0 6px 13px rgba(8,120,79,.12)!important;
+}
+.packages-grid .pkg-card:after{margin-top:8px!important;width:26px!important}
+.packages-grid .pkg-time{font-size:13px!important;line-height:1.35!important}
+.packages-grid .pkg-price{font-size:20px!important;margin-top:5px!important}
+.selected-package{font-size:12px!important;padding:10px 11px!important;margin-bottom:13px!important}
+.mfs-grid{gap:8px!important;margin-bottom:12px!important}
+.mfs-btn{min-height:54px!important;padding:8px!important;gap:8px!important;font-size:12px!important}
+.mfs-logo-icon{flex:0 0 64px!important;width:64px!important;height:30px!important}
+.card-footer{margin-top:16px!important;padding-top:12px!important}
+@media(max-width:380px){
+ body{padding:7px!important}
+ .main-card{padding:18px 12px!important}
+ .rgb-wrapper,.main-card{border-radius:18px!important}
+ .device-badge-corner{top:9px!important;right:9px!important;font-size:9px!important}
+ .bismillah{font-size:16px!important;margin-bottom:9px!important}
+ .logo-box{min-height:45px!important;margin-bottom:6px!important}
+ .logo-img{max-width:74px!important;max-height:48px!important}
+ .brand-title{font-size:23px!important}
+ .brand-subtitle{font-size:12px!important;margin:6px 0 8px!important}
+ .portal-trust-line{font-size:10px!important;gap:5px!important;margin-bottom:14px!important}
+ .tab-switcher{margin-bottom:14px!important}
+ .tab-btn{min-height:38px!important;padding:7px 4px!important;font-size:10px!important}
+ .packages-grid .pkg-card{min-height:80px!important;padding:10px 8px!important}
+ .packages-grid .pkg-time{font-size:12px!important}
+ .packages-grid .pkg-price{font-size:18px!important}
+ .mfs-btn{font-size:11px!important;gap:6px!important}
+ .mfs-logo-icon{flex-basis:54px!important;width:54px!important;height:27px!important}
+}
+</style>
