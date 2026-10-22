@@ -540,17 +540,14 @@ button{touch-action:manipulation}
 <!-- Professional MFS Payment Gateway Modal -->
 <div class="modal-overlay" id="mfs-modal">
     <div class="modal-card">
-        <div class="mfs-modal-brand-head"><img id="modal-mfs-logo" class="mfs-brand-logo" src="/assets/images/bkash-logo.png" alt="bKash"><h3 id="modal-mfs-title">পেমেন্ট গেটওয়ে</h3></div>
-        <p class="mfs-modal-subtitle" id="mfs-modal-subtitle">নির্বাচিত পেমেন্ট মাধ্যমের অফিসিয়াল নম্বরে Send Money করুন</p>
-        <section class="mfs-receive-card" aria-label="Official receiving number"><div class="mfs-receive-label">অফিসিয়াল পেমেন্ট নম্বর</div><div class="receive-row">
-            <span id="modal-wallet-number">01XXXXXXXXX</span>
-            <button type="button" id="copy-wallet-number" onclick="copyWalletNumber()">নম্বর কপি করুন</button></div></section>
-        <section class="mfs-device-details" aria-label="This device connection details">
-            <div class="mfs-device-details-title">আপনার সংযোগের তথ্য</div>
-            <div class="mfs-device-detail-row"><span>MAC Address</span><strong id="payment-device-mac">—</strong></div>
-            <div class="mfs-device-detail-row"><span>IP Address</span><strong id="payment-device-ip">—</strong></div>
-        </section>
-        <div class="instructions" id="mfs-payment-instructions">১. অ্যাপ খুলে Send Money নির্বাচন করুন।\n২. সঠিক প্যাকেজের টাকা উপরের নম্বরে পাঠান।\n৩. TrxID অথবা প্রেরকের ফোন নম্বর দিয়ে যাচাই করুন।</div><div class="timer-box" id="payment-timer">05:00</div>
+        <img id="modal-mfs-logo" class="mfs-brand-logo" src="/assets/images/bkash-logo.png" alt="bKash"><h3 id="modal-mfs-title" style="margin-bottom: 6px; color: #ffffff; font-size: 16px; text-align:center;">পেমেন্ট গেটওয়ে</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">নিচের অফিসিয়াল নম্বরে সেন্ড মানি করুন:</p>
+        
+        <div style="background: var(--mfs-tint); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px dashed var(--mfs-brand);"><div class="receive-row">
+            <span id="modal-wallet-number" style="font-size: 17px; font-weight: 800; color: #34d399; letter-spacing: 1px;">01XXXXXXXXX</span>
+            <button type="button" onclick="copyWalletNumber()" style="display: block; margin: 4px auto 0; background: none; border: none; color: #60a5fa; font-size: 10px; cursor: pointer; font-weight: 700;">নম্বর কপি করুন</button></div></div>
+
+        <div class="instructions" id="mfs-payment-instructions">১. অ্যাপ খুলে Send Money নির্বাচন করুন।<br>২. নিচের নম্বরে সঠিক পরিমাণ পাঠান।<br>৩. TrxID অথবা প্রেরকের ফোন নম্বর দিয়ে যাচাই করুন।</div><div class="timer-box" id="payment-timer">05:00</div>
 
         <div class="input-group verify-field" id="sender-phone-field" hidden>
             <label for="cust_phone">যে নম্বর থেকে টাকা পাঠিয়েছেন</label>
@@ -563,7 +560,7 @@ button{touch-action:manipulation}
         </div>
 
         <button type="button" class="btn-action" id="btn-verify-payment" onclick="handleVerification()">পেমেন্ট নিশ্চিত ও সংযোগ করুন</button>
-        <button type="button" class="mfs-cancel" onclick="closeMfsModal()">বাতিল করুন</button>
+        <button type="button" onclick="closeMfsModal()" style="background: none; border: none; color: var(--text-muted); font-size: 11px; margin-top: 10px; cursor: pointer;">বাতিল করুন</button>
     </div>
 </div>
 
@@ -863,35 +860,9 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
         logo.src = providerMeta.logo; logo.alt = providerMeta.name;
         document.getElementById('modal-mfs-title').textContent = title;
         document.getElementById('modal-wallet-number').textContent = number;
-        const routerMac = (document.getElementById('router-mac')?.value || '').trim();
-        const routerIp = (document.getElementById('router-ip')?.value || '').trim();
-        document.getElementById('payment-device-mac').textContent = routerMac || 'পাওয়া যায়নি';
-        document.getElementById('payment-device-ip').textContent = routerIp || 'পাওয়া যায়নি';
-        const amountText = formatTaka(selectedPackage.price);
-        const verificationText = verificationMethod === 'senderPhoneNumber'
-            ? 'যে নম্বর থেকে টাকা পাঠিয়েছেন সেটি দিন, যাতে পেমেন্ট মিলিয়ে দেখা যায়।'
-            : 'পেমেন্টের SMS থেকে TrxID লিখে যাচাই করুন।';
-        const steps = [
-            providerMeta.name + ' অ্যাপ খুলে Send Money নির্বাচন করুন।',
-            'ঠিক ' + amountText + ' উপরের অফিসিয়াল নম্বরে পাঠান।',
-            verificationText
-        ];
-        const instructions = document.getElementById('mfs-payment-instructions');
-        instructions.replaceChildren();
-        steps.forEach((step, index) => {
-            const row = document.createElement('div');
-            row.className = 'instruction-step';
-            const number = document.createElement('span');
-            number.className = 'instruction-step-number';
-            number.textContent = String(index + 1);
-            const text = document.createElement('span');
-            text.className = 'instruction-step-text';
-            text.textContent = step;
-            row.append(number, text);
-            instructions.appendChild(row);
-        });
-        document.getElementById('mfs-modal-subtitle').textContent =
-            providerMeta.name + ' দিয়ে নিরাপদে পেমেন্ট সম্পন্ন করুন।';
+        document.getElementById('mfs-payment-instructions').textContent =
+            '১. ' + providerMeta.name + ' অ্যাপ খুলে Send Money নির্বাচন করুন। ২. ' +
+            formatTaka(selectedPackage.price) + ' ঠিক এই নম্বরে পাঠান। ৩. কনফিগার করা যাচাই পদ্ধতি অনুযায়ী TrxID অথবা প্রেরকের নম্বর দিন।';
         document.getElementById('trx-field').hidden = verificationMethod === 'senderPhoneNumber';
         document.getElementById('cust_trx').required = verificationMethod !== 'senderPhoneNumber';
         document.getElementById('sender-phone-field').hidden = verificationMethod !== 'senderPhoneNumber';
@@ -910,18 +881,8 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 
     function copyWalletNumber() {
         const num = document.getElementById('modal-wallet-number').textContent;
-        const button = document.getElementById('copy-wallet-number');
-        const showCopied = () => { button.textContent = 'কপি হয়েছে ✓'; setTimeout(() => { button.textContent = 'নম্বর কপি করুন'; }, 1800); };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(num).then(showCopied).catch(() => fallbackCopyWalletNumber(num, button));
-        } else fallbackCopyWalletNumber(num, button);
-    }
-
-    function fallbackCopyWalletNumber(num, button) {
-        const input = document.createElement('textarea'); input.value = num; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.appendChild(input); input.select();
-        try { if (!document.execCommand('copy')) throw new Error('copy failed'); button.textContent = 'কপি হয়েছে ✓'; }
-        catch (_) { alert('নম্বরটি কপি করুন: ' + num); }
-        finally { input.remove(); setTimeout(() => { button.textContent = 'নম্বর কপি করুন'; }, 1800); }
+        navigator.clipboard.writeText(num);
+        alert('নম্বরটি কপি হয়েছে: ' + num);
     }
 
     function startCountdown(durationSeconds) {
@@ -1096,124 +1057,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
 .packages-grid .pkg-card.selected:before{background:#08784f!important;color:#fff!important}
 @media(prefers-reduced-motion:reduce){.packages-grid .pkg-card{transition:none!important}}
 </style>
-
-<style id="faz-branded-mfs-modal">
-/* Branded payment sheet: provider-specific colors are applied through data-provider. */
-#mfs-modal{padding:clamp(8px,3vw,18px);overflow-y:auto}
-#mfs-modal .modal-card{
- width:min(100%,460px);max-height:calc(100dvh - 24px);overflow-y:auto;
- padding:clamp(16px,4.5vw,24px);background:#fff!important;color:#18352d!important;
- border:1px solid color-mix(in srgb,var(--mfs-brand) 28%,#fff)!important;
- border-top:6px solid var(--mfs-brand)!important;border-radius:22px!important;
- box-shadow:0 22px 70px rgba(4,32,22,.26)!important
-}
-#mfs-modal .mfs-modal-brand-head{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;margin-bottom:8px}
-#mfs-modal .mfs-brand-logo{width:clamp(100px,30vw,148px)!important;height:clamp(48px,14vw,68px)!important;object-fit:contain;margin:0!important}
-#mfs-modal #modal-mfs-title{margin:0!important;color:var(--mfs-brand)!important;font-size:clamp(21px,5vw,27px)!important;font-weight:850;line-height:1.25;text-align:center}
-#mfs-modal .mfs-modal-subtitle{margin:8px 0 14px!important;color:#56685f!important;font-size:clamp(13px,3.5vw,15px)!important;line-height:1.65;text-align:left}
-#mfs-modal .mfs-receive-card{padding:clamp(12px,3.5vw,17px);margin:0 0 13px;border:1.5px dashed var(--mfs-brand);border-radius:14px;background:var(--mfs-tint)}
-#mfs-modal .mfs-receive-label{font-size:11px;font-weight:800;color:var(--mfs-brand);margin-bottom:9px;letter-spacing:.02em}
-#mfs-modal .receive-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-#mfs-modal #modal-wallet-number{font-size:clamp(21px,5.4vw,29px)!important;line-height:1.25;font-weight:900;letter-spacing:.06em;color:var(--mfs-brand)!important;overflow-wrap:anywhere}
-#mfs-modal #copy-wallet-number{min-height:40px;padding:9px 12px;background:var(--mfs-brand)!important;color:#fff!important;border:1px solid var(--mfs-brand)!important;border-radius:9px;font-size:12px;font-weight:800;white-space:nowrap}
-#mfs-modal #copy-wallet-number:active,#mfs-modal #btn-verify-payment:active{transform:scale(.99)}
-#mfs-modal .instructions{display:grid;gap:8px;margin:0 0 13px!important;padding:0!important;border:0!important;background:transparent!important;color:#334b3e!important;white-space:normal;font-size:13px!important;line-height:1.55!important}
-#mfs-modal .instruction-step{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:start;gap:10px;padding:11px 12px;border:1px solid color-mix(in srgb,var(--mfs-brand) 25%,#e5e7eb);border-radius:11px;background:color-mix(in srgb,var(--mfs-brand) 5%,white)}
-#mfs-modal .instruction-step-number{display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--mfs-brand);border-radius:8px;background:var(--mfs-tint);color:var(--mfs-brand);font-weight:900;font-size:13px}
-#mfs-modal .instruction-step-text{padding-top:3px}
-#mfs-modal .timer-box{display:block;width:max-content;min-width:96px;text-align:center;margin:0 0 13px!important;padding:9px 14px!important;background:var(--mfs-tint)!important;color:var(--mfs-brand)!important;border:1px solid var(--mfs-brand)!important;font-size:19px!important;font-variant-numeric:tabular-nums}
-#mfs-modal .input-group{margin:12px 0!important}
-#mfs-modal .input-group label{font-size:13px;color:#344c40;margin-bottom:7px}
-#mfs-modal .input-box input{min-height:48px;background:#fff!important;color:#18352d!important;border:1px solid #ceded4!important;border-radius:11px!important;font-size:16px!important}
-#mfs-modal #btn-verify-payment{min-height:52px;margin-top:6px;padding:13px 15px;border-radius:12px;background:var(--mfs-brand)!important;border:1px solid var(--mfs-brand)!important;color:#fff!important;font-size:clamp(13px,3.5vw,15px);font-weight:850;box-shadow:0 6px 15px color-mix(in srgb,var(--mfs-brand) 22%,transparent)}
-#mfs-modal .mfs-cancel{display:block;width:100%;padding:12px 8px!important;color:#68776f!important;font-size:13px!important}
-#mfs-modal .mfs-cancel:hover{text-decoration:underline}
-@media(max-width:360px){#mfs-modal .modal-card{padding:14px!important;border-radius:17px!important}#mfs-modal .receive-row{align-items:stretch}#mfs-modal #copy-wallet-number{width:100%}#mfs-modal .instruction-step{padding:9px;gap:8px}}
-@media(prefers-reduced-motion:reduce){#mfs-modal *{transition:none!important}}
-</style>
-
-
-<style id="faz-payment-device-details">
-#mfs-modal .mfs-device-details{margin:0 0 13px;padding:12px 14px;border:1px solid #dbe6df;border-radius:12px;background:#f7faf8}
-#mfs-modal .mfs-device-details-title{margin-bottom:8px;color:#3d5b4b;font-size:12px;font-weight:800}
-#mfs-modal .mfs-device-detail-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #e3ece6;font-size:12px;line-height:1.5}
-#mfs-modal .mfs-device-detail-row span{color:#65776c;flex:0 0 auto}
-#mfs-modal .mfs-device-detail-row strong{color:#18352d;text-align:right;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-@media(max-width:360px){#mfs-modal .mfs-device-details{padding:10px}#mfs-modal .mfs-device-detail-row{gap:8px;font-size:11px}#mfs-modal .mfs-device-detail-row strong{font-size:11px}}
-</style>
-
-<style id="faz-full-brand-color-payment-popup">
-/* Provider brand fills the entire payment popup; actions use a contrasting shade. */
-#mfs-modal .modal-card{
-  background:var(--mfs-brand)!important;
-  color:#fff!important;
-  border:1px solid color-mix(in srgb,var(--mfs-brand) 72%,#fff)!important;
-  border-top:4px solid color-mix(in srgb,var(--mfs-brand) 72%,#fff)!important;
-  box-shadow:0 22px 70px rgba(0,0,0,.32)!important;
-}
-#mfs-modal .mfs-modal-brand-head{gap:6px;margin-bottom:6px}
-#mfs-modal #modal-mfs-title{display:none!important}
-#mfs-modal .mfs-modal-subtitle{color:#fff!important;opacity:.96}
-#mfs-modal .mfs-receive-card{
-  background:color-mix(in srgb,var(--mfs-brand) 78%,#fff)!important;
-  border:1px dashed rgba(255,255,255,.82)!important;
-}
-#mfs-modal .mfs-receive-label{color:#fff!important}
-#mfs-modal #modal-wallet-number{color:#fff!important}
-#mfs-modal #copy-wallet-number{
-  background:color-mix(in srgb,var(--mfs-brand) 62%,#fff)!important;
-  color:#fff!important;border:1px solid rgba(255,255,255,.85)!important;
-}
-#mfs-modal .mfs-device-details{
-  background:color-mix(in srgb,var(--mfs-brand) 82%,#fff)!important;
-  border:1px solid rgba(255,255,255,.52)!important;
-}
-#mfs-modal .mfs-device-details-title,
-#mfs-modal .mfs-device-detail-row span,
-#mfs-modal .mfs-device-detail-row strong{color:#fff!important}
-#mfs-modal .mfs-device-detail-row{border-top-color:rgba(255,255,255,.24)!important}
-#mfs-modal .instructions{color:#fff!important}
-#mfs-modal .instruction-step{
-  grid-template-columns:22px minmax(0,1fr)!important;
-  gap:8px!important;padding:9px 10px!important;
-  color:#fff!important;
-  background:color-mix(in srgb,var(--mfs-brand) 82%,#fff)!important;
-  border:1px solid rgba(255,255,255,.55)!important;
-  border-radius:9px!important;
-}
-#mfs-modal .instruction-step-number{
-  width:20px!important;height:20px!important;
-  border:1px solid rgba(255,255,255,.8)!important;
-  border-radius:6px!important;
-  background:rgba(255,255,255,.18)!important;color:#fff!important;
-  font-size:11px!important;
-}
-#mfs-modal .instruction-step-text{padding-top:1px!important}
-#mfs-modal .timer-box{
-  background:color-mix(in srgb,var(--mfs-brand) 64%,#fff)!important;
-  color:#fff!important;border:1px solid rgba(255,255,255,.82)!important;
-}
-#mfs-modal .input-group label{color:#fff!important}
-#mfs-modal .input-box input{
-  background:#fff!important;color:#24352d!important;border:1px solid rgba(255,255,255,.85)!important;
-}
-#mfs-modal #btn-verify-payment{
-  background:color-mix(in srgb,var(--mfs-brand) 58%,#fff)!important;
-  color:#fff!important;border:1px solid rgba(255,255,255,.9)!important;
-  box-shadow:0 5px 14px rgba(0,0,0,.16)!important;
-}
-#mfs-modal .mfs-cancel{
-  margin-top:8px!important;border:1px solid rgba(255,255,255,.65)!important;
-  border-radius:9px!important;background:rgba(255,255,255,.12)!important;
-  color:#fff!important;
-}
-#mfs-modal .mfs-cancel:hover{background:rgba(255,255,255,.2)!important}
-@media(max-width:360px){
-  #mfs-modal .modal-card{padding:14px!important}
-  #mfs-modal .instruction-step{grid-template-columns:22px minmax(0,1fr)!important;padding:8px!important}
-}
-</style>
-
 </body>
 </html>
 
