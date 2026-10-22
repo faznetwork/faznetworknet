@@ -114,7 +114,12 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
   const from = '"' + config.from.name.replace(/["\\]/g, "") + '" <' + config.from.address + '>';
   const transporter = nodemailer.createTransport({ ...config, from });
   const info = await transporter.sendMail({ from, to: recipient, subject: title, ...(html ? { html: String(html) } : {}), ...(text ? { text: String(text) } : {}) });
-  return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted: Array.isArray(info.accepted) ? info.accepted : [], rejected: Array.isArray(info.rejected) ? info.rejected : [] };
+  const accepted = Array.isArray(info.accepted) ? info.accepted : [];
+  const rejected = Array.isArray(info.rejected) ? info.rejected : [];
+  if (rejected.some(address => String(address).toLowerCase() === String(recipient).toLowerCase()) && !accepted.some(address => String(address).toLowerCase() === String(recipient).toLowerCase())) {
+    return { success: false, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected, error: "SMTP server rejected the recipient address." };
+  }
+  return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected };
 }
 
 async function sendEmail({ to, subject, html, text, event = "manual" } = {}) {
