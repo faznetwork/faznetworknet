@@ -69,7 +69,7 @@ test("captive portal uses the premium responsive green-and-white UI without chan
  assert.match(login,/prefers-reduced-motion:reduce/);
  assert.match(login,/portal-trust-line/);
  assert.match(login,/api\/hotspot-auth\/claim-voucher/);
- assert.match(login,/api\/hotspot-auth\/direct-login/);
+ assert.doesNotMatch(login,/api\/hotspot-auth\/direct-login/);
  assert.match(login,/mikrotik-auto-login/);
 });
 
