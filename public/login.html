@@ -505,7 +505,7 @@ button{touch-action:manipulation}
             </div>
             <div id="selected-package" class="selected-package">চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।</div>
 
-            <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; text-align: left;">অফিসিয়াল পেমেন্ট মাধ্যম:</div>
+            <div id="official-payment-methods-label" class="official-payment-methods-label">অফিসিয়াল পেমেন্ট মাধ্যম</div>
             <div class="mfs-grid" id="mfs-buttons-grid">
                 <!-- Dynamic Official MFS Buttons Loaded Here -->
             </div>
@@ -1115,5 +1115,16 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
  .packages-grid .pkg-price{font-size:18px!important}
  .mfs-btn{font-size:11px!important;gap:6px!important}
  .mfs-logo-icon{flex-basis:54px!important;width:54px!important;height:27px!important}
+}
+</style>
+
+<style id="faz-official-payment-label-visibility">
+#official-payment-methods-label,.official-payment-methods-label{
+ display:block!important;visibility:visible!important;opacity:1!important;
+ color:#173f31!important;background:#e6f4ea!important;
+ border:1px solid #b8d9c5!important;border-left:4px solid #0b7654!important;
+ border-radius:10px!important;padding:10px 12px!important;margin:4px 0 10px!important;
+ font-size:14px!important;font-weight:800!important;line-height:1.5!important;
+ text-align:left!important;text-shadow:none!important;
 }
 </style>
