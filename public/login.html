@@ -359,6 +359,118 @@
 /* Provider logos are artwork, not cards: remove boxes from button and modal logo wrappers. */
 .mfs-logo-icon,.mfs-official-logo,.modal-card .mfs-brand-logo{background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0!important;padding:0!important}
 </style>
+
+<!-- Premium responsive UI refresh: visual-only overrides preserve captive-portal and payment logic. -->
+<style id="faz-premium-login-ui">
+:root{
+ --bg-color:#f3f8f5;--card-bg:#ffffff;--text-main:#172b24;--text-muted:#64756d;
+ --border-color:#dce8e1;--brand-primary:#0a3d2e;--brand-hover:#0d4d3a;--brand-accent:#10b981;
+ --bkash:#e2136e;--nagad:#f7941d;--rocket:#832b73;--upay:#0054a6;
+}
+html{min-height:100%;background:#f3f8f5;scroll-behavior:smooth}
+body{
+ min-height:100vh;align-items:flex-start;justify-content:center;padding:clamp(12px,3.5vw,34px) 14px;
+ color:var(--text-main);background:
+ radial-gradient(ellipse at 12% 0%,rgba(16,185,129,.12),transparent 38%),
+ radial-gradient(ellipse at 100% 100%,rgba(10,61,46,.08),transparent 34%),#f3f8f5;
+}
+.rgb-wrapper{
+ width:100%;max-width:480px;padding:0;border-radius:24px;background:#fff;
+ border:1px solid rgba(10,61,46,.08);box-shadow:0 22px 60px rgba(20,54,39,.13);
+ animation:none;
+}
+.main-card{
+ padding:clamp(20px,5vw,30px);border-radius:24px;background:#fff;color:var(--text-main);
+ text-align:center;backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+.device-badge-corner{
+ top:14px;right:14px;font-size:10px;color:#53675d;background:#f3f8f5;
+ border:1px solid #dce8e1;padding:5px 9px;border-radius:999px;
+}
+.bismillah{font-size:15px;color:var(--brand-primary);margin:2px 0 10px;letter-spacing:0}
+.logo-box{min-height:58px;margin-bottom:8px}
+.logo-img{max-width:84px;max-height:62px}
+.brand-title{font-size:clamp(22px,5vw,27px);letter-spacing:.7px;color:var(--brand-primary);line-height:1.2}
+.brand-subtitle{font-size:12px;line-height:1.6;color:#66776e;margin:7px 0 0}
+.portal-trust-line{display:flex;justify-content:center;align-items:center;gap:7px;flex-wrap:wrap;margin:11px 0 20px;color:#567267;font-size:10px;font-weight:700}
+.portal-trust-line span[aria-hidden="true"]:first-child{font-size:8px;color:#10a66f}
+.portal-trust-line span[aria-hidden="true"]:not(:first-child){color:#b6c6bd}
+.alert-box{padding:11px 12px;border-radius:10px;font-size:12px;line-height:1.55;margin:0 0 14px}
+.alert-error{background:#fff1f0;border:1px solid #fecaca;color:#b42318}
+.alert-success{background:#ecfdf3;border:1px solid #a7f3d0;color:#067647}
+.tab-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;margin-bottom:20px;background:#f0f5f2;border:1px solid #e1ebe5;border-radius:13px}
+.tab-btn{min-height:42px;padding:8px 5px;border-radius:9px;color:#5c6f65;font-size:11px;line-height:1.35;font-weight:750;transition:background .18s ease,color .18s ease,box-shadow .18s ease}
+.tab-btn.active{background:var(--brand-primary);color:#fff;box-shadow:0 3px 8px rgba(10,61,46,.17)}
+.packages-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:12px}
+.pkg-card{padding:12px 7px;border:1px solid #dce8e1;border-radius:12px;background:#fbfdfb;min-width:0}
+.pkg-card:hover{border-color:#10b981;background:#f5fcf8}
+.pkg-card.selected{border:1.5px solid #0a8c61;background:#eaf8f0;box-shadow:0 0 0 3px rgba(16,185,129,.1)}
+.pkg-time{font-size:11px;color:#52665b;line-height:1.4}
+.pkg-price{font-size:16px;color:var(--brand-primary);margin-top:5px}
+.selected-package{margin:0 0 18px;padding:10px 12px;border:1px solid #c8ebd7;border-left:3px solid #10a66f;border-radius:9px;background:#f0fbf5;color:#08764f;font-size:11px;line-height:1.5}
+#section-recharge>div:first-child:not(.packages-grid){color:#344c40!important}
+.mfs-grid{gap:10px;margin-bottom:17px}
+.mfs-btn{min-width:0;min-height:66px;padding:10px;border:1px solid #e0e9e4;border-radius:12px;background:#fff;color:#243a30;font-size:12px;box-shadow:0 2px 5px rgba(15,45,31,.025)}
+.mfs-btn:hover{background:#f8fcf9;transform:translateY(-1px);box-shadow:0 5px 14px rgba(15,45,31,.07)}
+.mfs-logo-icon{flex:0 0 74px;width:74px;height:36px}
+.mfs-official-logo{object-fit:contain}
+.input-group{margin-bottom:14px;text-align:left}
+.input-group label{font-size:12px;color:#43594d;margin-bottom:6px;font-weight:700}
+.input-group input,.input-box input,.payment-method-select,.modal-card input{
+ width:100%;min-height:44px;padding:11px 12px;background:#fbfdfb;border:1px solid #d7e3db;
+ border-radius:10px;font-size:14px;color:#172b24;outline:none;box-shadow:none;
+ transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.input-group input:focus,.input-box input:focus,.payment-method-select:focus,.modal-card input:focus{
+ border-color:#10a66f;background:#fff;box-shadow:0 0 0 3px rgba(16,185,129,.13)
+}
+.input-group input::placeholder,.modal-card input::placeholder{color:#9aa9a0}
+.btn-action{
+ min-height:46px;padding:12px 15px;margin-top:5px;border:1px solid var(--brand-primary);
+ border-radius:11px;background:var(--brand-primary);color:#fff;font-size:13px;font-weight:800;
+ box-shadow:0 5px 13px rgba(10,61,46,.14);transition:background .18s ease,transform .18s ease,box-shadow .18s ease
+}
+.btn-action:hover{background:var(--brand-hover);transform:translateY(-1px);box-shadow:0 7px 16px rgba(10,61,46,.18)}
+.btn-action:disabled{opacity:.55;transform:none;box-shadow:none}
+#section-voucher input,#section-member input{background:#fbfdfb!important;color:#172b24!important;border-color:#d7e3db!important;border-radius:10px!important;min-height:44px}
+#section-voucher input:focus,#section-member input:focus{border-color:#10a66f!important;box-shadow:0 0 0 3px rgba(16,185,129,.13)!important}
+.card-footer{margin-top:22px;padding-top:15px;border-top:1px solid #e7eee9;font-size:11px;color:#718178}
+.helpline{color:#08764f;font-weight:800}
+.modal-overlay{background:rgba(10,35,25,.55);backdrop-filter:blur(5px);padding:16px}
+.modal-card{
+ max-width:420px;padding:22px;border:1px solid #e0e9e4;border-top:4px solid var(--mfs-brand,#0a3d2e);
+ border-radius:20px;background:#fff;color:#172b24;text-align:left;box-shadow:0 24px 70px rgba(10,35,25,.22)
+}
+.modal-card h3{color:#172b24!important;font-size:18px!important}
+.modal-card p{color:#65776c!important;line-height:1.55}
+.modal-card .instructions{background:#f5f9f6;color:#40564a;border:1px solid #e5eee8;border-radius:11px;font-size:12px;line-height:1.8}
+.modal-card .timer-box{font-size:14px;padding:8px 12px;border-radius:9px}
+.modal-card .receive-row{align-items:center}
+.modal-card #modal-wallet-number{font-size:clamp(15px,4vw,19px);overflow-wrap:anywhere}
+.modal-card .receive-row button{font-size:11px}
+.modal-card .btn-action{color:#fff!important}
+button,input{font:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(16,185,129,.42);outline-offset:2px}
+button{touch-action:manipulation}
+@media(min-width:600px){
+ .rgb-wrapper{max-width:500px}
+ .main-card{padding:32px}
+ .tab-btn{font-size:12px}
+}
+@media(max-width:380px){
+ body{padding:8px}
+ .main-card{padding:20px 13px}
+ .device-badge-corner{position:static;display:inline-block;margin-bottom:10px}
+ .tab-btn{font-size:10px;padding:8px 3px}
+ .mfs-logo-icon{flex-basis:60px;width:60px;height:32px}
+ .mfs-btn{gap:8px;padding:8px}
+ .pkg-price{font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
 </head>
 <body>
 
@@ -376,8 +488,9 @@
 
         <div class="brand-title" id="brand-title-text">FAZ NETWORK</div>
         <div class="brand-subtitle" id="brand-subtitle-text">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</div>
+        <div class="portal-trust-line" aria-label="Connection benefits"><span aria-hidden="true">●</span> দ্রুত সংযোগ <span aria-hidden="true">·</span> নিরাপদ পেমেন্ট <span aria-hidden="true">·</span> ২৪/৭ সহায়তা</div>
 
-        <div id="status-box" class="alert-box"></div>
+        <div id="status-box" class="alert-box" role="status" aria-live="polite"></div>
 
         <!-- Tab Switcher -->
         <div class="tab-switcher">
