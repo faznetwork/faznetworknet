@@ -114,19 +114,38 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
   const from = '"' + config.from.name.replace(/["\\]/g, "") + '" <' + config.from.address + '>';
   const transporter = nodemailer.createTransport({ ...config, from });
   const info = await transporter.sendMail({ from, to: recipient, subject: title, ...(html ? { html: String(html) } : {}), ...(text ? { text: String(text) } : {}) });
-  return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted: Array.isArray(info.accepted) ? info.accepted : [], rejected: Array.isArray(info.rejected) ? info.rejected : [] };
+  const accepted = Array.isArray(info.accepted) ? info.accepted : [];
+  const rejected = Array.isArray(info.rejected) ? info.rejected : [];
+  if (rejected.some(address => String(address).toLowerCase() === String(recipient).toLowerCase()) && !accepted.some(address => String(address).toLowerCase() === String(recipient).toLowerCase())) {
+    return { success: false, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected, error: "SMTP server rejected the recipient address." };
+  }
+  return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected };
 }
 
-async function sendEmail({ to, subject, html, text } = {}) {
+async function sendEmail({ to, subject, html, text, event = "manual" } = {}) {
+  const recipient = String(to || "").trim();
+  const body = String(text || html || "").slice(0, 4000);
+  let result;
   try {
-    const { recipient, title } = validateEmailRequest({ to, subject, html, text });
+    const { recipient: validatedRecipient, title } = validateEmailRequest({ to, subject, html, text });
     const settings = await settingsService.getAllSettings();
     if (providerMode(settings) === APPS_SCRIPT_MODE) {
-      return await sendAppsScriptEmail({ to: recipient, subject: title, html, text }, settings);
+      result = await sendAppsScriptEmail({ to: validatedRecipient, subject: title, html, text }, settings);
+    } else {
+      result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings);
     }
-    return await sendSmtpEmail({ recipient, title, html, text }, settings);
+    return result;
   } catch (error) {
-    return { success: false, error: safeError(error), code: error && error.code ? String(error.code).slice(0, 80) : undefined, provider: undefined };
+    result = { success: false, error: safeError(error), code: error && error.code ? String(error.code).slice(0, 80) : undefined, provider: undefined };
+    return result;
+  } finally {
+    try {
+      await require("./messageHistoryService").recordMessage({
+        channel: "email", to: recipient, message: "Subject: " + String(subject || "").slice(0, 200) + "\n" + body,
+        event, status: result?.success ? "sent" : "failed", error: result?.success ? null : result?.error,
+        gateway: result?.provider || providerMode({})
+      });
+    } catch (_) {}
   }
 }
 

@@ -63,7 +63,7 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
   assert.equal(result.success,true);
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].channel,"whatsapp");
-  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test"}]);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test",event:"pppoe_renewal"}]);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
@@ -82,7 +82,7 @@ test("custom PPPoE renewal template replaces runtime variables for WhatsApp",asy
  try{
   const result=await dispatchNow({userType:"pppoe",event:"pppoe_renewal",customer:{username:"alice",full_name:"Alice",phone:"01712345678"},username:"alice",message:"Default",variables:{new_expiry_date:"2026-11-16"}});
   assert.equal(result.success,true);
-  assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK."}]);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK.",event:"pppoe_renewal"}]);
  }finally{settingsService.getAllSettings=originalGetAllSettings;whatsappService.sendMessage=originalSendMessage;db.query=originalDbQuery;}
 });
 
@@ -164,7 +164,7 @@ for(const scenario of [
     message:"Fallback message"
    });
    assert.equal(result.success,true);
-   assert.deepEqual(sent,[{to:"8801712345678",message:"প্রিয় "+scenario.name+", "+scenario.package+"; username=test-user; expiry="+scenario.expiry}]);
+   assert.deepEqual(sent,[{to:"8801712345678",message:"প্রিয় "+scenario.name+", "+scenario.package+"; username=test-user; expiry="+scenario.expiry,event:scenario.event}]);
   }finally{
    settingsService.getAllSettings=originalGetAllSettings;
    whatsappService.sendMessage=originalSendMessage;

@@ -712,15 +712,29 @@ function normalizeWhatsAppJid(value) {
   return normalizePhone(value) + "@s.whatsapp.net";
 }
 
-async function sendMessage({ to, message } = {}) {
-  if (!socket || connection !== "connected") {
-    throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
+async function sendMessage({ to, message, event = "manual" } = {}) {
+  const history = require("./messageHistoryService");
+  let result = null, failure = null;
+  const body = String(message || "").slice(0, 4000);
+  try {
+    if (!socket || connection !== "connected") {
+      throw new Error("WhatsApp is not linked. Open Notification Hub and connect the WhatsApp device first.");
+    }
+    const jid = normalizeWhatsAppJid(to);
+    result = await socket.sendMessage(jid, { text: body });
+    return { success: true, messageId: result?.key?.id || null };
+  } catch (error) {
+    failure = error;
+    throw error;
+  } finally {
+    await history.recordMessage({
+      channel: "whatsapp", to, message: body, event,
+      status: failure ? "failed" : "sent",
+      error: failure ? String(failure.message || failure) : null,
+      gateway: "baileys",
+      providerMessageId: result?.key?.id || null
+    });
   }
-  const jid = normalizeWhatsAppJid(to);
-  const result = await socket.sendMessage(jid, {
-    text: String(message || "").slice(0, 4000)
-  });
-  return { success: true, messageId: result?.key?.id || null };
 }
 
 async function clearStoredAuth(database = db) {

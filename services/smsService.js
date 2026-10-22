@@ -121,14 +121,14 @@ async function sendSmsCore({to,phone,message,event="manual",variables={},token:o
  const providerResponse=await requestProvider({url:endpoint,method,params,token:apiToken});
  return {success:true,mode,method,providerResponse};
 }
-async function recordSmsDelivery({to,phone,message,event="manual",status,error,mode,method,httpStatus}={}){
- try{
+async function recordSmsDelivery({to,phone,message,event="manual",status,error,mode,method,httpStatus}={}) {
+ try {
   const db=require("../db");
   await db.getPool().query(
-   "INSERT INTO sms_delivery_logs(recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW())",
-   [safeText(phone||to,40),safeText(message,4000),safeText(event,80)||"manual",status,safeText(mode,40)||null,safeText(method,20)||null,Number.isInteger(httpStatus)?httpStatus:null,error?safeText(error,1000):null]
+   "INSERT INTO sms_delivery_logs(recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,channel,recipient_address,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())",
+   [safeText(phone||to,40),safeText(message,4000),safeText(event,80)||"manual",status,safeText(mode,40)||null,safeText(method,20)||null,Number.isInteger(httpStatus)?httpStatus:null,error?safeText(error,1000):null,"sms",safeText(phone||to,254)]
   );
- }catch(_){/* History logging must never block a billing notification or alter send outcome. */}
+ } catch (_) { /* History must never block a message send. */ }
 }
 async function sendSms(args={}){
  const input=args||{};
@@ -146,6 +146,7 @@ async function sendSms(args={}){
  }finally{
   const provider=result?.providerResponse||result?.provider_response||{};
   const httpStatus=Number(provider.httpStatus||provider.statusCode||0);
+  if(!error&&result?.skipped)error=String(result.reason||"Message skipped");
   await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
  }
 }

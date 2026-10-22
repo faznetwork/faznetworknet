@@ -126,7 +126,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
  if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
  const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
- if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp")})]);
+ if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName})]);
  if(channelEnabled("email")&&ruleEnabled("email")){
   let recipientEmail=String(customer?.email||"").trim();
   if(!recipientEmail&&customerUsername!=="unknown"){
@@ -142,7 +142,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
    const subject=renderEmailTemplate(subjectSource,context,false).replace(/[\r\n]+/g," ").trim().slice(0,200);
    const html=renderEmailTemplate(bodySource,context,true);
    const text=html.replace(/<\s*br\s*\/?>/gi,"\n").replace(/<\/(p|div|li|h[1-6])>/gi,"\n").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/[ \t]+\n/g,"\n").trim();
-   return emailService.sendEmail({to:recipientEmail,subject,html,text});
+   return emailService.sendEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName});
   }]);
  }
  const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
