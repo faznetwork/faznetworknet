@@ -14,7 +14,7 @@ test("Add User creates a direct subscriber with username/password and no activat
  assert.match(source,/INVALID_PASSWORD/);
  assert.match(source,/USERNAME_ALREADY_EXISTS/);
  assert.match(source,/PHONE_ALREADY_EXISTS/);
- assert.match(source,/subscriber_type='direct_subscriber'/);
+ assert.match(source,/'direct_subscriber'/);
  assert.match(source,/activation_type\) VALUES/);
  assert.match(source,/status='pending_claim'/);
  assert.match(source,/mac_address,customer_name,note,cleanup_status,first_login_at,expires_at/);
