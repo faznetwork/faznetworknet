@@ -7,7 +7,7 @@
 :local oltAddress "172.21.21.2";
 :local oltPort 161;
 :local community "public";
-:local apiUrl "https://faznetwork.com/api/olt/sync-telemetry";
+:local apiUrl "https://faznetwork-web.onrender.com/api/olt/sync-telemetry";
 :local token "__OLT_COLLECTOR_TOKEN__";
 :local oltId "V-SOL-V1601E04-DP";
 

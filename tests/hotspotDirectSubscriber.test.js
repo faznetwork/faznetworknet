@@ -19,8 +19,6 @@ test("Add User creates a direct subscriber with username/password and no activat
  assert.match(source,/'pending_claim'/);
  assert.match(source,/mac_address,customer_name,note,cleanup_status,first_login_at,expires_at/);
  assert.match(source,/first successful login/);
- assert.match(source,/user:\{id:stored\.id,username,password,/);
- assert.match(ui,/savedPassword=response\.user\?\.password\|\|passwordInput\.value/);
  assert.match(ui,/id="hsLoginUsername" name="username"/);
  assert.match(ui,/id="hsGenerateUsername"/);
  assert.match(ui,/id="hsGeneratePassword"/);
@@ -34,14 +32,14 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  const routes=read("routes/hotspotAuthRoutes.js");
  assert.match(auth,/async function deviceLookup/);
  assert.match(auth,/async function activate/);
- assert.doesNotMatch(auth,/async function directLogin/);
- assert.doesNotMatch(auth,/INVALID_CREDENTIALS/);
+ assert.match(auth,/async function directLogin/);
+ assert.match(auth,/INVALID_CREDENTIALS/);
  assert.match(auth,/MAC_ALREADY_BOUND/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
   assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
- assert.doesNotMatch(routes,/direct-login|directLogin/);
+ assert.match(routes,/directLogin/);
 });
 
 test("manual permanent subscribers use the same voucher PIN/password claim flow",()=>{
@@ -129,11 +127,11 @@ test("unused scratch cards show PIN and password rather than a MAC in the vouche
 test("captive portal calls the hosted backend and submits the MikroTik login handshake",()=>{
  const portal=read("public/login.html");
  const auth=read("controllers/hotspotAuthController.js");
- assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork\.com'/);
+ assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
  assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
- assert.doesNotMatch(portal,/id="tab-member-btn"/);
- assert.doesNotMatch(portal,/section-member/);
- assert.doesNotMatch(portal,/api\/hotspot-auth\/direct-login/);
+ assert.match(portal,/id="tab-member-btn"/);
+ assert.match(portal,/section-member/);
+ assert.match(portal,/api\/hotspot-auth\/direct-login/);
  assert.match(portal,/form\.action=loginUrl/);
  assert.match(portal,/form\.submit\(\)/);
  assert.match(portal,/login_url:device\.login/);

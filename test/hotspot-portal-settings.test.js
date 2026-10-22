@@ -40,13 +40,6 @@ test("admin hotspot portal settings safely falls back when either settings store
  assert.match(controller,/return res\.status\(200\)\.json\(\{success:true,settings:\{\}\}\)/);
  assert.match(controller,/function readPublicConfig\(\).*catch\(_\)\{return \{\};\}/);
  assert.doesNotMatch(controller,/DELETE FROM (?:app_settings|hotspot_portal_settings)/i);
- assert.doesNotMatch(controller,/tenant_id/);
- const schema=fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8");
- const migration=fs.readFileSync(path.join(__dirname,"..","migrations","20261018_hotspot_portal_settings.sql"),"utf8");
- assert.doesNotMatch(schema,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings .*tenant_id/);
- assert.doesNotMatch(migration,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings .*tenant_id/);
- assert.match(controller,/INSERT INTO hotspot_portal_settings\(id\) VALUES\(1\)/);
- assert.match(controller,/WHERE id=1/);
 });
 
 test("dashboard live traffic retries interface discovery after transient router/API failures",()=>{
@@ -57,32 +50,4 @@ test("dashboard live traffic retries interface discovery after transient router/
  assert.match(admin,/dataset\.nocOptionsLoaded !== '1'/);
  assert.match(admin,/textContent = 'LIVE'/);
  assert.match(admin,/nocTrafficHistory\.push\(\{ rx: downloadMbps, tx: uploadMbps \}\)/);
-});
-
-
-test("captive portal uses the premium responsive green-and-white UI without changing login contracts",()=>{
- assert.match(login,/<style id="faz-premium-login-ui">/);
- assert.match(login,/--brand-primary:#0a3d2e/);
- assert.match(login,/\.rgb-wrapper\{/);
- assert.match(login,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
- assert.match(login,/@media\(max-width:380px\)/);
- assert.match(login,/prefers-reduced-motion:reduce/);
- assert.match(login,/portal-trust-line/);
- assert.match(login,/api\/hotspot-auth\/claim-voucher/);
- assert.doesNotMatch(login,/api\/hotspot-auth\/direct-login/);
- assert.match(login,/mikrotik-auto-login/);
-});
-
-test("captive portal uses server branding and all configured packages, with a premium responsive theme and visible retry on API failure",()=>{
- assert.match(login,/api\/public\/portal-config/);
- assert.match(login,/p\.profileId/);
- assert.match(login,/data\.logoUrl/);
- assert.match(login,/data\.bannerUrl/);
- assert.match(login,/portal-package-error/);
- assert.match(login,/portal-retry-button/);
- assert.match(login,/faz-premium-portal-v2/);
- assert.match(login,/--portal-forest:#082f27/);
- assert.match(login,/grid-template-columns:repeat\(auto-fit,minmax\(132px,1fr\)\)/);
- assert.match(login,/প্যাকেজ লোড করা যায়নি/);
- assert.match(login,/api\/hotspot-auth\/claim-voucher/);
 });

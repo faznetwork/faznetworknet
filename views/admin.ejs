@@ -157,38 +157,6 @@
             padding: 24px;
         }
 
-        /* Authoritative Desktop Workspace Layout - Sidebar Offset & Table Containment */
-        @media (min-width: 769px) {
-            body {
-                overflow-x: hidden;
-            }
-            #sidebar {
-                width: 260px !important;
-                position: fixed !important;
-                left: 0 !important;
-                top: 0 !important;
-                bottom: 0 !important;
-                z-index: 1000 !important;
-            }
-            #mainContent.main-content {
-                box-sizing: border-box !important;
-                margin-left: 260px !important;
-                width: calc(100vw - 260px) !important;
-                max-width: calc(100vw - 260px) !important;
-                min-width: 0 !important;
-                overflow-x: auto !important;
-                position: relative !important;
-                padding: 24px !important;
-            }
-            #dynamicPageContent,
-            #view-customer-filter,
-            #view-all-customer {
-                width: 100% !important;
-                min-width: 0 !important;
-                overflow-x: auto !important;
-            }
-        }
-
         .dashboard-shortcuts{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:18px;padding:8px 0}
         .dashboard-section-divider{border:0;border-top:2px solid #dbe5e1;opacity:1;margin:8px 0 24px}
         .dashboard-resource-card{border:1px solid #d1fae5;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden}
@@ -1828,47 +1796,6 @@
 </style>
 <style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
-<style id="ultimate-sidebar-fix">
-/* GUARANTEED DESKTOP SIDEBAR OVERLAP FIX */
-@media (min-width: 769px) {
-    body {
-        overflow-x: hidden !important;
-    }
-    #sidebar {
-        width: 260px !important;
-        min-width: 260px !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        bottom: 0 !important;
-        z-index: 1040 !important;
-    }
-    #mainContent.main-content {
-        margin-left: 260px !important;
-        width: calc(100% - 260px) !important;
-        max-width: calc(100% - 260px) !important;
-        min-width: 0 !important;
-        padding: 24px !important;
-        box-sizing: border-box !important;
-        display: block !important;
-        position: relative !important;
-    }
-    #dynamicPageContent, 
-    .admin-view, 
-    #view-customer-filter, 
-    #view-all-customer {
-        width: 100% !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-    }
-    .table-responsive {
-        width: 100% !important;
-        max-width: 100% !important;
-        overflow-x: auto !important;
-        display: block !important;
-    }
-}
-</style>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
@@ -3371,7 +3298,7 @@
             document.getElementById('hsRefreshProfiles')?.addEventListener('click',async event=>{const el=event.currentTarget,html=el.innerHTML;el.disabled=true;el.innerHTML='<span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>';try{await loadOptions();}finally{el.disabled=false;el.innerHTML=html;}});
             document.getElementById('hsClearForm')?.addEventListener('click',()=>{form.reset();profile.value='';loginUsername.value='';passwordInput.value='';server.value='all';server.dataset.selected='all';if(result)result.innerHTML='';updatePreview();updateButton();phone.focus();});
             form.addEventListener('submit',async event=>{event.preventDefault();if(!document.getElementById('hsCustomerName')?.value.trim()||!updatePhoneFeedback()||(loginUsername.value.trim()&&!/^[A-Za-z0-9_.@-]{3,100}$/.test(loginUsername.value.trim()))||(passwordInput.value&&passwordInput.value.length<8)){if(!document.getElementById('hsCustomerName')?.value.trim())document.getElementById('hsCustomerName')?.focus();else if(!updatePhoneFeedback())phone.focus();else if(loginUsername.value.trim()&&!/^[A-Za-z0-9_.@-]{3,100}$/.test(loginUsername.value.trim()))loginUsername.focus();else passwordInput.focus();updateButton();return;}if(!form.reportValidity())return;const chosen=selectedProfile();if(!chosen){if(result)result.innerHTML='<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';return;}button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving Hotspot account…';if(result)result.innerHTML='';
-                try{const response=await jsonFetch('/api/hotspot/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phone.value.trim(),username:loginUsername.value.trim(),password:passwordInput.value,customer_name:document.getElementById('hsCustomerName')?.value.trim()||'',note:document.getElementById('hsCustomerNote')?.value.trim()||'',profile_id:chosen.profile_id||chosen.name,server:server.value||'all'})});if(!response||response.success!==true)throw new Error(response?.message||'The Hotspot account was not saved.');const savedUsername=response.user?.username||loginUsername.value.trim()||'auto-generated voucher';const savedPassword=response.user?.password||passwordInput.value||'auto-generated';const message='Permanent customer created as voucher. PIN/Username: '+savedUsername+' | Password: '+savedPassword+'. MikroTik login uses the device MAC.';toast(message);if(result)result.innerHTML='<div class="alert alert-success mb-0">'+escapeHtml(message)+'</div>';if(typeof window.refreshHotspotVoucherStats==='function')Promise.resolve(window.refreshHotspotVoucherStats()).catch(()=>{});form.reset();profile.value='';updatePreview();}catch(error){if(result)result.innerHTML='<div class="alert alert-danger mb-0">'+escapeHtml(error?.message||'Unable to save Hotspot account.')+'</div>';}finally{button.innerHTML='<i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Hotspot User';updateButton();}});
+                try{const response=await jsonFetch('/api/hotspot/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phone.value.trim(),username:loginUsername.value.trim(),password:passwordInput.value,customer_name:document.getElementById('hsCustomerName')?.value.trim()||'',note:document.getElementById('hsCustomerNote')?.value.trim()||'',profile_id:chosen.profile_id||chosen.name,server:server.value||'all'})});if(!response||response.success!==true)throw new Error(response?.message||'The Hotspot account was not saved.');const savedUsername=response.user?.username||loginUsername.value.trim()||'auto-generated voucher';const message='Voucher-based permanent customer created. Voucher PIN/Username: '+savedUsername+'. MikroTik login will use the device MAC.';toast(message);if(result)result.innerHTML='<div class="alert alert-success mb-0">'+escapeHtml(message)+'</div>';if(typeof window.refreshHotspotVoucherStats==='function')Promise.resolve(window.refreshHotspotVoucherStats()).catch(()=>{});form.reset();profile.value='';updatePreview();}catch(error){if(result)result.innerHTML='<div class="alert alert-danger mb-0">'+escapeHtml(error?.message||'Unable to save Hotspot account.')+'</div>';}finally{button.innerHTML='<i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Hotspot User';updateButton();}});
             await loadOptions();
         }
         async function loadHotspotDashboard(){
