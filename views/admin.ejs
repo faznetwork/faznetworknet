@@ -8687,7 +8687,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return list.indexOf(String(value || '')) !== -1;
             }
             function cleanRoute(route) {
-                if (!route || typeof route !== 'object') return { view: 'dashboard' };
+                if (!route || typeof route !== 'object') return { view: 'not-found', path: window.location.pathname };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
@@ -8738,7 +8738,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
                     return { view: 'module', module: String(route.module) };
                 }
-                return { view: 'dashboard' };
+                return { view: 'not-found', path: String(route.path || window.location.pathname) };
             }
             function routeFromPath(path) {
                 const routes = {
@@ -8808,6 +8808,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const pathRoute = routeFromPath(path);
                 if (pathRoute) return pathRoute;
                 if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
+                if (/^\/admin(?:\/|$)/.test(path) && path !== '/admin') return { view: 'not-found', path };
 
                 // Backward compatibility: older shared links with ?view=... resolve once,
                 // then commitRoute replaces them with the canonical path-based URL.
@@ -8823,6 +8824,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function routeUrl(route) {
                 const normalized = cleanRoute(route);
+                if (normalized.view === 'not-found') return String(normalized.path || window.location.pathname);
                 if (normalized.view === 'dashboard') return '/admin/dashboard';
                 if (normalized.view === 'page') {
                     if (normalized.page === 'add-customer') return '/admin/customers/add';
@@ -8920,6 +8922,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             function dispatchRoute(route) {
                 const r = cleanRoute(route);
                 switch (r.view) {
+                    case 'not-found': return showAdminNotFound(r.path);
                     case 'dashboard':
                         return callIfAvailable('switchView', ['dashboard']);
                     case 'page':
@@ -8966,6 +8969,20 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return false;
             }
+            function showAdminNotFound(path) {
+                const dynamic = document.getElementById('dynamicPageContent');
+                if (!dynamic) {
+                    console.error('[Admin Routing] Cannot render not-found view: #dynamicPageContent is missing.');
+                    return false;
+                }
+                document.querySelectorAll('.admin-view').forEach(view => { view.style.display = 'none'; view.hidden = true; });
+                dynamic.style.display = 'block';
+                dynamic.hidden = false;
+                dynamic.innerHTML = '<section class="p-3"><div class="card border-0 shadow-sm"><div class="card-body p-4"><div class="text-danger fw-bold mb-2">404 · Admin page not found</div><p class="text-muted mb-3">No admin view is registered for <code>' + escapeHtml(String(path || window.location.pathname)) + '</code>.</p><a class="btn btn-outline-success" href="/admin/dashboard">Return to Dashboard</a></div></div></section>';
+                if (typeof setPageTitleSafe === 'function') setPageTitleSafe('Admin page not found');
+                return true;
+            }
+
             function showAdminModulePlaceholder(moduleKey) {
                 const title = moduleTitles[moduleKey];
                 const dynamic = document.getElementById('dynamicPageContent');
