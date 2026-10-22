@@ -34,14 +34,14 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  const routes=read("routes/hotspotAuthRoutes.js");
  assert.match(auth,/async function deviceLookup/);
  assert.match(auth,/async function activate/);
- assert.match(auth,/async function directLogin/);
- assert.match(auth,/INVALID_CREDENTIALS/);
+ assert.doesNotMatch(auth,/async function directLogin/);
+ assert.doesNotMatch(auth,/INVALID_CREDENTIALS/);
  assert.match(auth,/MAC_ALREADY_BOUND/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
   assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
- assert.match(routes,/directLogin/);
+ assert.doesNotMatch(routes,/direct-login|directLogin/);
 });
 
 test("manual permanent subscribers use the same voucher PIN/password claim flow",()=>{
@@ -131,9 +131,9 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  const auth=read("controllers/hotspotAuthController.js");
  assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
  assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
- assert.match(portal,/id="tab-member-btn"/);
- assert.match(portal,/section-member/);
- assert.match(portal,/api\/hotspot-auth\/direct-login/);
+ assert.doesNotMatch(portal,/id="tab-member-btn"/);
+ assert.doesNotMatch(portal,/section-member/);
+ assert.doesNotMatch(portal,/api\/hotspot-auth\/direct-login/);
  assert.match(portal,/form\.action=loginUrl/);
  assert.match(portal,/form\.submit\(\)/);
  assert.match(portal,/login_url:device\.login/);
