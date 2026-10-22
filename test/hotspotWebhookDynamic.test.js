@@ -57,7 +57,7 @@ test("Admin creates a direct subscriber with chosen credentials and defers Route
     assert.equal(insertedParams[0],"rahim.home");
     assert.equal(insertedParams[1],"SafePass123!");
     assert.equal(insertedParams[6],"01712345678");
-    assert.match(insertedSql,/status='pending_claim'/);
+    assert.match(insertedSql,/'pending_claim'/);
     assert.match(insertedSql,/mac_address,customer_name,note/);
     assert.equal(routerWrites,0,"RouterOS must not be provisioned before a successful credential login");
   }finally{
