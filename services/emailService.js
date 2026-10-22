@@ -117,16 +117,30 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
   return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted: Array.isArray(info.accepted) ? info.accepted : [], rejected: Array.isArray(info.rejected) ? info.rejected : [] };
 }
 
-async function sendEmail({ to, subject, html, text } = {}) {
+async function sendEmail({ to, subject, html, text, event = "manual" } = {}) {
+  const recipient = String(to || "").trim();
+  const body = String(text || html || "").slice(0, 4000);
+  let result;
   try {
-    const { recipient, title } = validateEmailRequest({ to, subject, html, text });
+    const { recipient: validatedRecipient, title } = validateEmailRequest({ to, subject, html, text });
     const settings = await settingsService.getAllSettings();
     if (providerMode(settings) === APPS_SCRIPT_MODE) {
-      return await sendAppsScriptEmail({ to: recipient, subject: title, html, text }, settings);
+      result = await sendAppsScriptEmail({ to: validatedRecipient, subject: title, html, text }, settings);
+    } else {
+      result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings);
     }
-    return await sendSmtpEmail({ recipient, title, html, text }, settings);
+    return result;
   } catch (error) {
-    return { success: false, error: safeError(error), code: error && error.code ? String(error.code).slice(0, 80) : undefined, provider: undefined };
+    result = { success: false, error: safeError(error), code: error && error.code ? String(error.code).slice(0, 80) : undefined, provider: undefined };
+    return result;
+  } finally {
+    try {
+      await require("./messageHistoryService").recordMessage({
+        channel: "email", to: recipient, message: "Subject: " + String(subject || "").slice(0, 200) + "\\n" + body,
+        event, status: result?.success ? "sent" : "failed", error: result?.success ? null : result?.error,
+        gateway: result?.provider || providerMode({})
+      });
+    } catch (_) {}
   }
 }
 
