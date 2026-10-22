@@ -72,3 +72,16 @@ test("captive portal uses the premium responsive green-and-white UI without chan
  assert.match(login,/api\/hotspot-auth\/direct-login/);
  assert.match(login,/mikrotik-auto-login/);
 });
+
+test("captive portal uses server branding and all configured packages, with a premium responsive theme and visible retry on API failure",()=>{
+ assert.match(login,/api\/public\/portal-config/);
+ assert.match(login,/p\.profileId/);
+ assert.match(login,/data\.logoUrl/);
+ assert.match(login,/data\.bannerUrl/);
+ assert.match(login,/portal-package-error/);
+ assert.match(login,/portal-retry-button/);
+ assert.match(login,/faz-premium-portal-v2/);
+ assert.match(login,/--portal-forest:#082f27/);
+ assert.match(login,/grid-template-columns:repeat\(auto-fit,minmax\(132px,1fr\)\)/);
+ assert.doesNotMatch(login,/renderPackages\(\[\{ profile: '1-Hour', price: 10/);
+});
