@@ -29,6 +29,7 @@ test('server view metadata and client route map cover the five critical direct U
   }
   assert.ok(adminView.includes("const serverViewKey = String(document.body?.dataset?.adminViewKey || '').trim();"));
   assert.ok(adminView.includes('function routeFromServerViewKey(viewKey, pathname)'));
+  assert.ok(adminView.includes("String(pathname || '/admin').replace(/\\/+$/, '')"), 'server route fallback must normalize trailing slashes');
   for (const key of ['dashboard', 'customers-all', 'payments-pending', 'hotspot-users-all', 'settings-brand-identity']) {
     assert.ok(adminView.includes("'" + key + "':") || adminView.includes(key + ':'), 'server view key not dispatched: ' + key);
   }
