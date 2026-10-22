@@ -1,7 +1,6 @@
 name: Payment Recovery Tests
 
 on:
-  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
@@ -26,7 +25,5 @@ jobs:
           node --check controllers/customerSelfCareController.js
           node --check services/paymentWebhookParser.js
           node --check test/hotspotWebhookDynamic.test.js
-      - name: Admin popstate adapter regression test
-        run: node --test test/admin-popstate-adapter.test.js
       - name: Run test suite
         run: npm test
