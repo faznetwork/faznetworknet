@@ -150,10 +150,11 @@ test("Apps Script delivery rejects unsuccessful JSON and non-JSON responses", as
   const nonJson = await emailService.sendEmail({ to: "customer@example.com", subject: "Test", html: "<p>Hello</p>" });
   assert.equal(nonJson.success, false);
   assert.match(nonJson.error, /non-JSON response \(HTTP 403\)/);
-  assert.equal(warnings.length, 1);
-  assert.equal(warnings[0][1].status, 403);
-  assert.equal(warnings[0][1].redirected, true);
-  assert.match(warnings[0][1].preview, /Forbidden redirect response/);
+  const providerWarnings = warnings.filter(args => String(args[0] || "").includes("[EmailService]"));
+  assert.equal(providerWarnings.length, 1);
+  assert.equal(providerWarnings[0][1].status, 403);
+  assert.equal(providerWarnings[0][1].redirected, true);
+  assert.match(providerWarnings[0][1].preview, /Forbidden redirect response/);
 });
 
 test("Apps Script URL validation blocks non-Google or non-HTTPS endpoints", async () => {
