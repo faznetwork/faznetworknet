@@ -30,7 +30,7 @@ async function retry(req,res){
  try{
   const id=Number.parseInt(String(req.params.id||""),10);
   if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({success:false,message:"Invalid message history ID."});
-  const found=await db.query("SELECT id,channel,recipient_address,message,event_key,status FROM sms_delivery_logs WHERE id=$1 LIMIT 1",[id]);
+  const found=await db.query("SELECT id,channel,recipient_address,recipient_phone,message,event_key,status FROM sms_delivery_logs WHERE id=$1 LIMIT 1",[id]);
   const row=found.rows?.[0];
   if(!row)return res.status(404).json({success:false,message:"Message history record not found."});
   if(row.status!=="failed")return res.status(409).json({success:false,message:"Only failed messages can be retried. Check the current status first."});
