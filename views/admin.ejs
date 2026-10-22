@@ -8451,7 +8451,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return list.indexOf(String(value || '')) !== -1;
             }
             function cleanRoute(route) {
-                if (!route || typeof route !== 'object') return { view: 'dashboard' };
+                if (!route || typeof route !== 'object') return { view: 'route-error', path: window.location.pathname };
+                if (route.view === 'route-error') return { view: 'route-error', path: String(route.path || window.location.pathname) };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
@@ -8502,9 +8503,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
                     return { view: 'module', module: String(route.module) };
                 }
-                return { view: 'dashboard' };
+                return { view: 'route-error', path: window.location.pathname };
             }
             function routeFromPath(path) {
+                if (path === '/admin') return { view: 'dashboard' };
                 const routes = {
                     '/admin/dashboard': { view: 'dashboard' },
                     '/admin/customers/add': { view: 'page', page: 'add-customer' },
@@ -8565,7 +8567,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hr/employees/added': { view: 'hr', section: 'added' },
                     '/admin/resellers/sub-staff': { view: 'sub-staff' }
                 };
-                return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
+                return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : { view: 'route-error', path };
             }
             function readRoute() {
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
@@ -8577,7 +8579,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 // then commitRoute replaces them with the canonical path-based URL.
                 const params = new URLSearchParams(window.location.search);
                 const view = params.get('view');
-                if (!view) return { view: 'dashboard' };
+                if (!view) return path === '/admin' ? { view: 'dashboard' } : { view: 'route-error', path };
+                if (!['page', 'customers', 'payments', 'hotspot', 'olt', 'settings', 'devices', 'packages', 'ip-pools', 'staff', 'audit', 'maps', 'support', 'hr', 'network-diagram', 'monitor', 'sub-staff', 'account-dashboard', 'account-manage', 'vpn', 'vpn-port-forwarding', 'module'].includes(view)) return { view: 'route-error', path: window.location.pathname + window.location.search };
                 if (view === 'page') return cleanRoute({ view, page: params.get('page'), channel: params.get('channel') });
                 if (view === 'customers') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
                 if (view === 'payments') return cleanRoute({ view, filter: params.get('filter'), title: params.get('title') });
@@ -8661,8 +8664,33 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return '/admin/dashboard';
             }
+            function showAdminRouteError(message, detail) {
+                const main = document.getElementById('mainContent');
+                if (!main) { window.alert(message + (detail ? '\\n' + detail : '')); return; }
+                document.querySelectorAll('.admin-view').forEach(view => { view.style.display = 'none'; });
+                let panel = document.getElementById('fazAdminRouteError');
+                if (!panel) {
+                    panel = document.createElement('section');
+                    panel.id = 'fazAdminRouteError';
+                    panel.className = 'container-fluid py-4';
+                    panel.setAttribute('role', 'alert');
+                    panel.style.cssText = 'position:relative;z-index:2;max-width:960px;margin:24px auto;';
+                    main.appendChild(panel);
+                }
+                panel.replaceChildren();
+                const card = document.createElement('div'); card.className = 'alert alert-danger shadow-sm';
+                const heading = document.createElement('h2'); heading.className = 'h5 alert-heading'; heading.textContent = message || 'Unable to load this page';
+                const body = document.createElement('p'); body.className = 'mb-2'; body.textContent = detail || 'The requested page could not be opened. Please choose another menu item or return to the dashboard.';
+                const back = document.createElement('a'); back.className = 'btn btn-success btn-sm mt-2'; back.href = '/admin/dashboard'; back.textContent = 'Return to Dashboard';
+                card.append(heading, body, back); panel.appendChild(card); panel.style.display = 'block';
+            }
+            function clearAdminRouteError() {
+                const panel = document.getElementById('fazAdminRouteError');
+                if (panel) panel.remove();
+            }
             function commitRoute(route, replace) {
                 const normalized = cleanRoute(route);
+                if (normalized.view === 'route-error') { state.current = normalized; return normalized; }
                 const url = routeUrl(normalized);
                 if (window.location.pathname + window.location.search !== url) {
                     const method = replace ? 'replaceState' : 'pushState';
@@ -8677,12 +8705,30 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const fn = window[name];
                 if (typeof fn !== 'function') {
                     console.error('[Admin Routing] Required view handler is unavailable:', name);
+                    showAdminRouteError('Page could not be loaded', 'Required section loader "' + name + '" is not available. Please reload the admin panel or contact support.');
                     return false;
                 }
-                return fn.apply(window, args || []);
+                try {
+                    const result = fn.apply(window, args || []);
+                    if (result === false) { showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" reported that it could not render this page.'); return false; }
+                    if (result && typeof result.then === 'function') return result.then(value => {
+                        if (value === false) showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" could not render this page.');
+                        return value;
+                    }).catch(error => {
+                        console.error('[Admin Routing] Loader failed:', name, error);
+                        showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" failed. Please try again.');
+                        return false;
+                    });
+                    return result;
+                } catch (error) {
+                    console.error('[Admin Routing] Loader threw an error:', name, error);
+                    showAdminRouteError('Page could not be loaded', 'The section loader "' + name + '" failed. Please try again.');
+                    return false;
+                }
             }
             function dispatchRoute(route) {
                 const r = cleanRoute(route);
+                if (r.view === 'route-error') { showAdminRouteError('Page Not Found / Invalid Route', 'No admin page is registered for: ' + r.path); return false; }
                 switch (r.view) {
                     case 'dashboard':
                         return callIfAvailable('switchView', ['dashboard']);
@@ -8721,9 +8767,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'network-diagram': return callIfAvailable('loadNetworkDiagram');
                     case 'monitor': return callIfAvailable('loadNetworkMonitor', [r.mode || 'online']);
                     case 'settings':
-                        if (typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') return false;
+                        if (typeof window.switchView !== 'function' || typeof window.showGeneralSettingsSection !== 'function') { showAdminRouteError('Settings could not be loaded', 'The required settings loader is not available.'); return false; }
                         window.switchView('general-settings');
-                        if (!window.showGeneralSettingsSection(r.section)) return false;
+                        if (!window.showGeneralSettingsSection(r.section)) { showAdminRouteError('Settings could not be loaded', 'The settings section "' + r.section + '" could not be rendered.'); return false; }
                         if (typeof window.syncGeneralSettingsSidebar === 'function') window.syncGeneralSettingsSidebar(r.section);
                         return true;
                     case 'module': return showAdminModulePlaceholder(r.module);
@@ -8766,13 +8812,17 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const normalized = commitRoute(route, Boolean(replace));
                 state.restoring = true;
                 try {
+                    clearAdminRouteError();
                     const result = dispatchRoute(normalized);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(error => console.error('[Admin Routing] View restore failed:', error));
-                    }
+                    if (result && typeof result.catch === 'function') return result.catch(error => {
+                        console.error('[Admin Routing] View restore failed:', error);
+                        showAdminRouteError('Page could not be loaded', 'The selected page failed while rendering. Please try again.');
+                        return false;
+                    });
                     return result;
                 } catch (error) {
                     console.error('[Admin Routing] View restore failed:', error);
+                    showAdminRouteError('Page could not be loaded', 'The selected page failed while rendering. Please try again.');
                     return false;
                 } finally {
                     state.restoring = false;
