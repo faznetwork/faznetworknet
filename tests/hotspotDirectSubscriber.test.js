@@ -6,22 +6,16 @@ const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("Add User creates a direct subscriber with username/password and no activation or MAC inputs",()=>{
+test("Add User implements distinct direct-subscriber creation modes",()=>{
  const source=read("controllers/hotspotController.js");
- const ui=read("views/admin.ejs");
- assert.match(source,/async function createUser\(req,res\)/);
- assert.match(source,/INVALID_USERNAME/);
- assert.match(source,/INVALID_PASSWORD/);
- assert.match(source,/USERNAME_ALREADY_EXISTS/);
- assert.match(source,/PHONE_ALREADY_EXISTS/);
- assert.match(source,/'direct_subscriber'/);
- assert.match(source,/activation_type\) VALUES/);
- assert.match(source,/'pending_claim'/);
- assert.match(source,/mac_address,customer_name,note,cleanup_status,first_login_at,expires_at/);
- assert.match(source,/first successful login/);
- assert.match(ui,/id="hsLoginUsername" name="username"/);
- assert.match(ui,/id="hsPassword" name="password" type="password"/);
- assert.doesNotMatch(ui.slice(ui.indexOf("const form=document.getElementById('addHotspotUserForm')"),ui.indexOf("async function loadHotspotDashboard")),/activation_type|hsDeviceMac|hsCustomExpiry|preassigned/);
+ assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
+ assert.match(source,/activation_type/);
+ assert.match(source,/subscriber_type='direct_subscriber'/);
+ assert.match(source,/preassigned\?"active":"pending_claim"/);
+ assert.match(source,/preassigned\?mac:null/);
+ assert.match(source,/first_login_at/);
+ assert.match(source,/db\.withTransaction\(async client=>/);
+ assert.match(source,/rechargeHotspotUser\(\{username:mac,password:mac,profile/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
@@ -29,14 +23,10 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  const routes=read("routes/hotspotAuthRoutes.js");
  assert.match(auth,/async function deviceLookup/);
  assert.match(auth,/async function activate/);
- assert.match(auth,/async function directLogin/);
- assert.match(auth,/INVALID_CREDENTIALS/);
- assert.match(auth,/MAC_ALREADY_BOUND/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
   assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
- assert.match(routes,/directLogin/);
 });
 
 test("direct subscribers cannot be redeemed as scratch-card tokens",()=>{
@@ -122,9 +112,6 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  const auth=read("controllers/hotspotAuthController.js");
  assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
  assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
- assert.match(portal,/id="tab-member-btn"/);
- assert.match(portal,/section-member/);
- assert.match(portal,/api\/hotspot-auth\/direct-login/);
  assert.match(portal,/form\.action=loginUrl/);
  assert.match(portal,/form\.submit\(\)/);
  assert.match(portal,/login_url:device\.login/);
