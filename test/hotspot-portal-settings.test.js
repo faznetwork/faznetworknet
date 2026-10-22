@@ -51,3 +51,12 @@ test("dashboard live traffic retries interface discovery after transient router/
  assert.match(admin,/textContent = 'LIVE'/);
  assert.match(admin,/nocTrafficHistory\.push\(\{ rx: downloadMbps, tx: uploadMbps \}\)/);
 });
+
+test("single-tenant hotspot settings schema does not require tenant_id",()=>{
+ const schema=fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8");
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings/);
+ assert.match(schema,/INSERT INTO hotspot_portal_settings\(id\) VALUES\(1\)/);
+ assert.doesNotMatch(schema,/tenant_id/);
+ assert.doesNotMatch(controller,/tenant_id/);
+ assert.match(controller,/WHERE id=1/);
+});
