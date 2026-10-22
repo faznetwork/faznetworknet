@@ -141,7 +141,7 @@ async function sendSms(args={}){
  }finally{
   const provider=result?.providerResponse||result?.provider_response||{};
   const httpStatus=Number(provider.httpStatus||provider.statusCode||0);
-  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
+  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error:error||(result?.skipped?String(result.reason||"Message skipped"):null),mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
  }
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
