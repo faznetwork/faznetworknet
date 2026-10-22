@@ -8561,7 +8561,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (Object.prototype.hasOwnProperty.call(serverRoutes, String(viewKey || ''))) {
                     return cleanRoute(serverRoutes[String(viewKey)]);
                 }
-                const normalizedPath = String(pathname || '/admin').replace(/\\/+$/, '') || '/admin';
+                const normalizedPath = String(pathname || '/admin').replace(/\/+$/, '') || '/admin';
                 return routeFromPath(normalizedPath);
             }
             function readRoute() {
