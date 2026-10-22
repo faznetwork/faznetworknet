@@ -221,10 +221,12 @@ async function directLogin(req,res){
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
   const username=String(req.body?.username||"").trim();
   const password=String(req.body?.password||"");
+  const customerName=String(req.body?.customer_name||req.body?.name||"").trim().slice(0,160);
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||req.body?.macAddress||"");
   const requestedLoginUrl=String(req.body?.login_url||req.body?.link_login_only||"").trim();
   const redirectUrl=/^https?:\/\//i.test(requestedLoginUrl)&&requestedLoginUrl.length<=2048?requestedLoginUrl:null;
   if(!username||username.length>100||!password||password.length>128)return fail(400,"CREDENTIALS_REQUIRED","Enter your Hotspot username and password.");
+  if(!customerName)return fail(400,"CUSTOMER_NAME_REQUIRED","Enter your name to continue.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
   let account=null,profileName="",validity="",quota=0,firstLogin=false,previousUsername="";
   try{
@@ -268,7 +270,7 @@ async function directLogin(req,res){
       if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC binding for this account.");
       if(String(existing.password||"")!==password||String(existing.profile||"")!==profileName||actualMac!==mac||String(existing.comment||"")!==String(account.comment||""))await mikrotikService.updateHotspotUser(username,profileName,account.comment,password,mac);
     }
-    const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username]);
+    const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,customer_name=$5::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username,customerName]);
     if(!finalized.rows?.length)throw new Error("RouterOS login was provisioned but the subscriber record could not be finalized.");
     if(firstLogin&&account.phone&&account.phone!=="Unlinked"){
       const expiry=reserved.expiresAt?new Date(reserved.expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
@@ -286,15 +288,17 @@ async function claimVoucher(req,res){
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
   const pin=String(req.body?.voucher_code||req.body?.pin||"").trim().toUpperCase();
   const password=String(req.body?.voucher_password||req.body?.password||"").trim();
+  const customerName=String(req.body?.customer_name||req.body?.name||"").trim().slice(0,160);
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||"");
   if(!pin||pin.length<4||pin.length>100)return fail(400,"INVALID_VOUCHER_PIN","Enter the voucher PIN printed on your card.");
   if(!password||password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Enter the voucher card password.");
+  if(!customerName)return fail(400,"CUSTOMER_NAME_REQUIRED","Enter your name to continue.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
   try{
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone,customer_name,subscriber_type,renewal_stacked FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
@@ -310,8 +314,8 @@ async function claimVoucher(req,res){
         if(liveActive)throw makeError("MAC_ALREADY_BOUND",409,"This device MAC is already bound to another live voucher. Sign in with that voucher or contact support.");
         await client.query("UPDATE hotspot_vouchers SET mac_address=NULL,status=CASE WHEN LOWER(COALESCE(status,''))='active' THEN 'expired' ELSE status END,expired_at=CASE WHEN LOWER(COALESCE(status,''))='active' THEN COALESCE(expired_at,expires_at,NOW()) ELSE expired_at END,updated_at=NOW() WHERE id=$1",[conflict.id]);
       }
-      await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,updated_at=NOW() WHERE id=$2::bigint",[mac,row.id]);
-      return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim"};
+      await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,customer_name=$2::text,updated_at=NOW() WHERE id=$3::bigint",[mac,customerName,row.id]);
+      return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim",customerName};
     });
     let statusCode=200;
     const responseProxy={
@@ -327,7 +331,7 @@ async function claimVoucher(req,res){
         return res.status(statusCode).json(body);
       }
     };
-    return activate({...req,body:{...(req.body||{}),mac,phone:""}},responseProxy);
+    return activate({...req,body:{...(req.body||{}),mac,phone:"",customer_name:claimed.customerName}},responseProxy);
   }catch(error){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
