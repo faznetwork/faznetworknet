@@ -15,7 +15,7 @@ test("RouterOS captive portal parses CHAP and redirect query parameters",()=>{
   assert.match(html,/params\.get\('chap-challenge'\)/);
   assert.match(html,/name="chap-id"/);
   assert.match(html,/name="chap-challenge"/);
-  assert.match($1,/if\\(device\\.chapChallenge\\).*md5Hex/);
+  assert.match(html,/if\\(device\\.chapChallenge\\).*md5Hex/);
   assert.match(html,/decodeChapChallenge\(device\.chapChallenge\)/);
   assert.match(html,/form\.submit\(\)/);
 });
