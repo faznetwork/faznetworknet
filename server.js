@@ -158,9 +158,13 @@ const ADMIN_ROUTE_VIEW_KEYS = Object.freeze({
   "/admin/resellers/sub-staff": "resellers-sub-staff"
 });
 function resolveAdminViewKey(pathname) {
-  const normalized = String(pathname || "/admin").replace(/\\/+$/, "") || "/admin";
-  if (Object.prototype.hasOwnProperty.call(ADMIN_ROUTE_VIEW_KEYS, normalized)) return ADMIN_ROUTE_VIEW_KEYS[normalized];
-  if (/^\\/admin\\/customers\\/[^/]+$/.test(normalized)) return "customer-profile";
+  const normalized = String(pathname || "/admin").replace(/\/+$/, "") || "/admin";
+  if (Object.prototype.hasOwnProperty.call(ADMIN_ROUTE_VIEW_KEYS, normalized)) {
+    return ADMIN_ROUTE_VIEW_KEYS[normalized];
+  }
+  if (/^\/admin\/customers\/[^/]+$/.test(normalized)) {
+    return "customer-profile";
+  }
   return null;
 }
 // Attach route metadata before route handlers render any admin EJS page.
