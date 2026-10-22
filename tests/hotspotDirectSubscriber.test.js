@@ -129,7 +129,7 @@ test("unused scratch cards show PIN and password rather than a MAC in the vouche
 test("captive portal calls the hosted backend and submits the MikroTik login handshake",()=>{
  const portal=read("public/login.html");
  const auth=read("controllers/hotspotAuthController.js");
- assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
+ assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork\.com'/);
  assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
  assert.doesNotMatch(portal,/id="tab-member-btn"/);
  assert.doesNotMatch(portal,/section-member/);
