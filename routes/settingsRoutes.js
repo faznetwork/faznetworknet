@@ -18,6 +18,7 @@ router.post("/hotspot-profile-settings",controller.saveHotspotProfileSettings);
 router.post("/hotspot-engine",controller.saveHotspotEngine);
 router.get("/all",controller.getAllSettings);
 router.post("/update",controller.updateSettings);
+router.get("/sms-history",require("../controllers/smsHistoryController").list);
 router.post("/notifications/test",controller.testNotification);
 router.get("/notifications/whatsapp/status",controller.whatsappStatus);
 router.get("/notifications/whatsapp/qr",controller.whatsappQr);

@@ -209,3 +209,10 @@ test("Email dispatch logs and skips customers without an email address",async()=
   assert.match(logged,/\[Email\] Skipped: No email address found for customer: missing-email/);
  }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;console.info=originalInfo;}
 });
+
+test("SMS history instrumentation is shared by automatic notifications and live test SMS",()=>{
+ const source=require("node:fs").readFileSync(require.resolve("../services/smsService"),"utf8");
+ assert.match(source,/async function recordSmsDelivery/);
+ assert.match(source,/INSERT INTO sms_delivery_logs/);
+ assert.match(source,/finally\{[\s\S]*await recordSmsDelivery/);
+});
