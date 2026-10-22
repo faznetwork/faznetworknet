@@ -853,7 +853,7 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
             const res = await fetch(BACKEND_BASE_URL + '/api/hotspot-auth/claim-voucher', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voucher_code: pin, voucher_password: password, customer_name: customerName, mac: routerMac, ip: routerIp, login_url: device.login })
+                body: JSON.stringify({ voucher_code: pin, voucher_password: password, customer_name: customerName, mac: routerMac, ip: routerIp })
             });
             const data = await res.json().catch(() => JSON.parse('{"success": false}'));
             if (!res.ok || !data.success) {
