@@ -432,8 +432,8 @@ body{
 }
 .btn-action:hover{background:var(--brand-hover);transform:translateY(-1px);box-shadow:0 7px 16px rgba(10,61,46,.18)}
 .btn-action:disabled{opacity:.55;transform:none;box-shadow:none}
-#section-voucher input,#section-member input{background:#fbfdfb!important;color:#172b24!important;border-color:#d7e3db!important;border-radius:10px!important;min-height:44px}
-#section-voucher input:focus,#section-member input:focus{border-color:#10a66f!important;box-shadow:0 0 0 3px rgba(16,185,129,.13)!important}
+#section-voucher input{background:#fbfdfb!important;color:#172b24!important;border-color:#d7e3db!important;border-radius:10px!important;min-height:44px}
+#section-voucher input:focus{border-color:#10a66f!important;box-shadow:0 0 0 3px rgba(16,185,129,.13)!important}
 .card-footer{margin-top:22px;padding-top:15px;border-top:1px solid #e7eee9;font-size:11px;color:#718178}
 .helpline{color:#08764f;font-weight:800}
 .modal-overlay{background:rgba(10,35,25,.55);backdrop-filter:blur(5px);padding:16px}
@@ -496,7 +496,6 @@ button{touch-action:manipulation}
         <div class="tab-switcher">
             <button type="button" id="tab-recharge-btn" class="tab-btn active" onclick="switchPortalTab('recharge')">অনলাইন পেমেন্ট (MFS)</button>
             <button type="button" id="tab-voucher-btn" class="tab-btn" onclick="switchPortalTab('voucher')">ভাউচার পিন / QR</button>
-            <button type="button" id="tab-member-btn" class="tab-btn" onclick="switchPortalTab('member')">Username / Password</button>
         </div>
 
         <!-- 1. Online Recharge Tab -->
@@ -531,23 +530,6 @@ button{touch-action:manipulation}
             </div>
             <button type="button" class="btn-action" onclick="handleVoucherLogin()">ভাউচার দিয়ে ইন্টারনেট চালু করুন</button>
         </div>
-        <!-- 3. Direct subscriber username/password login -->
-        <div id="section-member" style="display:none;">
-            <div class="input-group">
-                <label for="member_customer_name">আপনার নাম <span aria-hidden="true">*</span></label>
-                <input id="member_customer_name" autocomplete="name" maxlength="160" required placeholder="আপনার নাম লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <div class="input-group">
-                <label for="member_username">Username</label>
-                <input id="member_username" autocomplete="username" maxlength="100" placeholder="আপনার username" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <div class="input-group">
-                <label for="member_password">Password</label>
-                <input id="member_password" type="password" autocomplete="current-password" maxlength="128" placeholder="আপনার password" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <button type="button" class="btn-action" onclick="submitMemberLogin()">Login &amp; Connect</button>
-        </div>
-
         <div class="card-footer">
             <span>হেল্পলাইন:</span>
             <a href="tel:01339932887" class="helpline" id="footer-helpline">01339932887</a>
@@ -602,9 +584,6 @@ button{touch-action:manipulation}
  <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
  <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
  <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
- <input id="member_username_legacy" autocomplete="username" aria-label="Member username" placeholder="Username">
- <input id="member_password_legacy" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
- <button type="button" id="toggle-member-password" onclick="const p=document.getElementById('member_password');p.type=p.type==='password'?'text':'password'">Show password</button>
  <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
  <input id="remember-member" type="checkbox" aria-label="Remember member">
  <div id="router-error" role="alert"></div>
@@ -716,7 +695,7 @@ function renderPackagePalette(index,node){if(node)node.style.background=PALETTES
 async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
 async function startQrScanner(){if(!navigator.mediaDevices?.getUserMedia)return;const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});try{const video=document.createElement('video');video.srcObject=stream;await video.play();const detector='BarcodeDetector'in window?new BarcodeDetector({formats:['qr_code']}):null;if(detector){const codes=await detector.detect(video);if(codes[0]&&byId('voucher_pin'))byId('voucher_pin').value=codes[0].rawValue.trim().toUpperCase();}}finally{stream.getTracks().forEach(t=>t.stop());}}
 async function handleMasterAction(){
- const currentMethod=byId('m-btn-online')?.dataset.active==='true'?'online':byId('m-btn-pin')?.dataset.active==='true'?'pin':'member';
+ const currentMethod=byId('m-btn-online')?.dataset.active==='true'?'online':'pin';
  if(currentMethod==='online'){
   const trx=String(byId('cust_trx')?.value||'').trim().toUpperCase();if(!trx){addNoticeTicker('TrxID দিন।');return;}
   const selectedPackage=window.selectedPackage||{profile:byId('selected-package')?.dataset.profile||''};
@@ -730,22 +709,10 @@ async function handleMasterAction(){
   const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,voucher_password:password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
   if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
- return submitMemberLogin();
+ return;
 }
-async function submitMemberLogin(){
- const username=String(byId('member_username')?.value||'').trim(),password=String(byId('member_password')?.value||''),customerName=String(byId('member_customer_name')?.value||'').trim();
- if(!customerName||!username||!password){addNoticeTicker('আপনার নাম, Username ও password দিন।');return;}
- try{
-  const verified=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/direct-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
-  if(!verified.success)throw new Error(verified.message||'Login failed.');
-  const form=byId('mikrotik-auto-login');if(!form)return;
-  form.action=device.login;form.querySelector('[name="username"]').value=verified.username;
-  form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+verified.password+decodeChapChallenge(device.chapChallenge)):verified.password;
-  const dst=form.querySelector('[name="dst"]');if(dst)dst.value=verified.redirect_url||device.original;
-  form.submit();
- }catch(error){addNoticeTicker(error.message||'Username or password is incorrect.');}
-}
-window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
+/* Public username/password login is intentionally not offered; use voucher PIN or online purchase. */
+window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.normalizeMac=normalizeMac;
 document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}byId('btn-master-action').addEventListener('click',handleMasterAction);loadPortalConfig();});
 })();
 </script>
@@ -763,8 +730,8 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
     let paymentSessionExpiresAt = 0;
 
     function switchPortalTab(tab) {
-        const sections={recharge:document.getElementById('section-recharge'),voucher:document.getElementById('section-voucher'),member:document.getElementById('section-member')};
-        const buttons={recharge:document.getElementById('tab-recharge-btn'),voucher:document.getElementById('tab-voucher-btn'),member:document.getElementById('tab-member-btn')};
+        const sections={recharge:document.getElementById('section-recharge'),voucher:document.getElementById('section-voucher')};
+        const buttons={recharge:document.getElementById('tab-recharge-btn'),voucher:document.getElementById('tab-voucher-btn')};
         Object.entries(sections).forEach(([key,element])=>{if(element)element.style.display=key===tab?'block':'none';});
         Object.entries(buttons).forEach(([key,element])=>{if(element)element.classList.toggle('active',key===tab);});
     }
@@ -1079,6 +1046,18 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
 @media(min-width:560px){.packages-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.main-card{padding:34px}}
 @media(max-width:420px){body{padding:10px}.rgb-wrapper{border-radius:22px}.main-card{padding:21px 16px;border-radius:21px}.tab-switcher{display:grid;grid-template-columns:1fr 1fr}.tab-btn{font-size:12px}.packages-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pkg-card{min-height:104px;padding:14px 10px}.mfs-btn{padding:10px;font-size:13px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+
+<style id="faz-package-selection-colors">
+/* Make packages read as selectable purchase buttons, not passive information cards. */
+.packages-grid .pkg-card{cursor:pointer!important;border:1px solid #d5a52b!important;background:linear-gradient(145deg,#fff4c7 0%,#ffe18a 100%)!important;color:#173e31!important;box-shadow:0 5px 0 #c49a27,0 9px 18px rgba(8,47,39,.10)!important;transform:translateY(0);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease!important}
+.packages-grid .pkg-card .pkg-time{color:#274d3c!important;font-weight:800!important}
+.packages-grid .pkg-card .pkg-price{color:#075c42!important;font-weight:900!important}
+.packages-grid .pkg-card:after{background:#d2a12a!important}
+.packages-grid .pkg-card:hover{transform:translateY(-3px)!important;border-color:#0d8d63!important;background:linear-gradient(145deg,#e1f8e9 0%,#b9efd0 100%)!important;box-shadow:0 7px 0 #0d8d63,0 13px 24px rgba(8,75,59,.16)!important}
+.packages-grid .pkg-card.selected{border:2px solid #08784f!important;background:linear-gradient(145deg,#baf2d0 0%,#e4ffed 100%)!important;box-shadow:0 5px 0 #08784f,0 10px 22px rgba(8,120,79,.18)!important}
+.packages-grid .pkg-card.selected:before{background:#08784f!important;color:#fff!important}
+@media(prefers-reduced-motion:reduce){.packages-grid .pkg-card{transition:none!important}}
 </style>
 </body>
 </html>
