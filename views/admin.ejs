@@ -8487,6 +8487,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function routeFromPath(path) {
                 const routes = {
+                    '/admin': { view: 'dashboard' },
                     '/admin/dashboard': { view: 'dashboard' },
                     '/admin/customers/add': { view: 'page', page: 'add-customer' },
                     '/admin/customers/all': { view: 'customers', filter: 'all', title: 'all_customer' },
@@ -8701,13 +8702,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     }
                 }
             }
-            function commitRoute(route, replace) {
+            function commitRoute(route, replace, preserveCurrentUrl) {
                 const normalized = cleanRoute(route);
                 const url = routeUrl(normalized);
-                if (window.location.pathname + window.location.search !== url) {
+                // Restoring on reload/popstate must render the URL already requested,
+                // not canonicalize it into a different menu/path as a side effect.
+                if (!preserveCurrentUrl && window.location.pathname + window.location.search !== url) {
                     const method = replace ? 'replaceState' : 'pushState';
                     window.history[method]({ fazAdminRoute: normalized }, '', url);
-                } else if (replace) {
+                } else if (!preserveCurrentUrl && replace) {
                     window.history.replaceState({ fazAdminRoute: normalized }, '', url);
                 }
                 state.current = normalized;
@@ -8818,7 +8821,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
 
             function restoreRoute(route, replace) {
-                const normalized = commitRoute(route, Boolean(replace));
+                const normalized = commitRoute(route, Boolean(replace), true);
                 state.restoring = true;
                 try {
                     const result = dispatchRoute(normalized);
