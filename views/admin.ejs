@@ -2167,7 +2167,11 @@
 <div class="col-12"><label class="form-label">লগইন সফল হলে রিডাইরেক্ট ইউআরএল (ঐচ্ছিক)</label><input id="portalRedirectUrl" type="url" class="form-control" maxlength="500"></div></div><div id="hotspotPortalSettingsStatus" class="small mt-3" role="status"></div><div class="text-end mt-3"><button id="hotspotPortalSaveBtn" type="submit" class="btn btn-success">Save Portal Settings</button></div></form></div></div>
 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><div class="fw-semibold">MikroTik External Redirect Snippet</div></div><div class="card-body"><pre id="portalMikrotikSnippet" class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;overflow-wrap:anywhere">&lt;!DOCTYPE html&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta http-equiv="refresh" content="0; url=https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only=$(link-login-only)&amp;link-orig=$(link-orig)"&gt;&lt;/head&gt;
-&lt;body&gt;&lt;script&gt;window.location.href="https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only="+encodeURIComponent("$(link-login-only)")+"&amp;link-orig="+encodeURIComponent("$(link-orig)");&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre><button id="portalCopySnippetBtn" type="button" class="btn btn-outline-success">Copy Snippet</button><span id="portalCopySnippetStatus" class="small ms-2"></span></div></div></div><div id="general-settings-panel-brand" class="general-settings-panel" style="display:none">
+&lt;body&gt;&lt;script&gt;window.location.href="https://faznetwork-web.onrender.com/login.html?mac=$(mac)&amp;ip=$(ip)&amp;link-login-only="+encodeURIComponent("$(link-login-only)")+"&amp;link-orig="+encodeURIComponent("$(link-orig)");&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</pre><button id="portalCopySnippetBtn" type="button" class="btn btn-outline-success">Copy Snippet</button><span id="portalCopySnippetStatus" class="small ms-2"></span></div></div></div><div id="general-settings-panel-payments" class="general-settings-panel" style="display:none"><div class="card border-0 shadow-sm" style="background:#fff;border:1px solid #e2e8f0!important;border-radius:16px"><div class="card-header bg-white border-bottom p-4"><h2 class="h5 fw-bold text-dark mb-1"><i class="bi bi-wallet2 text-success me-2"></i>Payment and Webhooks</h2><p class="small text-muted mb-0">One authoritative configuration for receiving accounts, sender shortcodes, and webhook/API authentication.</p></div><div class="card-body p-4"><form id="webhookApiSettingsForm" autocomplete="off"><section class="mb-4"><h3 class="h6 fw-bold mb-1">Payment accounts &amp; sender IDs</h3><p class="small text-muted">Enter receiving numbers and accepted SMS sender IDs for each provider.</p><div class="row g-3">
+<div class="col-md-6"><label class="form-label fw-semibold" for="whbKashNumber">bKash receiving number</label><input id="whbKashNumber" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div><div class="col-md-6"><label class="form-label fw-semibold" for="whbKashSenders">bKash sender names / shortcodes</label><input id="whbKashSenders" class="form-control" maxlength="300" placeholder="bkash, 16247"></div>
+<div class="col-md-6"><label class="form-label fw-semibold" for="whNagadNumber">Nagad receiving number</label><input id="whNagadNumber" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div><div class="col-md-6"><label class="form-label fw-semibold" for="whNagadSenders">Nagad sender names / shortcodes</label><input id="whNagadSenders" class="form-control" maxlength="300" placeholder="nagad, 16167"></div>
+<div class="col-md-6"><label class="form-label fw-semibold" for="whRocketNumber">Rocket receiving number</label><input id="whRocketNumber" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div><div class="col-md-6"><label class="form-label fw-semibold" for="whRocketSenders">Rocket sender names / shortcodes</label><input id="whRocketSenders" class="form-control" maxlength="300" placeholder="rocket, 16216, dbbl"></div>
+<div class="col-md-6"><label class="form-label fw-semibold" for="whUpayNumber">Upay receiving number</label><input id="whUpayNumber" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div><div class="col-md-6"><label class="form-label fw-semibold" for="whUpaySenders">Upay sender names / shortcodes</label><input id="whUpaySenders" class="form-control" maxlength="300" placeholder="upay, 16268"></div></div></section><hr class="my-4"><section class="mb-4"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><h3 class="h6 fw-bold mb-1">Inbound payment webhook &amp; API authentication</h3><p class="small text-muted mb-0">For MacroDroid, Tasker and trusted SMS forwarders.</p></div><span id="generalWebhookBadge" class="badge bg-secondary">Disabled</span></div><div class="row g-3 mt-1"><div class="col-12"><label class="form-label fw-semibold" for="generalWebhookPath">Inbound endpoint path or full URL</label><input id="generalWebhookPath" class="form-control font-monospace" maxlength="500" placeholder="/api/webhooks/macrodroid-sms"><div class="form-text">Use an absolute path or HTTP/HTTPS URL.</div></div><div class="col-12"><div class="p-3 rounded border bg-light"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><span class="small fw-semibold text-muted">Full endpoint URL</span><button id="generalWebhookCopyBtn" type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copy URL</button></div><code id="generalWebhookFullUrl" class="d-block text-break mt-2"></code></div></div><div class="col-md-8"><label class="form-label fw-semibold" for="whSecret">Webhook secret key / API token</label><div class="input-group"><input id="whSecret" class="form-control font-monospace" type="password" readonly autocomplete="off" aria-describedby="whSecretHint"><button id="whSecretToggle" class="btn btn-outline-secondary" type="button" aria-label="Show secret"><i class="bi bi-eye"></i></button><button id="whSecretRegenerate" class="btn btn-outline-danger" type="button">Regenerate</button></div><div id="whSecretHint" class="form-text">Only authorized administrators can view this token. Regeneration invalidates the previous key.</div></div><div class="col-md-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" id="generalWebhookEnabled" type="checkbox" role="switch"><label class="form-check-label fw-semibold" for="generalWebhookEnabled">Webhook enabled</label></div></div></div></section><div id="webhookApiSaveStatus" class="small mb-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end"><button id="webhookApiSave" class="btn btn-success px-4" type="submit"><i class="bi bi-check2-circle me-1"></i>Save Payment &amp; Webhook Settings</button></div></form></div></div></div><div id="general-settings-panel-brand" class="general-settings-panel" style="display:none">
                 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-palette text-success fs-5"></i><div><div class="fw-semibold">Brand &amp; Identity</div><small class="text-muted fw-normal">White-label details shared by public pages, customer portal, and invoices.</small></div></div>
                 <div class="card-body p-4"><form id="systemBrandForm" novalidate><div class="row g-3">
                   <div class="col-md-6"><label class="form-label" for="setCompanyName">Company / ISP Name</label><input id="setCompanyName" class="form-control" maxlength="160" required></div>
@@ -2316,7 +2320,7 @@
           </div></div>
           <div class="mt-4"><div class="d-flex align-items-center justify-content-between gap-2 mb-2"><h6 class="fw-bold mb-0">Recent Broadcast History</h6><button type="button" id="broadcastHistoryRefresh" class="btn btn-sm btn-outline-secondary">Refresh history</button></div><div id="broadcastHistory" class="small text-muted">No history loaded.</div></div>
         </div></div>
-</section>
+      </section>
       <section data-notify-panel="history" id="notificationHistoryPanel" style="display:none">
   <div class="card border-0 shadow-sm"><div class="card-body p-3 p-lg-4">
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
@@ -2338,35 +2342,11 @@
   </div></div>
 </section>
 
-      </section>
       <div class="modal fade" id="notificationTestLogModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="notificationTestLogTitle">Notification Test Response</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><pre id="notificationTestLogBody" class="small text-wrap mb-0" style="max-height:55vh;overflow:auto"></pre></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
     </div>
   </div>
 </div>
-<div id="general-settings-panel-webhook" class="general-settings-panel" style="display:none">
-                <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Universal Payment Webhook</div><small class="text-muted fw-normal">Works with MacroDroid, Tasker and custom SMS forwarders.</small></div><span id="generalWebhookBadge" class="badge bg-secondary ms-auto">Disabled</span></div>
-                  <div class="card-body p-4"><form id="generalWebhookForm" novalidate><div class="row g-3">
-                    <div class="col-12"><label class="form-label" for="generalWebhookPath">Inbound Endpoint Path or Full URL</label><input id="generalWebhookPath" class="form-control font-monospace" placeholder="/api/webhooks/macrodroid-sms" required><div class="form-text">Use a unique absolute path. Changes take effect immediately after saving; no server restart is needed.</div></div>
-                    <div class="col-12"><div class="p-3 rounded border bg-light"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><span class="small fw-semibold text-muted">Full endpoint URL</span><button id="generalWebhookCopyBtn" type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copy URL</button></div><code id="generalWebhookFullUrl" class="d-block text-break mt-2"></code></div></div>
-                    <div class="col-12"><div class="fw-semibold mb-1">Accepted MFS sender IDs / shortcodes</div><div class="small text-muted mb-2">Comma-separated official sender names or service shortcodes. Only configured senders are accepted by the SMS forwarder.</div><div class="row g-3"><div class="col-md-6"><label class="form-label" for="generalWebhookSendersBkash">bKash sender IDs</label><input id="generalWebhookSendersBkash" class="form-control" maxlength="300" placeholder="bkash, 16247"></div><div class="col-md-6"><label class="form-label" for="generalWebhookSendersNagad">Nagad sender IDs</label><input id="generalWebhookSendersNagad" class="form-control" maxlength="300" placeholder="nagad, 16167"></div><div class="col-md-6"><label class="form-label" for="generalWebhookSendersRocket">Rocket sender IDs</label><input id="generalWebhookSendersRocket" class="form-control" maxlength="300" placeholder="rocket, 16216, dbbl"></div><div class="col-md-6"><label class="form-label" for="generalWebhookSendersUpay">Upay sender IDs</label><input id="generalWebhookSendersUpay" class="form-control" maxlength="300" placeholder="upay, 16268"></div></div></div>
-                    <div class="col-12"><label class="form-label" for="generalWebhookSecret">Webhook API Secret / Token</label><div class="input-group"><input id="generalWebhookSecret" class="form-control font-monospace" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing secret"><button id="generalWebhookSecretToggle" class="btn btn-outline-secondary" type="button" aria-label="Show secret" title="Show or hide secret"><i class="bi bi-eye"></i></button><button id="generalWebhookSecretRegenerate" class="btn btn-outline-danger" type="button"><i class="bi bi-arrow-repeat me-1"></i>Regenerate</button></div><div id="generalWebhookSecretHint" class="form-text">Secret is write-only. Leave blank to keep the saved secret; regenerate to rotate it.</div></div>
-                    <div class="col-md-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" id="generalWebhookEnabled" type="checkbox" role="switch"><label class="form-check-label fw-semibold" for="generalWebhookEnabled">Automation Enabled</label></div></div>
-                  </div><div id="generalWebhookResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalWebhookSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Webhook Settings</button></div></form></div>
-                </div>
-              </div>
-              <div id="general-settings-panel-mfs" class="general-settings-panel" style="display:none">
-                <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-wallet2 text-success fs-5"></i><div><div class="fw-semibold">Personal MFS Send Money Accounts</div><small class="text-muted fw-normal">Saved numbers appear in the subscriber self-care portal.</small></div></div>
-                  <div class="card-body p-4"><form id="generalMfsForm" novalidate><div class="row g-3">
-                    <div class="col-md-6"><label class="form-label" for="generalMfsBkash">bKash Personal Number</label><input id="generalMfsBkash" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
-                    <div class="col-md-6"><label class="form-label" for="generalMfsNagad">Nagad Personal Number</label><input id="generalMfsNagad" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
-                    <div class="col-md-6"><label class="form-label" for="generalMfsRocket">Rocket Personal Number</label><input id="generalMfsRocket" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
-                    <div class="col-md-6"><label class="form-label" for="generalMfsUpay">Upay Personal Number</label><input id="generalMfsUpay" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
-                  </div><div id="generalMfsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalMfsSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Numbers</button></div></form></div>
-                </div>
-              </div>
-            
 
-</section>
 
             <!-- Shared Add/Edit Customer Form Modal. The existing Add Customer form is moved here for editing and restored when closed. -->
             <div class="modal fade" id="customerEditFormModal" tabindex="-1" aria-labelledby="customerEditFormModalTitle" aria-hidden="true">
@@ -3139,25 +3119,23 @@
                   <div class="hs-create-form-card">
                     <div class="hs-create-card-head">
                       <h5 class="fw-bold mb-1">Customer &amp; Package</h5>
-                      <p class="small text-muted mb-0">Create a subscriber with permanent username/password credentials. First successful login binds the device MAC automatically.</p>
+                      <p class="small text-muted mb-0">Create a direct subscriber. First Login stages it; Pre-Assigned provisions immediately.</p>
                     </div>
                     <div class="hs-create-card-body">
                       <form id="addHotspotUserForm" novalidate>
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
-                            <label class="hs-create-label" for="hsCustomerName">Customer Name <span class="text-danger">*</span></label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" required placeholder="Customer name">
-                            <label class="hs-create-label" for="hsUsername">Phone Number <span class="text-muted fw-normal">(Optional)</span></label>
-                            <p class="hs-create-help">Optional. If supplied, use 01XXXXXXXXX.</p>
+                            <label class="hs-create-label d-block">Activation Type</label><div class="d-flex flex-wrap gap-3 mb-3"><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="first_login" checked> On First Login</label><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="preassigned"> Pre-Assigned (Instant MAC Bind)</label></div>
+                            <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim" required>
+                            <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
+                            <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
                               <i class="bi bi-telephone hs-create-input-icon" aria-hidden="true"></i>
-                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
+                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
                               <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
                             </div>
-                            <div id="hsPhoneFeedback" class="hs-create-feedback mb-3" aria-live="polite">Phone number is optional.</div>
-                            <label class="hs-create-label" for="hsLoginUsername">Voucher PIN / Username</label><div class="d-flex gap-2 mb-3"><input id="hsLoginUsername" name="username" type="text" class="hs-create-input" minlength="3" maxlength="100" pattern="[A-Za-z0-9_.@-]{3,100}" autocomplete="username" placeholder="Enter or generate voucher PIN"><button type="button" id="hsGenerateUsername" class="btn btn-outline-success flex-shrink-0">Generate</button></div>
-                            <label class="hs-create-label" for="hsPassword">Voucher Password</label><div class="d-flex gap-2 mb-2"><input id="hsPassword" name="password" type="password" class="hs-create-input" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Enter or generate password"><button type="button" id="hsGeneratePassword" class="btn btn-outline-success flex-shrink-0">Generate</button></div>
-                            <p class="hs-create-help">These are the voucher credentials used to verify the permanent customer. MikroTik login will use the device MAC as username and password.</p>
+                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div><label class="hs-create-label mt-3" for="hsDeviceMac">Device MAC Address <span class="text-muted fw-normal">(Required for Pre-Assigned)</span></label><input id="hsDeviceMac" name="mac" type="text" class="hs-create-input mb-3 font-monospace" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off"><label class="hs-create-label" for="hsPassword">Password <span class="text-muted fw-normal">(Defaults to phone)</span></label><input id="hsPassword" name="password" type="text" class="hs-create-input mb-2" maxlength="128" autocomplete="new-password" placeholder="Assigned automatically from device MAC">
                           </div>
                         </div>
 
@@ -3177,6 +3155,7 @@
                           </div>
                         </div>
 
+                        <div class="hs-create-step"><span class="hs-create-step-number" aria-hidden="true">+</span><div class="hs-create-step-content"><label class="hs-create-label" for="hsCustomExpiry">Custom Expiry Date &amp; Time <span class="text-muted fw-normal">(Optional override)</span></label><input id="hsCustomExpiry" name="expires_at" type="datetime-local" class="hs-create-input"><p class="hs-create-help">Used for Pre-Assigned accounts; first-login vouchers start their validity at activation.</p></div></div>
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">3</span>
                           <div class="hs-create-step-content">
@@ -3209,7 +3188,7 @@
                             <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Reset
                           </button>
                           <button type="submit" id="hsSaveButton" class="btn btn-success hs-create-save" disabled>
-                            <i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Hotspot User
+                            <i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Pending Account
                           </button>
                         </div>
                         <div id="hotspotCreateResult" class="mt-3" role="status" aria-live="polite"></div>
@@ -3229,12 +3208,12 @@
                       <div class="hs-create-card-body">
                         <div class="hs-create-credential-list">
                           <div class="hs-create-credential-row">
-                            <span class="hs-create-credential-label">Login Username</span>
-                            <strong id="hsPreviewUsername" class="hs-create-credential-value">Choose a username</strong>
+                            <span class="hs-create-credential-label">RouterOS Username</span>
+                            <strong id="hsPreviewUsername" class="hs-create-credential-value">Assigned at first login (Device MAC)</strong>
                           </div>
                           <div class="hs-create-credential-row">
-                            <span class="hs-create-credential-label">Login Password</span>
-                            <strong id="hsPreviewPassword" class="hs-create-credential-value">Enter a password</strong>
+                            <span class="hs-create-credential-label">RouterOS Password</span>
+                            <strong id="hsPreviewPassword" class="hs-create-credential-value">Customer phone number</strong>
                           </div>
                           <div class="hs-create-credential-row">
                             <span class="hs-create-credential-label">Profile</span>
@@ -3254,7 +3233,7 @@
                           </div>
                           <div class="hs-create-credential-row">
                             <span class="hs-create-credential-label">Expiry Date</span>
-                            <strong id="hsPreviewExpiry" class="hs-create-credential-value">Starts after first successful login</strong>
+                            <strong id="hsPreviewExpiry" class="hs-create-credential-value">Starts at first login (Continuous clock)</strong>
                           </div>
                         </div>
 
@@ -3268,7 +3247,7 @@
 
                         <div class="hs-create-info">
                           <i class="bi bi-shield-check fs-5" aria-hidden="true"></i>
-                          <span>Username and password are saved now. On first successful login, the device MAC is bound automatically and package validity starts.</span>
+                          <span>No manual MAC entry needed. The customer's device MAC will be locked to this phone number upon first captive portal connection.</span>
                         </div>
                       </div>
                     </div>
@@ -3277,28 +3256,243 @@
               </div>
             </section>`);
 
-            const form=document.getElementById('addHotspotUserForm'),phone=document.getElementById('hsUsername'),phoneValidMark=document.getElementById('hsPhoneValid'),phoneFeedback=document.getElementById('hsPhoneFeedback'),loginUsername=document.getElementById('hsLoginUsername'),passwordInput=document.getElementById('hsPassword'),profile=document.getElementById('hsProfile'),server=document.getElementById('hsServer'),button=document.getElementById('hsSaveButton'),result=document.getElementById('hotspotCreateResult'),validityLabel=document.getElementById('hsValidityLabel');
-            if(!form||!phone||!loginUsername||!passwordInput||!profile||!server||!button)return;
-            let profileRecords=[],profileReady=false;
-            const asciiDigits=value=>String(value||'').replace(/[০-৯]/g,ch=>String('০১২৩৪৫৬৭৮৯'.indexOf(ch))).replace(/[^0-9]/g,'').slice(0,11);
-            const validityText=p=>{if(!p)return'Select a profile';if(p.validityLabel)return String(p.validityLabel);const value=Number(p.validityValue),unit=String(p.validityUnit||'').trim().toLowerCase();if(Number.isFinite(value)&&value>0){if(unit==='gb'||unit==='gib')return value+' GB';const labels={second:'Second',seconds:'Seconds',minute:'Minute',minutes:'Minutes',hour:'Hour',hours:'Hours',day:'Day',days:'Days',week:'Week',weeks:'Weeks',month:'Month',months:'Months',year:'Year',years:'Years'};return value+' '+(labels[unit]||unit);}if(p.sessionTimeout&&String(p.sessionTimeout).toLowerCase()!=='none')return String(p.sessionTimeout);if(p.validity)return String(p.validity);if(Number(p.limitBytesTotal)>0)return(Number(p.limitBytesTotal)/1073741824).toFixed(0)+' GB data limit';return'Validity not configured';};
-            const priceText=p=>{if(!p||p.price===undefined||p.price===null||p.price==='')return'Price not set';const amount=Number(p.price);return Number.isFinite(amount)?'৳'+amount.toLocaleString('en-BD',{maximumFractionDigits:2}):'Price not set';};
-            const selectedProfile=()=>profileRecords.find(p=>String(p.profile_id||p.name)===String(profile.value));
-            const putText=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};
-            const updatePhoneFeedback=()=>{const normalized=asciiDigits(phone.value);if(phone.value!==normalized)phone.value=normalized;const valid=!normalized||/^01[0-9]{9}$/.test(normalized);phone.classList.toggle('hs-phone-valid',valid);phone.classList.toggle('hs-phone-invalid',normalized.length>0&&!valid);if(phoneValidMark)phoneValidMark.classList.toggle('is-visible',valid);if(phoneFeedback){phoneFeedback.textContent=!normalized?'Phone number is optional.':(valid?'✓ Valid Bangladesh mobile number.':'Enter a valid 11-digit number beginning with 01.');phoneFeedback.classList.toggle('is-valid',valid);phoneFeedback.classList.toggle('is-invalid',normalized.length>0&&!valid);}return valid;};
-            const updatePreview=()=>{const p=selectedProfile();if(validityLabel)validityLabel.textContent=p?validityText(p)+' — starts at first successful login':'Select a profile';putText('hsPreviewUsername',loginUsername.value.trim()||'Choose a username');putText('hsPreviewPassword',passwordInput.value?'••••••••':'Enter a password');putText('hsPreviewProfile',p?String(p.name||'—'):'—');putText('hsPreviewPrice',p?priceText(p):'—');putText('hsPreviewValidity',p?validityText(p):'—');putText('hsPreviewServer',(server.value||'all')==='all'?'All Hotspot servers (default)':server.value);putText('hsPreviewExpiry','Starts after first successful login');putText('hsPreviewComment','FAZ | DIRECT_SUBSCRIBER | '+(p?String(p.name||'PROFILE'):'—'));};
-            const updateButton=()=>{const validPhone=updatePhoneFeedback(),validUsername=!loginUsername.value.trim()||/^[A-Za-z0-9_.@-]{3,100}$/.test(loginUsername.value.trim()),validPassword=!passwordInput.value||passwordInput.value.length>=8&&passwordInput.value.length<=128,validName=Boolean(document.getElementById('hsCustomerName')?.value.trim());button.disabled=!(validPhone&&validUsername&&validPassword&&validName&&profile.value&&profileReady);};
-            const toast=message=>{let host=document.getElementById('hotspotProvisionToastHost');if(!host){host=document.createElement('div');host.id='hotspotProvisionToastHost';host.className='position-fixed top-0 end-0 p-3';host.style.zIndex='20000';document.body.appendChild(host);}const item=document.createElement('div');item.className='alert alert-success shadow border-0 mb-0';item.setAttribute('role','status');item.textContent=message;host.appendChild(item);window.setTimeout(()=>{item.remove();if(!host.children.length)host.remove();},4500);};
-            [phone,loginUsername,passwordInput,document.getElementById('hsCustomerName')].filter(Boolean).forEach(el=>el.addEventListener('input',()=>{updatePreview();updateButton();}));
-            const generateCredential=(length)=>{const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return Array.from(bytes,b=>chars[b%chars.length]).join('');};
-            document.getElementById('hsGenerateUsername')?.addEventListener('click',()=>{loginUsername.value='FZN'+generateCredential(8);updatePreview();updateButton();});
-            document.getElementById('hsGeneratePassword')?.addEventListener('click',()=>{passwordInput.value=generateCredential(12);passwordInput.type='text';updatePreview();updateButton();});profile.addEventListener('change',()=>{updatePreview();updateButton();});server.addEventListener('change',updatePreview);
-            const loadOptions=async()=>{const previousProfile=profile.value;profileReady=false;button.disabled=true;profile.innerHTML='<option value="">Loading packages…</option>';try{const data=await jsonFetch('/api/hotspot/profiles');profileRecords=(Array.isArray(data.profiles)?data.profiles:[]).filter(p=>p&&p.name&&String(p.name).toLowerCase()!=='default');if(profileRecords.length){profile.innerHTML='<option value="">Select a package / profile…</option>'+profileRecords.map(p=>'<option value="'+escapeHtml(p.profile_id||p.name)+'">'+escapeHtml(p.name)+' — '+escapeHtml(validityText(p))+' — '+escapeHtml(priceText(p))+'</option>').join('');profileReady=true;if(profileRecords.some(p=>String(p.profile_id||p.name)===previousProfile))profile.value=previousProfile;}else profile.innerHTML='<option value="">No saved packages found</option>';}catch(_){profileRecords=[];profile.innerHTML='<option value="">Package list unavailable — try reload</option>';}
-                server.innerHTML='<option value="all">All Hotspot servers (default)</option>';try{const data=await jsonFetch('/api/hotspot/servers'),servers=Array.isArray(data.servers)?data.servers.filter(x=>x&&x.name):[];if(servers.length)server.innerHTML+=servers.map(x=>'<option value="'+escapeHtml(x.name)+'">'+escapeHtml(x.name)+'</option>').join('');}catch(_){}server.dataset.selected=server.value||'all';updatePreview();updateButton();};
-            document.getElementById('hsRefreshProfiles')?.addEventListener('click',async event=>{const el=event.currentTarget,html=el.innerHTML;el.disabled=true;el.innerHTML='<span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>';try{await loadOptions();}finally{el.disabled=false;el.innerHTML=html;}});
-            document.getElementById('hsClearForm')?.addEventListener('click',()=>{form.reset();profile.value='';loginUsername.value='';passwordInput.value='';server.value='all';server.dataset.selected='all';if(result)result.innerHTML='';updatePreview();updateButton();phone.focus();});
-            form.addEventListener('submit',async event=>{event.preventDefault();if(!document.getElementById('hsCustomerName')?.value.trim()||!updatePhoneFeedback()||(loginUsername.value.trim()&&!/^[A-Za-z0-9_.@-]{3,100}$/.test(loginUsername.value.trim()))||(passwordInput.value&&passwordInput.value.length<8)){if(!document.getElementById('hsCustomerName')?.value.trim())document.getElementById('hsCustomerName')?.focus();else if(!updatePhoneFeedback())phone.focus();else if(loginUsername.value.trim()&&!/^[A-Za-z0-9_.@-]{3,100}$/.test(loginUsername.value.trim()))loginUsername.focus();else passwordInput.focus();updateButton();return;}if(!form.reportValidity())return;const chosen=selectedProfile();if(!chosen){if(result)result.innerHTML='<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';return;}button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving Hotspot account…';if(result)result.innerHTML='';
-                try{const response=await jsonFetch('/api/hotspot/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phone.value.trim(),username:loginUsername.value.trim(),password:passwordInput.value,customer_name:document.getElementById('hsCustomerName')?.value.trim()||'',note:document.getElementById('hsCustomerNote')?.value.trim()||'',profile_id:chosen.profile_id||chosen.name,server:server.value||'all'})});if(!response||response.success!==true)throw new Error(response?.message||'The Hotspot account was not saved.');const savedUsername=response.user?.username||loginUsername.value.trim()||'auto-generated voucher';const message='Voucher-based permanent customer created. Voucher PIN/Username: '+savedUsername+'. MikroTik login will use the device MAC.';toast(message);if(result)result.innerHTML='<div class="alert alert-success mb-0">'+escapeHtml(message)+'</div>';if(typeof window.refreshHotspotVoucherStats==='function')Promise.resolve(window.refreshHotspotVoucherStats()).catch(()=>{});form.reset();profile.value='';updatePreview();}catch(error){if(result)result.innerHTML='<div class="alert alert-danger mb-0">'+escapeHtml(error?.message||'Unable to save Hotspot account.')+'</div>';}finally{button.innerHTML='<i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Hotspot User';updateButton();}});
+            const form = document.getElementById('addHotspotUserForm');
+            const phone = document.getElementById('hsUsername');
+            const phoneValidMark = document.getElementById('hsPhoneValid');
+            const phoneFeedback = document.getElementById('hsPhoneFeedback');
+            const profile = document.getElementById('hsProfile');
+            const server = document.getElementById('hsServer');
+            const macInput = document.getElementById('hsDeviceMac');
+            const passwordInput = document.getElementById('hsPassword');
+            const expiryInput = document.getElementById('hsCustomExpiry');
+            const activationInputs = [...form.querySelectorAll('input[name="activation_type"]')];
+            const activationMode = () => activationInputs.find(input => input.checked)?.value || 'first_login';
+            if (expiryInput) expiryInput.disabled = true;
+            const button = document.getElementById('hsSaveButton');
+            const result = document.getElementById('hotspotCreateResult');
+            const validityLabel = document.getElementById('hsValidityLabel');
+            if (!form || !phone || !profile || !server || !button) return;
+
+            let profileRecords = [];
+            let profileReady = false;
+
+            const asciiDigits = value => String(value || '')
+                .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
+                .replace(/[^0-9]/g, '')
+                .slice(0, 11);
+
+            const validityText = p => {
+                if (!p) return 'Select a profile';
+                if (p.validityLabel) return String(p.validityLabel);
+                const value = Number(p.validityValue);
+                const unit = String(p.validityUnit || '').trim().toLowerCase();
+                if (Number.isFinite(value) && value > 0) {
+                    if (unit === 'gb' || unit === 'gib') return value + ' GB';
+                    const labels = { second:'Second', seconds:'Seconds', minute:'Minute', minutes:'Minutes', hour:'Hour', hours:'Hours', day:'Day', days:'Days', week:'Week', weeks:'Weeks', month:'Month', months:'Months', year:'Year', years:'Years' };
+                    const label = labels[unit] || unit;
+                    return value + ' ' + label;
+                }
+                if (p.sessionTimeout && String(p.sessionTimeout).toLowerCase() !== 'none') return String(p.sessionTimeout);
+                if (p.validity) return String(p.validity);
+                if (Number(p.limitBytesTotal) > 0) return (Number(p.limitBytesTotal) / 1073741824).toFixed(0) + ' GB data limit';
+                return 'Validity not configured';
+            };
+
+            const priceText = p => {
+                if (!p || p.price === undefined || p.price === null || p.price === '') return 'Price not set';
+                const amount = Number(p.price);
+                return Number.isFinite(amount) ? '৳' + amount.toLocaleString('en-BD', { maximumFractionDigits: 2 }) : 'Price not set';
+            };
+
+            const selectedProfile = () => profileRecords.find(p => String(p.profile_id || p.name) === String(profile.value));
+            const putText = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            };
+
+            const updatePhoneFeedback = () => {
+                const normalized = asciiDigits(phone.value);
+                if (phone.value !== normalized) phone.value = normalized;
+                const valid = /^01[0-9]{9}$/.test(normalized);
+                phone.classList.toggle('hs-phone-valid', valid);
+                phone.classList.toggle('hs-phone-invalid', normalized.length > 0 && !valid);
+                if (phoneValidMark) phoneValidMark.classList.toggle('is-visible', valid);
+                if (phoneFeedback) {
+                    phoneFeedback.textContent = valid
+                        ? '✓ Valid Bangladesh mobile number.'
+                        : (normalized.length ? 'Enter a valid 11-digit number beginning with 01.' : 'Enter a valid 11-digit Bangladeshi mobile number.');
+                    phoneFeedback.classList.toggle('is-valid', valid);
+                    phoneFeedback.classList.toggle('is-invalid', normalized.length > 0 && !valid);
+                }
+                return valid;
+            };
+
+            const updatePreview = () => {
+                const p = selectedProfile();
+                const validity = validityText(p);
+                const selectedServer = server.value || 'all';
+                if (validityLabel) validityLabel.textContent = p ? validity + ' — starts at first captive login' : 'Select a profile';
+                const preassigned = activationMode() === 'preassigned';
+                putText('hsPreviewUsername', preassigned ? (macInput.value.trim().toUpperCase() || 'Enter device MAC') : 'Assigned at first login (Device MAC)');
+                putText('hsPreviewPassword', preassigned ? (macInput.value.trim().toUpperCase() || 'Same as device MAC') : 'Same as device MAC after first login');
+                putText('hsPreviewProfile', p ? String(p.name || '—') : '—');
+                putText('hsPreviewPrice', p ? priceText(p) : '—');
+                putText('hsPreviewValidity', p ? validity : '—');
+                putText('hsPreviewServer', selectedServer === 'all' ? 'All Hotspot servers (default)' : selectedServer);
+                putText('hsPreviewExpiry', preassigned && expiryInput.value ? expiryInput.value.replace('T',' ') : preassigned ? 'Package validity starts now' : 'Starts at first login (Continuous clock)');
+                putText('hsPreviewComment', preassigned ? 'Exp: ' + (expiryInput.value ? expiryInput.value.replace('T',' ') + ':00' : 'calculated from package') : 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
+            };
+
+            const updateButton = () => {
+                const validPhone = updatePhoneFeedback();
+                const preassigned = activationMode() === 'preassigned';
+                const validMac = !preassigned || /^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test((macInput.value || '').trim().replace(/-/g, ':'));
+                button.disabled = !(validPhone && profile.value && profileReady && validMac);
+            };
+
+            const toast = message => {
+                let host = document.getElementById('hotspotProvisionToastHost');
+                if (!host) {
+                    host = document.createElement('div');
+                    host.id = 'hotspotProvisionToastHost';
+                    host.className = 'position-fixed top-0 end-0 p-3';
+                    host.style.zIndex = '20000';
+                    document.body.appendChild(host);
+                }
+                const item = document.createElement('div');
+                item.className = 'alert alert-success shadow border-0 mb-0';
+                item.setAttribute('role', 'status');
+                item.textContent = message;
+                host.appendChild(item);
+                window.setTimeout(() => {
+                    item.remove();
+                    if (!host.children.length) host.remove();
+                }, 4500);
+            };
+
+            phone.addEventListener('input', () => { updatePreview(); updateButton(); });
+            [macInput,passwordInput,expiryInput].forEach(el => el?.addEventListener('input',()=>{updatePreview();updateButton();}));
+            activationInputs.forEach(el=>el.addEventListener('change',()=>{macInput.required=activationMode()==='preassigned';expiryInput.disabled=activationMode()!=='preassigned';updatePreview();updateButton();}));
+            profile.addEventListener('change', () => { updatePreview(); updateButton(); });
+            server.addEventListener('change', updatePreview);
+
+            const loadOptions = async () => {
+                const previousProfile = profile.value;
+                profileReady = false;
+                button.disabled = true;
+                profile.innerHTML = '<option value="">Loading packages…</option>';
+                try {
+                    const data = await jsonFetch('/api/hotspot/profiles');
+                    profileRecords = (Array.isArray(data.profiles) ? data.profiles : [])
+                        .filter(p => p && p.name && String(p.name).toLowerCase() !== 'default');
+                    if (profileRecords.length) {
+                        profile.innerHTML = '<option value="">Select a package / profile…</option>' +
+                            profileRecords.map(p => '<option value="' + escapeHtml(p.profile_id || p.name) + '">' +
+                                escapeHtml(p.name) + ' — ' + escapeHtml(validityText(p)) + ' — ' + escapeHtml(priceText(p)) +
+                                '</option>').join('');
+                        profileReady = true;
+                        if (profileRecords.some(p => String(p.profile_id || p.name) === previousProfile)) profile.value = previousProfile;
+                    } else {
+                        profile.innerHTML = '<option value="">No saved packages found</option>';
+                    }
+                } catch (error) {
+                    profileRecords = [];
+                    profile.innerHTML = '<option value="">Package list unavailable — try reload</option>';
+                }
+
+                server.innerHTML = '<option value="all">All Hotspot servers (default)</option>';
+                try {
+                    const data = await jsonFetch('/api/hotspot/servers');
+                    const servers = Array.isArray(data.servers) ? data.servers.filter(s => s && s.name) : [];
+                    if (servers.length) {
+                        server.innerHTML += servers.map(item => '<option value="' + escapeHtml(item.name) + '">' +
+                            escapeHtml(item.name) + '</option>').join('');
+                        const previousServer = server.dataset.selected || 'all';
+                        if ([...server.options].some(option => option.value === previousServer)) server.value = previousServer;
+                    }
+                } catch (_) {
+                    /* The "all servers" default remains usable if server discovery is unavailable. */
+                }
+                server.dataset.selected = server.value || 'all';
+                updatePreview();
+                updateButton();
+            };
+
+            const refreshButton = document.getElementById('hsRefreshProfiles');
+            if (refreshButton) {
+                refreshButton.addEventListener('click', async () => {
+                    const oldHtml = refreshButton.innerHTML;
+                    refreshButton.disabled = true;
+                    refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>';
+                    try { await loadOptions(); }
+                    finally { refreshButton.disabled = false; refreshButton.innerHTML = oldHtml; }
+                });
+            }
+
+            const resetButton = document.getElementById('hsClearForm');
+            if (resetButton) {
+                resetButton.addEventListener('click', () => {
+                    form.reset();
+                    profile.value = '';
+                    macInput.value='';passwordInput.value='';expiryInput.value='';activationInputs.forEach(el=>el.checked=el.value==='first_login');macInput.required=false;expiryInput.disabled=true;
+                    server.value = 'all';
+                    server.dataset.selected = 'all';
+                    if (result) result.innerHTML = '';
+                    updatePreview();
+                    updateButton();
+                    phone.focus();
+                });
+            }
+
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!updatePhoneFeedback() || !document.getElementById('hsCustomerName')?.value.trim()) {
+                    if (!document.getElementById('hsCustomerName')?.value.trim()) document.getElementById('hsCustomerName')?.focus(); else phone.focus();
+                    updateButton();
+                    return;
+                }
+                if (!form.reportValidity()) return;
+                const value = phone.value.trim();
+                const chosen = selectedProfile();
+                if (!chosen) {
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';
+                    return;
+                }
+
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving Hotspot account…';
+                if (result) result.innerHTML = '';
+                try {
+                    const response = await jsonFetch('/api/hotspot/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: value,
+                            activation_type: activationMode(),
+                            mac: macInput.value.trim(),
+                            password: passwordInput.value.trim(),
+                            expires_at: expiryInput.value || '',
+                            customer_name: document.getElementById('hsCustomerName')?.value.trim() || '',
+                            note: document.getElementById('hsCustomerNote')?.value.trim() || '',
+                            profile_id: chosen.profile_id || chosen.name,
+                            server: server.value || 'all'
+                        })
+                    });
+                    if (!response || response.success !== true) throw new Error(response?.message || 'The pending account was not saved.');
+                    const successMessage = response.instant_provisioned ? 'Pre-assigned Hotspot user provisioned immediately for ' + value + '.' : 'First-login Hotspot package saved for ' + value + '. MAC binding and countdown start on captive-portal activation.';
+                    toast(successMessage);
+                    if (result) result.innerHTML = '<div class="alert alert-success mb-0">' + escapeHtml(successMessage) + '</div>';
+                    if (typeof window.refreshHotspotVoucherStats === 'function') {
+                        Promise.resolve(window.refreshHotspotVoucherStats()).catch(() => {});
+                    }
+                } catch (error) {
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error?.message || 'Unable to save pending account.') + '</div>';
+                } finally {
+                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Direct Subscriber';
+                    updateButton();
+                }
+            });
+
             await loadOptions();
         }
         async function loadHotspotDashboard(){
@@ -4677,13 +4871,13 @@ async function deletePlan(id,name){
 
         let generalSettingsLoaded=false;
         function generalSettingsResult(id,message,ok=true){const el=document.getElementById(id);if(el){el.className='small mt-3 '+(ok?'text-success':'text-danger')+' fw-semibold';el.textContent=message;}}
+        function generalWebhookRenderUrl(){const input=document.getElementById('generalWebhookPath'),out=document.getElementById('generalWebhookFullUrl');if(!input||!out)return;const value=input.value.trim();if(!value){out.textContent='Enter an endpoint path';return;}try{out.textContent=value.startsWith('/')?location.origin+value:new URL(value,location.origin).href;}catch(_){out.textContent=value;}}
         async function loadGeneralSettings(force=false){
           if(generalSettingsLoaded&&!force)return;
           try{
             const response=await jsonFetch('/api/settings/general'),s=response.settings||response.data||response,r=s.router||{};
-            const host=document.getElementById('generalRouterHost'),port=document.getElementById('generalRouterPort'),user=document.getElementById('generalRouterUser'),password=document.getElementById('generalRouterPassword'),hint=document.getElementById('generalRouterPasswordHint');
-            if(host)host.value=r.host||'';if(port)port.value=r.port||8728;if(user)user.value=r.user||'';if(password)password.value='';
-            if(hint)hint.textContent=r.passwordConfigured?'Password saved ('+(r.passwordSource==='environment'?'environment fallback':'database')+'). Leave blank to retain it.':'No password configured yet.';
+            document.getElementById('generalRouterHost').value=r.host||'';document.getElementById('generalRouterPort').value=r.port||8728;document.getElementById('generalRouterUser').value=r.user||'';document.getElementById('generalRouterPassword').value='';
+            document.getElementById('generalRouterPasswordHint').textContent=r.passwordConfigured?'Password saved ('+(r.passwordSource==='environment'?'environment fallback':'database')+'). Leave blank to retain it.':'No password configured yet.';
             generalSettingsLoaded=true;
           }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
@@ -4692,15 +4886,11 @@ async function deletePlan(id,name){
           if (!validTargets.includes(target)) return false;
           document.querySelectorAll('.general-settings-panel').forEach(panel => {
             const key = panel.id.replace('general-settings-panel-', '');
-            const visible = key === target || (target === 'payments' && (key === 'webhook' || key === 'mfs'));
+            const visible = key === target;
             panel.style.display = visible ? 'block' : 'none';
           });
           if (['brand', 'billing', 'sms'].includes(target)) loadSystemSettings();
-          
-          if (target === 'payments') {
-            loadUnifiedPaymentWebhookSettings(true);
-            loadGeneralSettings(true);
-          }
+          if (target === 'payments') { loadWebhookApiSettings(true); loadGeneralSettings(true); }
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
@@ -4742,6 +4932,8 @@ async function deletePlan(id,name){
           window.showGeneralSettingsSection(target);
           syncGeneralSettingsSidebar(target);
         }
+        document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
+        document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
         async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
           const btn=document.getElementById(buttonId),original=btn?.innerHTML;if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>'+loadingText;}
           try{const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});const d=await response.json().catch(()=>({}));if(!response.ok||d.success===false)throw new Error(d.message||d.error||'Settings request failed.');generalSettingsResult(resultId,d.message||'Settings saved successfully.');return d;}
@@ -4752,8 +4944,6 @@ async function deletePlan(id,name){
         document.getElementById('generalRouterTestBtn')?.addEventListener('click',async()=>{const badge=document.getElementById('generalRouterBadge');if(badge){badge.textContent='Testing…';badge.className='badge bg-info ms-auto';}try{const d=await generalSettingsPost('/api/settings/mikrotik/test',{host:document.getElementById('generalRouterHost').value.trim(),port:Number(document.getElementById('generalRouterPort').value),user:document.getElementById('generalRouterUser').value.trim(),password:document.getElementById('generalRouterPassword').value},'generalRouterTestBtn','generalRouterResult','Testing connection…');if(badge){badge.textContent='Connected · '+(d.router?.version||'RouterOS');badge.className='badge bg-success ms-auto';}generalSettingsResult('generalRouterResult','Connected to '+(d.router?.routerName||'MikroTik')+' · RouterOS '+(d.router?.version||'unknown')+' · '+(d.router?.model||'RouterOS device'));}catch(_){if(badge){badge.textContent='Connection failed';badge.className='badge bg-danger ms-auto';}}});
         document.getElementById('generalRouterForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await generalSettingsPost('/api/settings/mikrotik',{host:document.getElementById('generalRouterHost').value.trim(),port:Number(document.getElementById('generalRouterPort').value),user:document.getElementById('generalRouterUser').value.trim(),password:document.getElementById('generalRouterPassword').value},'generalRouterSaveBtn','generalRouterResult','Saving & syncing…');document.getElementById('generalRouterPassword').value='';generalSettingsLoaded=false;await loadGeneralSettings(true);}catch(_){}});
         document.getElementById('generalRouterSyncBtn')?.addEventListener('click',async()=>{try{const d=await generalSettingsPost('/api/settings/mikrotik/sync',{},'generalRouterSyncBtn','generalRouterResult','Syncing profiles…');const v=d.sync||{};generalSettingsResult('generalRouterResult','Synced '+(v.pppoeProfiles||0)+' PPPoE profiles and '+(v.hotspotProfiles||0)+' Hotspot profiles. Existing customer and price records preserved.');}catch(_){}});
-        document.getElementById('generalWebhookForm')?.addEventListener('submit',async e=>{e.preventDefault();const button=document.getElementById('generalWebhookSaveBtn'),result=document.getElementById('generalWebhookResult');button.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving unified payment/webhook settings…';}try{const payload={webhookUrl:document.getElementById('generalWebhookPath').value.trim(),webhookSecret:document.getElementById('generalWebhookSecret').value,webhookEnabled:document.getElementById('generalWebhookEnabled').checked,senders:{bkash:document.getElementById('generalWebhookSendersBkash').value,nagad:document.getElementById('generalWebhookSendersNagad').value,rocket:document.getElementById('generalWebhookSendersRocket').value,upay:document.getElementById('generalWebhookSendersUpay').value}};const response=await fetch('/api/settings/payment-webhooks',{method:'PUT',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to save Payment and Webhooks settings.');document.getElementById('generalWebhookSecret').value='';unifiedPaymentSettingsLoaded=false;await loadUnifiedPaymentWebhookSettings(true);if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Payment and webhook settings saved.';}}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Save failed.';}}finally{button.disabled=false;}});
-        document.getElementById('generalMfsForm')?.addEventListener('submit',async e=>{e.preventDefault();const button=document.getElementById('generalMfsSaveBtn'),result=document.getElementById('generalMfsResult');button.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving receiving accounts…';}try{const payload={recipients:{bkash:document.getElementById('generalMfsBkash').value.trim(),nagad:document.getElementById('generalMfsNagad').value.trim(),rocket:document.getElementById('generalMfsRocket').value.trim(),upay:document.getElementById('generalMfsUpay').value.trim()}};const response=await fetch('/api/settings/payment-webhooks',{method:'PUT',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to save receiving accounts.');unifiedPaymentSettingsLoaded=false;await loadUnifiedPaymentWebhookSettings(true);if(result){result.className='small mt-3 text-success fw-semibold';result.textContent='MFS receiving accounts saved successfully.';}}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Save failed.';}}finally{button.disabled=false;}});
 
 
         let systemSettingsLoaded=false,systemSettingsCache={};
@@ -4938,6 +5128,14 @@ async function deletePlan(id,name){
         document.getElementById('broadcastHistoryRefresh')?.addEventListener('click',loadBroadcastHistory);
         document.getElementById('broadcastMessage')?.addEventListener('input',broadcastPreview);
         document.getElementById('broadcastStartBtn')?.addEventListener('click',startBulkBroadcast);
+        let webhookApiSettingsLoaded=false;
+        function generalWebhookRenderUrl(){const i=document.getElementById('generalWebhookPath'),o=document.getElementById('generalWebhookFullUrl');if(!i||!o)return;const v=i.value.trim();o.textContent=!v?'Enter an endpoint path':(v.startsWith('/')?(window.location.origin||'')+v:v);}
+        async function loadWebhookApiSettings(force=false){if(webhookApiSettingsLoaded&&!force)return;const st=document.getElementById('webhookApiSaveStatus');try{const r=await fetch('/api/admin/webhook-settings',{credentials:'same-origin',headers:{Accept:'application/json'},cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||'Unable to load payment settings.');const s=d.settings||{},put=(id,v)=>{const e=document.getElementById(id);if(e)e.value=Array.isArray(v)?v.join(', '):(v??'');};put('whbKashSenders',s.senders?.bkash);put('whbKashNumber',s.recipients?.bkash);put('whNagadSenders',s.senders?.nagad);put('whNagadNumber',s.recipients?.nagad);put('whRocketSenders',s.senders?.rocket);put('whRocketNumber',s.recipients?.rocket);put('whUpaySenders',s.senders?.upay);put('whUpayNumber',s.recipients?.upay);const secret=document.getElementById('whSecret');if(secret)secret.value=s.secret||'';const url=document.getElementById('generalWebhookPath');if(url)url.value=s.webhookUrl||'/api/webhooks/macrodroid-sms';const enabled=document.getElementById('generalWebhookEnabled');if(enabled)enabled.checked=Boolean(s.webhookEnabled);const badge=document.getElementById('generalWebhookBadge');if(badge){badge.textContent=s.webhookEnabled?'Enabled':'Disabled';badge.className='badge '+(s.webhookEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('whSecretHint');if(hint)hint.textContent=s.secretConfigured?'Secret loaded. Use Show to reveal it; regeneration invalidates the old token.':'No secret configured yet.';generalWebhookRenderUrl();webhookApiSettingsLoaded=true;}catch(e){if(st){st.className='small mb-3 text-danger';st.textContent=e.message||'Load failed';}}}
+        document.getElementById('whSecretToggle')?.addEventListener('click',()=>{const i=document.getElementById('whSecret'),b=document.getElementById('whSecretToggle');if(!i||!b)return;i.type=i.type==='password'?'text':'password';b.innerHTML=i.type==='password'?'<i class="bi bi-eye"></i>':'<i class="bi bi-eye-slash"></i>';b.setAttribute('aria-label',i.type==='password'?'Show secret':'Hide secret');});
+        document.getElementById('whSecretRegenerate')?.addEventListener('click',async()=>{if(!confirm('Regenerate the webhook/API secret? Existing forwarders using the old token will stop working.'))return;const b=document.getElementById('whSecretRegenerate'),st=document.getElementById('webhookApiSaveStatus');b.disabled=true;try{const r=await fetch('/api/admin/webhook-settings/regenerate',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||'Regeneration failed.');const i=document.getElementById('whSecret');i.value=d.secret;i.type='text';if(st){st.className='small mb-3 text-success';st.textContent='New secret generated. Update your trusted forwarder.';}webhookApiSettingsLoaded=false;}catch(e){if(st){st.className='small mb-3 text-danger';st.textContent=e.message||'Regeneration failed.';}}finally{b.disabled=false;}});
+        document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
+        document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const v=document.getElementById('generalWebhookFullUrl')?.textContent||'',st=document.getElementById('webhookApiSaveStatus');try{await navigator.clipboard.writeText(v);if(st){st.className='small mb-3 text-success';st.textContent='Endpoint URL copied.';}}catch(_){if(st){st.className='small mb-3 text-danger';st.textContent='Copy failed. Select and copy the URL manually.';}}});
+        document.getElementById('webhookApiSettingsForm')?.addEventListener('submit',async e=>{e.preventDefault();const b=document.getElementById('webhookApiSave'),st=document.getElementById('webhookApiSaveStatus'),v=id=>document.getElementById(id)?.value||'';b.disabled=true;try{const payload={webhookUrl:v('generalWebhookPath').trim(),webhookEnabled:document.getElementById('generalWebhookEnabled').checked,senders:{bkash:v('whbKashSenders'),nagad:v('whNagadSenders'),rocket:v('whRocketSenders'),upay:v('whUpaySenders')},recipients:{bkash:v('whbKashNumber'),nagad:v('whNagadNumber'),rocket:v('whRocketNumber'),upay:v('whUpayNumber')}};const r=await fetch('/api/admin/webhook-settings',{method:'PUT',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||'Save failed.');webhookApiSettingsLoaded=false;await loadWebhookApiSettings(true);if(st){st.className='small mb-3 text-success';st.textContent='Payment and webhook settings saved.';}}catch(e){if(st){st.className='small mb-3 text-danger';st.textContent=e.message||'Save failed.';}}finally{b.disabled=false;}});
         async function loadSystemSettings(force=false){
           if(systemSettingsLoaded&&!force)return;
           try{
@@ -5129,36 +5327,13 @@ async function deletePlan(id,name){
         document.getElementById('whatsappUnlinkBtn')?.addEventListener('click',async e=>{if(!window.confirm('Unlink WhatsApp and remove the saved local session?'))return;const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/unlink',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Unable to unlink WhatsApp.');await refreshWhatsAppStatus();}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'Unlink failed.';}finally{b.disabled=false;}});
  
 
-        let unifiedPaymentSettingsLoaded=false;
-        function renderWebhookEndpointDisplay(){
-          const input=document.getElementById('generalWebhookPath'),display=document.getElementById('generalWebhookFullUrl');if(!input||!display)return;
-          const value=String(input.value||'').trim();display.textContent=!value?'Enter a custom path or full URL':(value.startsWith('/')?(window.location.origin||'')+value:value);
+        function hydratePaymentSettingsOnReady(){ loadWebhookApiSettings(true); loadGeneralSettings(true); }
+        if(document.readyState==='loading'){
+            document.addEventListener('DOMContentLoaded',hydratePaymentSettingsOnReady,{once:true});
+        }else{
+            hydratePaymentSettingsOnReady();
         }
-        async function loadUnifiedPaymentWebhookSettings(force=false){
-          if(unifiedPaymentSettingsLoaded&&!force)return;
-          const result=document.getElementById('generalWebhookResult');
-          try{
-            const response=await jsonFetch('/api/settings/payment-webhooks'),settings=response.settings||response.data||response;
-            const url=document.getElementById('generalWebhookPath'),enabled=document.getElementById('generalWebhookEnabled'),secret=document.getElementById('generalWebhookSecret');
-            if(url)url.value=settings.webhookUrl||'/api/webhooks/macrodroid-sms';
-            if(enabled)enabled.checked=Boolean(settings.webhookEnabled);
-            if(secret)secret.value='';
-            const badge=document.getElementById('generalWebhookBadge');if(badge){badge.textContent=settings.webhookEnabled?'Enabled':'Disabled';badge.className='badge ms-auto '+(settings.webhookEnabled?'bg-success':'bg-secondary');}
-            const hint=document.getElementById('generalWebhookSecretHint');if(hint)hint.textContent=settings.secretConfigured?'A secret is already saved. Leave blank to keep it; regenerate to rotate it.':'No secret is saved yet. Enter a secret or regenerate one before enabling automation.';
-            const senderIds={generalWebhookSendersBkash:settings.senders?.bkash,generalWebhookSendersNagad:settings.senders?.nagad,generalWebhookSendersRocket:settings.senders?.rocket,generalWebhookSendersUpay:settings.senders?.upay};
-            for(const [id,value] of Object.entries(senderIds)){const el=document.getElementById(id);if(el)el.value=Array.isArray(value)?value.join(', '):'';}
-            const recipients={generalMfsBkash:settings.recipients?.bkash,generalMfsNagad:settings.recipients?.nagad,generalMfsRocket:settings.recipients?.rocket,generalMfsUpay:settings.recipients?.upay};
-            for(const [id,value] of Object.entries(recipients)){const el=document.getElementById(id);if(el)el.value=String(value||'');}
-            renderWebhookEndpointDisplay();unifiedPaymentSettingsLoaded=true;
-          }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Payment and Webhooks settings.';}}
-        }
-        document.getElementById('generalWebhookPath')?.addEventListener('input',renderWebhookEndpointDisplay);
-        document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const endpoint=document.getElementById('generalWebhookFullUrl')?.textContent||'';const result=document.getElementById('generalWebhookResult');try{await navigator.clipboard.writeText(endpoint);if(result){result.className='small mt-3 text-success fw-semibold';result.textContent='Webhook endpoint copied.';}}catch(_){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent='Copy failed. Select and copy the endpoint shown above.';}}});
-        document.getElementById('generalWebhookSecretToggle')?.addEventListener('click',()=>{const input=document.getElementById('generalWebhookSecret'),button=document.getElementById('generalWebhookSecretToggle');if(!input||!button)return;input.type=input.type==='password'?'text':'password';button.innerHTML=input.type==='password'?'<i class="bi bi-eye"></i>':'<i class="bi bi-eye-slash"></i>';button.setAttribute('aria-label',input.type==='password'?'Show secret':'Hide secret');});
-        document.getElementById('generalWebhookSecretRegenerate')?.addEventListener('click',async()=>{if(!confirm('Regenerate the webhook secret? Any forwarder using the old secret will stop authenticating.'))return;const button=document.getElementById('generalWebhookSecretRegenerate'),input=document.getElementById('generalWebhookSecret'),result=document.getElementById('generalWebhookResult');button.disabled=true;try{const response=await fetch('/api/settings/payment-webhooks/regenerate',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:'{}',cache:'no-store'});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Secret regeneration failed.');if(input){input.value=data.secret||'';input.type='text';}const toggle=document.getElementById('generalWebhookSecretToggle');if(toggle){toggle.innerHTML='<i class="bi bi-eye-slash"></i>';toggle.setAttribute('aria-label','Hide secret');}const hint=document.getElementById('generalWebhookSecretHint');if(hint)hint.textContent='New secret generated. Copy it to your trusted forwarder now; it will not be shown again after leaving this page.';if(result){result.className='small mt-3 text-success fw-semibold';result.textContent='Secret regenerated. Update your SMS forwarder now.';}unifiedPaymentSettingsLoaded=false;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Secret regeneration failed.';}}finally{button.disabled=false;}});
-        function hydratePaymentSettingsOnReady(){loadUnifiedPaymentWebhookSettings(true);loadGeneralSettings(true);}
-        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hydratePaymentSettingsOnReady,{once:true});else hydratePaymentSettingsOnReady();
-        document.querySelectorAll('[data-settings-tab="payments"]').forEach(tab=>tab.addEventListener('click',()=>{loadUnifiedPaymentWebhookSettings(true);loadGeneralSettings(true);}));
+        document.querySelectorAll('[data-settings-tab="payments"]').forEach(tab=>tab.addEventListener('click',()=>{ loadWebhookApiSettings(true); loadGeneralSettings(true); }));
         let liveHotspotProfiles=[];
         async function loadHotspotProfileSettings(){
             const status=document.getElementById('hotspotProfileSyncStatus'),result=document.getElementById('hotspotProfileSettingsResult');
@@ -5182,8 +5357,6 @@ async function deletePlan(id,name){
         function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
         document.getElementById('hotspotProfilesRefreshBtn')?.addEventListener('click',loadHotspotProfileSettings);
         setInterval(function(){const view=document.getElementById('view-hotspot-webhook');if(view&&view.style.display!=='none'&&!document.hidden)loadHotspotProfileSettings();},15000);
-
-        
 
         function switchView(viewName, channel = '') {
             purgeStuckBackdrops();
@@ -9189,7 +9362,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <div class="modal fade" id="customerRenewConfirmModal" tabindex="-1" aria-labelledby="customerRenewConfirmTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content customer-renew-confirm-card"><div class="modal-header border-0 pb-1"><div class="d-flex align-items-center gap-2"><span class="customer-renew-confirm-icon"><i class="bi bi-calendar-check"></i></span><div><h5 class="modal-title mb-0" id="customerRenewConfirmTitle">Renew for 1 Month?</h5><div class="small text-muted">Review the renewal details</div></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel renewal"></button></div><div class="modal-body pt-2"><div class="customer-renew-confirm-summary"><div class="customer-renew-detail"><span>Customer</span><strong id="renewConfirmName">Loading…</strong></div><div class="customer-renew-detail"><span>PPPoE ID</span><code id="renewConfirmUsername">—</code></div><div class="customer-renew-detail"><span>Package rate</span><strong id="renewConfirmRate">—</strong></div><div class="customer-renew-detail"><span>New expiry date</span><strong id="renewConfirmExpiry">Calculating…</strong></div></div><div id="renewConfirmStatus" class="small text-muted mt-3" role="status" aria-live="polite">Loading current package and billing details…</div></div><div class="modal-footer border-0 pt-1"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="renewConfirmSubmit" disabled><i class="bi bi-check2-circle me-1"></i>Confirm Renewal</button></div></div></div></div><style>.customer-renew-confirm-card{border:0;border-radius:18px;box-shadow:0 20px 55px rgba(15,23,42,.22);overflow:hidden}.customer-renew-confirm-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#dcfce7;color:#047857;font-size:20px;flex:0 0 42px}.customer-renew-confirm-summary{display:grid;border:1px solid #e2e8f0;border-radius:13px;overflow:hidden;background:#f8fafc}.customer-renew-detail{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid #e2e8f0}.customer-renew-detail:last-child{border-bottom:0}.customer-renew-detail>span{font-size:12px;color:#64748b;flex:0 0 42%}.customer-renew-detail>strong,.customer-renew-detail>code{font-size:12px;text-align:right;min-width:0;overflow-wrap:anywhere;word-break:break-word;color:#0f172a}#renewConfirmSubmit{min-height:40px;font-weight:700}@media(max-width:767.98px){#customerRenewConfirmModal .modal-dialog{margin:12px auto;max-width:calc(100% - 24px)}#customerRenewConfirmModal .modal-footer .btn{flex:1;min-height:42px}}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
-<script src="/js/notification-history.js?v=delivery-history-20261022" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
+<script src="/js/notification-history.js?v=delivery-history-20261022" defer></script>
 </body>
 </html>

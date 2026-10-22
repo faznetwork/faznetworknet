@@ -3,50 +3,36 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const path=require("node:path");
-const read=name=>fs.readFileSync(path.join(__dirname,"..",name),"utf8");
-const controller=read("controllers/settingsController.js");
-const service=read("services/webhookSettingsService.js");
-const routes=read("routes/settingsRoutes.js");
-const server=read("server.js");
-const admin=read("views/admin.ejs");
+const controller=fs.readFileSync(path.join(__dirname,"..","controllers","settingsController.js"),"utf8");
+const service=fs.readFileSync(path.join(__dirname,"..","services","webhookSettingsService.js"),"utf8");
+const routes=fs.readFileSync(path.join(__dirname,"..","routes","settingsRoutes.js"),"utf8");
+const admin=fs.readFileSync(path.join(__dirname,"..","views","admin.ejs"),"utf8");
+const server=fs.readFileSync(path.join(__dirname,"..","server.js"),"utf8");
 
-test("payment and webhook configuration has one transactional app_settings source of truth",()=>{
- assert.match(controller,/async function paymentWebhookSettings/);
- assert.match(controller,/async function savePaymentWebhookSettings/);
- assert.match(controller,/async function regeneratePaymentWebhookSecret/);
- assert.match(service,/db\.withTransaction\(async tx=>/);
- assert.match(service,/ON CONFLICT\(key\) DO UPDATE SET value=EXCLUDED\.value,updated_at=NOW\(\)/);
- for(const key of ["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret","mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number","mfs_bkash_sender_ids","mfs_nagad_sender_ids","mfs_rocket_sender_ids","mfs_upay_sender_ids"])assert.ok(service.includes(key),key);
- assert.match(service,/async function getPublic\(\)/);
- assert.match(service,/secretConfigured:Boolean\(c\.secret\)/);
- assert.doesNotMatch(service,/CREATE TABLE IF NOT EXISTS webhook_settings/);
+test("payment, sender IDs, and webhook/API secret share app_settings as the canonical store",()=>{
+ assert.ok(service.includes("FROM app_settings WHERE key=ANY"));
+ assert.ok(service.includes("personal_payment_webhook_secret"));
+ assert.ok(service.includes('nk=k=>"mfs_"+k+"_number"'));
+ assert.ok(service.includes('sk=k=>"mfs_"+k+"_sender_ids"'));
+ assert.ok(service.includes("db.withTransaction(async tx=>"));
+ assert.ok(service.includes("ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"));
+ assert.ok(service.includes("DROP TABLE webhook_settings"));
+ assert.doesNotMatch(controller,/async function saveHotspotWebhookSettings/);
+ assert.doesNotMatch(controller,/async function saveGeneralSettings/);
+ assert.doesNotMatch(controller,/async function saveMfsAccounts/);
+ assert.doesNotMatch(routes,/hotspot-webhook|mfs-accounts|controller\.website|saveGeneralSettings/);
 });
 
-test("legacy webhook_settings values migrate transactionally before the duplicate table is removed",()=>{
- assert.match(service,/to_regclass\('public\.webhook_settings'\)/);
- assert.match(service,/SELECT secret_key,sender_ids,recipient_numbers FROM public\.webhook_settings/);
- assert.match(service,/DROP TABLE public\.webhook_settings/);
- assert.match(service,/ON CONFLICT\(key\) DO NOTHING/);
-});
-
-test("only the unified payment-webhooks API is writable for payment configuration",()=>{
- assert.match(routes,/router\.get\("\/payment-webhooks",controller\.paymentWebhookSettings\)/);
- assert.match(routes,/router\.put\("\/payment-webhooks",controller\.savePaymentWebhookSettings\)/);
- assert.match(routes,/router\.post\("\/payment-webhooks\/regenerate",controller\.regeneratePaymentWebhookSecret\)/);
- assert.doesNotMatch(routes,/hotspot-webhook|mfs-accounts|webhookSettingsRoutes|saveGeneralSettings/);
- assert.doesNotMatch(server,/app\.use\("\/api\/admin\/webhook-settings"/);
- assert.match(server,/app\.get\("\/admin\/settings\/webhooks".*res\.redirect\(302,"\/admin\/settings\/payment-webhooks"\)/);
-});
-
-test("Payment & Webhooks UI contains receiver accounts, sender allowlists, and safe secret controls",()=>{
- for(const id of ["generalMfsBkash","generalMfsNagad","generalMfsRocket","generalMfsUpay","generalWebhookSendersBkash","generalWebhookSendersNagad","generalWebhookSendersRocket","generalWebhookSendersUpay","generalWebhookSecretToggle","generalWebhookSecretRegenerate"])assert.ok(admin.includes('id="'+id+'"'),id);
- assert.match(admin,/\/api\/settings\/payment-webhooks/);
- assert.match(admin,/\/api\/settings\/payment-webhooks\/regenerate/);
+test("admin exposes one Payment and Webhooks module with secret visibility and regeneration controls",()=>{
+ assert.ok(admin.includes('id="general-settings-panel-payments"'));
+ assert.ok(admin.includes('id="whSecretToggle"'));
+ assert.ok(admin.includes('id="whSecretRegenerate"'));
+ assert.ok(admin.includes('id="webhookApiSettingsForm"'));
  assert.doesNotMatch(admin,/data-settings-nav="webhooks"/);
  assert.doesNotMatch(admin,/id="general-settings-panel-webhooks"/);
- assert.doesNotMatch(admin,/\/api\/admin\/webhook-settings/);
- assert.doesNotMatch(admin,/\/api\/settings\/hotspot-webhook/);
- assert.doesNotMatch(admin,/paymentWebhookSettingsForm/);
- assert.match(admin,/generalWebhookSecretToggle/);
- assert.match(admin,/generalWebhookSecretRegenerate/);
+ assert.doesNotMatch(admin,/id="general-settings-panel-webhook"/);
+ assert.doesNotMatch(admin,/id="general-settings-panel-mfs"/);
+ assert.doesNotMatch(admin,/loadHotspotWebhookSettings/);
+ assert.ok(admin.includes("/api/admin/webhook-settings"));
+ assert.match(server,/payment-webhooks\|sms-alerts\|hotspot-portal\)/);
 });

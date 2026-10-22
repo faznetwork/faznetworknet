@@ -383,7 +383,6 @@
         <div class="tab-switcher">
             <button type="button" id="tab-recharge-btn" class="tab-btn active" onclick="switchPortalTab('recharge')">অনলাইন পেমেন্ট (MFS)</button>
             <button type="button" id="tab-voucher-btn" class="tab-btn" onclick="switchPortalTab('voucher')">ভাউচার পিন / QR</button>
-            <button type="button" id="tab-member-btn" class="tab-btn" onclick="switchPortalTab('member')">Username / Password</button>
         </div>
 
         <!-- 1. Online Recharge Tab -->
@@ -402,37 +401,13 @@
         <!-- 2. Voucher & QR Code Scanner Tab -->
         <div id="section-voucher" style="display: none;">
             <div class="input-group">
-                <label for="voucher_customer_name">আপনার নাম <span aria-hidden="true">*</span></label>
-                <input type="text" id="voucher_customer_name" autocomplete="name" maxlength="160" required placeholder="আপনার নাম লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <div class="input-group">
-                <label for="voucher_pin">ভাউচার PIN / Username</label>
+                <label for="voucher_pin">ভাউচার স্ক্র্যাচ পিন কোড</label>
                 <div style="display: flex; gap: 6px;">
                     <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন" style="flex: 1; padding: 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; color: #fff; text-transform: uppercase;">
                     <button type="button" class="btn-action" style="margin-top:0; width: auto; padding: 0 12px; font-size: 12px;" onclick="openQrScanner()">📷 স্ক্যান</button>
                 </div>
             </div>
-            <div class="input-group">
-                <label for="voucher_password">ভাউচার Password</label>
-                <input type="password" id="voucher_password" autocomplete="current-password" maxlength="160" required placeholder="ভাউচার পাসওয়ার্ড লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
             <button type="button" class="btn-action" onclick="handleVoucherLogin()">ভাউচার দিয়ে ইন্টারনেট চালু করুন</button>
-        </div>
-        <!-- 3. Direct subscriber username/password login -->
-        <div id="section-member" style="display:none;">
-            <div class="input-group">
-                <label for="member_customer_name">আপনার নাম <span aria-hidden="true">*</span></label>
-                <input id="member_customer_name" autocomplete="name" maxlength="160" required placeholder="আপনার নাম লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <div class="input-group">
-                <label for="member_username">Username</label>
-                <input id="member_username" autocomplete="username" maxlength="100" placeholder="আপনার username" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <div class="input-group">
-                <label for="member_password">Password</label>
-                <input id="member_password" type="password" autocomplete="current-password" maxlength="128" placeholder="আপনার password" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
-            </div>
-            <button type="button" class="btn-action" onclick="submitMemberLogin()">Login &amp; Connect</button>
         </div>
 
         <div class="card-footer">
@@ -489,8 +464,8 @@
  <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
  <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
  <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
- <input id="member_username_legacy" autocomplete="username" aria-label="Member username" placeholder="Username">
- <input id="member_password_legacy" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
+ <input id="member_username" autocomplete="username" aria-label="Member username" placeholder="Username">
+ <input id="member_password" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
  <button type="button" id="toggle-member-password" onclick="const p=document.getElementById('member_password');p.type=p.type==='password'?'text':'password'">Show password</button>
  <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
  <input id="remember-member" type="checkbox" aria-label="Remember member">
@@ -565,27 +540,12 @@ async function handleMasterAction(){
   if(!result.success)throw new Error(result.message||'Payment verification failed');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
  if(currentMethod==='pin'){
-  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase(),password=String(byId('voucher_password')?.value||''),customerName=String(byId('voucher_customer_name')?.value||'').trim();
-  if(!customerName){addNoticeTicker('আপনার নাম লিখুন।');byId('voucher_customer_name')?.focus();return;}
-  if(!pin||!password){addNoticeTicker('ভাউচার PIN ও Password দিন।');return;}
-  const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,voucher_password:password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
-  if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
+  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('ভাউচার পিন দিন।');return;}
+  const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
  return submitMemberLogin();
 }
-async function submitMemberLogin(){
- const username=String(byId('member_username')?.value||'').trim(),password=String(byId('member_password')?.value||''),customerName=String(byId('member_customer_name')?.value||'').trim();
- if(!customerName||!username||!password){addNoticeTicker('আপনার নাম, Username ও password দিন।');return;}
- try{
-  const verified=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/direct-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
-  if(!verified.success)throw new Error(verified.message||'Login failed.');
-  const form=byId('mikrotik-auto-login');if(!form)return;
-  form.action=device.login;form.querySelector('[name="username"]').value=verified.username;
-  form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+verified.password+decodeChapChallenge(device.chapChallenge)):verified.password;
-  const dst=form.querySelector('[name="dst"]');if(dst)dst.value=verified.redirect_url||device.original;
-  form.submit();
- }catch(error){addNoticeTicker(error.message||'Username or password is incorrect.');}
-}
+function submitMemberLogin(){const username=String(byId('member_username')?.value||'').trim();const password=String(byId('member_password')?.value||'');if(!username||!password){addNoticeTicker('Username ও password দিন।');return;}const form=byId('mikrotik-auto-login');if(!form)return;form.action=device.login;form.querySelector('[name="username"]').value=username;form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;form.submit();}
 window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
 document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}byId('btn-master-action').addEventListener('click',handleMasterAction);loadPortalConfig();});
 })();
@@ -604,10 +564,22 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
     let paymentSessionExpiresAt = 0;
 
     function switchPortalTab(tab) {
-        const sections={recharge:document.getElementById('section-recharge'),voucher:document.getElementById('section-voucher'),member:document.getElementById('section-member')};
-        const buttons={recharge:document.getElementById('tab-recharge-btn'),voucher:document.getElementById('tab-voucher-btn'),member:document.getElementById('tab-member-btn')};
-        Object.entries(sections).forEach(([key,element])=>{if(element)element.style.display=key===tab?'block':'none';});
-        Object.entries(buttons).forEach(([key,element])=>{if(element)element.classList.toggle('active',key===tab);});
+        const secRecharge = document.getElementById('section-recharge');
+        const secVoucher = document.getElementById('section-voucher');
+        const btnRecharge = document.getElementById('tab-recharge-btn');
+        const btnVoucher = document.getElementById('tab-voucher-btn');
+
+        if (tab === 'recharge') {
+            secRecharge.style.display = 'block';
+            secVoucher.style.display = 'none';
+            btnRecharge.classList.add('active');
+            btnVoucher.classList.remove('active');
+        } else {
+            secRecharge.style.display = 'none';
+            secVoucher.style.display = 'block';
+            btnRecharge.classList.remove('active');
+            btnVoucher.classList.add('active');
+        }
     }
 
     function formatTaka(value) {
@@ -839,21 +811,19 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 
     async function handleVoucherLogin() {
         const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
-        const password = document.getElementById('voucher_password').value;
-        const customerName = document.getElementById('voucher_customer_name').value.trim();
         const routerMac = document.getElementById('router-mac').value.trim();
         const routerIp = document.getElementById('router-ip').value.trim();
 
-        if (!customerName || !pin || !password) {
-            alert('আপনার নাম, ভাউচার PIN ও Password দিন।');
+        if (!pin) {
+            alert('ভাউচার পিন দিন।');
             return;
         }
 
         try {
-            const res = await fetch(BACKEND_BASE_URL + '/api/hotspot-auth/claim-voucher', {
+            const res = await fetch(VOUCHER_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voucher_code: pin, voucher_password: password, customer_name: customerName, mac: routerMac, ip: routerIp })
+                body: JSON.stringify({ voucher_code: pin, mac: routerMac, ip: routerIp })
             });
             const data = await res.json().catch(() => JSON.parse('{"success": false}'));
             if (!res.ok || !data.success) {

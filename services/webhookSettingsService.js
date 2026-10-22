@@ -1,72 +1,13 @@
 "use strict";
-const crypto=require("crypto");
-const db=require("../db");
-const DEFAULT_SENDERS=Object.freeze({bkash:["bkash","16247"],nagad:["nagad","16167"],rocket:["rocket","16216","dbbl"],upay:["upay","16268"]});
-const CHANNELS=Object.keys(DEFAULT_SENDERS);
-const RECIPIENT_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
-const SENDER_KEYS={bkash:"mfs_bkash_sender_ids",nagad:"mfs_nagad_sender_ids",rocket:"mfs_rocket_sender_ids",upay:"mfs_upay_sender_ids"};
-const KEYS=["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(RECIPIENT_KEYS),...Object.values(SENDER_KEYS)];
-let ready;
-function parseBool(v){return v===true||String(v??"").trim().toLowerCase()==="true"||String(v??"").trim()==="1";}
-function parseIds(v,fallback){if(Array.isArray(v))return v;try{const x=JSON.parse(String(v||""));if(Array.isArray(x))return x;}catch(_){}return fallback;}
-function splitIds(v,fallback){const raw=v===undefined||v===null?fallback:v;return [...new Set((Array.isArray(raw)?raw:String(raw||"").split(/[,\n;]/)).map(x=>String(x).trim()).filter(Boolean).map(x=>x.slice(0,80)))].slice(0,20);}
-function cleanNumber(v){const x=String(v??"").trim();if(x&&!/^(?:\+?\d[\d\s-]{6,18}\d)$/.test(x))throw new Error("Enter a valid receiving number or leave it blank.");return x.slice(0,24);}
-function cleanUrl(v){const x=String(v??"").trim();if(!x)return "";if(x.startsWith("/")&&!x.startsWith("//"))return x.replace(/\/$/,"")||"/";let u;try{u=new URL(x);}catch(_){throw new Error("Webhook URL must be a valid HTTP/HTTPS URL or an absolute path.");}if(!["http:","https:"].includes(u.protocol))throw new Error("Webhook URL must use HTTP or HTTPS.");return u.toString().replace(/\/$/,"");}
-async function upsert(tx,key,value){await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);}
-async function ensure(){
- if(!ready)ready=db.withTransaction(async tx=>{
-  let migrated=false;
-  const exists=await tx.query("SELECT to_regclass('public.webhook_settings') AS table_name");
-  if(exists.rows?.[0]?.table_name){
-   const legacyResult=await tx.query("SELECT secret_key,sender_ids,recipient_numbers FROM public.webhook_settings WHERE id=1 LIMIT 1");
-   const legacy=legacyResult.rows?.[0];
-   const currentResult=await tx.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[KEYS]);
-   const current=Object.fromEntries((currentResult.rows||[]).map(r=>[r.key,r.value]));
-   if(legacy){
-    if(!String(current.personal_payment_webhook_secret||"").trim()&&String(legacy.secret_key||"").trim())await upsert(tx,"personal_payment_webhook_secret",legacy.secret_key);
-    for(const channel of CHANNELS){
-     const senderKey=SENDER_KEYS[channel],recipientKey=RECIPIENT_KEYS[channel];
-     if(!Object.prototype.hasOwnProperty.call(current,senderKey))await upsert(tx,senderKey,JSON.stringify(splitIds(parseIds(legacy.sender_ids?.[channel],DEFAULT_SENDERS[channel]),DEFAULT_SENDERS[channel])));
-     if(!Object.prototype.hasOwnProperty.call(current,recipientKey)&&String(legacy.recipient_numbers?.[channel]||"").trim())await upsert(tx,recipientKey,cleanNumber(legacy.recipient_numbers[channel]));
-    }
-   }
-   await tx.query("DROP TABLE public.webhook_settings");
-   migrated=true;
-  }
-  const defaults={personal_payment_webhook_url:"",personal_payment_webhook_enabled:"false",personal_payment_webhook_secret:"",...Object.fromEntries(CHANNELS.map(c=>[RECIPIENT_KEYS[c],""])),...Object.fromEntries(CHANNELS.map(c=>[SENDER_KEYS[c],JSON.stringify(DEFAULT_SENDERS[c])]))};
-  for(const [key,value] of Object.entries(defaults))await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO NOTHING",[key,value]);
-  return migrated;
- }).then(migrated=>{if(migrated)try{require("./appSettings").invalidate();}catch(_){}return true;}).catch(e=>{ready=null;throw e;});
- await ready;
-}
-async function get(){
- await ensure();
- const r=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[KEYS]);
- const map=Object.fromEntries((r.rows||[]).map(row=>[row.key,row.value])),senders={},recipients={};
- for(const c of CHANNELS){senders[c]=splitIds(parseIds(map[SENDER_KEYS[c]],DEFAULT_SENDERS[c]),DEFAULT_SENDERS[c]);recipients[c]=String(map[RECIPIENT_KEYS[c]]||"");}
- return {webhookUrl:String(map.personal_payment_webhook_url||""),webhookEnabled:parseBool(map.personal_payment_webhook_enabled),secret:String(map.personal_payment_webhook_secret||""),senders,recipients};
-}
-async function getPublic(){const c=await get();return {webhookUrl:c.webhookUrl,webhookEnabled:c.webhookEnabled,secretConfigured:Boolean(c.secret),senders:c.senders,recipients:c.recipients};}
-async function save(input={},actor="admin"){
- await ensure();const current=await get();
- const url=Object.prototype.hasOwnProperty.call(input,"webhookUrl")?cleanUrl(input.webhookUrl):current.webhookUrl;
- const enabled=Object.prototype.hasOwnProperty.call(input,"webhookEnabled")?parseBool(input.webhookEnabled):current.webhookEnabled;
- const secretInput=String(input.webhookSecret??"").trim();if(secretInput.length>300)throw new Error("Webhook secret must be 300 characters or fewer.");
- const secret=secretInput||current.secret;
- if(enabled&&!url)throw new Error("Webhook URL is required when automation is enabled.");
- if(enabled&&!secret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");
- const senders={},recipients={};
- for(const c of CHANNELS){
-  senders[c]=splitIds(input.senders&&Object.prototype.hasOwnProperty.call(input.senders,c)?input.senders[c]:current.senders[c],DEFAULT_SENDERS[c]);
-  if(!senders[c].length)throw new Error("At least one sender identifier is required for "+c+".");
-  recipients[c]=cleanNumber(input.recipients&&Object.prototype.hasOwnProperty.call(input.recipients,c)?input.recipients[c]:current.recipients[c]);
- }
- await db.withTransaction(async tx=>{
-  const values={personal_payment_webhook_url:url,personal_payment_webhook_enabled:enabled?"true":"false",personal_payment_webhook_secret:secret,...Object.fromEntries(CHANNELS.map(c=>[RECIPIENT_KEYS[c],recipients[c]])),...Object.fromEntries(CHANNELS.map(c=>[SENDER_KEYS[c],JSON.stringify(senders[c])]))};
-  for(const [key,value] of Object.entries(values))await upsert(tx,key,value);
- });
- try{require("./appSettings").invalidate();}catch(_){}
- return getPublic();
-}
-async function regenerate(){await ensure();const secret=crypto.randomBytes(32).toString("hex");await db.withTransaction(tx=>upsert(tx,"personal_payment_webhook_secret",secret));try{require("./appSettings").invalidate();}catch(_){}return secret;}
-module.exports={ensure,get,getPublic,save,regenerate,DEFAULT_SENDERS,RECIPIENT_KEYS,SENDER_KEYS};
+const crypto=require("crypto"),db=require("../db");let ready;
+const P=["bkash","nagad","rocket","upay"],D={bkash:["bkash","16247"],nagad:["nagad","16167"],rocket:["rocket","16216","dbbl"],upay:["upay","16268"]},nk=k=>"mfs_"+k+"_number",sk=k=>"mfs_"+k+"_sender_ids",URL_DEFAULT="/api/webhooks/macrodroid-sms";
+function ids(v){const a=Array.isArray(v)?v:String(v||"").split(/[,\n;]/);return [...new Set(a.map(x=>String(x||"").trim()).filter(Boolean).map(x=>x.slice(0,80)))].slice(0,20)}
+function parse(v,f){try{const x=JSON.parse(String(v||""));if(Array.isArray(x))return ids(x)}catch(_){}return ids(v).length?ids(v):f}
+function number(v){v=String(v||"").trim();if(v&&!/^(?:\+?\d[\d\s()-]{6,22}\d)$/.test(v))throw Error("Enter a valid receiving number or leave it blank.");return v.slice(0,24)}
+function url(v){v=String(v||"").trim();if(!v)return "";if(v.startsWith("/")&&!v.startsWith("//"))return v.replace(/\/$/,"")||"/";let u;try{u=new URL(v)}catch(_){throw Error("Webhook URL must be a valid HTTP/HTTPS URL or an absolute path.")}if(!["http:","https:"].includes(u.protocol))throw Error("Webhook URL must use HTTP or HTTPS.");return u.toString().replace(/\/$/,"")}
+function bool(v){return v===true||String(v||"").toLowerCase()==="true"||String(v||"")==="1"}
+async function ensure(){if(!ready)ready=db.withTransaction(async tx=>{await tx.query("SELECT pg_advisory_xact_lock($1)",[72840117]);const e=await tx.query("SELECT to_regclass('public.webhook_settings') AS table_name");let old=null;if(e.rows?.[0]?.table_name){const r=await tx.query("SELECT secret_key,sender_ids,recipient_numbers FROM webhook_settings WHERE id=1");old=r.rows?.[0]||null}const keys=["personal_payment_webhook_secret","personal_payment_webhook_url","personal_payment_webhook_enabled",...P.flatMap(k=>[nk(k),sk(k)])],r=await tx.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]),m=Object.fromEntries((r.rows||[]).map(x=>[x.key,x.value])),os=old?.sender_ids&&typeof old.sender_ids==="object"?old.sender_ids:{},on=old?.recipient_numbers&&typeof old.recipient_numbers==="object"?old.recipient_numbers:{},v={personal_payment_webhook_secret:String(m.personal_payment_webhook_secret||old?.secret_key||"").trim()||crypto.randomBytes(32).toString("hex"),personal_payment_webhook_url:String(m.personal_payment_webhook_url||URL_DEFAULT),personal_payment_webhook_enabled:String(m.personal_payment_webhook_enabled||"false")};for(const k of P){v[nk(k)]=String(m[nk(k)]||on[k]||"").trim();v[sk(k)]=m[sk(k)]?JSON.stringify(parse(m[sk(k)],D[k])):JSON.stringify(parse(os[k],D[k]))}for(const [k,x] of Object.entries(v))await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=CASE WHEN app_settings.value='' THEN EXCLUDED.value ELSE app_settings.value END,updated_at=NOW()",[k,String(x)]);if(e.rows?.[0]?.table_name)await tx.query("DROP TABLE webhook_settings")}).catch(e=>{ready=null;throw e});await ready}
+async function get(){await ensure();const keys=["personal_payment_webhook_secret","personal_payment_webhook_url","personal_payment_webhook_enabled",...P.flatMap(k=>[nk(k),sk(k)])],r=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]),m=Object.fromEntries((r.rows||[]).map(x=>[x.key,x.value]));return {secret:String(m.personal_payment_webhook_secret||""),secretConfigured:Boolean(m.personal_payment_webhook_secret),webhookUrl:String(m.personal_payment_webhook_url||URL_DEFAULT),webhookEnabled:bool(m.personal_payment_webhook_enabled),senders:Object.fromEntries(P.map(k=>[k,parse(m[sk(k)],D[k])])),recipients:Object.fromEntries(P.map(k=>[k,String(m[nk(k)]||"")]))}}
+async function save(input,actor){await ensure();const current=await get(),senders={},recipients={};for(const k of P){senders[k]=ids(input?.senders?.[k]);if(!senders[k].length)throw Error("At least one sender identifier is required for "+k+".");recipients[k]=number(input?.recipients?.[k])}const webhookUrl=url(input?.webhookUrl??current.webhookUrl),webhookEnabled=bool(input?.webhookEnabled),secret=String(input?.webhookSecret||"").trim()||current.secret;if(webhookEnabled&&!webhookUrl)throw Error("Webhook URL is required when automation is enabled.");if(webhookEnabled&&!secret)throw Error("Webhook Secret Key / Token is required when automation is enabled.");await db.withTransaction(async tx=>{const v={personal_payment_webhook_url:webhookUrl,personal_payment_webhook_enabled:webhookEnabled?"true":"false",personal_payment_webhook_secret:secret};for(const k of P){v[nk(k)]=recipients[k];v[sk(k)]=JSON.stringify(senders[k])}for(const [k,x] of Object.entries(v))await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[k,String(x??"")])});try{require("./appSettings").invalidate()}catch(_){}return get()}
+async function regenerate(actor){await ensure();const secret=crypto.randomBytes(32).toString("hex");await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",["personal_payment_webhook_secret",secret]);try{require("./appSettings").invalidate()}catch(_){}return secret}
+module.exports={ensure,get,save,regenerate};
