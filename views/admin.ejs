@@ -131,7 +131,7 @@
         .submenu.show { display: block; }
         /* General Settings uses the same sidebar accordion, with a short smooth reveal. */
         .submenu.general-settings-submenu { display: block; max-height: 0; overflow: hidden; visibility: hidden; transition: max-height .24s ease, visibility .24s ease; }
-        .submenu.general-settings-submenu.show { max-height: 800px; visibility: visible; }
+        .submenu.general-settings-submenu.show { max-height: 360px; visibility: visible; }
         .general-settings-toggle .arrow-icon { transition: transform .24s ease; }
         .general-settings-toggle[aria-expanded="true"] .arrow-icon { transform: rotate(180deg); }
         .general-settings-submenu a { padding-left: 48px; }
@@ -157,35 +157,14 @@
             padding: 24px;
         }
 
-/* Authoritative Desktop Workspace Layout - Sidebar Offset & Table Containment */
+/* Desktop workspace must reserve the fixed sidebar's full width. */
 @media (min-width: 769px) {
-    body {
-        overflow-x: hidden;
-    }
-    #sidebar {
-        width: 260px !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        bottom: 0 !important;
-        z-index: 1000 !important;
-    }
     #mainContent.main-content {
-        box-sizing: border-box !important;
-        margin-left: 260px !important;
-        width: calc(100vw - 260px) !important;
-        max-width: calc(100vw - 260px) !important;
-        min-width: 0 !important;
-        overflow-x: auto !important;
-        position: relative !important;
-        padding: 24px !important;
-    }
-    #dynamicPageContent,
-    #view-customer-filter,
-    #view-all-customer {
-        width: 100% !important;
-        min-width: 0 !important;
-        overflow-x: auto !important;
+        box-sizing: border-box;
+        width: calc(100% - var(--sidebar-width));
+        min-width: 0;
+        margin-left: var(--sidebar-width) !important;
+        position: relative;
     }
 }
 
