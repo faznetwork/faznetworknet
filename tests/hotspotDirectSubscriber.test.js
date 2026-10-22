@@ -79,7 +79,8 @@ test("scratch voucher claim retains historical MAC bindings and rejects live con
  const auth=read("controllers/hotspotAuthController.js");
   assert.ok(auth.includes("SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>$2::bigint AND LOWER(COALESCE(mac_address,''))=LOWER($1::text) FOR UPDATE"));
  assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
- assert.match(auth,/SET mac_address=NULL,status=CASE WHEN LOWER\(COALESCE\(status,''\)\)='active' THEN 'expired'/);
+ assert.match(auth,/SET status=CASE WHEN LOWER\(COALESCE\(status,''\)\)='active' THEN 'expired'/);
+ assert.doesNotMatch(auth,/SET mac_address=NULL/);
  assert.match(auth,/MAC_ALREADY_BOUND/);
 });
 
