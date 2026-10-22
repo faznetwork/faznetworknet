@@ -667,6 +667,43 @@
         @media(max-width:420px){.hotspot-dynamic-view .voucher-grid{grid-template-columns:1fr}}
 
 
+        /* Desktop navigation contract: dock the sidebar; mobile drawer rules are scoped below 767.98px. */
+        @media (min-width: 1024px) {
+            :root { --sidebar-width: 260px; }
+            #sidebar.sidebar {
+                left: 0 !important;
+                width: var(--sidebar-width);
+                max-width: none;
+                transform: none !important;
+                visibility: visible !important;
+                transition: none;
+            }
+            #mainContent.main-content {
+                box-sizing: border-box;
+                margin-left: var(--sidebar-width) !important;
+                width: calc(100% - var(--sidebar-width)) !important;
+                max-width: calc(100% - var(--sidebar-width)) !important;
+                min-width: 0;
+            }
+            #mobileSidebarToggle { display: none !important; }
+            #sidebarBackdrop { display: none !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1023.98px) {
+            #sidebar.sidebar {
+                left: 0 !important;
+                transform: none !important;
+                visibility: visible !important;
+            }
+            #mainContent.main-content {
+                margin-left: var(--sidebar-width) !important;
+                width: calc(100% - var(--sidebar-width)) !important;
+                max-width: calc(100% - var(--sidebar-width)) !important;
+                min-width: 0;
+            }
+            #mobileSidebarToggle { display: none !important; }
+            #sidebarBackdrop { display: none !important; }
+        }
+
         /* FAZ NETWORK mobile-first navigation and dashboard refinement. */
         @media (max-width: 767.98px) {
             :root { --sidebar-width: min(300px, 86vw); }
