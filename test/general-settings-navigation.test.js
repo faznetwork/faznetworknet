@@ -25,8 +25,14 @@ test('every General Settings sidebar link has a client target and an Express pag
     assert.ok(adminView.includes(`href="${url}" data-settings-nav="${target}"`), `sidebar link missing for ${url}`);
     assert.ok(mainScript.includes(`'${url}': '${target}'`), `client route missing for ${url}`);
   }
-  assert.ok(serverSource.includes('hotspot-portal|webhooks'), 'shared settings route must include webhooks');
+  assert.ok(serverSource.includes('brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal|webhooks'), 'Express route must expose all six canonical settings URLs');
+  assert.ok(serverSource.includes('res.redirect(302,"/admin/settings/brand-identity")'), 'parent settings URL must redirect to the first submenu');
   assert.ok(serverSource.includes('renderAdminSettingsPage'), 'shared settings page renderer must exist');
+  assert.equal(new Set(settingsPaths.map(([url]) => url)).size, settingsPaths.length, 'each submenu must have a unique URL');
+  assert.equal(new Set(settingsPaths.map(([, target]) => target)).size, settingsPaths.length, 'each submenu URL must map to a unique target');
+  assert.doesNotMatch(serverSource, /settings\\\\\\/general/, 'legacy /general alias must not be registered');
+  assert.doesNotMatch(mainScript, /admin\\/settings(?:\\/general)?['"]\\s*:/, 'client router must not alias the parent/general URL to a submenu');
+  assert.doesNotMatch(adminView, /admin\\/settings(?:\\/general)?['"]\\s*:/, 'admin view router must not alias the parent/general URL to a submenu');
 });
 
 test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
