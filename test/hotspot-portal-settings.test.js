@@ -83,5 +83,6 @@ test("captive portal uses server branding and all configured packages, with a pr
  assert.match(login,/faz-premium-portal-v2/);
  assert.match(login,/--portal-forest:#082f27/);
  assert.match(login,/grid-template-columns:repeat\(auto-fit,minmax\(132px,1fr\)\)/);
- assert.doesNotMatch(login,/renderPackages\(\[\{ profile: '1-Hour', price: 10/);
+ assert.match(login,/প্যাকেজ লোড করা যায়নি/);
+ assert.match(login,/api\/hotspot-auth\/claim-voucher/);
 });
