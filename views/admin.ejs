@@ -2698,6 +2698,14 @@
 </div>
 
 <script>
+// Base Route Fallback
+if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') {
+    window.location.replace('/admin/dashboard');
+}
+
+// ... আপনার বাকি জাভাস্ক্রিপ্ট কোড ...
+
+
         // Keep core admin helpers available before any dependent UI code executes.
         window.setPageTitleSafe = window.setPageTitleSafe || function(title) {
             try { document.title = title || 'FAZ NETWORK'; } catch (e) {}
