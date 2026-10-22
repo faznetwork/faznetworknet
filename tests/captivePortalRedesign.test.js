@@ -15,12 +15,12 @@ test("captive portal exposes mobile-first login modes and fast responsive stylin
 });
 
 test("member login preserves RouterOS PAP and CHAP login handling",()=>{
- assert.match(portal,/function submitMemberLogin\(\)/);
+ assert.doesNotMatch(portal,/function submitMemberLogin\(\)/);
  assert.match(portal,/device\.chapChallenge\?md5Hex\(String\.fromCharCode\(chapIdentifierByte\(device\.chapId\)\)\+verified\.password\+decodeChapChallenge\(device\.chapChallenge\)\):verified\.password/);
- assert.match(portal,/api\/hotspot-auth\/direct-login/);
+ assert.doesNotMatch(portal,/api\/hotspot-auth\/direct-login/);
  assert.match(portal,/form\.submit\(\)/);
- assert.match(portal,/id="member_username"/);
- assert.match(portal,/id="member_password"/);
+ assert.doesNotMatch(portal,/id="member_username"/);
+ assert.doesNotMatch(portal,/id="member_password"/);
  assert.match(portal,/toggle-member-password/);
 });
 
