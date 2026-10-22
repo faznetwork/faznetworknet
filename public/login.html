@@ -545,6 +545,11 @@ button{touch-action:manipulation}
         <section class="mfs-receive-card" aria-label="Official receiving number"><div class="mfs-receive-label">অফিসিয়াল পেমেন্ট নম্বর</div><div class="receive-row">
             <span id="modal-wallet-number">01XXXXXXXXX</span>
             <button type="button" id="copy-wallet-number" onclick="copyWalletNumber()">নম্বর কপি করুন</button></div></section>
+        <section class="mfs-device-details" aria-label="This device connection details">
+            <div class="mfs-device-details-title">আপনার সংযোগের তথ্য</div>
+            <div class="mfs-device-detail-row"><span>MAC Address</span><strong id="payment-device-mac">—</strong></div>
+            <div class="mfs-device-detail-row"><span>IP Address</span><strong id="payment-device-ip">—</strong></div>
+        </section>
         <div class="instructions" id="mfs-payment-instructions">১. অ্যাপ খুলে Send Money নির্বাচন করুন।\n২. সঠিক প্যাকেজের টাকা উপরের নম্বরে পাঠান।\n৩. TrxID অথবা প্রেরকের ফোন নম্বর দিয়ে যাচাই করুন।</div><div class="timer-box" id="payment-timer">05:00</div>
 
         <div class="input-group verify-field" id="sender-phone-field" hidden>
@@ -858,6 +863,10 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
         logo.src = providerMeta.logo; logo.alt = providerMeta.name;
         document.getElementById('modal-mfs-title').textContent = title;
         document.getElementById('modal-wallet-number').textContent = number;
+        const routerMac = (document.getElementById('router-mac')?.value || '').trim();
+        const routerIp = (document.getElementById('router-ip')?.value || '').trim();
+        document.getElementById('payment-device-mac').textContent = routerMac || 'পাওয়া যায়নি';
+        document.getElementById('payment-device-ip').textContent = routerIp || 'পাওয়া যায়নি';
         const amountText = formatTaka(selectedPackage.price);
         const verificationText = verificationMethod === 'senderPhoneNumber'
             ? 'যে নম্বর থেকে টাকা পাঠিয়েছেন সেটি দিন, যাতে পেমেন্ট মিলিয়ে দেখা যায়।'
@@ -1121,6 +1130,16 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
 #mfs-modal .mfs-cancel:hover{text-decoration:underline}
 @media(max-width:360px){#mfs-modal .modal-card{padding:14px!important;border-radius:17px!important}#mfs-modal .receive-row{align-items:stretch}#mfs-modal #copy-wallet-number{width:100%}#mfs-modal .instruction-step{padding:9px;gap:8px}}
 @media(prefers-reduced-motion:reduce){#mfs-modal *{transition:none!important}}
+</style>
+
+
+<style id="faz-payment-device-details">
+#mfs-modal .mfs-device-details{margin:0 0 13px;padding:12px 14px;border:1px solid #dbe6df;border-radius:12px;background:#f7faf8}
+#mfs-modal .mfs-device-details-title{margin-bottom:8px;color:#3d5b4b;font-size:12px;font-weight:800}
+#mfs-modal .mfs-device-detail-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #e3ece6;font-size:12px;line-height:1.5}
+#mfs-modal .mfs-device-detail-row span{color:#65776c;flex:0 0 auto}
+#mfs-modal .mfs-device-detail-row strong{color:#18352d;text-align:right;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+@media(max-width:360px){#mfs-modal .mfs-device-details{padding:10px}#mfs-modal .mfs-device-detail-row{gap:8px;font-size:11px}#mfs-modal .mfs-device-detail-row strong{font-size:11px}}
 </style>
 
 </body>
