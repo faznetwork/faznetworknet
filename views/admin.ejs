@@ -8572,7 +8572,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             function readRoute() {
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
                 const pathRoute = routeFromPath(path);
-                if (pathRoute) return pathRoute;
+                const hasLegacyView = new URLSearchParams(window.location.search).has('view');
+                if (pathRoute && !(path === '/admin' && hasLegacyView)) return pathRoute;
                 if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
 
                 // Backward compatibility: older shared links with ?view=... resolve once,
