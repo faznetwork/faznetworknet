@@ -402,16 +402,28 @@
         <!-- 2. Voucher & QR Code Scanner Tab -->
         <div id="section-voucher" style="display: none;">
             <div class="input-group">
-                <label for="voucher_pin">ভাউচার স্ক্র্যাচ পিন কোড</label>
+                <label for="voucher_customer_name">আপনার নাম <span aria-hidden="true">*</span></label>
+                <input type="text" id="voucher_customer_name" autocomplete="name" maxlength="160" required placeholder="আপনার নাম লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
+            </div>
+            <div class="input-group">
+                <label for="voucher_pin">ভাউচার PIN / Username</label>
                 <div style="display: flex; gap: 6px;">
                     <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন" style="flex: 1; padding: 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; color: #fff; text-transform: uppercase;">
                     <button type="button" class="btn-action" style="margin-top:0; width: auto; padding: 0 12px; font-size: 12px;" onclick="openQrScanner()">📷 স্ক্যান</button>
                 </div>
             </div>
+            <div class="input-group">
+                <label for="voucher_password">ভাউচার Password</label>
+                <input type="password" id="voucher_password" autocomplete="current-password" maxlength="160" required placeholder="ভাউচার পাসওয়ার্ড লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
+            </div>
             <button type="button" class="btn-action" onclick="handleVoucherLogin()">ভাউচার দিয়ে ইন্টারনেট চালু করুন</button>
         </div>
         <!-- 3. Direct subscriber username/password login -->
         <div id="section-member" style="display:none;">
+            <div class="input-group">
+                <label for="member_customer_name">আপনার নাম <span aria-hidden="true">*</span></label>
+                <input id="member_customer_name" autocomplete="name" maxlength="160" required placeholder="আপনার নাম লিখুন" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
+            </div>
             <div class="input-group">
                 <label for="member_username">Username</label>
                 <input id="member_username" autocomplete="username" maxlength="100" placeholder="আপনার username" style="width:100%;padding:11px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;color:#fff;">
@@ -553,16 +565,19 @@ async function handleMasterAction(){
   if(!result.success)throw new Error(result.message||'Payment verification failed');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
  if(currentMethod==='pin'){
-  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('ভাউচার পিন দিন।');return;}
-  const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
+  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase(),password=String(byId('voucher_password')?.value||''),customerName=String(byId('voucher_customer_name')?.value||'').trim();
+  if(!customerName){addNoticeTicker('আপনার নাম লিখুন।');byId('voucher_customer_name')?.focus();return;}
+  if(!pin||!password){addNoticeTicker('ভাউচার PIN ও Password দিন।');return;}
+  const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,voucher_password:password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
+  if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
  }
  return submitMemberLogin();
 }
 async function submitMemberLogin(){
- const username=String(byId('member_username')?.value||'').trim(),password=String(byId('member_password')?.value||'');
- if(!username||!password){addNoticeTicker('Username ও password দিন।');return;}
+ const username=String(byId('member_username')?.value||'').trim(),password=String(byId('member_password')?.value||''),customerName=String(byId('member_customer_name')?.value||'').trim();
+ if(!customerName||!username||!password){addNoticeTicker('আপনার নাম, Username ও password দিন।');return;}
  try{
-  const verified=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/direct-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,mac:device.mac,ip:device.ip,login_url:device.login})});
+  const verified=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/direct-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,customer_name:customerName,mac:device.mac,ip:device.ip,login_url:device.login})});
   if(!verified.success)throw new Error(verified.message||'Login failed.');
   const form=byId('mikrotik-auto-login');if(!form)return;
   form.action=device.login;form.querySelector('[name="username"]').value=verified.username;
@@ -824,19 +839,21 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 
     async function handleVoucherLogin() {
         const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
+        const password = document.getElementById('voucher_password').value;
+        const customerName = document.getElementById('voucher_customer_name').value.trim();
         const routerMac = document.getElementById('router-mac').value.trim();
         const routerIp = document.getElementById('router-ip').value.trim();
 
-        if (!pin) {
-            alert('ভাউচার পিন দিন।');
+        if (!customerName || !pin || !password) {
+            alert('আপনার নাম, ভাউচার PIN ও Password দিন।');
             return;
         }
 
         try {
-            const res = await fetch(VOUCHER_API_URL, {
+            const res = await fetch(BACKEND_BASE_URL + '/api/hotspot-auth/claim-voucher', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voucher_code: pin, mac: routerMac, ip: routerIp })
+                body: JSON.stringify({ voucher_code: pin, voucher_password: password, customer_name: customerName, mac: routerMac, ip: routerIp, login_url: device.login })
             });
             const data = await res.json().catch(() => JSON.parse('{"success": false}'));
             if (!res.ok || !data.success) {
