@@ -603,7 +603,7 @@ const device={
  chapId:params.get('chap-id')||'',
  chapChallenge:params.get('chap-challenge')||''
 };
-const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
+const BACKEND_BASE_URL = 'https://faznetwork.com';
 const VERIFY_API_URL=BACKEND_BASE_URL+'/api/verify-trx';
 const VOUCHER_CLAIM_URL=BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher';
 const ACTIVATE_API_URL=BACKEND_BASE_URL+'/api/hotspot-auth/activate';
@@ -715,7 +715,7 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
 })();
 </script>
 <script>
-    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
+    const BACKEND_BASE_URL = 'https://faznetwork.com';
     const BACKEND_API_URL = BACKEND_BASE_URL + '/api/public/payment/confirm';
     const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/hotspot/verify-voucher';
     const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';

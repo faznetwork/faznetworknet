@@ -35,7 +35,7 @@ First create a VETH on a management-LAN address that is unused and in the correc
 /container/envs/add list=vsol key=OLT_USERNAME value=readonly-user
 /container/envs/add list=vsol key=OLT_PASSWORD value=CHANGE_ME
 /container/envs/add list=vsol key=OLT_ENABLE_PASSWORD value=
-/container/envs/add list=vsol key=RENDER_INGEST_URL value=https://faznetwork-web.onrender.com/api/olt/sync-telemetry
+/container/envs/add list=vsol key=RENDER_INGEST_URL value=https://faznetwork.com/api/olt/sync-telemetry
 /container/envs/add list=vsol key=OLT_COLLECTOR_TOKEN value=SET_THE_RENDER_SECRET_HERE
 /container/envs/add list=vsol key=OLT_ID value=vsol-v1601e04-dp
 /container/envs/add list=vsol key=POLL_INTERVAL_SECONDS value=300
