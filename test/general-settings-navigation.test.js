@@ -30,13 +30,26 @@ test('every General Settings sidebar link has a client target and an Express pag
 });
 
 test('settings submenu click and browser history keep route, panel, and active item synchronized', () => {
+  // The shared layout owns its own settings router; admin EJS uses only its
+  // canonical URL router for initial navigation, preventing duplicate panel loads.
   assert.match(mainScript, /const validTargets = Object\.keys\(pathsByTarget\)/);
   assert.match(mainScript, /window\.history\.pushState/);
   assert.match(mainScript, /addEventListener\('popstate'/);
   assert.match(mainScript, /window\.location\.reload\(\)/);
   assert.match(mainScript, /item\.dataset\.settingsNav === target/);
-  assert.match(adminView, /function initializeGeneralSettingsRoute\(\)/);
-  assert.match(adminView, /syncGeneralSettingsSidebar\(target\)/);
+  assert.doesNotMatch(adminView, /initializeGeneralSettingsRoute/);
+  assert.doesNotMatch(adminView, /if \(window\.location\.hash === '#hotspot-webhook'\) switchView\('general-settings'\)/);
+  assert.match(adminView, /function readRoute\(\)/);
+  assert.match(adminView, /window\.__fazRestoreAdminRoute = function\(\)/);
+  assert.match(adminView, /case 'settings':/);
+  assert.match(adminView, /syncGeneralSettingsSidebar\(r\.section\)/);
+});
+
+test('unknown admin paths stay on their URL and render an explicit not-found view', () => {
+  assert.match(adminView, /view: 'not-found', path/);
+  assert.match(adminView, /if \(normalized\.view === 'not-found'\) return String\(normalized\.path \|\| window\.location\.pathname\)/);
+  assert.match(adminView, /case 'not-found': return showAdminNotFound\(r\.path\)/);
+  assert.match(adminView, /function showAdminNotFound\(path\)/);
 });
 
 test('settings save forms submit asynchronously and have matching API handlers', () => {
