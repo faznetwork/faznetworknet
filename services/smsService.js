@@ -122,8 +122,13 @@ async function sendSmsCore({to,phone,message,event="manual",variables={},token:o
  return {success:true,mode,method,providerResponse};
 }
 async function recordSmsDelivery({to,phone,message,event="manual",status,error,mode,method,httpStatus}={}) {
- const history=require("./messageHistoryService");
- await history.recordMessage({channel:"sms",to:phone||to,message,event,status,error,gateway:mode,method,httpStatus});
+ try {
+  const db=require("../db");
+  await db.getPool().query(
+   "INSERT INTO sms_delivery_logs(recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,channel,recipient_address,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())",
+   [safeText(phone||to,40),safeText(message,4000),safeText(event,80)||"manual",status,safeText(mode,40)||null,safeText(method,20)||null,Number.isInteger(httpStatus)?httpStatus:null,error?safeText(error,1000):null,"sms",safeText(phone||to,254)]
+  );
+ } catch (_) { /* History must never block a message send. */ }
 }
 async function sendSms(args={}){
  const input=args||{};
