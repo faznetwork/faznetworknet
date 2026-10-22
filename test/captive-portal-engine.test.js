@@ -21,7 +21,7 @@ test("captive portal parses RouterOS redirect context and submits the canonical 
 test("captive portal uses public branding and settings endpoints without exposing admin endpoints",()=>{
  assert.match(script,/\/api\/hotspot\/public-branding/);
  assert.match(script,/\/api\/settings\/public/);
- assert.match(script,/if\(data\.banner_url&&box&&image\)/);
+ assert.match(script,/const bannerUrl=data\.bannerUrl\|\|data\.banner_url/);
  assert.match(script,/\/api\/public\/portal-config/);
  assert.match(script,/data\.display_mode==='custom_code'/);
  assert.match(script,/addNoticeTicker/);
