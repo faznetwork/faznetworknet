@@ -663,8 +663,54 @@ function submitMikrotikLogin(mac,redirectUrl){
 function byId(id){return document.getElementById(id);}
 function requestJson(url,options){return fetch(url,options).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data;});}
 function addNoticeTicker(text){const node=byId('status-box');if(node&&text){node.textContent=text;node.style.display='block';}}
-function applyFeatures(config){if(!config)return;const data=config.config||config;const box=byId('portal-banner'),image=byId('portal-banner-image');if(data.banner_url&&box&&image){image.src=data.banner_url;box.hidden=false;} }
-async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;const packages=(config.packages||data.packages||[]).filter(p=>Number.isFinite(p.price)&&p.price>0);if(packages.length&&typeof renderPackages==='function')renderPackages(packages);if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
+function applyFeatures(config){
+ if(!config)return;
+ const data=config.config||config;
+ const box=byId('portal-banner'),image=byId('portal-banner-image');
+ const bannerUrl=data.bannerUrl||data.banner_url||data.settings?.banner_url||'';
+ const logoUrl=data.logoUrl||data.portal_logo_url||data.settings?.portal_logo_url||'';
+ const logo=byId('brand-logo');
+ if(logo){
+  if(logoUrl){logo.src=logoUrl;logo.style.display='';logo.onerror=function(){this.style.display='none';};}
+  else {logo.style.display='';}
+ }
+ if(box&&image){
+  if(bannerUrl){image.src=bannerUrl;image.alt=(data.portalTitle||data.brand_title||'FAZ NETWORK')+' banner';box.hidden=false;box.style.display='';image.onerror=function(){box.hidden=true;};}
+  else {box.hidden=true;}
+ }
+ const title=data.portalTitle||data.brand_title||data.company_name;
+ if(title&&byId('brand-title-text'))byId('brand-title-text').textContent=title;
+ const subtitle=data.brand_subtitle||data.subtitle;
+ if(subtitle&&byId('brand-subtitle-text'))byId('brand-subtitle-text').textContent=subtitle;
+}
+async function loadPortalConfig(){
+ const grid=byId('packages-grid');
+ try{
+  const [brand,settings,config]=await Promise.all([
+   requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),
+   requestJson(BACKEND_BASE_URL+'/api/settings/public'),
+   requestJson(BACKEND_BASE_URL+'/api/public/portal-config')
+  ]);
+  const data=config.config||config;
+  if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;
+  applyFeatures({...brand,...data,settings:data.settings||data});
+  const source=Array.isArray(config.packages)?config.packages:(Array.isArray(data.packages)?data.packages:[]);
+  const packages=source.map(p=>({
+   ...p,
+   profile:String(p.profile||p.profileId||p.profile_id||p.name||'').trim(),
+   price:Number(p.price),
+   validity:String(p.validity||p.validityLabel||p.validity_label||p.name||p.profileId||'').trim()
+  })).filter(p=>p.profile&&Number.isFinite(p.price)&&p.price>0);
+  if(typeof renderPackages==='function')renderPackages(packages);
+  if(data.display_mode==='custom_code'&&data.custom_code){
+   const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;
+  }
+  addNoticeTicker(data.notice_text||data.notice||settings.notice||'');
+ }catch(e){
+  if(grid){grid.replaceChildren();const message=document.createElement('div');message.className='portal-package-error';message.setAttribute('role','status');message.textContent='প্যাকেজ লোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';const retry=document.createElement('button');retry.type='button';retry.className='portal-retry-button';retry.textContent='আবার চেষ্টা করুন';retry.addEventListener('click',loadPortalConfig);message.appendChild(retry);grid.appendChild(message);}
+  addNoticeTicker('সার্ভারের সঙ্গে সংযোগে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+ }
+}
 const PALETTES=[{bg:'rgba(16,185,129,.12)'},{bg:'rgba(59,130,246,.12)'},{bg:'rgba(245,158,11,.12)'},{bg:'rgba(236,72,153,.12)'},{bg:'rgba(139,92,246,.12)'},{bg:'rgba(6,182,212,.12)'},{bg:'rgba(239,68,68,.12)'},{bg:'rgba(132,204,22,.12)'}];
 function renderPackagePalette(index,node){if(node)node.style.background=PALETTES[index%PALETTES.length].bg;}
 async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
@@ -986,5 +1032,53 @@ document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-m
     document.addEventListener('DOMContentLoaded', loadPublicPortalData);
 </script>
 
+
+<style id="faz-premium-portal-v2">
+:root{--portal-forest:#082f27;--portal-green:#0b4b3b;--portal-emerald:#12a878;--portal-gold:#d6b878;--portal-ink:#18352d;--portal-muted:#62766e;--portal-line:rgba(18,75,59,.16);--portal-paper:#f4f7f2}
+html{min-height:100%;background:#082f27}
+body{min-height:100vh;padding:clamp(14px,3vw,34px);align-items:center;justify-content:center;background:radial-gradient(ellipse at 12% 12%,rgba(18,168,120,.23),transparent 34%),radial-gradient(ellipse at 88% 84%,rgba(214,184,120,.14),transparent 32%),linear-gradient(138deg,#062b24 0%,#0a4034 46%,#102f2a 100%);color:var(--portal-ink)}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.15;background-image:repeating-linear-gradient(45deg,transparent 0 28px,rgba(230,215,175,.12) 29px 30px,transparent 31px 58px),repeating-linear-gradient(-45deg,transparent 0 28px,rgba(230,215,175,.08) 29px 30px,transparent 31px 58px);mask-image:linear-gradient(to bottom right,#000,transparent 78%)}
+.rgb-wrapper{z-index:1;max-width:560px;padding:1px;border-radius:26px;background:linear-gradient(145deg,rgba(214,184,120,.85),rgba(18,168,120,.8) 45%,rgba(255,255,255,.12));box-shadow:0 28px 90px rgba(0,0,0,.32);animation:none}
+.main-card{overflow:hidden;border:1px solid rgba(255,255,255,.72);border-radius:25px;background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(244,248,244,.98));padding:clamp(22px,5vw,34px);color:var(--portal-ink);box-shadow:none}
+.bismillah{font-size:clamp(17px,4vw,21px);color:#98783c;letter-spacing:0;margin:0 0 14px}
+.logo-box{min-height:68px;margin-bottom:10px}
+.logo-img{max-width:118px;max-height:82px;width:auto;object-fit:contain;filter:drop-shadow(0 5px 10px rgba(8,47,39,.10))}
+.brand-title{font-size:clamp(27px,6vw,34px);line-height:1.15;font-weight:850;letter-spacing:.3px;color:var(--portal-forest)}
+.brand-subtitle{font-size:clamp(14px,3.2vw,16px);line-height:1.65;color:#5c7068;margin:8px 0 10px}
+.portal-trust-line{font-size:13px;line-height:1.6;color:#557166;margin:0 0 20px}
+.tab-switcher{padding:5px;border:1px solid #d7e6dc;border-radius:15px;background:#eaf2ec;gap:4px;margin-bottom:20px}
+.tab-btn{min-height:44px;padding:10px 8px;border-radius:11px;font-size:clamp(12px,2.8vw,14px);line-height:1.35;color:#526a60}
+.tab-btn.active{background:linear-gradient(135deg,#0a3d2e,#12684d);color:#fff;box-shadow:0 5px 14px rgba(10,61,46,.22)}
+.packages-grid{grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:12px;margin:12px 0 16px}
+.pkg-card{position:relative;min-height:112px;padding:17px 12px;border:1px solid #d6e5dc;border-radius:17px;background:linear-gradient(160deg,#fff,#f0f7f1);box-shadow:0 5px 15px rgba(8,47,39,.045);text-align:left}
+.pkg-card:after{content:"";display:block;width:30px;height:3px;margin:12px auto 0;border-radius:9px;background:#c6d9ce}
+.pkg-card:hover{transform:translateY(-2px);border-color:#2b9972;box-shadow:0 10px 24px rgba(8,75,59,.10)}
+.pkg-card.selected{border:2px solid #0b8b62;background:linear-gradient(145deg,#e8f7ee,#fff);box-shadow:0 8px 22px rgba(11,139,98,.13)}
+.pkg-card.selected:before{content:"✓";position:absolute;top:9px;right:10px;width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:#0b8b62;color:#fff;font-size:12px;font-weight:800}
+.pkg-time{font-size:clamp(14px,3.2vw,16px);line-height:1.45;font-weight:750;color:#244a3b}
+.pkg-price{font-size:clamp(21px,5vw,25px);line-height:1.25;font-weight:850;color:#0a6047;margin-top:9px}
+.selected-package{border:1px solid #d7e7dd;border-radius:13px;background:#edf6ef;color:#244b3b;padding:13px 15px;font-size:14px;line-height:1.6;margin-bottom:18px}
+.input-group{margin-bottom:15px}
+.input-group label{display:block;margin-bottom:7px;color:#264a3c;font-size:14px;font-weight:700}
+.input-group input,.input-group select{min-height:48px!important;width:100%;padding:12px 14px!important;border:1px solid #ceded4!important;border-radius:12px!important;background:#fff!important;color:#18352d!important;font-size:16px!important;box-shadow:inset 0 1px 2px rgba(8,47,39,.025)}
+.input-group input:focus,.input-group select:focus{outline:3px solid rgba(18,168,120,.18);border-color:#14966b!important}
+button,.btn{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(18,168,120,.55);outline-offset:3px}
+.mfs-grid{gap:11px}
+.mfs-btn{min-height:58px;padding:12px 14px;border:1px solid #d7e4dc;border-radius:14px;background:#fff;color:#264a3c;font-size:14px;font-weight:700;box-shadow:0 4px 12px rgba(8,47,39,.04)}
+.mfs-btn:hover{border-color:#7ab99d;box-shadow:0 8px 20px rgba(8,47,39,.09);transform:translateY(-1px)}
+#section-recharge>div:first-child:not(.packages-grid){font-size:14px!important;color:#244a3b!important}
+#portal-banner{overflow:hidden;margin:0 0 20px;border-radius:18px;border:1px solid #d8e6dd;background:#e8f1e9;box-shadow:0 10px 25px rgba(8,47,39,.08)}
+#portal-banner[hidden]{display:none!important}
+#portal-banner-image{display:block;width:100%;max-height:250px;object-fit:cover}
+#status-box{font-size:14px;line-height:1.65;border-radius:12px}
+.portal-package-error{grid-column:1/-1;padding:18px;border:1px solid #edcf9b;border-radius:14px;background:#fff8e9;color:#77551b;font-size:14px;line-height:1.6;text-align:center}
+.portal-retry-button{display:block;margin:12px auto 0;padding:10px 16px;border:0;border-radius:10px;background:#0b5a43;color:white;font-weight:700}
+#footer-helpline{color:#0b6c4c;font-weight:750}
+.modal-card{border-radius:22px!important;box-shadow:0 24px 70px rgba(0,0,0,.24)!important}
+@media(min-width:560px){.packages-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.main-card{padding:34px}}
+@media(max-width:420px){body{padding:10px}.rgb-wrapper{border-radius:22px}.main-card{padding:21px 16px;border-radius:21px}.tab-switcher{display:grid;grid-template-columns:1fr 1fr}.tab-btn{font-size:12px}.packages-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pkg-card{min-height:104px;padding:14px 10px}.mfs-btn{padding:10px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
 </body>
 </html>
