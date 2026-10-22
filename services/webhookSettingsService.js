@@ -15,6 +15,7 @@ function cleanUrl(v){const x=String(v??"").trim();if(!x)return "";if(x.startsWit
 async function upsert(tx,key,value){await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);}
 async function ensure(){
  if(!ready)ready=db.withTransaction(async tx=>{
+  let migrated=false;
   const exists=await tx.query("SELECT to_regclass('public.webhook_settings') AS table_name");
   if(exists.rows?.[0]?.table_name){
    const legacyResult=await tx.query("SELECT secret_key,sender_ids,recipient_numbers FROM public.webhook_settings WHERE id=1 LIMIT 1");
@@ -30,10 +31,12 @@ async function ensure(){
     }
    }
    await tx.query("DROP TABLE public.webhook_settings");
+   migrated=true;
   }
   const defaults={personal_payment_webhook_url:"",personal_payment_webhook_enabled:"false",personal_payment_webhook_secret:"",...Object.fromEntries(CHANNELS.map(c=>[RECIPIENT_KEYS[c],""])),...Object.fromEntries(CHANNELS.map(c=>[SENDER_KEYS[c],JSON.stringify(DEFAULT_SENDERS[c])]))};
   for(const [key,value] of Object.entries(defaults))await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO NOTHING",[key,value]);
- }).then(()=>true).catch(e=>{ready=null;throw e;});
+  return migrated;
+ }).then(migrated=>{if(migrated)try{require("./appSettings").invalidate();}catch(_){}return true;}).catch(e=>{ready=null;throw e;});
  await ready;
 }
 async function get(){
