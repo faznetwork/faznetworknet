@@ -23,7 +23,7 @@ app.get("/healthz",(req,res)=>res.status(200).json({status:"ok",uptime:process.u
 // Temporary safe trace for MacroDroid webhook requests. Never log header values,
 // request bodies, tokens, SMS text, phone numbers, or query strings.
 app.use((req,res,next)=>{
-  if(req.method!=="POST"||!/^\\/api\\/webhooks\\/forward\\/?$/.test(String(req.path||"")))return next();
+  if(req.method!=="POST"||!["/api/webhooks/forward","/api/webhooks/forward/"].includes(String(req.path||"")))return next();
   const startedAt=Date.now();
   const requestId=String(req.get("x-request-id")||require("crypto").randomUUID());
   req.webhookDiagnosticRequestId=requestId;
