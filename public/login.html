@@ -581,11 +581,9 @@ button{touch-action:manipulation}
 <!-- Compatible login modes: payment verification remains server-authoritative. -->
 <!-- Mobile-first FAZ NETWORK captive portal refresh: Connected to Fast Network -->
 <div class="portal-compat-controls" aria-label="Hotspot login options">
- <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
- <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
+ <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
  <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
  <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
- <input id="remember-member" type="checkbox" aria-label="Remember member">
  <div id="router-error" role="alert"></div>
  <div id="portal-banner" hidden><img id="portal-banner-image" alt="Network banner"></div>
  <div id="custom-portal-slot"></div>
