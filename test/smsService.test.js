@@ -44,3 +44,17 @@ test("universal SMS engine sends provider-defined x-www-form-urlencoded fields",
   assert.equal(params.get("api_key"),"test-secret");
  }finally{global.fetch=oldFetch;}
 });
+
+test("SMS attempts are recorded with provider-accepted and failure statuses without blocking send results",async()=>{
+ const smsService=require("../services/smsService"),db=require("../db");
+ const originalQuery=db.query,originalFetch=global.fetch;const records=[];
+ db.query=async(sql,params)=>{if(!sql.includes("INSERT INTO sms_delivery_logs"))throw new Error("Unexpected query");records.push({sql,params});return {rows:[{id:records.length}]};};
+ global.fetch=async()=>new Response(JSON.stringify({success:true,message:"accepted"}),{status:200});
+ try{
+  const success=await smsService.sendSms({to:"01712345678",message:"Hello SMS history",event:"manual",settings:{sms_provider_mode:"custom_http",sms_api_url:"https://provider.example/send",sms_api_method:"POST_JSON",sms_http_param_mapping:JSON.stringify({to:"{to}",message:"{message}"})}});
+  assert.equal(success.success,true);assert.equal(records.at(-1).params[3],"sent");assert.equal(records.at(-1).params[0],"01712345678");assert.equal(records.at(-1).params[1],"Hello SMS history");
+  global.fetch=async()=>new Response("provider error",{status:503});
+  await assert.rejects(()=>smsService.sendSms({to:"01712345678",message:"Failure test",settings:{sms_provider_mode:"custom_http",sms_api_url:"https://provider.example/send",sms_api_method:"POST_JSON",sms_http_param_mapping:JSON.stringify({to:"{to}",message:"{message}"})}}));
+  assert.equal(records.at(-1).params[3],"failed");assert.match(records.at(-1).params[7],/HTTP 503/);
+ }finally{db.query=originalQuery;global.fetch=originalFetch;}
+});
