@@ -4,7 +4,7 @@ const ALLOWED_STATUS=new Set(["sent","failed","skipped"]);
 const ALLOWED_CHANNEL=new Set(["sms","whatsapp","email"]);
 const ALLOWED_EVENTS=new Set(["manual","broadcast","payment","payment_receipt","renewal","welcome","expiry_warning","expired","line_expiry","recharge","pppoe_payment","pppoe_renewal","pppoe_expiry_warning","pppoe_expired","hotspot_purchase","hotspot_renewal","hotspot_expiry_warning","hotspot_expired"]);
 function boundedInt(value,fallback,min,max){const parsed=Number.parseInt(String(value??""),10);return Number.isInteger(parsed)?Math.max(min,Math.min(max,parsed)):fallback;}
-function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z"))||new Date(raw+"T00:00:00Z").toISOString().slice(0,10)!==raw)throw new Error("Invalid "+label+" date.");return raw;}
+function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z"))||new Date(raw+"T00:00:00Z").toISOString().slice(0,10)!==raw)throw new Error("Invalid "+label+" date.");return raw;}
 async function list(req,res){
  try{
   const query=String(req.query.search||"").trim().slice(0,120),status=String(req.query.status||"").trim().toLowerCase(),channel=String(req.query.channel||"").trim().toLowerCase(),event=String(req.query.event||"").trim().toLowerCase(),from=validDate(req.query.from,"start"),to=validDate(req.query.to,"end"),limit=boundedInt(req.query.limit,25,1,100),offset=boundedInt(req.query.offset,0,0,10000000);
@@ -39,7 +39,7 @@ async function retry(req,res){
   if(row.channel==="sms")result=await require("../services/smsService").sendSms({to:recipient,message:row.message,event:row.event_key});
   else if(row.channel==="whatsapp")result=await require("../services/whatsappService").sendMessage({to:recipient,message:row.message,event:row.event_key});
   else if(row.channel==="email"){
-    const match=String(row.message||"").match(/^Subject: ([^\\n]*)\\n([\\s\\S]*)$/);
+    const match=String(row.message||"").match(/^Subject: ([^\n]*)\n([\s\S]*)$/);
     if(!match)throw new Error("Email subject/body could not be recovered from this history entry.");
     result=await require("../services/emailService").sendEmail({to:recipient,subject:match[1],text:match[2],event:row.event_key});
   }else return res.status(400).json({success:false,message:"Unsupported message channel."});
