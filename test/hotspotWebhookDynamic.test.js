@@ -67,6 +67,20 @@ test("Admin creates a direct subscriber with chosen credentials and defers Route
 });
 
 
+test("direct credential login binds the first device and preserves supplied account identity",async()=>{
+ const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldGetUser=mikrotik.getHotspotUser,oldRecharge=mikrotik.rechargeHotspotUser;
+ const username="subscriber.test",password="test-password-value",mac="AA:BB:CC:DD:EE:FF";
+ const pending={id:51,username,password,profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"pending_claim",phone:"Unlinked",server:"all",time_limit:"1h",data_limit:null,mac_address:null,comment:"FAZ|DIRECT_SUBSCRIBER|PROFILE=1-Hour|VALIDITY=1h",first_login_at:null,expires_at:null,subscriber_type:"direct_subscriber",customer_name:"Test"};
+ let routerPayload=null,finalSql="";
+ try{
+  db.query=async(sql,params=[])=>{if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'")){finalSql=sql;return {rows:[{id:51,username,profile:"1-Hour",phone:"Unlinked",first_login_at:params[2],expires_at:new Date(params[2].getTime()+3600000)}]};}throw new Error("Unexpected direct-login query: "+sql);};
+  db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};if(sql.startsWith("SELECT * FROM hotspot_vouchers WHERE LOWER(username)"))return {rows:[pending]};if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address="))return {rows:[{...pending,mac_address:params[0],first_login_at:params[1],expires_at:params[2],comment:params[3]}]};throw new Error("Unexpected direct-login transaction query: "+sql);}});
+  mikrotik.getHotspotProfiles=async()=>oneHourProfile();mikrotik.getHotspotUser=async()=>null;mikrotik.rechargeHotspotUser=async payload=>{routerPayload=payload;};
+  const res=responseRecorder();await hotspotAuthController.directLogin({ip:"direct-login-test",body:{username,password,customer_name:"Test Customer",mac}},res);
+  assert.equal(res.statusCode,200);assert.equal(res.body.success,true);assert.equal(res.body.username,username);assert.equal(res.body.password,password);assert.equal(res.body.mac,mac);
+  assert.equal(routerPayload.username,username);assert.equal(routerPayload.password,password);assert.equal(routerPayload.macAddress,mac);assert.match(finalSql,/status='active'/);assert.ok(new Date(res.body.expires_at).getTime()>Date.now());
+ }finally{db.query=oldQuery;db.withTransaction=oldTransaction;mikrotik.getHotspotProfiles=oldProfiles;mikrotik.getHotspotUser=oldGetUser;mikrotik.rechargeHotspotUser=oldRecharge;}
+});
 test("verifyTrx validates payment and stages a pending phone package without RouterOS writes",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles;
   const oldRecharge=mikrotik.rechargeHotspotUser,oldCreate=mikrotik.createHotspotUser,oldUpdate=mikrotik.updateHotspotProfile;
