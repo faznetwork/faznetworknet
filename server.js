@@ -93,6 +93,88 @@ app.post("/logout",(req,res)=>{
 app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"];const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);const values=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:values.mfs_bkash_number||"",nagad:values.mfs_nagad_number||"",rocket:values.mfs_rocket_number||"",upay:values.mfs_upay_number||""}});}catch(error){console.warn("[Hotspot Portal] Payment account settings unavailable:",error.message);return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:"",nagad:"",rocket:"",upay:""}});}});
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
+// Canonical server-side route contract for the shared admin shell.
+// This is intentionally a view-context map, not a second client-side router.
+// Keep route keys stable so the EJS shell can progressively render the requested section.
+const ADMIN_ROUTE_VIEW_KEYS = Object.freeze({
+  "/admin": "dashboard",
+  "/admin/dashboard": "dashboard",
+  "/admin/customers/add": "customers-add",
+  "/admin/customers/all": "customers-all",
+  "/admin/customers/online": "customers-online",
+  "/admin/customers/offline": "customers-offline",
+  "/admin/customers/active": "customers-active",
+  "/admin/customers/expired": "customers-expired",
+  "/admin/customers/expiring-today-yesterday": "customers-expiring-today-yesterday",
+  "/admin/customers/expiring-next-7-days": "customers-expiring-next-7-days",
+  "/admin/customers/new": "customers-new",
+  "/admin/customers/due": "customers-due",
+  "/admin/payments/pending": "payments-pending",
+  "/admin/payments/all": "payments-all",
+  "/admin/payments/requests": "payments-requests",
+  "/admin/payments/bkash": "payments-bkash",
+  "/admin/payments/nagad": "payments-nagad",
+  "/admin/payments/rocket": "payments-rocket",
+  "/admin/hotspot/dashboard": "hotspot-dashboard",
+  "/admin/hotspot/add-user": "hotspot-add-user",
+  "/admin/hotspot/users/all": "hotspot-users-all",
+  "/admin/hotspot/users/active": "hotspot-users-active",
+  "/admin/hotspot/users/offline": "hotspot-users-offline",
+  "/admin/hotspot/profiles": "hotspot-profiles",
+  "/admin/hotspot/vouchers/generate": "hotspot-vouchers-generate",
+  "/admin/hotspot/vouchers/manage": "hotspot-vouchers-manage",
+  "/admin/hotspot/vouchers/cleanup": "hotspot-vouchers-cleanup",
+  "/admin/hotspot/sales": "hotspot-sales",
+  "/admin/network/mikrotik-devices": "network-mikrotik-devices",
+  "/admin/packages": "packages",
+  "/admin/network/ip-pools": "network-ip-pools",
+  "/admin/network/olt": "network-olt",
+  "/admin/network/olt/onts": "network-olt-onts",
+  "/admin/network/olt/topology": "network-olt-topology",
+  "/admin/staff": "staff",
+  "/admin/audit-logs": "audit-logs",
+  "/admin/network/maps": "network-maps",
+  "/admin/support/tickets": "support-tickets",
+  "/admin/support/software": "support-software",
+  "/admin/support/website": "support-website",
+  "/admin/settings": "settings-general",
+  "/admin/settings/general": "settings-general",
+  "/admin/settings/brand-identity": "settings-brand-identity",
+  "/admin/settings/billing-expiry": "settings-billing-expiry",
+  "/admin/settings/payment-webhooks": "settings-payment-webhooks",
+  "/admin/settings/sms-alerts": "settings-sms-alerts",
+  "/admin/settings/hotspot-portal": "settings-hotspot-portal",
+  "/admin/settings/webhooks": "settings-payment-webhooks",
+  "/admin/monitor/usage": "monitor-usage",
+  "/admin/monitor/online": "monitor-online",
+  "/admin/network/diagram": "network-diagram",
+  "/admin/vpn": "vpn",
+  "/admin/vpn/port-forwarding": "vpn-port-forwarding",
+  "/admin/account/dashboard": "account-dashboard",
+  "/admin/account/manage": "account-manage",
+  "/admin/hr/departments": "hr-departments",
+  "/admin/hr/employees": "hr-employees",
+  "/admin/hr/employees/added": "hr-employees-added",
+  "/admin/resellers/sub-staff": "resellers-sub-staff"
+});
+function resolveAdminViewKey(pathname) {
+  const normalized = String(pathname || "/admin").replace(/\/+$/, "") || "/admin";
+  if (Object.prototype.hasOwnProperty.call(ADMIN_ROUTE_VIEW_KEYS, normalized)) {
+    return ADMIN_ROUTE_VIEW_KEYS[normalized];
+  }
+  if (/^\/admin\/customers\/[^/]+$/.test(normalized)) {
+    return "customer-profile";
+  }
+  return null;
+}
+// Attach route metadata before route handlers render any admin EJS page.
+app.use((req,res,next) => {
+  if (String(req.path || "").startsWith("/admin")) {
+    res.locals.adminRoutePath = String(req.path || "/admin");
+    res.locals.adminViewKey = resolveAdminViewKey(req.path);
+  }
+  next();
+});
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 
 app.get("/admin/reports/collection",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));

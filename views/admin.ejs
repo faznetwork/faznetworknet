@@ -1797,7 +1797,7 @@
 <style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
 </head>
-<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
+<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>" data-admin-route-path="<%= typeof adminRoutePath !== 'undefined' ? adminRoutePath : '/admin' %>" data-admin-view-key="<%= typeof adminViewKey !== 'undefined' && adminViewKey ? adminViewKey : 'dashboard' %>">
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -8426,7 +8426,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             };
             const moduleTitles = {
             };
-            const state = { depth: 0, restoring: false, current: null };
+            const state = { depth: 0, restoring: false, current: null, booting: true, pendingPopState: false };
 
             function has(list, value) {
                 return list.indexOf(String(value || '')) !== -1;
@@ -8547,6 +8547,22 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/resellers/sub-staff': { view: 'sub-staff' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
+            }
+            // Prefer the server-selected view key for first paint. The URL fallback retains
+            // route-specific filters and supports routes not yet represented in this map.
+            function routeFromServerViewKey(viewKey, pathname) {
+                const serverRoutes = {
+                    dashboard: { view: 'dashboard' },
+                    'customers-all': { view: 'customers', filter: 'all', title: 'all_customer' },
+                    'payments-pending': { view: 'payments', filter: 'pending', title: 'pending_invoice' },
+                    'hotspot-users-all': { view: 'hotspot', section: 'users', filter: 'all', title: 'all_user' },
+                    'settings-brand-identity': { view: 'settings', section: 'brand' }
+                };
+                if (Object.prototype.hasOwnProperty.call(serverRoutes, String(viewKey || ''))) {
+                    return cleanRoute(serverRoutes[String(viewKey)]);
+                }
+                const normalizedPath = String(pathname || '/admin').replace(/\/+$/, '') || '/admin';
+                return routeFromPath(normalizedPath);
             }
             function readRoute() {
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
@@ -8923,10 +8939,17 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             window.__fazRestoreAdminRoute = function() {
                 restoreRoute(readRoute(), true);
             };
-            window.addEventListener('popstate', function() {
+            // Keep the browser event adapter thin: the canonical router owns URL parsing,
+            // history normalization, view dispatch, and section-loader selection.
+            function handleAdminPopState() {
+                if (state.booting) {
+                    state.pendingPopState = true;
+                    return;
+                }
                 restoreRoute(readRoute(), true);
                 closeDrawerAfterNavigation();
-            });
+            }
+            window.addEventListener('popstate', handleAdminPopState);
         })();
 
         function initializeAdminRuntime() {
@@ -8955,7 +8978,25 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 
             // Restore the URL-selected view on first load; dashboard is only the default.
             // The selected loader owns its existing data fetches and polling behavior.
-            try { void safeAdminBootStep('restore URL-selected view', () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard')); }
+            try {
+                const serverRoutePath = String(document.body?.dataset?.adminRoutePath || '').trim();
+                const serverViewKey = String(document.body?.dataset?.adminViewKey || '').trim();
+                const initialRoute = routeFromServerViewKey(serverViewKey, serverRoutePath || window.location.pathname);
+                // The server key selects the initial view when a canonical mapping exists;
+                // path parsing remains the compatibility fallback for the rest of the admin routes.
+                const initialViewTask = serverViewKey && initialRoute && initialRoute.view !== 'not-found'
+                    ? () => restoreRoute(initialRoute, true)
+                    : () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard');
+                void safeAdminBootStep('restore initial admin view', initialViewTask).finally(() => {
+                    state.booting = false;
+                    if (state.pendingPopState) {
+                        state.pendingPopState = false;
+                        // Replay a history event that arrived during boot only after the
+                        // server-selected initial view has finished its first dispatch.
+                        handleAdminPopState();
+                    }
+                });
+            }
             catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
 
             try {
