@@ -1,7 +1,5 @@
 name: Self-Care Tests
-
 on:
-  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
@@ -15,6 +13,4 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - name: Admin popstate adapter regression test
-        run: node --test test/admin-popstate-adapter.test.js
       - run: npm test

@@ -1,7 +1,6 @@
 name: Security Audit and Regression Tests
 
 on:
-  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
@@ -49,7 +48,5 @@ jobs:
           node --check services/hotspotProfileConfig.js
           node --check jobs/hotspotExpirationCleanup.js
           npm run build
-      - name: Admin popstate adapter regression test
-        run: node --test test/admin-popstate-adapter.test.js
       - name: Regression tests
         run: npm test
