@@ -8548,6 +8548,22 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
+            // Prefer the server-selected view key for first paint. The URL fallback retains
+            // route-specific filters and supports routes not yet represented in this map.
+            function routeFromServerViewKey(viewKey, pathname) {
+                const serverRoutes = {
+                    dashboard: { view: 'dashboard' },
+                    'customers-all': { view: 'customers', filter: 'all', title: 'all_customer' },
+                    'payments-pending': { view: 'payments', filter: 'pending', title: 'pending_invoice' },
+                    'hotspot-users-all': { view: 'hotspot', section: 'users', filter: 'all', title: 'all_user' },
+                    'settings-brand-identity': { view: 'settings', section: 'brand' }
+                };
+                if (Object.prototype.hasOwnProperty.call(serverRoutes, String(viewKey || ''))) {
+                    return cleanRoute(serverRoutes[String(viewKey)]);
+                }
+                const normalizedPath = String(pathname || '/admin').replace(/\\/+$/, '') || '/admin';
+                return routeFromPath(normalizedPath);
+            }
             function readRoute() {
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
                 const pathRoute = routeFromPath(path);
@@ -8965,9 +8981,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             try {
                 const serverRoutePath = String(document.body?.dataset?.adminRoutePath || '').trim();
                 const serverViewKey = String(document.body?.dataset?.adminViewKey || '').trim();
-                const initialRoute = routeFromPath(serverRoutePath || window.location.pathname);
-                // The server-provided key is the initial-render contract. The path route
-                // still carries filter/module details required by existing section loaders.
+                const initialRoute = routeFromServerViewKey(serverViewKey, serverRoutePath || window.location.pathname);
+                // The server key selects the initial view when a canonical mapping exists;
+                // path parsing remains the compatibility fallback for the rest of the admin routes.
                 const initialViewTask = serverViewKey && initialRoute && initialRoute.view !== 'not-found'
                     ? () => restoreRoute(initialRoute, true)
                     : () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard');
