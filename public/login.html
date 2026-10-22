@@ -505,7 +505,7 @@ button{touch-action:manipulation}
             </div>
             <div id="selected-package" class="selected-package">চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।</div>
 
-            <div id="official-payment-methods-label" class="official-payment-methods-label">অফিসিয়াল পেমেন্ট মাধ্যম</div>
+            <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; text-align: left;">অফিসিয়াল পেমেন্ট মাধ্যম:</div>
             <div class="mfs-grid" id="mfs-buttons-grid">
                 <!-- Dynamic Official MFS Buttons Loaded Here -->
             </div>
@@ -1116,48 +1116,4 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
  .mfs-btn{font-size:11px!important;gap:6px!important}
  .mfs-logo-icon{flex-basis:54px!important;width:54px!important;height:27px!important}
 }
-</style>
-
-<style id="faz-adaptive-mobile-layout">
-/* Responsive layout: scale with viewport instead of fixed, oversized card dimensions. */
-html{width:100%;min-width:0;overflow-x:hidden}
-body{width:100%;min-width:0;min-height:100svh;padding:clamp(6px,2.5vw,18px)!important;align-items:flex-start!important}
-.rgb-wrapper{width:min(100%,440px)!important;max-width:440px!important;margin:auto!important}
-.main-card{width:100%;min-width:0;padding:clamp(12px,3.5vw,22px)!important}
-.logo-box{min-height:0!important}
-.logo-img{display:block;max-width:min(30vw,100px)!important;max-height:clamp(32px,10vw,64px)!important;width:auto!important;height:auto!important;object-fit:contain}
-.official-payment-methods-label{
- display:flex!important;align-items:center!important;gap:8px!important;
- width:100%!important;min-height:42px!important;box-sizing:border-box!important;
- margin:8px 0 10px!important;padding:10px 12px!important;
- border:1px solid #8fc9a8!important;border-left:4px solid #08784f!important;
- border-radius:9px!important;background:#e5f5eb!important;color:#124b36!important;
- font-size:clamp(13px,3.5vw,15px)!important;font-weight:800!important;
- line-height:1.4!important;text-align:left!important;letter-spacing:0!important;
- opacity:1!important;visibility:visible!important;text-shadow:none!important;
-}
-.official-payment-methods-label:before{content:"✓";display:inline-grid;place-items:center;flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:#08784f;color:white;font-size:12px}
-.packages-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:clamp(7px,2vw,10px)!important;margin:10px 0 12px!important}
-.packages-grid .pkg-card{min-width:0;min-height:clamp(76px,20vw,96px)!important;padding:clamp(9px,2.6vw,13px)!important;border-radius:11px!important;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-wrap:anywhere}
-.packages-grid .pkg-time{font-size:clamp(12px,3.4vw,14px)!important;line-height:1.35!important}
-.packages-grid .pkg-price{font-size:clamp(17px,4.8vw,21px)!important;line-height:1.2!important;margin-top:5px!important}
-.mfs-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
-.mfs-btn{min-width:0!important;min-height:54px!important;padding:8px!important;gap:8px!important;font-size:clamp(11px,3vw,13px)!important}
-.mfs-logo-icon{flex:0 1 clamp(42px,14vw,68px)!important;width:clamp(42px,14vw,68px)!important;height:30px!important;min-width:0!important}
-.tab-btn{min-width:0;font-size:clamp(10px,2.9vw,12px)!important;padding:8px 4px!important}
-.card-footer{gap:8px;flex-wrap:wrap}
-@media(min-width:520px){
- body{align-items:center!important}
- .packages-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
- .packages-grid .pkg-card{min-height:92px!important}
-}
-@media(max-width:340px){
- .main-card{padding:11px 9px!important}
- .packages-grid{gap:6px!important}
- .packages-grid .pkg-card{min-height:72px!important;padding:8px 5px!important}
- .packages-grid .pkg-price{font-size:16px!important}
- .mfs-btn{gap:5px!important;padding:7px 5px!important}
- .mfs-logo-icon{flex-basis:38px!important;width:38px!important;height:26px!important}
-}
-@media(prefers-reduced-motion:reduce){.rgb-wrapper{animation:none!important}*{scroll-behavior:auto!important;transition:none!important}}
 </style>
