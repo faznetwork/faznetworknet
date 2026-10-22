@@ -1142,6 +1142,78 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(
 @media(max-width:360px){#mfs-modal .mfs-device-details{padding:10px}#mfs-modal .mfs-device-detail-row{gap:8px;font-size:11px}#mfs-modal .mfs-device-detail-row strong{font-size:11px}}
 </style>
 
+<style id="faz-full-brand-color-payment-popup">
+/* Provider brand fills the entire payment popup; actions use a contrasting shade. */
+#mfs-modal .modal-card{
+  background:var(--mfs-brand)!important;
+  color:#fff!important;
+  border:1px solid color-mix(in srgb,var(--mfs-brand) 72%,#fff)!important;
+  border-top:4px solid color-mix(in srgb,var(--mfs-brand) 72%,#fff)!important;
+  box-shadow:0 22px 70px rgba(0,0,0,.32)!important;
+}
+#mfs-modal .mfs-modal-brand-head{gap:6px;margin-bottom:6px}
+#mfs-modal #modal-mfs-title{display:none!important}
+#mfs-modal .mfs-modal-subtitle{color:#fff!important;opacity:.96}
+#mfs-modal .mfs-receive-card{
+  background:color-mix(in srgb,var(--mfs-brand) 78%,#fff)!important;
+  border:1px dashed rgba(255,255,255,.82)!important;
+}
+#mfs-modal .mfs-receive-label{color:#fff!important}
+#mfs-modal #modal-wallet-number{color:#fff!important}
+#mfs-modal #copy-wallet-number{
+  background:color-mix(in srgb,var(--mfs-brand) 62%,#fff)!important;
+  color:#fff!important;border:1px solid rgba(255,255,255,.85)!important;
+}
+#mfs-modal .mfs-device-details{
+  background:color-mix(in srgb,var(--mfs-brand) 82%,#fff)!important;
+  border:1px solid rgba(255,255,255,.52)!important;
+}
+#mfs-modal .mfs-device-details-title,
+#mfs-modal .mfs-device-detail-row span,
+#mfs-modal .mfs-device-detail-row strong{color:#fff!important}
+#mfs-modal .mfs-device-detail-row{border-top-color:rgba(255,255,255,.24)!important}
+#mfs-modal .instructions{color:#fff!important}
+#mfs-modal .instruction-step{
+  grid-template-columns:22px minmax(0,1fr)!important;
+  gap:8px!important;padding:9px 10px!important;
+  color:#fff!important;
+  background:color-mix(in srgb,var(--mfs-brand) 82%,#fff)!important;
+  border:1px solid rgba(255,255,255,.55)!important;
+  border-radius:9px!important;
+}
+#mfs-modal .instruction-step-number{
+  width:20px!important;height:20px!important;
+  border:1px solid rgba(255,255,255,.8)!important;
+  border-radius:6px!important;
+  background:rgba(255,255,255,.18)!important;color:#fff!important;
+  font-size:11px!important;
+}
+#mfs-modal .instruction-step-text{padding-top:1px!important}
+#mfs-modal .timer-box{
+  background:color-mix(in srgb,var(--mfs-brand) 64%,#fff)!important;
+  color:#fff!important;border:1px solid rgba(255,255,255,.82)!important;
+}
+#mfs-modal .input-group label{color:#fff!important}
+#mfs-modal .input-box input{
+  background:#fff!important;color:#24352d!important;border:1px solid rgba(255,255,255,.85)!important;
+}
+#mfs-modal #btn-verify-payment{
+  background:color-mix(in srgb,var(--mfs-brand) 58%,#fff)!important;
+  color:#fff!important;border:1px solid rgba(255,255,255,.9)!important;
+  box-shadow:0 5px 14px rgba(0,0,0,.16)!important;
+}
+#mfs-modal .mfs-cancel{
+  margin-top:8px!important;border:1px solid rgba(255,255,255,.65)!important;
+  border-radius:9px!important;background:rgba(255,255,255,.12)!important;
+  color:#fff!important;
+}
+#mfs-modal .mfs-cancel:hover{background:rgba(255,255,255,.2)!important}
+@media(max-width:360px){
+  #mfs-modal .modal-card{padding:14px!important}
+  #mfs-modal .instruction-step{grid-template-columns:22px minmax(0,1fr)!important;padding:8px!important}
+}
+</style>
+
 </body>
 </html>
 
