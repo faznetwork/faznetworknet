@@ -8426,7 +8426,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             };
             const moduleTitles = {
             };
-            const state = { depth: 0, restoring: false, current: null };
+            const state = { depth: 0, restoring: false, current: null, booting: true, pendingPopState: false };
 
             function has(list, value) {
                 return list.indexOf(String(value || '')) !== -1;
@@ -8923,10 +8923,17 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             window.__fazRestoreAdminRoute = function() {
                 restoreRoute(readRoute(), true);
             };
-            window.addEventListener('popstate', function() {
+            // Keep the browser event adapter thin: the canonical router owns URL parsing,
+            // history normalization, view dispatch, and section-loader selection.
+            function handleAdminPopState() {
+                if (state.booting) {
+                    state.pendingPopState = true;
+                    return;
+                }
                 restoreRoute(readRoute(), true);
                 closeDrawerAfterNavigation();
-            });
+            }
+            window.addEventListener('popstate', handleAdminPopState);
         })();
 
         function initializeAdminRuntime() {
@@ -8961,11 +8968,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const initialRoute = routeFromPath(serverRoutePath || window.location.pathname);
                 // The server-provided key is the initial-render contract. The path route
                 // still carries filter/module details required by existing section loaders.
-                if (serverViewKey && initialRoute && initialRoute.view !== 'not-found') {
-                    void safeAdminBootStep('restore server-selected admin view', () => restoreRoute(initialRoute, true));
-                } else {
-                    void safeAdminBootStep('restore URL-selected view', () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard'));
-                }
+                const initialViewTask = serverViewKey && initialRoute && initialRoute.view !== 'not-found'
+                    ? () => restoreRoute(initialRoute, true)
+                    : () => window.__fazRestoreAdminRoute ? window.__fazRestoreAdminRoute() : switchView('dashboard');
+                void safeAdminBootStep('restore initial admin view', initialViewTask).finally(() => {
+                    state.booting = false;
+                    if (state.pendingPopState) {
+                        state.pendingPopState = false;
+                        // Replay a history event that arrived during boot only after the
+                        // server-selected initial view has finished its first dispatch.
+                        handleAdminPopState();
+                    }
+                });
             }
             catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
 
