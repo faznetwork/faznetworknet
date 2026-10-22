@@ -534,6 +534,7 @@
     '/admin/settings/payment-webhooks': 'payments',
     '/admin/settings/sms-alerts': 'sms',
     '/admin/settings/hotspot-portal': 'hotspot-portal',
+    '/admin/settings/webhooks': 'webhooks'
   };
   const pathsByTarget = {
     brand: '/admin/settings/brand-identity',
@@ -541,6 +542,7 @@
     payments: '/admin/settings/payment-webhooks',
     sms: '/admin/settings/sms-alerts',
     'hotspot-portal': '/admin/settings/hotspot-portal',
+    webhooks: '/admin/settings/webhooks'
   };
   const validTargets = Object.keys(pathsByTarget);
 
