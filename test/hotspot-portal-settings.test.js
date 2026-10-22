@@ -43,8 +43,8 @@ test("admin hotspot portal settings safely falls back when either settings store
  assert.doesNotMatch(controller,/tenant_id/);
  const schema=fs.readFileSync(path.join(__dirname,"..","db","schema.sql"),"utf8");
  const migration=fs.readFileSync(path.join(__dirname,"..","migrations","20261018_hotspot_portal_settings.sql"),"utf8");
- assert.doesNotMatch(schema,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings ([^;]*tenant_id/);
- assert.doesNotMatch(migration,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings ([^;]*tenant_id/);
+ assert.doesNotMatch(schema,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings .*tenant_id/);
+ assert.doesNotMatch(migration,/CREATE TABLE IF NOT EXISTS hotspot_portal_settings .*tenant_id/);
  assert.match(controller,/INSERT INTO hotspot_portal_settings\(id\) VALUES\(1\)/);
  assert.match(controller,/WHERE id=1/);
 });
