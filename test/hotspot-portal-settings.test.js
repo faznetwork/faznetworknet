@@ -58,3 +58,17 @@ test("dashboard live traffic retries interface discovery after transient router/
  assert.match(admin,/textContent = 'LIVE'/);
  assert.match(admin,/nocTrafficHistory\.push\(\{ rx: downloadMbps, tx: uploadMbps \}\)/);
 });
+
+
+test("captive portal uses the premium responsive green-and-white UI without changing login contracts",()=>{
+ assert.match(login,/<style id="faz-premium-login-ui">/);
+ assert.match(login,/--brand-primary:#0a3d2e/);
+ assert.match(login,/\.rgb-wrapper\{/);
+ assert.match(login,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+ assert.match(login,/@media\(max-width:380px\)/);
+ assert.match(login,/prefers-reduced-motion:reduce/);
+ assert.match(login,/portal-trust-line/);
+ assert.match(login,/api\/hotspot-auth\/claim-voucher/);
+ assert.match(login,/api\/hotspot-auth\/direct-login/);
+ assert.match(login,/mikrotik-auto-login/);
+});
