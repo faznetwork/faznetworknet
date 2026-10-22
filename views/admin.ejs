@@ -342,6 +342,13 @@
     
         .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:999}
         .sidebar-backdrop.show{display:block}
+        /* Keep the mobile menu control above the drawer so it can always close the sidebar. */
+        .mobile-sidebar-fab{display:none}
+        @media (max-width:767.98px){
+          .mobile-sidebar-fab{display:flex;position:fixed;top:calc(env(safe-area-inset-top, 0px) + 12px);right:12px;z-index:1105;width:44px;height:44px;align-items:center;justify-content:center;border:1px solid #d1fae5;border-radius:14px;background:#0a3d2e;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.22);font-size:21px;line-height:1;touch-action:manipulation}
+          .mobile-sidebar-fab:focus-visible{outline:3px solid #10b981;outline-offset:3px}
+          #mobileSidebarToggle{display:none!important}
+        }
         /* Mobile drawer/backdrop hardening: navigation must never leave an overlay behind. */
         @media (max-width:768px){
             .sidebar-backdrop{pointer-events:auto}
@@ -2024,6 +2031,7 @@
     </div>
 
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarMobile(); return false;" aria-hidden="true"></div>
+    <button id="mobileSidebarFab" class="mobile-sidebar-fab" type="button" aria-label="Open navigation menu" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(); return false;"><i class="bi bi-three-dots"></i></button>
 
     <div class="main-content" id="mainContent">
         <nav id="adminTopBar" class="navbar navbar-expand-lg navbar-light bg-white rounded shadow-sm mb-4 p-2">
@@ -4065,7 +4073,7 @@ window.editHotspotUser=function(username,event){
             }, true);
         }
 
-        function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);if(button)button.setAttribute('aria-expanded',open?'true':'false');}
+        function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),buttons=[document.getElementById('mobileSidebarToggle'),document.getElementById('mobileSidebarFab')];const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);buttons.filter(Boolean).forEach(button=>{button.setAttribute('aria-expanded',open?'true':'false');button.setAttribute('aria-label',open?'Close navigation menu':'Open navigation menu');const icon=button.querySelector('i');if(icon)icon.className=open?'bi bi-x-lg':'bi bi-three-dots';});}
         function closeSidebarMobile(){purgeStuckBackdrops();const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('show');const backdrop=document.getElementById('sidebarBackdrop');if(backdrop)backdrop.classList.remove('show');if(document.body)document.body.classList.remove('sidebar-open');syncMobileSidebarState();}
         function toggleSidebar(){const sidebar=document.getElementById('sidebar');if(!sidebar||window.innerWidth>=768)return;sidebar.classList.toggle('show');syncMobileSidebarState();}
 
