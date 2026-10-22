@@ -477,8 +477,8 @@
  <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
  <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
  <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
- <input id="member_username" autocomplete="username" aria-label="Member username" placeholder="Username">
- <input id="member_password" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
+ <input id="member_username_legacy" autocomplete="username" aria-label="Member username" placeholder="Username">
+ <input id="member_password_legacy" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
  <button type="button" id="toggle-member-password" onclick="const p=document.getElementById('member_password');p.type=p.type==='password'?'text':'password'">Show password</button>
  <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
  <input id="remember-member" type="checkbox" aria-label="Remember member">
