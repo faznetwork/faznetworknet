@@ -5129,19 +5129,25 @@ async function deletePlan(id,name){
           try{const response=await fetch('/api/settings/sms-history?'+smsHistoryQueryString(smsHistoryFilters()),{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to load SMS history.');renderSmsHistory(data);if(result){result.className='small mt-2 text-muted';result.textContent='History refreshed. Provider acceptance is not handset delivery confirmation.';}}
           catch(error){if(body)body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">'+smsHistoryEscape(error.message||'Unable to load SMS history.')+'</td></tr>';if(result){result.className='small mt-2 text-danger';result.textContent=error.message||'Unable to load SMS history.';}}
         }
-        function exportSmsHistoryCsv(){
-          if(!smsHistoryRowsCache.length){const result=document.getElementById('smsHistoryResult');if(result){result.className='small mt-2 text-danger';result.textContent='There are no records on this page to export.';}return;}
-          const columns=[['Time','created_at'],['Recipient','recipient_phone'],['Message','message'],['Event','event_key'],['Gateway','gateway_mode'],['HTTP Status','http_status'],['Status','status'],['Error','error']];
-          const csv=[columns.map(([label])=>label),...smsHistoryRowsCache.map(row=>columns.map(([,key])=>row[key]??''))].map(line=>line.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-          const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download='faz-network-sms-history-page-'+(smsHistoryPage+1)+'.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+        async function exportSmsHistoryCsv(){
+          const result=document.getElementById('smsHistoryResult'),filters=smsHistoryFilters(),allRows=[];
+          if(result){result.className='small mt-2 text-muted';result.textContent='Preparing CSV export…';}
+          try{
+            const exportLimit=100,maxRows=10000;
+            for(let offset=0;offset<maxRows;offset+=exportLimit){
+              const pageFilters={...filters,limit:exportLimit,offset};
+              const response=await fetch('/api/settings/sms-history?'+smsHistoryQueryString(pageFilters),{credentials:'same-origin',cache:'no-store'}),data=await response.json();
+              if(!response.ok||!data.success)throw new Error(data.message||'Unable to export SMS history.');
+              allRows.push(...(data.logs||[]));
+              if(allRows.length>=Number(data.total||0)||allRows.length>=maxRows)break;
+            }
+            if(!allRows.length)throw new Error('No SMS records match the current filters.');
+            const columns=[['Time','created_at'],['Recipient','recipient_phone'],['Message','message'],['Event','event_key'],['Gateway','gateway_mode'],['HTTP Status','http_status'],['Status','status'],['Error','error']];
+            const csv=[columns.map(([label])=>label),...allRows.map(row=>columns.map(([,key])=>row[key]??''))].map(line=>line.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+            const url=URL.createObjectURL(new Blob(['\\uFEFF'+csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download='faz-network-sms-history.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+            if(result){result.className='small mt-2 text-success';result.textContent='Exported '+allRows.length+' filtered SMS records'+(allRows.length>=maxRows?' (export safety limit: 10,000 rows).':'.');}
+          }catch(error){if(result){result.className='small mt-2 text-danger';result.textContent=error.message||'Unable to export SMS history.';}}
         }
-        document.getElementById('smsHistoryRefreshBtn')?.addEventListener('click',()=>loadSmsHistory());
-        document.getElementById('smsHistoryExportBtn')?.addEventListener('click',exportSmsHistoryCsv);
-        document.getElementById('smsHistoryPrev')?.addEventListener('click',()=>{if(smsHistoryPage>0){smsHistoryPage--;loadSmsHistory();}});
-        document.getElementById('smsHistoryNext')?.addEventListener('click',()=>{if((smsHistoryPage+1)*smsHistoryPageSize<smsHistoryTotalRows){smsHistoryPage++;loadSmsHistory();}});
-        ['smsHistoryStatus','smsHistoryEvent','smsHistoryFrom','smsHistoryTo'].forEach(id=>document.getElementById(id)?.addEventListener('change',()=>{smsHistoryPage=0;loadSmsHistory();}));
-        document.getElementById('smsHistorySearch')?.addEventListener('input',()=>{if(smsHistoryDebounce)clearTimeout(smsHistoryDebounce);smsHistoryDebounce=setTimeout(()=>{smsHistoryPage=0;loadSmsHistory();},300);});
-        document.getElementById('smsHistoryRows')?.addEventListener('click',async event=>{const button=event.target.closest('.sms-history-copy');if(!button)return;try{await navigator.clipboard.writeText(button.dataset.phone||'');const result=document.getElementById('smsHistoryResult');if(result){result.className='small mt-2 text-success';result.textContent='Recipient phone copied.';}}catch(_){const result=document.getElementById('smsHistoryResult');if(result){result.className='small mt-2 text-danger';result.textContent='Copy unavailable. Select the phone number manually.';}}});
         function renderBroadcastProgress(data){
           const job=data.broadcast||{},card=document.getElementById('broadcastProgressCard'),bar=document.getElementById('broadcastProgressBar'),pill=document.getElementById('broadcastStatusPill'),summary=document.getElementById('broadcastProgressSummary'),failed=document.getElementById('broadcastProgressFailures'),log=document.getElementById('broadcastDeliveryLog');
           if(card)card.style.display='block';

@@ -214,5 +214,5 @@ test("SMS history instrumentation is shared by automatic notifications and live 
  const source=require("node:fs").readFileSync(require.resolve("../services/smsService"),"utf8");
  assert.match(source,/async function recordSmsDelivery/);
  assert.match(source,/INSERT INTO sms_delivery_logs/);
- assert.match(source,/finally\{\s*await recordSmsDelivery/);
+ assert.match(source,/finally\{[\s\S]*await recordSmsDelivery/);
 });

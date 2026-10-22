@@ -132,11 +132,11 @@ async function recordSmsDelivery({to,phone,message,event="manual",status,error,m
 }
 async function sendSms(args={}){
  const input=args||{};
- const settings=input.settings||await settingsService.getAllSettings().catch(()=>({}));
- const mode=String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled");
+ let settings=input.settings||{};
  const recipient=safeText(input.phone||input.to,40),text=renderTemplate(input.message,input.variables||{});
  let status="failed",error=null,result=null;
  try{
+  if(!input.settings)settings=await settingsService.getAllSettings();
   result=await sendSmsCore({...input,settings});
   status=result?.skipped?"skipped":"sent";
   return result;
@@ -146,7 +146,7 @@ async function sendSms(args={}){
  }finally{
   const provider=result?.providerResponse||result?.provider_response||{};
   const httpStatus=Number(provider.httpStatus||provider.statusCode||0);
-  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode,method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
+  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
  }
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
