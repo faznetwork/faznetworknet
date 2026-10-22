@@ -87,7 +87,7 @@ app.get(/^\/admin\/account\/(dashboard|manage)\/?$/,requireRole(["super_admin","
 app.get(/^\/admin\/vpn(?:\/port-forwarding)?\/?$/,requireRole(["super_admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 const renderAdminSettingsPage=(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 app.get("/admin/settings",requireRole(["super_admin"]),(req,res)=>res.redirect(302,"/admin/settings/general"));
-app.get(/^\/admin\/settings\/(general|brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal)\/?$/,requireRole(["super_admin"]),renderAdminSettingsPage);
+app.get(/^\/admin\/settings\/(general|brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal|webhooks)\/?$/,requireRole(["super_admin"]),renderAdminSettingsPage);
 app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   const adminPath=String(req.path||"").replace(/\/+$/,"")||"/admin";
   const customerRoute=adminPath.match(/^\/admin\/customers\/([^/]+)$/);

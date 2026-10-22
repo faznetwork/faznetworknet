@@ -11,6 +11,8 @@ function validateUrl(value){
   if(!["http:","https:"].includes(parsed.protocol))throw new Error("Webhook URL must use HTTP or HTTPS.");
   return parsed.toString().replace(/\/$/,"");
 }
+async function readSettings(){const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_url','personal_payment_webhook_secret','personal_payment_webhook_enabled')");const map=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return {webhookUrl:String(map.personal_payment_webhook_url||""),webhookEnabled:parseBool(map.personal_payment_webhook_enabled),secretConfigured:Boolean(String(map.personal_payment_webhook_secret||""))};}
+async function hotspotWebhookSettings(req,res){try{return res.json({success:true,settings:await readSettings()});}catch(error){return errorResponse(res,error,503);}}
 async function hotspotProfiles(req,res){try{
  const [profilesResult,metadataResult]=await Promise.all([
   require("../services/mikrotikService").getHotspotProfiles(),
@@ -44,6 +46,26 @@ async function saveHotspotEngine(req,res){
 }
 
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
+async function saveHotspotWebhookSettings(req,res){
+ try{
+  const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();
+  if(webhookEnabled&&!webhookUrl)throw new Error("Webhook URL is required when automation is enabled.");
+  const saved=await db.withTransaction(async tx=>{
+   const current=await tx.query("SELECT value FROM app_settings WHERE key=$1 LIMIT 1",["personal_payment_webhook_secret"]);
+   const currentSecret=String(current.rows[0]?.value||"");
+   if(webhookEnabled&&!newSecret&&!currentSecret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");
+   const secret=newSecret||currentSecret;
+   for(const [key,value] of [["personal_payment_webhook_url",webhookUrl],["personal_payment_webhook_enabled",webhookEnabled?"true":"false"],["personal_payment_webhook_secret",secret]]){
+    await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,value]);
+   }
+   const result=await tx.query("SELECT key,value FROM app_settings WHERE key = ANY($1::varchar[])",[["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret"]]);
+   return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
+  });
+  const settings={webhookUrl:String(saved.personal_payment_webhook_url||""),webhookEnabled:parseBool(saved.personal_payment_webhook_enabled),secretConfigured:Boolean(String(saved.personal_payment_webhook_secret||""))};
+  return res.set("Cache-Control","no-store").json({success:true,message:"Payment webhook settings saved to PostgreSQL.",data:settings,settings});
+ }catch(error){return errorResponse(res,error,400);}
+}
+
 const mikrotikService=require("../services/mikrotikService");
 const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"];
 const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
@@ -51,10 +73,12 @@ async function upsertSetting(key,value){await db.query("INSERT INTO app_settings
 async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
 async function generalSettings(req,res){
  try{
-  const keys=[...ROUTER_KEYS];
+  const keys=[...ROUTER_KEYS,"personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(MFS_KEYS)];
   const s=await getSettingsMap(keys);
   return res.set("Cache-Control","no-store").json({success:true,settings:{
    router:{host:s.mikrotik_host||process.env.ROUTER_HOST||"",port:Number(s.mikrotik_port||process.env.ROUTER_PORT||8728),user:s.mikrotik_user||process.env.ROUTER_USER||"",passwordConfigured:Boolean(s.mikrotik_password||process.env.ROUTER_PASS),passwordSource:s.mikrotik_password?"database":process.env.ROUTER_PASS?"environment":"unset"},
+   webhook:{url:s.personal_payment_webhook_url||"/api/webhooks/macrodroid-sms",enabled:parseBool(s.personal_payment_webhook_enabled),secretConfigured:Boolean(s.personal_payment_webhook_secret)},
+   mfs:Object.fromEntries(Object.entries(MFS_KEYS).map(([name,key])=>[name,String(s[key]||"")]))
   }});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -95,11 +119,36 @@ async function syncMikrotik(req,res){
  try{return res.json({success:true,message:"MikroTik profile synchronization completed.",sync:await syncMikrotikProfilesInternal()});}
  catch(error){return errorResponse(res,error,502);}
 }
+async function saveGeneralSettings(req,res){
+ try{
+  const body=req.body||{},mfs=body.mfs&&typeof body.mfs==="object"?body.mfs:body,normalized={};
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(mfs[name]??"").trim();if(value&&!/^[+()\d\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  await db.withTransaction(async tx=>{
+   for(const [name,key] of Object.entries(MFS_KEYS)){
+    await tx.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,normalized[name]]);
+   }
+  });
+  try{require("../services/appSettings").invalidate();}catch(_){}
+  return res.set("Cache-Control","no-store").json({success:true,message:"MFS receiving numbers saved to PostgreSQL.",data:normalized,accounts:normalized});
+ }catch(error){return errorResponse(res,error,400);}
+}
+async function saveMfsAccounts(req,res){
+ try{
+  const body=req.body||{},normalized={};
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(body[name]??"").trim();if(value&&!/^[+()\d\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
+  return res.json({success:true,message:"Personal MFS Send Money accounts saved.",accounts:normalized});
+ }catch(error){return errorResponse(res,error,400);}
+}
+
+
 const appSettingsService=require("../services/appSettings");
 const SETTINGS_RULES={
  company_name:{max:160},public_base_url:{url:true,max:500},logo_url:{url:true,max:1000},favicon_url:{url:true,max:1000},
  support_phone:{phone:true,max:40},whatsapp_number:{phone:true,max:24},office_address:{max:1000},btrc_license_number:{max:200},footer_copyright:{max:300},
  billing_cycle_type:{oneOf:["monthly_1st","rolling_30"]},grace_period_days:{numberMin:0,numberMax:7},expiry_action:{oneOf:["quarantine","disable_secret"]},
+ personal_payment_webhook_url:{pathOrUrl:true,max:500},personal_payment_webhook_enabled:{bool:true},personal_payment_webhook_secret:{secret:true,max:300},
+ mfs_bkash_number:{phone:true,max:24},mfs_nagad_number:{phone:true,max:24},mfs_rocket_number:{phone:true,max:24},mfs_upay_number:{phone:true,max:24},
  sms_gateway_mode:{oneOf:["bulk_sms","personal_device","provider_preset","custom_http","disabled"]},sms_provider_mode:{oneOf:["bulk_sms","personal_device","provider_preset","custom_http","disabled"]},
  sms_provider_preset:{oneOf:["greenweb","alpha_sms","elitbuzz","custom"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},
  sms_http_param_mapping:{json:true,max:4000},sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},sms_device_http_method:{oneOf:["GET","POST","POST_JSON","POST_FORM"]},sms_device_param_mapping:{json:true,max:4000},
@@ -207,4 +256,4 @@ async function testWhatsApp(req,res){
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect({freshQr:true})});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,testMikrotik,saveMikrotik,syncMikrotik,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
