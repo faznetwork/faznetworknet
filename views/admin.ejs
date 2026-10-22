@@ -8688,6 +8688,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             }
             function cleanRoute(route) {
                 if (!route || typeof route !== 'object') return { view: 'not-found', path: window.location.pathname };
+                if (route.view === 'dashboard') return { view: 'dashboard' };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
