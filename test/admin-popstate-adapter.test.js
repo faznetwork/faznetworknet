@@ -28,5 +28,10 @@ test('server view metadata and client route map cover the five critical direct U
     assert.ok(serverSource.includes('"' + route + '"'), 'server route-key map missing ' + route);
   }
   assert.ok(adminView.includes("const serverViewKey = String(document.body?.dataset?.adminViewKey || '').trim();"));
+  assert.ok(adminView.includes('function routeFromServerViewKey(viewKey, pathname)'));
+  for (const key of ['dashboard', 'customers-all', 'payments-pending', 'hotspot-users-all', 'settings-brand-identity']) {
+    assert.ok(adminView.includes("'" + key + "':") || adminView.includes(key + ':'), 'server view key not dispatched: ' + key);
+  }
+  assert.ok(adminView.includes('routeFromServerViewKey(serverViewKey, serverRoutePath || window.location.pathname)'));
   assert.ok(adminView.includes('restoreRoute(initialRoute, true)'));
 });
