@@ -4904,7 +4904,6 @@ async function deletePlan(id,name){
         // Use native links for navigation. The route is activated only after switchView is
         // assigned below; invoking it earlier leaves the parent admin view hidden (white page).
         const settingsTargetByPath = {
-          '/admin/settings/general':'brand',
           '/admin/settings/brand-identity':'brand',
           '/admin/settings/billing-expiry':'billing',
           '/admin/settings/payment-webhooks':'payments',
@@ -8733,8 +8732,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/audit-logs': { view: 'audit' },
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support', category: 'all' },
-                    '/admin/settings': { view: 'settings', section: 'brand' },
-                    '/admin/settings/general': { view: 'settings', section: 'brand' },
                     '/admin/settings/brand-identity': { view: 'settings', section: 'brand' },
                     '/admin/settings/billing-expiry': { view: 'settings', section: 'billing' },
                     '/admin/settings/payment-webhooks': { view: 'settings', section: 'payments' },

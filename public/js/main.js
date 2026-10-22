@@ -527,8 +527,6 @@
   window.__generalSettingsSidebarNavigationBound = true;
 
   const targetsByPath = {
-    '/admin/settings': 'brand',
-    '/admin/settings/general': 'brand',
     '/admin/settings/brand-identity': 'brand',
     '/admin/settings/billing-expiry': 'billing',
     '/admin/settings/payment-webhooks': 'payments',
