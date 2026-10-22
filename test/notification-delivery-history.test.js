@@ -45,3 +45,13 @@ test("SMS Alerts UI includes searchable channel, provider and status filters", a
   assert.match(view,/data-notify-tab="history"/);
   assert.match(client,/\/api\/notifications\/delivery-history/);
 });
+
+test("delivery status finalization updates pending attempts to sent and retries failed database updates", async () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const source = fs.readFileSync(path.join(__dirname,"..","services","notificationDeliveryLog.js"),"utf8");
+  assert.match(source,/RETURNING id,status/);
+  assert.match(source,/for \(let attempt = 1; attempt <= 2; attempt \+= 1\)/);
+  assert.match(source,/targetStatus: nextStatus/);
+  assert.match(source,/status='delivered'[\s\S]*WHEN \$2='delivered'/);
+});
