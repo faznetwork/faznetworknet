@@ -312,7 +312,7 @@ async function claimVoucher(req,res){
         const deadline=parseSavedExpiry(conflict.expires_at)||parseCommentExpiry(conflict.comment);
         const liveActive=state==="active"&&(!deadline||deadline.getTime()>Date.now());
         if(liveActive)throw makeError("MAC_ALREADY_BOUND",409,"This device MAC is already bound to another live voucher. Sign in with that voucher or contact support.");
-        await client.query("UPDATE hotspot_vouchers SET mac_address=NULL,status=CASE WHEN LOWER(COALESCE(status,''))='active' THEN 'expired' ELSE status END,expired_at=CASE WHEN LOWER(COALESCE(status,''))='active' THEN COALESCE(expired_at,expires_at,NOW()) ELSE expired_at END,updated_at=NOW() WHERE id=$1",[conflict.id]);
+        await client.query("UPDATE hotspot_vouchers SET status=CASE WHEN LOWER(COALESCE(status,''))='active' THEN 'expired' ELSE status END,expired_at=CASE WHEN LOWER(COALESCE(status,''))='active' THEN COALESCE(expired_at,expires_at,NOW()) ELSE expired_at END,updated_at=NOW() WHERE id=$1",[conflict.id]);
       }
       await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,customer_name=$2::text,updated_at=NOW() WHERE id=$3::bigint",[mac,customerName,row.id]);
       return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim",customerName};
