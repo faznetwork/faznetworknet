@@ -110,3 +110,28 @@ test("accepts Bangla digits and MacroDroid text fields",()=>{
   assert.equal(extractAmount("Received ১০.০০ Tk. Fee ০.০০ Tk. Balance ২০.০০ Tk"),10);
   assert.equal(extractTransactionId("TrxID: ABC1234567"),"ABC1234567");
 });
+
+
+test("accepts configured custom sender shortcodes without guessing channel from SMS text",()=>{
+  const result=parseSms(
+    {sender:"MFS-BKASH-CUSTOM",message:"Received Tk 25.00 from 01712345678. TrxID CUSTOM123456"},
+    {},
+    {},
+    {senderIdentifiers:{bkash:["MFS-BKASH-CUSTOM"],nagad:["NAGAD-CUSTOM"],rocket:["ROCKET-CUSTOM"],upay:["UPAY-CUSTOM"]}}
+  );
+  assert.equal(result.channel,"bkash");
+  assert.equal(result.amount,25);
+  assert.equal(result.trxId,"CUSTOM123456");
+});
+
+test("accepts MacroDroid sms_body and sender_id field names",()=>{
+  const result=parseSms(
+    {sender_id:"16247",sms_body:"You have received Tk 35.00 from 01712345678. TrxID MACRO123456"},
+    {},
+    {},
+    {}
+  );
+  assert.equal(result.channel,"bkash");
+  assert.equal(result.amount,35);
+  assert.equal(result.trxId,"MACRO123456");
+});
