@@ -6,16 +6,22 @@ const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("Add User implements distinct direct-subscriber creation modes",()=>{
+test("Add User creates a direct subscriber with username/password and no activation or MAC inputs",()=>{
  const source=read("controllers/hotspotController.js");
- assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
- assert.match(source,/activation_type/);
+ const ui=read("views/admin.ejs");
+ assert.match(source,/async function createUser\(req,res\)/);
+ assert.match(source,/INVALID_USERNAME/);
+ assert.match(source,/INVALID_PASSWORD/);
+ assert.match(source,/USERNAME_ALREADY_EXISTS/);
+ assert.match(source,/PHONE_ALREADY_EXISTS/);
  assert.match(source,/subscriber_type='direct_subscriber'/);
- assert.match(source,/preassigned\?"active":"pending_claim"/);
- assert.match(source,/preassigned\?mac:null/);
- assert.match(source,/first_login_at/);
- assert.match(source,/db\.withTransaction\(async client=>/);
- assert.match(source,/rechargeHotspotUser\(\{username:mac,password:mac,profile/);
+ assert.match(source,/activation_type\) VALUES/);
+ assert.match(source,/status='pending_claim'/);
+ assert.match(source,/mac_address,customer_name,note,cleanup_status,first_login_at,expires_at/);
+ assert.match(source,/first successful login/);
+ assert.match(ui,/id="hsLoginUsername" name="username"/);
+ assert.match(ui,/id="hsPassword" name="password" type="password"/);
+ assert.doesNotMatch(ui.slice(ui.indexOf("const form=document.getElementById('addHotspotUserForm')"),ui.indexOf("async function loadHotspotDashboard")),/activation_type|hsDeviceMac|hsCustomExpiry|preassigned/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
