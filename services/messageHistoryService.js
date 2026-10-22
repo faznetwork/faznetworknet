@@ -17,9 +17,8 @@ async function recordMessage({ channel, to, message, event = "manual", status, e
        Number.isInteger(httpStatus) ? httpStatus : null, error ? String(error).replace(/[\r\n\t]+/g," ").slice(0,1000) : null,
        providerMessageId ? String(providerMessageId).slice(0,255) : null]
     );
-  } catch (loggingError) {
+  } catch (_) {
     // Message audit must never block billing, payment or notification flows.
-    console.warn("[MessageHistory] Could not record outbound attempt:", loggingError.message);
   }
 }
 
