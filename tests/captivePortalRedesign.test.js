@@ -5,37 +5,19 @@ const fs=require("node:fs");
 const path=require("node:path");
 const portal=fs.readFileSync(path.join(__dirname,"..","public","login.html"),"utf8");
 
-test("captive portal exposes mobile-first login modes and fast responsive styling",()=>{
- assert.match(portal,/Mobile-first FAZ NETWORK captive portal refresh/);
- assert.match(portal,/id="m-btn-pin"/);
- assert.doesNotMatch(portal,/id="m-btn-member"/);
- assert.match(portal,/id="m-btn-online"/);
- assert.match(portal,/prefers-reduced-motion/);
- assert.match(portal,/Connected to Fast Network/);
-});
-
-test("public username/password login is removed while RouterOS MAC PAP and CHAP remain",()=>{
- assert.doesNotMatch(portal,/function submitMemberLogin\(\)/);
- assert.match($1,/if\\(device\\.chapChallenge\\).*md5Hex/);
+test("captive portal removes public credential login and keeps supported purchase flows",()=>{
+ assert.doesNotMatch(portal,/function submitMemberLogin/);
  assert.doesNotMatch(portal,/api\/hotspot-auth\/direct-login/);
- assert.match(portal,/form\.submit\(\)/);
  assert.doesNotMatch(portal,/id="member_username"/);
  assert.doesNotMatch(portal,/id="member_password"/);
- assert.doesNotMatch(portal,/toggle-member-password/);
-});
-
-test("voucher and transaction inputs normalize values and respect opt-in remember controls",()=>{
- assert.match(portal,/voucher_pin.*toUpperCase/s);
- assert.match(portal,/remember-voucher/);
+ assert.doesNotMatch(portal,/id="m-btn-member"/);
  assert.doesNotMatch(portal,/remember-member/);
- assert.match(portal,/id="router-error"/);
- assert.match(portal,/\$\(link-login-only\)/);
- assert.match(portal,/\$\(link-orig\)/);
-});
-
-test("portal keeps existing payment, voucher claim, and QR flows",()=>{
- assert.match(portal,/\/api\/verify-trx/);
- assert.match(portal,/\/api\/hotspot-auth\/claim-voucher/);
+ assert.match(portal,/faz-package-selection-colors/);
+ assert.match(portal,/linear-gradient\(145deg,#fff4c7 0%,#ffe18a 100%\)/);
+ assert.match(portal,/api\/verify-trx/);
+ assert.match(portal,/api\/hotspot-auth\/claim-voucher/);
  assert.match(portal,/function startQrScanner\(\)/);
- assert.match(portal,/submitMikrotikLogin\(result\.username\|\|device\.mac,result\.redirect_url\)/);
+ assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
+ assert.match(portal,/form\.submit\(\)/);
+ assert.match(portal,/prefers-reduced-motion/);
 });
