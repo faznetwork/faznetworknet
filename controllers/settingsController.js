@@ -2,9 +2,15 @@ const db=require("../db");
 const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
 function errorResponse(res,error,status=400){const message=String(error?.message||"Settings operation failed.");return res.status(status).json({success:false,error:message,message});}
 function parseBool(value){return value===true||String(value||"").toLowerCase()==="true"||String(value||"")==="1";}
-async function paymentWebhookSettings(req,res){try{const settings=await require("../services/webhookSettingsService").getPublic();return res.set("Cache-Control","no-store").json({success:true,settings});}catch(error){return errorResponse(res,error,503);}}
-async function savePaymentWebhookSettings(req,res){try{const settings=await require("../services/webhookSettingsService").save(req.body||{},req.session?.adminUser||req.session?.username||"admin");return res.set("Cache-Control","no-store").json({success:true,message:"Payment and webhook settings saved atomically.",settings});}catch(error){return errorResponse(res,error,400);}}
-async function regeneratePaymentWebhookSecret(req,res){try{const secret=await require("../services/webhookSettingsService").regenerate(req.session?.adminUser||req.session?.username||"admin");return res.set("Cache-Control","no-store").json({success:true,secret,message:"Webhook secret regenerated. Update your trusted forwarder now."});}catch(error){return errorResponse(res,error,503);}}
+function validateUrl(value){
+  const url=String(value||"").trim();
+  if(!url)return "";
+  if(url.startsWith("/")&&!url.startsWith("//"))return url.replace(/\/$/,"")||"/";
+  let parsed;
+  try{parsed=new URL(url);}catch(_){throw new Error("Webhook URL must be a valid HTTP/HTTPS URL or an absolute path.");}
+  if(!["http:","https:"].includes(parsed.protocol))throw new Error("Webhook URL must use HTTP or HTTPS.");
+  return parsed.toString().replace(/\/$/,"");
+}
 async function hotspotProfiles(req,res){try{
  const [profilesResult,metadataResult]=await Promise.all([
   require("../services/mikrotikService").getHotspotProfiles(),
@@ -40,13 +46,15 @@ async function saveHotspotEngine(req,res){
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
 const mikrotikService=require("../services/mikrotikService");
 const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"];
+const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
 async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);try{require("../services/appSettings").invalidate();}catch(_){}}
 async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
 async function generalSettings(req,res){
  try{
-  const s=await getSettingsMap(ROUTER_KEYS);
+  const keys=[...ROUTER_KEYS];
+  const s=await getSettingsMap(keys);
   return res.set("Cache-Control","no-store").json({success:true,settings:{
-   router:{host:s.mikrotik_host||process.env.ROUTER_HOST||"",port:Number(s.mikrotik_port||process.env.ROUTER_PORT||8728),user:s.mikrotik_user||process.env.ROUTER_USER||"",passwordConfigured:Boolean(s.mikrotik_password||process.env.ROUTER_PASS),passwordSource:s.mikrotik_password?"database":process.env.ROUTER_PASS?"environment":"unset"}
+   router:{host:s.mikrotik_host||process.env.ROUTER_HOST||"",port:Number(s.mikrotik_port||process.env.ROUTER_PORT||8728),user:s.mikrotik_user||process.env.ROUTER_USER||"",passwordConfigured:Boolean(s.mikrotik_password||process.env.ROUTER_PASS),passwordSource:s.mikrotik_password?"database":process.env.ROUTER_PASS?"environment":"unset"},
   }});
  }catch(error){return errorResponse(res,error,503);}
 }
@@ -199,4 +207,4 @@ async function testWhatsApp(req,res){
 async function whatsappConnect(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").connect({freshQr:true})});}catch(error){return errorResponse(res,error,502);}}
 async function whatsappUnlink(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").unlink()});}catch(error){return errorResponse(res,error,502);}}
 
-module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,paymentWebhookSettings,savePaymentWebhookSettings,regeneratePaymentWebhookSecret,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,testMikrotik,saveMikrotik,syncMikrotik,getAllSettings,updateSettings,publicSettings};
+module.exports={testNotification,testWhatsApp,testEmail,whatsappStatus,whatsappQr,whatsappConnect,whatsappUnlink,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,saveHotspotEngine,generalSettings,testMikrotik,saveMikrotik,syncMikrotik,getAllSettings,updateSettings,publicSettings};

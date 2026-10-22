@@ -114,11 +114,6 @@ INSERT INTO app_settings(key,value) VALUES
  ('mfs_nagad_number',''),
  ('mfs_rocket_number',''),
  ('mfs_upay_number',''),
- ('mfs_bkash_sender_ids','["bkash","16247"]'),
- ('mfs_nagad_sender_ids','["nagad","16167"]'),
- ('mfs_rocket_sender_ids','["rocket","16216","dbbl"]'),
- ('mfs_upay_sender_ids','["upay","16268"]'),
- ('personal_payment_webhook_url',''),
  ('personal_payment_webhook_secret',''),
  ('personal_payment_webhook_enabled','false')
 ON CONFLICT(key) DO NOTHING;
