@@ -157,6 +157,38 @@
             padding: 24px;
         }
 
+        /* Authoritative Desktop Workspace Layout - Sidebar Offset & Table Containment */
+        @media (min-width: 769px) {
+            body {
+                overflow-x: hidden;
+            }
+            #sidebar {
+                width: 260px !important;
+                position: fixed !important;
+                left: 0 !important;
+                top: 0 !important;
+                bottom: 0 !important;
+                z-index: 1000 !important;
+            }
+            #mainContent.main-content {
+                box-sizing: border-box !important;
+                margin-left: 260px !important;
+                width: calc(100vw - 260px) !important;
+                max-width: calc(100vw - 260px) !important;
+                min-width: 0 !important;
+                overflow-x: auto !important;
+                position: relative !important;
+                padding: 24px !important;
+            }
+            #dynamicPageContent,
+            #view-customer-filter,
+            #view-all-customer {
+                width: 100% !important;
+                min-width: 0 !important;
+                overflow-x: auto !important;
+            }
+        }
+
         .dashboard-shortcuts{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:18px;padding:8px 0}
         .dashboard-section-divider{border:0;border-top:2px solid #dbe5e1;opacity:1;margin:8px 0 24px}
         .dashboard-resource-card{border:1px solid #d1fae5;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden}
