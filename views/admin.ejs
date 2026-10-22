@@ -8432,7 +8432,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 return list.indexOf(String(value || '')) !== -1;
             }
             function cleanRoute(route) {
-                if (!route || typeof route !== 'object') return { view: 'dashboard' };
+                if (!route || typeof route !== 'object') return { view: 'not-found', path: window.location.pathname };
                 if (route.view === 'page' && has(allowed.pages, route.page)) {
                     if (route.page === 'dashboard') return { view: 'dashboard' };
                     if (route.page === 'all-customer') return { view: 'customers', filter: 'all', title: 'all_customer' };
@@ -8483,7 +8483,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'module' && Object.prototype.hasOwnProperty.call(moduleTitles, String(route.module || ''))) {
                     return { view: 'module', module: String(route.module) };
                 }
-                return { view: 'dashboard' };
+                return { view: 'not-found', path: window.location.pathname };
             }
             function routeFromPath(path) {
                 const routes = {
@@ -8552,6 +8552,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 const path = window.location.pathname.replace(/\/+$/, '') || '/admin';
                 const pathRoute = routeFromPath(path);
                 if (pathRoute) return pathRoute;
+                if (/^\/admin(?:\/|$)/.test(path) && path !== '/admin') return { view: 'not-found', path };
                 if (path === '/admin' && window.location.hash === '#hotspot-webhook') return { view: 'page', page: 'general-settings' };
 
                 // Backward compatibility: older shared links with ?view=... resolve once,
@@ -8640,6 +8641,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     };
                     return modulePaths[normalized.module];
                 }
+                if (normalized.view === 'not-found') return String(normalized.path || window.location.pathname);
                 return '/admin/dashboard';
             }
             function commitRoute(route, replace) {
@@ -8665,6 +8667,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             function dispatchRoute(route) {
                 const r = cleanRoute(route);
                 switch (r.view) {
+                    case 'not-found':
+                        return showAdminNotFound(r.path);
                     case 'dashboard':
                         return callIfAvailable('switchView', ['dashboard']);
                     case 'page':
@@ -8710,6 +8714,18 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'module': return showAdminModulePlaceholder(r.module);
                 }
                 return false;
+            }
+            function showAdminNotFound(path) {
+                const dynamic = document.getElementById('dynamicPageContent');
+                document.querySelectorAll('.admin-view').forEach(view => { view.classList.add('hidden'); view.style.display = 'none'; });
+                if (!dynamic) return false;
+                dynamic.style.display = 'block';
+                dynamic.innerHTML = '<section class="admin-view p-3"><div class="card border-0 shadow-sm"><div class="card-body p-4"><div class="text-danger fw-bold mb-2">404 · Admin page not found</div><p class="text-muted mb-3">The requested admin route is not registered.</p><code class="d-block mb-3"></code><a href="/admin/dashboard" class="btn btn-success">Return to Dashboard</a></div></div></section>';
+                const pathNode = dynamic.querySelector('code');
+                if (pathNode) pathNode.textContent = String(path || window.location.pathname);
+                setPageTitleSafe('Page Not Found');
+                if (window.innerWidth < 768 && typeof window.closeSidebarMobile === 'function') window.closeSidebarMobile();
+                return true;
             }
             function showAdminModulePlaceholder(moduleKey) {
                 const title = moduleTitles[moduleKey];
