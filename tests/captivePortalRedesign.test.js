@@ -14,9 +14,9 @@ test("captive portal exposes mobile-first login modes and fast responsive stylin
  assert.match(portal,/Connected to Fast Network/);
 });
 
-test("member login preserves RouterOS PAP and CHAP login handling",()=>{
+test("public username/password login is removed while RouterOS MAC PAP and CHAP remain",()=>{
  assert.doesNotMatch(portal,/function submitMemberLogin\(\)/);
- assert.match(portal,/if\(device\.chapChallenge\)\{password;form\.querySelector\(\[name="password"\]\)\.value=md5Hex/);
+ assert.match($1,/if\\(device\\.chapChallenge\\).*md5Hex/);
  assert.doesNotMatch(portal,/api\/hotspot-auth\/direct-login/);
  assert.match(portal,/form\.submit\(\)/);
  assert.doesNotMatch(portal,/id="member_username"/);
