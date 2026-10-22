@@ -249,11 +249,11 @@ async function directLogin(req,res){
       if(!profile)throw makeError("PROFILE_NOT_FOUND",503,"The saved Hotspot profile is unavailable on RouterOS.");
       const packageInfo=getPackageDuration(row,metadata[String(profile.name||"")]||{},profile);
       if(!packageInfo.duration&&!packageInfo.quota)throw makeError("PROFILE_INVALID",409,"This package has no valid time duration or data quota.");
-      const now=new Date(),expiresAt=packageInfo.duration?new Date(now.getTime()+packageInfo.duration):null;
+      const now=new Date(),firstLoginAt=parseSavedExpiry(row.first_login_at)||now,expiresAt=packageInfo.duration?new Date(firstLoginAt.getTime()+packageInfo.duration):parseSavedExpiry(row.expires_at);
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
-      const update=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=$3::timestamptz,comment=$4::text,status='active',updated_at=NOW() WHERE id=$5::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING *",[mac,now,expiresAt,comment,row.id]);
+      const update=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=COALESCE(expires_at,$3::timestamptz),comment=$4::text,updated_at=NOW() WHERE id=$5::bigint AND LOWER(COALESCE(status,''))='pending_claim' AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING *",[mac,firstLoginAt,expiresAt,comment,row.id]);
       if(!update.rows?.length)throw makeError("MAC_ALREADY_BOUND",403,"This account was claimed by another device. Contact support.");
-      return {row:{...update.rows[0],username,password,mac_address:mac,profile:profile.name,comment,first_login_at:now,expires_at:expiresAt},firstLogin:true,previousUsername:row.username,expiresAt};
+      return {row:{...update.rows[0],username,password,mac_address:mac,profile:profile.name,comment,first_login_at:firstLoginAt,expires_at:expiresAt},firstLogin:true,previousUsername:row.username,expiresAt};
     });
     account=reserved.row;firstLogin=reserved.firstLogin;previousUsername=reserved.previousUsername;
     profileName=String(account.profile||"");
