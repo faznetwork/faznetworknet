@@ -268,7 +268,7 @@ async function directLogin(req,res){
       if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC binding for this account.");
       if(String(existing.password||"")!==password||String(existing.profile||"")!==profileName||actualMac!==mac||String(existing.comment||"")!==String(account.comment||""))await mikrotikService.updateHotspotUser(username,profileName,account.comment,password,mac);
     }
-    const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username]);
+    const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username]);
     if(!finalized.rows?.length)throw new Error("RouterOS login was provisioned but the subscriber record could not be finalized.");
     if(firstLogin&&account.phone&&account.phone!=="Unlinked"){
       const expiry=reserved.expiresAt?new Date(reserved.expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
