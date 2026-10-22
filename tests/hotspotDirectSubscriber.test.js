@@ -19,6 +19,8 @@ test("Add User creates a direct subscriber with username/password and no activat
  assert.match(source,/'pending_claim'/);
  assert.match(source,/mac_address,customer_name,note,cleanup_status,first_login_at,expires_at/);
  assert.match(source,/first successful login/);
+ assert.match(source,/user:\{id:stored\.id,username,password,/);
+ assert.match(ui,/savedPassword=response\.user\?\.password\|\|passwordInput\.value/);
  assert.match(ui,/id="hsLoginUsername" name="username"/);
  assert.match(ui,/id="hsGenerateUsername"/);
  assert.match(ui,/id="hsGeneratePassword"/);
