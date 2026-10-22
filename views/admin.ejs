@@ -5128,7 +5128,7 @@ async function deletePlan(id,name){
         async function loadSmsHistory(){
           const result=document.getElementById('smsHistoryResult'),body=document.getElementById('smsHistoryRows');if(result){result.className='small mt-2 text-muted';result.textContent='Loading SMS delivery history…';}
           try{const response=await fetch('/api/settings/sms-history?'+smsHistoryQueryString(smsHistoryFilters()),{credentials:'same-origin',cache:'no-store'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Unable to load SMS history.');renderSmsHistory(data);if(result){result.className='small mt-2 text-muted';result.textContent='History refreshed. Provider acceptance is not handset delivery confirmation.';}}
-          catch(error){if(body)body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">'+smsHistoryEscape(error.message||'Unable to load SMS history.')+'</td></tr>';if(result){result.className='small mt-2 text-danger';result.textContent=error.message||'Unable to load SMS history.';}}
+          catch(error){if(body)body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">'+smsHistoryEscape(error.message||'Unable to load SMS history.')+'</td></tr>';if(result){result.className='small mt-2 text-danger';result.textContent=error.message||'Unable to load SMS history.';}}
         }
         async function exportSmsHistoryCsv(){
           const result=document.getElementById('smsHistoryResult'),filters=smsHistoryFilters(),allRows=[];
