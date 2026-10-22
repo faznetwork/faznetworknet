@@ -136,7 +136,7 @@ async function sendEmail({ to, subject, html, text, event = "manual" } = {}) {
   } finally {
     try {
       await require("./messageHistoryService").recordMessage({
-        channel: "email", to: recipient, message: "Subject: " + String(subject || "").slice(0, 200) + "\\n" + body,
+        channel: "email", to: recipient, message: "Subject: " + String(subject || "").slice(0, 200) + "\n" + body,
         event, status: result?.success ? "sent" : "failed", error: result?.success ? null : result?.error,
         gateway: result?.provider || providerMode({})
       });
