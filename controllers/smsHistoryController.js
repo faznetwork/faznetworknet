@@ -3,7 +3,7 @@ const db=require("../db");
 const ALLOWED_STATUS=new Set(["sent","failed","skipped"]);
 const ALLOWED_EVENTS=new Set(["manual","broadcast","payment","payment_receipt","renewal","welcome","expiry_warning","expired","line_expiry","recharge"]);
 function boundedInt(value,fallback,min,max){const parsed=Number.parseInt(String(value??""),10);return Number.isInteger(parsed)?Math.max(min,Math.min(max,parsed)):fallback;}
-function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z")))throw new Error("Invalid "+label+" date.");return raw;}
+function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z"))||new Date(raw+"T00:00:00Z").toISOString().slice(0,10)!==raw)throw new Error("Invalid "+label+" date.");return raw;}
 async function list(req,res){
  try{
   const query=String(req.query.search||"").trim().slice(0,120),status=String(req.query.status||"").trim().toLowerCase(),event=String(req.query.event||"").trim().toLowerCase(),from=validDate(req.query.from,"start"),to=validDate(req.query.to,"end"),limit=boundedInt(req.query.limit,25,1,100),offset=boundedInt(req.query.offset,0,0,10000000);
@@ -11,7 +11,7 @@ async function list(req,res){
   if(event&&!ALLOWED_EVENTS.has(event))throw new Error("Choose a supported SMS event.");
   if(from&&to&&from>to)throw new Error("Start date must be on or before end date.");
   const clauses=[],params=[];
-  if(query){params.push("%"+query.replace(/[\\%_]/g,"\\$&")+"%");clauses.push("(recipient_phone ILIKE $"+params.length+" ESCAPE '\\\\' OR message ILIKE $"+params.length+" ESCAPE '\\\\' OR event_key ILIKE $"+params.length+" ESCAPE '\\\\')");}
+  if(query){params.push("%"+query+"%");clauses.push("(recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+")");}
   if(status){params.push(status);clauses.push("status=$"+params.length);}
   if(event){params.push(event);clauses.push("event_key=$"+params.length);}
   if(from){params.push(from);clauses.push("created_at >= $"+params.length+"::date");}
