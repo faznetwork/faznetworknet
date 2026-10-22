@@ -216,6 +216,71 @@ async function activate(req,res){
   }
 }
 
+async function directLogin(req,res){
+  const fail=(status,code,message)=>res.status(status).json({success:false,code,message,error:message});
+  if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
+  const username=String(req.body?.username||"").trim();
+  const password=String(req.body?.password||"");
+  const mac=normalizeMac(req.body?.mac||req.body?.device_mac||req.body?.macAddress||"");
+  const requestedLoginUrl=String(req.body?.login_url||req.body?.link_login_only||"").trim();
+  const redirectUrl=/^https?:\/\//i.test(requestedLoginUrl)&&requestedLoginUrl.length<=2048?requestedLoginUrl:null;
+  if(!username||username.length>100||!password||password.length>128)return fail(400,"CREDENTIALS_REQUIRED","Enter your Hotspot username and password.");
+  if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  let account=null,profileName="",validity="",quota=0,firstLogin=false,previousUsername="";
+  try{
+    const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+    const metadata=cleanMetadata(metaResult.rows?.[0]?.value);
+    const routerProfiles=await mikrotikService.getHotspotProfiles();
+    const reserved=await db.withTransaction(async client=>{
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-login-username:"+username.toLowerCase()]);
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
+      const found=await client.query("SELECT * FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1::text) AND password=$2::text AND subscriber_type='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') ORDER BY id DESC LIMIT 2 FOR UPDATE",[username,password]);
+      if(found.rows?.length!==1)throw makeError("INVALID_CREDENTIALS",401,"Username or password is incorrect.");
+      const row=found.rows[0],status=String(row.status||"").toLowerCase();
+      const bound=normalizeMac(row.mac_address);
+      if(bound&&bound!==mac)throw makeError("MAC_ALREADY_BOUND",403,"This account is bound to another device. Contact FAZ NETWORK support.");
+      if(status==="active"){
+        const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
+        if(expiry&&expiry.getTime()<=Date.now())throw makeError("PACKAGE_EXPIRED",410,"This Hotspot package has expired. Please recharge.");
+        if(!expiry&&!row.data_limit)throw makeError("EXPIRY_NOT_RECORDED",409,"This account has no reliable expiry record. Contact support.");
+        return {row,firstLogin:false,previousUsername:row.username,expiresAt:expiry};
+      }
+      const profile=routerProfiles.find(p=>String(p.name||"").toLowerCase()===String(row.profile||"").toLowerCase());
+      if(!profile)throw makeError("PROFILE_NOT_FOUND",503,"The saved Hotspot profile is unavailable on RouterOS.");
+      const packageInfo=getPackageDuration(row,metadata[String(profile.name||"")]||{},profile);
+      if(!packageInfo.duration&&!packageInfo.quota)throw makeError("PROFILE_INVALID",409,"This package has no valid time duration or data quota.");
+      const now=new Date(),firstLoginAt=parseSavedExpiry(row.first_login_at)||now,expiresAt=packageInfo.duration?new Date(firstLoginAt.getTime()+packageInfo.duration):parseSavedExpiry(row.expires_at);
+      const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
+      const update=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=COALESCE(expires_at,$3::timestamptz),comment=$4::text,updated_at=NOW() WHERE id=$5::bigint AND LOWER(COALESCE(status,''))='pending_claim' AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING *",[mac,firstLoginAt,expiresAt,comment,row.id]);
+      if(!update.rows?.length)throw makeError("MAC_ALREADY_BOUND",403,"This account was claimed by another device. Contact support.");
+      return {row:{...update.rows[0],username,password,mac_address:mac,profile:profile.name,comment,first_login_at:firstLoginAt,expires_at:expiresAt},firstLogin:true,previousUsername:row.username,expiresAt};
+    });
+    account=reserved.row;firstLogin=reserved.firstLogin;previousUsername=reserved.previousUsername;
+    profileName=String(account.profile||"");
+    const profile=routerProfiles.find(p=>String(p.name||"").toLowerCase()===profileName.toLowerCase());
+    const packageInfo=getPackageDuration(account,metadata[profileName]||{},profile);
+    validity=packageInfo.validity;quota=packageInfo.quota;
+    const existing=await mikrotikService.getHotspotUser(username);
+    if(!existing){
+      await mikrotikService.rechargeHotspotUser({username,password,profile:profileName,validity,limitBytesTotal:quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername});
+    }else{
+      const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
+      if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC binding for this account.");
+      if(String(existing.password||"")!==password||String(existing.profile||"")!==profileName||actualMac!==mac||String(existing.comment||"")!==String(account.comment||""))await mikrotikService.updateHotspotUser(username,profileName,account.comment,password,mac);
+    }
+    const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username]);
+    if(!finalized.rows?.length)throw new Error("RouterOS login was provisioned but the subscriber record could not be finalized.");
+    if(firstLogin&&account.phone&&account.phone!=="Unlinked"){
+      const expiry=reserved.expiresAt?new Date(reserved.expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
+      notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:account.phone,recipient:account.phone,phone:account.phone,username,customerName:account.customer_name||username,message:"FAZ NETWORK Hotspot প্যাকেজ সক্রিয় হয়েছে। মেয়াদ: "+expiry,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:account.customer_name||username,username,profile:profileName,package:profileName,expiry_date:expiry}});
+    }
+    return res.json({success:true,message:"Hotspot login verified; this device MAC is bound.",username,password,mac,profile:profileName,first_login_at:finalized.rows[0].first_login_at,expires_at:finalized.rows[0].expires_at?new Date(finalized.rows[0].expires_at).toISOString():null,redirect_url:redirectUrl});
+  }catch(error){
+    console.error("[Hotspot direct login]",{code:error.code||"DIRECT_LOGIN_ERROR",message:error.message,username,mac});
+    return fail(error.statusCode||503,error.code||"DIRECT_LOGIN_ERROR",error.message||"Unable to sign in to this Hotspot account.");
+  }
+}
+
 async function claimVoucher(req,res){
   const fail=(status,code,message)=>res.status(status).json({success:false,code,message,error:message});
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
@@ -267,4 +332,4 @@ async function claimVoucher(req,res){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
 }
-module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac};
+module.exports={activate,claimVoucher,deviceLookup,directLogin,normalizePhone,normalizeMac};
