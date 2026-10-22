@@ -8644,6 +8644,63 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (normalized.view === 'not-found') return String(normalized.path || window.location.pathname);
                 return '/admin/dashboard';
             }
+            function syncRouteNavigationState(route) {
+                const normalized = cleanRoute(route);
+                const canonicalUrl = routeUrl(normalized);
+                const canonicalPath = String(canonicalUrl || '/admin/dashboard').split('?')[0].replace(/\\/+$/, '') || '/admin';
+                const sidebar = document.getElementById('sidebar');
+                if (!sidebar) return;
+
+                // URL is the source of truth for active sidebar state. Match only local admin links.
+                const links = Array.from(sidebar.querySelectorAll('a[href]'));
+                let activeLink = null;
+                links.forEach(link => {
+                    let targetPath = '';
+                    try {
+                        const target = new URL(link.getAttribute('href'), window.location.origin);
+                        if (target.origin === window.location.origin) {
+                            targetPath = target.pathname.replace(/\\/+$/, '') || '/admin';
+                        }
+                    } catch (_) {}
+                    const active = Boolean(targetPath && targetPath === canonicalPath);
+                    link.classList.toggle('active', active);
+                    if (active) {
+                        link.setAttribute('aria-current', 'page');
+                        activeLink = link;
+                    } else {
+                        link.removeAttribute('aria-current');
+                    }
+                });
+
+                // Expand only the active link's existing parent groups; do not create duplicate navigation UI.
+                if (activeLink) {
+                    let parent = activeLink.parentElement;
+                    while (parent && parent !== sidebar) {
+                        if (parent.classList && (parent.classList.contains('collapse') || parent.classList.contains('submenu'))) {
+                            parent.classList.add('show');
+                            const toggle = parent.id
+                                ? sidebar.querySelector('[data-bs-target="#' + parent.id + '"], [href="#' + parent.id + '"]')
+                                : null;
+                            if (toggle) {
+                                toggle.setAttribute('aria-expanded', 'true');
+                                toggle.classList.remove('collapsed');
+                            }
+                        }
+                        parent = parent.parentElement;
+                    }
+                }
+
+                // Keep the shared page heading aligned to the selected navigation label.
+                // View loaders may replace this with a more specific translated/data-driven title.
+                if (activeLink) {
+                    const titleNode = document.getElementById('pageTitle');
+                    if (titleNode) {
+                        const label = String(activeLink.getAttribute('aria-label') || activeLink.textContent || '')
+                            .replace(/\\s+/g, ' ').trim();
+                        if (label) titleNode.textContent = label;
+                    }
+                }
+            }
             function commitRoute(route, replace) {
                 const normalized = cleanRoute(route);
                 const url = routeUrl(normalized);
@@ -8654,6 +8711,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     window.history.replaceState({ fazAdminRoute: normalized }, '', url);
                 }
                 state.current = normalized;
+                syncRouteNavigationState(normalized);
                 return normalized;
             }
             function callIfAvailable(name, args) {
