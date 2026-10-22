@@ -75,7 +75,7 @@ test("schema distinguishes direct subscribers from legacy and scratch-card inven
  assert.match(schema,/CHECK \(subscriber_type IN \('direct_subscriber','scratch_voucher','legacy'\)\)/);
 });
 
-test("scratch voucher claim releases only stale MAC bindings and rejects live conflicts",()=>{
+test("scratch voucher claim retains historical MAC bindings and rejects live conflicts",()=>{
  const auth=read("controllers/hotspotAuthController.js");
   assert.ok(auth.includes("SELECT id,status,expires_at,comment FROM hotspot_vouchers WHERE id<>$2::bigint AND LOWER(COALESCE(mac_address,''))=LOWER($1::text) FOR UPDATE"));
  assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
@@ -83,7 +83,7 @@ test("scratch voucher claim releases only stale MAC bindings and rejects live co
  assert.match(auth,/MAC_ALREADY_BOUND/);
 });
 
-test("voucher MAC uniqueness is limited to active records and historical bindings are released",()=>{
+test("voucher MAC uniqueness is limited to active records and historical bindings are retained",()=>{
  const schema=read("db/schema.sql");
  const migration=read("db/migrations/20261018_hotspot_voucher_active_mac_unique.sql");
  const auth=read("controllers/hotspotAuthController.js");
@@ -92,7 +92,7 @@ test("voucher MAC uniqueness is limited to active records and historical binding
  assert.match(migration,/DROP INDEX IF EXISTS uq_hotspot_vouchers_mac_address_ci/);
  assert.match(migration,/WHERE status = 'active' AND mac_address IS NOT NULL/);
  assert.match(auth,/liveActive=state==="active"&&\(!deadline\|\|deadline\.getTime\(\)>Date\.now\(\)\)/);
- assert.match(auth,/SET mac_address=NULL/);
+ assert.doesNotMatch(auth,/SET mac_address=NULL/);
 });
 
 test("generated scratch vouchers persist batch IDs and can be retrieved for reprinting",()=>{
