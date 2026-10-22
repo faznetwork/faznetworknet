@@ -92,3 +92,20 @@ Generated from `views/admin.ejs` (branch `refactor/admin-canonical-router-step1`
 - Existing registered routes and view loaders are intentionally retained in this first increment to reduce regression risk.
 - Step 2 will replace the legacy function wrappers and unify URL, active submenu, expanded parent, and title state.
 - The route inventory must be compared against all submenu anchors and route handlers before deleting any legacy handler.
+
+
+## Step 2 — URL-driven navigation state
+
+- Added `syncRouteNavigationState()` and call it from `commitRoute()`.
+- The canonical route URL now drives sidebar anchor active state and `aria-current="page"`.
+- Existing collapsible/submenu ancestors of the active link are expanded using their current DOM structure; no duplicate controls or CSS overrides are introduced.
+- The shared `#pageTitle` is synchronized from the active link label as an initial heading. Existing view loaders may set a more specific translated title while loading.
+- Legacy view handlers and `wrapNavigation()` remain in place in this step. Removing them before every direct caller is mapped would risk breaking existing hotspot/customer/settings workflows; that removal is deferred until call sites and route coverage have explicit regression tests.
+
+### Step 2 validation checklist
+
+1. Open each canonical route directly and confirm its sidebar item becomes active.
+2. Navigate between two different submenu items and confirm only one item has `aria-current="page"`.
+3. Use browser Back/Forward and confirm active item, expanded parent, URL, and content stay aligned.
+4. Check settings, Hotspot, Customers, Payments, OLT, and mobile sidebar behavior.
+5. Run CI/build/tests; do not merge or deploy until checks are green and browser smoke tests are complete.
