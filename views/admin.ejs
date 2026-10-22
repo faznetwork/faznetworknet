@@ -1817,10 +1817,10 @@
 
         <ul class="sidebar-menu">
             <li class="menu-item">
-                <a href="javascript:void(0)" class="active" data-view-target="view-main-dashboard" onclick="event.preventDefault(); switchView('dashboard'); return false;"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
+                <a href="/admin/dashboard" class="active" data-view-target="view-main-dashboard"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
             </li>
             <li class="menu-item">
-                <a href="javascript:void(0)" class="traffic-sidebar-link" onclick="switchView('dashboard'); window.setTimeout(function(){ document.getElementById('dashboardTrafficCard')?.scrollIntoView({behavior:'smooth',block:'start'}); }, 80);"><i class="bi bi-activity"></i><span>Live Traffic Monitor</span><span class="ms-auto badge rounded-pill text-bg-success">LIVE</span></a>
+                <a href="/admin/dashboard#dashboardTrafficCard" class="traffic-sidebar-link"><i class="bi bi-activity"></i><span>Live Traffic Monitor</span><span class="ms-auto badge rounded-pill text-bg-success">LIVE</span></a>
             </li>
 
             <li class="menu-item">
@@ -1829,16 +1829,16 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('all', 'all_customer')"><span data-key="all_customer">All Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="showAddCustomerForm()"><span data-key="add_customer">Add Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('online', 'online_customer')"><span data-key="online_customer">Online Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('offline', 'offline_customer')"><span data-key="offline_customer">Offline Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('active', 'active_customer')"><span data-key="active_customer">Active Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire', 'expire_customer')"><span data-key="expire_customer">Expire Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire_today_yesterday', 'expire_today_yesterday')"><span data-key="expire_today_yesterday">Expire Today & Yesterday</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire_7_days', 'expire_7_days')"><span data-key="expire_7_days">Expire in 7 Days</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('new', 'new_customer')"><span data-key="new_customer">New Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('due', 'due_collection')"><span data-key="due_collection">Due Collection</span></a></li>
+                    <li><a href="/admin/customers/all"><span data-key="all_customer">All Customer</span></a></li>
+                    <li><a href="/admin/customers/add"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="/admin/customers/online"><span data-key="online_customer">Online Customer</span></a></li>
+                    <li><a href="/admin/customers/offline"><span data-key="offline_customer">Offline Customer</span></a></li>
+                    <li><a href="/admin/customers/active"><span data-key="active_customer">Active Customer</span></a></li>
+                    <li><a href="/admin/customers/expired"><span data-key="expire_customer">Expire Customer</span></a></li>
+                    <li><a href="/admin/customers/expiring-today-yesterday"><span data-key="expire_today_yesterday">Expire Today & Yesterday</span></a></li>
+                    <li><a href="/admin/customers/expiring-next-7-days"><span data-key="expire_7_days">Expire in 7 Days</span></a></li>
+                    <li><a href="/admin/customers/new"><span data-key="new_customer">New Customer</span></a></li>
+                    <li><a href="/admin/customers/due"><span data-key="due_collection">Due Collection</span></a></li>
                 </ul>
             </li>
 
@@ -1861,12 +1861,12 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('pending', 'pending_invoice')"><span data-key="pending_invoice">Pending Invoice</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('all', 'all_payments')"><span data-key="all_payments">All Payments</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('requests', 'payment_request')"><span data-key="payment_request">Payment Request</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('bkash', 'bkash_payments')"><span data-key="bkash_payments">bKash Payments</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('nagad', 'nagad_payments')"><span data-key="nagad_payments">Nagad Payments</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('rocket', 'rocket_payments')"><span data-key="rocket_payments">Rocket Payments</span></a></li>
+                    <li><a href="/admin/payments/pending"><span data-key="pending_invoice">Pending Invoice</span></a></li>
+                    <li><a href="/admin/payments/all"><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="/admin/payments/requests"><span data-key="payment_request">Payment Request</span></a></li>
+                    <li><a href="/admin/payments/bkash"><span data-key="bkash_payments">bKash Payments</span></a></li>
+                    <li><a href="/admin/payments/nagad"><span data-key="nagad_payments">Nagad Payments</span></a></li>
+                    <li><a href="/admin/payments/rocket"><span data-key="rocket_payments">Rocket Payments</span></a></li>
                 </ul>
             </li>
 
@@ -1876,20 +1876,20 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" data-view-target="view-hotspot-dashboard" onclick="event.preventDefault(); window.loadHotspotDashboard(); return false;"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadAddHotspotUserView(); return false;"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('all','Voucher Management'); return false;"><span>Voucher &amp; Recharge Ledger</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherRecords('cleanup','Expired &amp; Cleanup'); return false;"><span>Expired &amp; Cleanup</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotVoucherSales(); return false;"><span>Voucher Sales History</span></a></li>
+                    <li><a href="/admin/hotspot/dashboard" data-view-target="view-hotspot-dashboard"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
+                    <li><a href="/admin/hotspot/add-user"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
+                    <li><a href="/admin/hotspot/users/all"><span data-key="hotspot_all_users">All Users</span></a></li>
+                    <li><a href="/admin/hotspot/users/active"><span data-key="hotspot_active_users">Active Users</span></a></li>
+                    <li><a href="/admin/hotspot/profiles"><span data-key="hotspot_profile">Profile</span></a></li>
+                    <li><a href="/admin/hotspot/vouchers/generate"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
+                    <li><a href="/admin/hotspot/vouchers/manage"><span>Voucher &amp; Recharge Ledger</span></a></li>
+                    <li><a href="/admin/hotspot/vouchers/cleanup"><span>Expired &amp; Cleanup</span></a></li>
+                    <li><a href="/admin/hotspot/sales"><span>Voucher Sales History</span></a></li>
                 </ul>
             </li>
 
             <li class="menu-item" data-rbac-roles="super_admin">
-                <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
+                <a href="/admin/audit-logs"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
 
             <li class="menu-item general-settings-menu">
@@ -1912,12 +1912,12 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="window.loadDevices(); return false;"><i class="bi bi-hdd-network me-2"></i><span data-key="devices">MikroTik Devices</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadPlanPackages()"><span data-key="plan_packages">Plan & Packages</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="loadIpPools()"><span data-key="ip_pools">IP Pools</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadOltManagement('overview'); return false;"><i class="bi bi-diagram-3 me-2"></i><span data-key="olt_management">OLT Management</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadOltManagement('onts'); return false;"><i class="bi bi-hdd-stack me-2"></i><span>ONT Information</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadOltManagement('topology'); return false;"><i class="bi bi-bezier2 me-2"></i><span>Fiber Topology</span></a></li>
+                    <li><a href="/admin/network/mikrotik-devices"><i class="bi bi-hdd-network me-2"></i><span data-key="devices">MikroTik Devices</span></a></li>
+                    <li><a href="/admin/packages"><span data-key="plan_packages">Plan & Packages</span></a></li>
+                    <li><a href="/admin/network/ip-pools"><span data-key="ip_pools">IP Pools</span></a></li>
+                    <li><a href="/admin/network/olt"><i class="bi bi-diagram-3 me-2"></i><span data-key="olt_management">OLT Management</span></a></li>
+                    <li><a href="/admin/network/olt/onts"><i class="bi bi-hdd-stack me-2"></i><span>ONT Information</span></a></li>
+                    <li><a href="/admin/network/olt/topology"><i class="bi bi-bezier2 me-2"></i><span>Fiber Topology</span></a></li>
                     <li>
                         <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
                             <i class="bi bi-activity"></i> <span data-key="monitor">Monitor</span>
@@ -1957,7 +1957,7 @@
                             <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                         </button>
                         <ul class="submenu">
-                            <li><a href="javascript:void(0)" onclick="window.loadSupportTickets(); return false;"><span data-key="support_tickets">Support Tickets</span></a></li>
+                            <li><a href="/admin/support/tickets"><span data-key="support_tickets">Support Tickets</span></a></li>
                             <li><a href="/admin/support/software"><span data-key="software_support_tickets">Software Support Tickets</span></a></li>
                             <li><a href="/admin/support/website"><span data-key="website_support_tickets">Website Support Tickets</span></a></li>
                         </ul>
@@ -1995,7 +1995,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="window.loadGoogleMapTracking(); return false;"><i class="bi bi-map me-2"></i><span data-key="google_map">Google Maps</span></a></li>
+                    <li><a href="/admin/network/maps"><i class="bi bi-map me-2"></i><span data-key="google_map">Google Maps</span></a></li>
                 </ul>
             </li>
 
@@ -3797,7 +3797,7 @@ window.editHotspotUser=function(username,event){
             if(typeof window.editHotspotUserProfile360==="function")return window.editHotspotUserProfile360(username,event);
             alert("Subscriber Profile 360 is still loading. Please try again.");
         };
-        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);if(titleKey==='all_user'&&typeof window.loadHotspotVoucherRecords==='function'){return window.loadHotspotVoucherRecords('all','All Hotspot Users');}appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(['all','online','active','offline','expired'].includes(filter)?filter:'all');const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
+        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(['all','online','active','offline','expired'].includes(filter)?filter:'all');const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
         async function refreshHotspotCurrent(){await loadHotspotSection(currentHotspotMode,currentHotspotTitleKey);}
 
         function showHotspotSyncToast(message,success){
@@ -5470,7 +5470,7 @@ async function deletePlan(id,name){
                 (target === 'view-hotspot-dashboard' ? 'hotspot-dashboard' : target.replace(/^view-/, ''));
             setPageTitleSafe(viewTitles[titleKey] || 'Dashboard');
             currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
+            if (target === 'view-main-dashboard') {
                 void refreshDashboard();
                 startTrafficPolling();
             } else {
