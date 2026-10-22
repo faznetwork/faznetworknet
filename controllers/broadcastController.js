@@ -102,7 +102,7 @@ async function runBroadcast(id){
    for(const channel of channels){
     try{
      let result;
-     if(channel==="whatsapp")result=await whatsappService.sendMessage({to:recipient.phone,message});
+     if(channel==="whatsapp")result=await whatsappService.sendMessage({to:recipient.phone,message,event:"broadcast"});
      else if(channel==="sms")result=await smsService.sendSms({to:recipient.phone,message,event:"broadcast",variables,settings});
      else throw new Error("Unsupported broadcast channel.");
      if(result?.success===false)throw new Error("Provider reported unsuccessful delivery.");
