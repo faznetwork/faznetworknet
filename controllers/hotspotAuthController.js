@@ -260,18 +260,13 @@ async function directLogin(req,res){
     const profile=routerProfiles.find(p=>String(p.name||"").toLowerCase()===profileName.toLowerCase());
     const packageInfo=getPackageDuration(account,metadata[profileName]||{},profile);
     validity=packageInfo.validity;quota=packageInfo.quota;
-    if(firstLogin){
+    const existing=await mikrotikService.getHotspotUser(username);
+    if(!existing){
       await mikrotikService.rechargeHotspotUser({username,password,profile:profileName,validity,limitBytesTotal:quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername});
     }else{
-      const existing=await mikrotikService.getHotspotUser(username);
-      if(!existing){
-        if(quota>0)return fail(503,"ACTIVE_DATA_ACCOUNT_MISSING","The RouterOS account is missing; support must reconcile data quota before re-provisioning.");
-        await mikrotikService.createHotspotUser({username,password,profile:profileName,server:account.server||"all",validity,comment:account.comment,macAddress:mac});
-      }else{
-        const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
-        if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC binding for this account.");
-        if(String(existing.password||"")!==password||String(existing.profile||"")!==profileName||actualMac!==mac)await mikrotikService.updateHotspotUser(username,profileName,account.comment,password,mac);
-      }
+      const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
+      if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC binding for this account.");
+      if(String(existing.password||"")!==password||String(existing.profile||"")!==profileName||actualMac!==mac||String(existing.comment||"")!==String(account.comment||""))await mikrotikService.updateHotspotUser(username,profileName,account.comment,password,mac);
     }
     const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),updated_at=NOW() WHERE id=$1::bigint AND LOWER(username)=LOWER($4::text) AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,profile,phone,first_login_at,expires_at",[account.id,mac,account.first_login_at||new Date(),username]);
     if(!finalized.rows?.length)throw new Error("RouterOS login was provisioned but the subscriber record could not be finalized.");
