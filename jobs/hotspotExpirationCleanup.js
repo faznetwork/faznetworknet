@@ -257,7 +257,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     // Keep expired subscribers visible for 30 days. Only purge a row after the
     // expired profile was applied successfully and the final RouterOS removal succeeds.
     const candidates = await database.query(
-      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
+      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id ASC"
     );
     const purgeIds = [];
     for (const row of candidates.rows || []) {
@@ -279,7 +279,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
       [purgeIds]
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
+      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' RETURNING id",
       [purgeIds]
     );
     const result = {
