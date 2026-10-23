@@ -23,7 +23,9 @@ function ensureSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_olt_telemetry_mac ON olt_telemetry(onu_mac);
     CREATE INDEX IF NOT EXISTS idx_olt_telemetry_seen ON olt_telemetry(received_at DESC);
-  `).then(()=>db.query('ALTER TABLE olt_telemetry ADD COLUMN IF NOT EXISTS pppoe_username VARCHAR(160)')).catch(error => { schemaReady = null; throw error; });
+  `).then(()=>db.query('ALTER TABLE olt_telemetry ADD COLUMN IF NOT EXISTS pppoe_username VARCHAR(160)'))
+    .then(()=>db.query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS router_mac VARCHAR(32)'))
+    .catch(error => { schemaReady = null; throw error; });
   return schemaReady;
 }
 function secureEqual(a,b) {
@@ -48,7 +50,7 @@ function normalizeClientMac(value) {
   const compact=String(value??"").replace(/[^0-9a-f]/gi,"").toUpperCase();
   return compact.length===12 ? compact : "";
 }
-function matchPppoeUsername(clientMacs,sessions) {
+function matchPppoeSession(clientMacs,sessions) {
   if(!Array.isArray(clientMacs)||!Array.isArray(sessions)) return null;
   const matched=new Map();
   for(const clientMac of clientMacs) {
@@ -56,7 +58,8 @@ function matchPppoeUsername(clientMacs,sessions) {
     if(!mac) continue;
     for(const session of sessions) {
       const username=String(session.username||"").trim();
-      if(username && normalizeClientMac(session.callerId)===mac) matched.set(username.toLowerCase(),username);
+      const callerId=normalizeClientMac(session.callerId);
+      if(username && callerId===mac) matched.set(username.toLowerCase()+"|"+callerId,session);
     }
   }
   return matched.size===1 ? [...matched.values()][0] : null;
@@ -102,15 +105,16 @@ function normalizeReading(row, oltId) {
   };
   const observedAt=row.observedAt ? new Date(row.observedAt) : new Date();
   if(Number.isNaN(observedAt.getTime()) || observedAt.getTime()>Date.now()+300000) throw new Error('Invalid observedAt timestamp.');
+  const raw=row.raw&&typeof row.raw==="object"&&!Array.isArray(row.raw)?row.raw:{};
   return {
-    oltId, onuId, onuMac:normalizeMac(row.onuMac), pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
+    oltId, onuId, onuMac:normalizeMac(row.onuMac||raw.onuMac||raw.onu_mac||raw.macAddress), pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
     ponPort:String(row.ponPort||'').trim().slice(0,100)||null,
     status, rx:power(row.rxPowerDbm,-50,10),
     tx:power(row.txPowerDbm,-50,20),
     observedAt:observedAt.toISOString(),
     sourceAgent:String(row.sourceAgent||'').trim().slice(0,160)||null,
-    raw:safeRawJson(row.raw),
-    clientMacs:Array.isArray(row.raw?.clientMacs)?row.raw.clientMacs:[]
+    raw:safeRawJson(raw),
+    clientMacs:Array.isArray(raw.clientMacs)?raw.clientMacs:[]
   };
 }
 exports.syncTelemetry = [authenticateAgent, async (req,res) => {
@@ -125,18 +129,34 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
     for(const row of readings) normalized.push(normalizeReading(row||{},oltId));
     const client=await db.getPool().connect();
     let count=0;
+    let identityMatched=0;
     try {
       await client.query('BEGIN');
       const activeSessions=await client.query(
         "SELECT username,caller_id AS \"callerId\" FROM pppoe_live_sessions WHERE LOWER(COALESCE(service,''))='pppoe' AND received_at >= NOW()-INTERVAL '3 minutes' AND caller_id IS NOT NULL"
       );
-      let identityMatched=0;
       for(const r of normalized) {
-        const matchedUsername=matchPppoeUsername(r.clientMacs,activeSessions.rows);
-        if(matchedUsername) {
-          r.pppoeUsername=matchedUsername;
+        const matchedSession=matchPppoeSession(r.clientMacs,activeSessions.rows);
+        if(matchedSession) {
+          r.pppoeUsername=String(matchedSession.username||"").trim();
           r.identityMatched=true;
           identityMatched++;
+          const compactRouterMac=normalizeClientMac(matchedSession.callerId);
+          const routerMac=compactRouterMac.match(/.{2}/g).join(":");
+          if(r.onuMac) {
+            await client.query(`
+              UPDATE customers c
+                 SET onu_mac=$1,router_mac=$2,updated_at=NOW()
+               WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
+                 AND NOT EXISTS (
+                   SELECT 1 FROM customers other
+                    WHERE other.id<>c.id
+                      AND regexp_replace(lower(COALESCE(other.onu_mac,'')),'[^0-9a-f]','','g')=$4
+                 )
+            `,[r.onuMac,routerMac,r.pppoeUsername,r.onuMac.replace(/[^0-9a-f]/gi,"").toLowerCase()]);
+          } else {
+            await client.query(`UPDATE customers SET router_mac=$1,updated_at=NOW() WHERE LOWER(BTRIM(username))=LOWER(BTRIM($2))`,[routerMac,r.pppoeUsername]);
+          }
         }
         const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
