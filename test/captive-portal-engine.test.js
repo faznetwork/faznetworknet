@@ -24,7 +24,7 @@ test("captive portal preserves RouterOS redirect context and the canonical login
 
 test("captive portal consumes public settings and never calls protected admin APIs",()=>{
  assert.match(script,/\/api\/public\/portal-config/);
- assert.match(script,/\/api\/public\/payment\/settings/);
+ assert.match(script,/\/api\/public\/payment\/settings/);\n assert.match(script,/\/api\/settings\/public/);\n assert.match(script,/generalSettings\.logo_url/);\n assert.match(script,/generalSettings\.company_name/);
  assert.match(script,/display_mode/);
  assert.match(script,/logoUrl/);
  assert.match(script,/bannerUrl/);
