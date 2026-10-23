@@ -60,3 +60,42 @@ test("single-tenant hotspot settings schema does not require tenant_id",()=>{
  assert.doesNotMatch(controller,/tenant_id/);
  assert.match(controller,/WHERE id=1/);
 });
+
+test("public portal configuration exposes only saved, enabled, priced Hotspot profiles and current branding",()=>{
+ assert.match(controller,/async function publicPortalPayload\\(\\)/);
+ assert.match(controller,/display_mode:s\\.display_mode/);
+ assert.match(controller,/logoUrl:s\\.portal_logo_url\\|\\|null/);
+ assert.match(controller,/bannerUrl:s\\.banner_url\\|\\|null/);
+ assert.match(controller,/features:\\{online_payment:s\\.enable_online_payment!==false,voucher_pin:s\\.enable_voucher_pin!==false,qr_scan:s\\.enable_qr_scan!==false\\}/);
+ assert.match(controller,/return \\{profileId:name,profile:name,name,price,validity:/);
+ assert.match(controller,/status\\(503\\)\\.json\\(\\{success:false,error:/);
+});
+
+test("hotspot login page uses one script, verified voucher credentials, RouterOS CHAP and the public config contract",()=>{
+ const scripts=[...login.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+ assert.equal(scripts.length,1,"legacy competing script flows should be consolidated");
+ assert.doesNotThrow(()=>new vm.Script(scripts[0][1],{filename:"public/login.html script"}));
+ assert.match(login,/id="voucher_pin"/);
+ assert.match(login,/id="voucher_password"/);
+ assert.match(login,/claim-voucher/);
+ assert.doesNotMatch(login,/api\\/hotspot\\/verify-voucher/);
+ assert.doesNotMatch(login,/member_username|m-btn-member|btn-master-action/);
+ assert.match(login,/display_mode\\|\\|?'default'/);
+ assert.match(login,/features\\.online_payment/);
+ assert.match(login,/features\\.voucher_pin/);
+ assert.match(login,/chapIdentifierByte/);
+ assert.match(login,/decodeChapChallenge/);
+ assert.match(login,/qr-scanner-modal/);
+ assert.match(login,/config\\.packages\\|\\|\\[\\]/);
+ assert.match(login,/showStatus\\(error\\.message/);
+});
+
+test("voucher and payment connection only follow successful verification responses",()=>{
+ const script=[...login.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)][0][1];
+ const voucher=script.slice(script.indexOf("async function handleVoucherLogin"),script.indexOf("document.addEventListener('DOMContentLoaded'"));
+ const payment=script.slice(script.indexOf("async function handleVerification"),script.indexOf("function parseQrCredentials"));
+ assert.ok(voucher.indexOf("await requestJson")<voucher.indexOf("submitMikrotikLogin"));
+ assert.match(voucher,/if\\(!result\\.username\\|\\|!result\\.password\\)/);
+ assert.ok(payment.indexOf("await requestJson")<payment.indexOf("submitMikrotikLogin"));
+ assert.match(payment,/profile_id:selectedPackage\\.profile/);
+});
