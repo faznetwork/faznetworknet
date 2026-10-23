@@ -151,6 +151,7 @@
         }
         
         .dashboard-view.hidden { display: none !important; }
+        html.admin-route-initial #view-main-dashboard { display: none !important; }
         .main-content {
             margin-left: var(--sidebar-width);
             transition: all 0.3s ease;
@@ -1806,6 +1807,19 @@
             document.documentElement.classList.add('admin-sidebar-collapsed');
         }
     } catch (_) {}
+</script>
+<script>
+    // Hide the server-rendered dashboard before first paint when the URL targets another route.
+    (function () {
+        const path = window.location.pathname.replace(/\/+$/, '') || '/';
+        const params = new URLSearchParams(window.location.search);
+        const isAdminRoot = path === '/admin';
+        const isLegacyDashboard = isAdminRoot && (params.get('view') === 'dashboard' || (!params.has('view') && !window.location.hash));
+        const isDashboardRoute = path === '/admin/dashboard' || isLegacyDashboard;
+        if (/^\/admin(?:\/|$)/.test(path) && !isDashboardRoute) {
+            document.documentElement.classList.add('admin-route-initial');
+        }
+    })();
 </script>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
