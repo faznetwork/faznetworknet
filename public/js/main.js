@@ -519,6 +519,39 @@
 })();
 
 
+/* Small shared toast API for settings saves and other admin actions. */
+(() => {
+  if (typeof window.showToast === 'function') return;
+  let container;
+  window.showToast = (message, type = 'success') => {
+    const text = String(message || '').trim();
+    if (!text) return;
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'faz-toast-stack';
+      container.style.cssText = 'position:fixed;right:1rem;bottom:1rem;z-index:1090;display:flex;flex-direction:column;gap:.5rem;max-width:min(26rem,calc(100vw - 2rem));';
+      container.setAttribute('aria-live', 'polite');
+      container.setAttribute('aria-atomic', 'false');
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const isError = ['error', 'danger', 'warning'].includes(String(type).toLowerCase());
+    toast.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success') + ' shadow-sm mb-0 d-flex align-items-start gap-2';
+    toast.setAttribute('role', 'status');
+    const label = document.createElement('span');
+    label.textContent = text;
+    label.style.cssText = 'overflow-wrap:anywhere;flex:1;';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn-close';
+    close.setAttribute('aria-label', 'Dismiss notification');
+    close.addEventListener('click', () => toast.remove(), { once: true });
+    toast.append(label, close);
+    container.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 5000);
+  };
+})();
+
 /* General Settings sidebar router.
  * Keep URL, visible panel, active link, and accordion state in sync for click,
  * reload, and browser back/forward navigation. */
