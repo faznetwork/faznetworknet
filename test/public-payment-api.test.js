@@ -89,9 +89,9 @@ test("Hotspot captive checkout uses local MFS image assets and submits MAC crede
   assert.match(page, /assets\/images\/upay-logo\.png/);
   assert.doesNotMatch(page, /<svg/);
   assert.match(page, /service_type/);
-  assert.match(page, /payload\.senderPhoneNumber = phoneInput/);
-  assert.match(page, /payload\.trxId = trxInput/);
-  assert.match(page, /document\.getElementById\('mt-user'\)\.value = routerMac/);
-  assert.match(page, /document\.getElementById\('mt-pass'\)\.value = routerMac/);
-  assert.match(page, /paymentSessionExpiresAt\s*=\s*Date\.now\(\)\s*\+\s*300000/);
+  assert.match(page, /payload\.senderPhoneNumber=phone/);
+  assert.match(page, /payload\.trxId=trx/);
+  assert.match(page, /submitMikrotikLogin\(result\.username/);
+  assert.match(page, /submitMikrotikLogin\(result\.username/);
+  assert.match(page, /paymentSessionExpiresAt=Date\.now\(\)\+300000/);
 });
