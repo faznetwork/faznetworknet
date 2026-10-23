@@ -100,11 +100,16 @@ async function webhook(req,res){
   // Existing app_settings remain a safe compatibility fallback while the singleton table initializes.
   try { webhookConfig=await require("../services/webhookSettingsService").get(); }
   catch(error) { console.error("[Payment Webhook] Could not load webhook_settings; using legacy configuration fallback:", error.message); }
-  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
+  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true"){console.warn("[Payment Webhook] Rejected: automation disabled.");return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});}
   const expected=String(webhookConfig.secret||settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
-  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected)))return res.status(401).json({success:false,error:"Unauthorized webhook."});
-  const payment=parseSms(req.body,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
+  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected))){console.warn("[Payment Webhook] Rejected: missing or mismatched token.");return res.status(401).json({success:false,error:"Unauthorized webhook."});}
+  // MacroDroid's receiving-number token describes the SIM that received the SMS, not
+  // the MFS merchant account mentioned in the payment. Validate only a recipient
+  // explicitly present in the SMS text or a dedicated recipient header/query value.
+  const webhookBody=req.body&&typeof req.body==="object"&&!Array.isArray(req.body)?{...req.body}:req.body;
+  if(webhookBody&&typeof webhookBody==="object")for(const key of ["recipient","recipient_phone","receiving_number","receiver","destination","to","merchant_number","account_number"])delete webhookBody[key];
+  const payment=parseSms(webhookBody,req.query,req.headers,{recipientNumbers:webhookConfig.recipients,senderIdentifiers:webhookConfig.senders});
   payment.trxId=String(payment.trxId||"").trim().toUpperCase();
   if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
@@ -165,7 +170,7 @@ async function webhook(req,res){
    try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimedTransactionId,String(req.body?.username||""),JSON.stringify(detail)]);}catch(auditError){console.error("[CRITICAL] Webhook reconciliation audit write failed",claimedTransactionId,auditError?.message||auditError);}
    console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",detail);
   }
-  if(error?.code==="UNTRUSTED_FORWARDER_SENDER"||error?.code==="INVALID_RECIPIENT")return res.status(403).json({success:false,code:error.code,error:error.message});
+  if(error?.code==="UNTRUSTED_FORWARDER_SENDER"||error?.code==="INVALID_RECIPIENT"){console.warn("[Payment Webhook] Rejected SMS:",error.code);return res.status(403).json({success:false,code:error.code,error:error.message});}
   return errorResponse(res,error,claimedTransactionId!==null&&routerSucceeded?500:(error?.statusCode||400));
  }
 }
