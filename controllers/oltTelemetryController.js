@@ -70,8 +70,40 @@ function fieldValue(row,names) {
   }
   return undefined;
 }
+function coerceReadingList(value) {
+  if(Array.isArray(value)) return {rows:value,representation:"array"};
+  if(typeof value==="string") {
+    try {
+      const parsed=JSON.parse(value);
+      if(parsed!==value) {
+        const result=coerceReadingList(parsed);
+        return {...result,representation:"json-string/"+result.representation};
+      }
+    } catch (_) {}
+    return {rows:null,representation:"string"};
+  }
+  if(value&&typeof value==="object") {
+    if(fieldValue(value,["onuId","onu_id","onuIndex","onu_index"])!==undefined) {
+      return {rows:[value],representation:"single-reading-object"};
+    }
+    const keys=Object.keys(value);
+    if(keys.length&&keys.every(key=>/^\d+$/.test(key))) {
+      keys.sort((a,b)=>Number(a)-Number(b));
+      return {rows:keys.map(key=>value[key]),representation:"numeric-keyed-object"};
+    }
+    const values=Object.values(value);
+    if(values.length&&values.every(row=>row&&typeof row==="object"&&!Array.isArray(row)&&
+      fieldValue(row,["onuId","onu_id","onuIndex","onu_index"])!==undefined)) {
+      return {rows:values,representation:"keyed-reading-object"};
+    }
+    return {rows:null,representation:"object"};
+  }
+  return {rows:null,representation:value===null?"null":typeof value};
+}
 function payloadSummary(req,body) {
-  const rows=Array.isArray(body?.readings)?body.readings:Array.isArray(body?.onuReadings)?body.onuReadings:Array.isArray(body?.onu_readings)?body.onu_readings:[];
+  const input=fieldValue(body,["readings","onuReadings","onu_readings"]);
+  const coerced=coerceReadingList(input);
+  const rows=coerced.rows||[];
   const summarizeMac=value=>{
     const text=typeof value==="string"?value.trim():"";
     const compact=text.replace(/[\s:.-]/g,"");
@@ -83,6 +115,7 @@ function payloadSummary(req,body) {
     bodyType:Array.isArray(body)?"array":body===null?"null":typeof body,
     topLevelKeys:body&&typeof body==="object"&&!Array.isArray(body)?Object.keys(body).slice(0,30):[],
     oltIdPresent:Boolean(fieldValue(body,["oltId","olt_id"])),
+    readingsType:coerced.representation,
     readingsCount:rows.length,
     readings:rows.slice(0,100).map((row,index)=>{
       const raw=fieldValue(row,["raw","rawData","raw_data"]);
@@ -216,14 +249,16 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
   console.info("[OLT telemetry ingest] incoming payload summary", diagnostic);
   try {
     const oltId=String(fieldValue(body,["oltId","olt_id"])||"").trim().slice(0,160);
-    const readings=fieldValue(body,["readings","onuReadings","onu_readings"]);
+    const readingsInput=fieldValue(body,["readings","onuReadings","onu_readings"]);
+    const coercedReadings=coerceReadingList(readingsInput);
+    const readings=coercedReadings.rows;
     if(!oltId) {
       console.warn("[OLT telemetry ingest] rejected payload", {requestId,reason:"missing-oltId",diagnostic});
       return res.status(400).json({success:false,code:"MISSING_OLT_ID",message:"oltId is required.",requestId});
     }
     if(!Array.isArray(readings)||readings.length<1||readings.length>5000) {
-      console.warn("[OLT telemetry ingest] rejected payload", {requestId,reason:"invalid-readings-array",diagnostic});
-      return res.status(400).json({success:false,code:"INVALID_READINGS",message:"readings must contain 1–5000 ONU entries.",requestId});
+      console.warn("[OLT telemetry ingest] rejected payload", {requestId,reason:"invalid-readings-array",readingsType:coercedReadings.representation,diagnostic});
+      return res.status(400).json({success:false,code:"INVALID_READINGS",message:"readings must contain 1–5000 ONU entries as an array or keyed reading object.",requestId});
     }
     const normalized=[];
     let skippedInvalidReadings=0;
