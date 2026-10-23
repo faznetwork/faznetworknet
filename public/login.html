@@ -371,13 +371,14 @@
         <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 
         <div class="logo-box">
-            <img id="brand-logo" src="logo-Faznetwork.png" alt="FAZ Network Logo" class="logo-img" onerror="this.style.display='none'">
+            <img id="brand-logo" alt="FAZ NETWORK Logo" class="logo-img" hidden>
         </div>
 
         <div class="brand-title" id="brand-title-text">FAZ NETWORK</div>
         <div class="brand-subtitle" id="brand-subtitle-text">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</div>
 
-        <div id="status-box" class="alert-box"></div>
+        <div id="portal-banner" class="portal-banner" hidden><img id="portal-banner-image" alt="Hotspot promotional banner"></div>
+        <div id="status-box" class="alert-box" role="status" aria-live="polite"></div>
 
         <!-- Tab Switcher -->
         <div class="tab-switcher">
@@ -398,16 +399,21 @@
             </div>
         </div>
 
-        <!-- 2. Voucher & QR Code Scanner Tab -->
+        <!-- Voucher sign-in: credentials are verified server-side before RouterOS login. -->
         <div id="section-voucher" style="display: none;">
             <div class="input-group">
-                <label for="voucher_pin">ভাউচার স্ক্র্যাচ পিন কোড</label>
-                <div style="display: flex; gap: 6px;">
-                    <input type="text" id="voucher_pin" placeholder="পিন কোড লিখুন" style="flex: 1; padding: 9px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; color: #fff; text-transform: uppercase;">
-                    <button type="button" class="btn-action" style="margin-top:0; width: auto; padding: 0 12px; font-size: 12px;" onclick="openQrScanner()">📷 স্ক্যান</button>
+                <label for="voucher_pin">ভাউচার ইউজারনেম</label>
+                <div class="voucher-credential-row">
+                    <input type="text" id="voucher_pin" placeholder="ভাউচার ইউজারনেম / PIN" autocomplete="username" autocapitalize="characters" required>
+                    <button type="button" id="qr-scan-button" class="qr-scan-button" onclick="openQrScanner()" aria-label="QR কোড স্ক্যান করুন" title="QR কোড স্ক্যান করুন">▦</button>
                 </div>
             </div>
-            <button type="button" class="btn-action" onclick="handleVoucherLogin()">ভাউচার দিয়ে ইন্টারনেট চালু করুন</button>
+            <div class="input-group">
+                <label for="voucher_password">ভাউচার পাসওয়ার্ড</label>
+                <div class="input-box"><input type="password" id="voucher_password" placeholder="ভাউচার পাসওয়ার্ড লিখুন" autocomplete="current-password" required></div>
+            </div>
+            <button type="button" id="voucher-login-button" class="btn-action" onclick="handleVoucherLogin()">ভেরিফাই করে সংযোগ করুন</button>
+            <p class="voucher-help">QR কোড স্ক্যান করে ইউজারনেম পূরণ করুন, তারপর পাসওয়ার্ড যাচাই করুন।</p>
         </div>
 
         <div class="card-footer">
@@ -458,48 +464,41 @@
 <input type="hidden" id="router-ip" value="$(ip)">
 
 
-<!-- Compatible login modes: payment verification remains server-authoritative. -->
-<!-- Mobile-first FAZ NETWORK captive portal refresh: Connected to Fast Network -->
-<div class="portal-compat-controls" aria-label="Hotspot login options">
- <button type="button" id="m-btn-pin" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='true';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='false';">Voucher PIN</button>
- <button type="button" id="m-btn-member" data-active="true" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='true';document.getElementById('m-btn-online').dataset.active='false';">Member login</button>
- <button type="button" id="m-btn-online" data-active="false" onclick="document.getElementById('m-btn-pin').dataset.active='false';document.getElementById('m-btn-member').dataset.active='false';document.getElementById('m-btn-online').dataset.active='true';">Online payment</button>
- <input id="member_username" autocomplete="username" aria-label="Member username" placeholder="Username">
- <input id="member_password" type="password" autocomplete="current-password" aria-label="Member password" placeholder="Password">
- <button type="button" id="toggle-member-password" onclick="const p=document.getElementById('member_password');p.type=p.type==='password'?'text':'password'">Show password</button>
- <input id="remember-voucher" type="checkbox" aria-label="Remember voucher">
- <input id="remember-member" type="checkbox" aria-label="Remember member">
- <div id="router-error" role="alert"></div>
- <div id="portal-banner" hidden><img id="portal-banner-image" alt="Network banner"></div>
- <div id="custom-portal-slot"></div>
- <button type="button" id="btn-master-action">Continue</button>
+<style>
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.portal-banner{margin:0 0 14px;border-radius:12px;overflow:hidden;border:1px solid var(--border-color)}
+.portal-banner img{display:block;width:100%;max-height:150px;object-fit:cover}
+.logo-img[hidden],.portal-banner[hidden]{display:none!important}
+.voucher-credential-row{display:flex;align-items:stretch;gap:8px}
+.voucher-credential-row input{flex:1;min-width:0;padding:11px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border-color);border-radius:8px;font-size:14px;color:#fff}
+.qr-scan-button{flex:0 0 42px;width:42px;border:1px solid rgba(16,185,129,.45);border-radius:8px;background:rgba(16,185,129,.13);color:#34d399;font-size:24px;line-height:1;cursor:pointer}
+.qr-scan-button:disabled{opacity:.55;cursor:wait}
+.voucher-help{font-size:10px;line-height:1.5;color:var(--text-muted);margin-top:9px}
+.scanner-video{display:block;width:100%;max-height:55vh;object-fit:cover;border-radius:12px;background:#020617}
+#qr-scanner-modal .modal-card{width:min(100%,380px)}
+#qr-scanner-status{font-size:12px;color:var(--text-muted);margin:10px 0}
+</style>
+<div class="modal-overlay" id="qr-scanner-modal" role="dialog" aria-modal="true" aria-label="Voucher QR scanner">
+ <div class="modal-card">
+  <h3 style="font-size:16px;margin-bottom:10px;text-align:center">ভাউচার QR স্ক্যান</h3>
+  <video id="qr-scanner-video" class="scanner-video" autoplay muted playsinline></video>
+  <p id="qr-scanner-status" role="status">ক্যামেরা চালু হচ্ছে…</p>
+  <button type="button" class="btn-action" onclick="closeQrScanner()">স্ক্যান বন্ধ করুন</button>
+ </div>
 </div>
-<style>@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}} .portal-compat-controls{display:none}</style>
+
 
 <script>
 (function(){
 'use strict';
+const BACKEND_BASE_URL='https://faznetwork-web.onrender.com';
 const params=new URLSearchParams(window.location.search);
-const device={
- mac:normalizeMac(params.get('mac')||document.getElementById('router-mac')?.value||''),
- ip:params.get('ip')||document.getElementById('router-ip')?.value||'',
- login:params.get('link-login-only')||'$(link-login-only)',
- original:params.get('link-orig')||'$(link-orig)',
- chapId:params.get('chap-id')||'',
- chapChallenge:params.get('chap-challenge')||''
-};
-const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
-const VERIFY_API_URL=BACKEND_BASE_URL+'/api/verify-trx';
-const VOUCHER_CLAIM_URL=BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher';
-const ACTIVATE_API_URL=BACKEND_BASE_URL+'/api/hotspot-auth/activate';
-const DEVICE_LOOKUP_URL=BACKEND_BASE_URL+'/api/hotspot-auth/device-lookup';
+const device={mac:normalizeMac(params.get('mac')||document.getElementById('router-mac')?.value||''),ip:params.get('ip')||document.getElementById('router-ip')?.value||'',login:params.get('link-login-only')||'$(link-login-only)',original:params.get('link-orig')||'$(link-orig)',chapId:params.get('chap-id')||'$(chap-id)',chapChallenge:params.get('chap-challenge')||'$(chap-challenge)'};
+let selectedPackage=null,currentProvider='',paymentAccounts={},countdownTimer=null,paymentSessionExpiresAt=0,verificationMethod='transactionId',scannerStream=null,scannerTimer=null,scannerBusy=false;
+const byId=id=>document.getElementById(id);
 function normalizeMac(value){return String(value||'').trim().toUpperCase().replace(/-/g,':');}
-function chapIdentifierByte(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
-function decodeChapChallenge(value){
- const s=String(value||''); if(!s)return '';
- if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');
- let out=''; for(let i=0;i<s.length;i++){if(s[i]==='\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];} return out;
-}
+function chapIdentifierByteForMd5(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
+function decodeChapChallengeForMd5(value){const s=String(value||'');if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');let out='';for(let i=0;i<s.length;i++){if(s[i]==='\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];}return out;}
 function md5Hex(input){
  const bytes=[];for(let i=0;i<input.length;i++){let c=input.charCodeAt(i);if(c<128)bytes.push(c);else if(c<2048)bytes.push((c>>6)|192,(c&63)|128);else if(c<55296||c>=57344)bytes.push((c>>12)|224,((c>>6)&63)|128,(c&63)|128);else{c=65536+(((c&1023)<<10)|(input.charCodeAt(++i)&1023));bytes.push((c>>18)|240,((c>>12)&63)|128,((c>>6)&63)|128,(c&63)|128);}}
  const bitLen=bytes.length*8;bytes.push(128);while(bytes.length%64!==56)bytes.push(0);for(let i=0;i<8;i++)bytes.push(i<4?Math.floor(bitLen/Math.pow(256,i))&255:0);
@@ -509,338 +508,30 @@ function md5Hex(input){
  for(let i=0;i<64;i++){let F,g,s;if(i<16){F=(B&C)|(~B&D);g=i;s=shifts[i%4];}else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;s=shifts[4+i%4];}else if(i<48){F=B^C^D;g=(3*i+5)%16;s=shifts[8+i%4];}else{F=C^(B|~D);g=(7*i)%16;s=shifts[12+i%4];}const n=(A+F+K[i]+M[g])|0;const rot=(n<<s)|(n>>>(32-s));A=D;D=C;C=B;B=(B+rot)|0;}a0=(a0+A)|0;b0=(b0+B)|0;c0=(c0+C)|0;d0=(d0+D)|0;}
  return [a0,b0,c0,d0].map(n=>[0,8,16,24].map(s=>((n>>>s)&255).toString(16).padStart(2,'0')).join('')).join('');
 }
-function chapIdentifierByteForMd5(value){const s=String(value||'');if(/^\\[0-7]{3}$/.test(s))return parseInt(s.slice(1),8)&255;if(/^0x[0-9a-f]{1,2}$/i.test(s))return parseInt(s,16)&255;return s.length?s.charCodeAt(0)&255:0;}
-function decodeChapChallengeForMd5(value){const s=String(value||'');if(/^(?:[0-9a-f]{2})+$/i.test(s))return s.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');let out='';for(let i=0;i<s.length;i++){if(s[i]==='\\'&&i+3<s.length&&/[0-7]/.test(s[i+1])&&/[0-7]/.test(s[i+2])&&/[0-7]/.test(s[i+3])){out+=String.fromCharCode(parseInt(s.slice(i+1,i+4),8)&255);i+=3;}else out+=s[i];}return out;}
-function chapIdentifierByte(value){return chapIdentifierByteForMd5(value);}
-function decodeChapChallenge(value){return decodeChapChallengeForMd5(value);}
-function submitMikrotikLogin(mac,redirectUrl){
- const form=document.getElementById('mikrotik-auto-login');if(!form)return;
- const loginUrl=device.login;
- form.action=loginUrl;form.querySelector('[name="username"]').value=normalizeMac(mac||device.mac);form.querySelector('[name="password"]').value=normalizeMac(mac||device.mac);
- const dst=form.querySelector('[name="dst"]');if(dst)dst.value=redirectUrl||device.original;
- const password=form.querySelector('[name="password"]').value;
- if(device.chapChallenge){password;form.querySelector('[name="password"]').value=md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge));}
- form.submit();
-}
-function byId(id){return document.getElementById(id);}
-function requestJson(url,options){return fetch(url,options).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data;});}
-function addNoticeTicker(text){const node=byId('status-box');if(node&&text){node.textContent=text;node.style.display='block';}}
-function applyFeatures(config){if(!config)return;const data=config.config||config;const box=byId('portal-banner'),image=byId('portal-banner-image');if(data.banner_url&&box&&image){image.src=data.banner_url;box.hidden=false;} }
-async function loadPortalConfig(){try{const [brand,settings,config]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/hotspot/public-branding'),requestJson(BACKEND_BASE_URL+'/api/settings/public'),requestJson(BACKEND_BASE_URL+'/api/public/portal-config')]);if(brand.company_name&&byId('brand-title-text'))byId('brand-title-text').textContent=brand.company_name;const data=config.config||config;const packages=(config.packages||data.packages||[]).filter(p=>Number.isFinite(p.price)&&p.price>0);if(packages.length&&typeof renderPackages==='function')renderPackages(packages);if(data.display_mode==='custom_code'&&data.custom_code){const slot=byId('custom-portal-slot');if(slot)slot.innerHTML=data.custom_code;}applyFeatures(config);addNoticeTicker(config.notice||settings.notice||'');}catch(e){/* public portal remains usable if branding is unavailable */}}
-const PALETTES=[{bg:'rgba(16,185,129,.12)'},{bg:'rgba(59,130,246,.12)'},{bg:'rgba(245,158,11,.12)'},{bg:'rgba(236,72,153,.12)'},{bg:'rgba(139,92,246,.12)'},{bg:'rgba(6,182,212,.12)'},{bg:'rgba(239,68,68,.12)'},{bg:'rgba(132,204,22,.12)'}];
-function renderPackagePalette(index,node){if(node)node.style.background=PALETTES[index%PALETTES.length].bg;}
-async function quickConnect(){const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('PIN দিন।');return;}const result=await requestJson(DEVICE_LOOKUP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:device.mac,ip:device.ip,login_url:device.login})});if(result.expired&&result.can_recharge){addNoticeTicker('আপনার সংযোগের মেয়াদ শেষ। রিচার্জ করে আবার সংযোগ করুন।');return;}if(result.success&&result.username)submitMikrotikLogin(result.username,result.redirect_url);}
-async function startQrScanner(){if(!navigator.mediaDevices?.getUserMedia)return;const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});try{const video=document.createElement('video');video.srcObject=stream;await video.play();const detector='BarcodeDetector'in window?new BarcodeDetector({formats:['qr_code']}):null;if(detector){const codes=await detector.detect(video);if(codes[0]&&byId('voucher_pin'))byId('voucher_pin').value=codes[0].rawValue.trim().toUpperCase();}}finally{stream.getTracks().forEach(t=>t.stop());}}
-async function handleMasterAction(){
- const currentMethod=byId('m-btn-online')?.dataset.active==='true'?'online':byId('m-btn-pin')?.dataset.active==='true'?'pin':'member';
- if(currentMethod==='online'){
-  const trx=String(byId('cust_trx')?.value||'').trim().toUpperCase();if(!trx){addNoticeTicker('TrxID দিন।');return;}
-  const selectedPackage=window.selectedPackage||{profile:byId('selected-package')?.dataset.profile||''};
-  const result=await requestJson(VERIFY_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trxId:trx,package_id:selectedPackage.profile,mac:device.mac,ip:device.ip})});
-  if(!result.success)throw new Error(result.message||'Payment verification failed');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
- }
- if(currentMethod==='pin'){
-  const pin=String(byId('voucher_pin')?.value||'').trim().toUpperCase();if(!pin){addNoticeTicker('ভাউচার পিন দিন।');return;}
-  const result=await requestJson(ACTIVATE_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:pin,mac:device.mac,ip:device.ip})});if(!result.success)throw new Error(result.message||'Voucher rejected');submitMikrotikLogin(result.username||device.mac,result.redirect_url);return;
- }
- return submitMemberLogin();
-}
-function submitMemberLogin(){const username=String(byId('member_username')?.value||'').trim();const password=String(byId('member_password')?.value||'');if(!username||!password){addNoticeTicker('Username ও password দিন।');return;}const form=byId('mikrotik-auto-login');if(!form)return;form.action=device.login;form.querySelector('[name="username"]').value=username;form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+password+decodeChapChallenge(device.chapChallenge)):password;form.submit();}
-window.handleMasterAction=handleMasterAction;window.startQrScanner=startQrScanner;window.submitMikrotikLogin=submitMikrotikLogin;window.submitMemberLogin=submitMemberLogin;window.normalizeMac=normalizeMac;
-document.addEventListener('DOMContentLoaded',function(){const mac=byId('router-mac');if(mac)mac.value=device.mac||mac.value;const ip=byId('router-ip');if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form){let loginUrl=device.login;form.action=loginUrl;}byId('btn-master-action').addEventListener('click',handleMasterAction);loadPortalConfig();});
+function showStatus(message,isError=false){const el=byId('status-box');if(!el)return;el.textContent=String(message||'');el.style.display=message?'block':'none';el.classList.toggle('error',Boolean(isError));}
+function absoluteAssetUrl(value){if(!value)return '';try{return new URL(value,BACKEND_BASE_URL).toString();}catch(error){console.error('[Hotspot Portal] Invalid asset URL:',error);return '';}}
+async function requestJson(url,options={}){const response=await fetch(url,{cache:'no-store',...options});let data;try{data=await response.json();}catch(error){throw new Error('সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।');}if(!response.ok||data?.success===false)throw new Error(data?.error||data?.message||'অনুরোধ সম্পন্ন হয়নি।');return data;}
+function submitMikrotikLogin(username,password,redirectUrl){const form=byId('mikrotik-auto-login');if(!form)throw new Error('MikroTik login form পাওয়া যায়নি।');form.action=device.login;form.querySelector('[name="username"]').value=String(username||device.mac);const rawPassword=String(password??device.mac);form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+rawPassword+decodeChapChallenge(device.chapChallenge)):rawPassword;const dst=form.querySelector('[name="dst"]');if(dst)dst.value=redirectUrl||device.original;form.submit();}
+function switchPortalTab(tab){const recharge=byId('section-recharge'),voucher=byId('section-voucher'),rechargeBtn=byId('tab-recharge-btn'),voucherBtn=byId('tab-voucher-btn');const isRecharge=tab==='recharge';recharge.style.display=isRecharge?'block':'none';voucher.style.display=isRecharge?'none':'block';rechargeBtn.classList.toggle('active',isRecharge);voucherBtn.classList.toggle('active',!isRecharge);}
+function formatTaka(value){const amount=Number(value);return Number.isFinite(amount)?'৳ '+amount.toLocaleString('en-BD'):'৳ —';}
+function renderPackages(packages){const grid=byId('packages-grid'),summary=byId('selected-package');grid.replaceChildren();selectedPackage=null;summary.textContent='চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।';const valid=(Array.isArray(packages)?packages:[]).map(p=>({...p,profile:String(p.profile||p.profileId||p.profile_id||p.name||'').trim(),price:Number(p.price),validity:String(p.validity||p.validityLabel||p.validity_label||'').trim()})).filter(p=>p.profile&&Number.isFinite(p.price)&&p.price>0);if(!valid.length){const empty=document.createElement('div');empty.style.gridColumn='1/-1';empty.style.fontSize='11px';empty.style.color='var(--text-muted)';empty.textContent='এই মুহূর্তে পোর্টালে কোনো সক্রিয় প্যাকেজ প্রকাশ করা নেই।';grid.appendChild(empty);return;}valid.forEach((pkg,index)=>{const card=document.createElement('button');card.type='button';card.className='pkg-card';const validity=document.createElement('div');validity.className='pkg-time';validity.textContent=pkg.validity||pkg.profile;const price=document.createElement('div');price.className='pkg-price';price.textContent=formatTaka(pkg.price);card.append(validity,price);const select=()=>{selectedPackage={profile:pkg.profile,price:pkg.price,validity:pkg.validity||pkg.profile};grid.querySelectorAll('.pkg-card').forEach(node=>node.classList.toggle('selected',node===card));summary.textContent='নির্বাচিত প্যাকেজ: '+selectedPackage.validity+' — '+formatTaka(selectedPackage.price);};card.addEventListener('click',select);grid.appendChild(card);if(index===0)select();});}
+function renderMfsButtons(accounts){const grid=byId('mfs-buttons-grid');grid.replaceChildren();const labels={bkash:{name:'bKash',logo:'/assets/images/bkash-logo.png'},nagad:{name:'Nagad',logo:'/assets/images/nagad-logo.png'},rocket:{name:'Rocket',logo:'/assets/images/rocket-logo.png'},upay:{name:'Upay',logo:'/assets/images/upay-logo.png'}};const active=Object.keys(labels).filter(key=>accounts[key]&&String(accounts[key].number||accounts[key]).trim());if(!active.length){const empty=document.createElement('div');empty.style.gridColumn='1/-1';empty.style.fontSize='11px';empty.style.color='var(--text-muted)';empty.textContent='কোনো পেমেন্ট মাধ্যম সক্রিয় নেই। অনুগ্রহ করে সাপোর্টে যোগাযোগ করুন।';grid.appendChild(empty);return;}active.forEach(key=>{const info=labels[key],account=accounts[key],number=typeof account==='object'?account.number:account,btn=document.createElement('button');btn.type='button';btn.className='mfs-btn '+key;const icon=document.createElement('span');icon.className='mfs-logo-icon';const img=document.createElement('img');img.src=info.logo;img.alt='';img.className='mfs-official-logo';img.onerror=()=>{img.style.display='none';};icon.appendChild(img);const label=document.createElement('span');label.textContent=info.name+' দিয়ে পেমেন্ট';btn.append(icon,label);btn.addEventListener('click',()=>openMfsModal(key,number,info.name+' গেটওয়ে'));grid.appendChild(btn);});}
+function applyPortalSettings(config){const logo=byId('brand-logo'),logoUrl=absoluteAssetUrl(config.logoUrl||config.portal_logo_url),banner=byId('portal-banner'),bannerImg=byId('portal-banner-image');if(logoUrl){logo.src=logoUrl;logo.hidden=false;logo.onerror=()=>{logo.hidden=true;showStatus('লোগো লোড করা যায়নি। Hotspot Portal Settings-এ আপলোড করা ছবির URL যাচাই করুন।',true);};}else{logo.removeAttribute('src');logo.hidden=true;}const bannerUrl=absoluteAssetUrl(config.bannerUrl||config.banner_url);if(String(config.display_mode||'default')==='banner'&&bannerUrl){bannerImg.src=bannerUrl;banner.hidden=false;bannerImg.onerror=()=>{banner.hidden=true;showStatus('ব্যানার লোড করা যায়নি। Hotspot Portal Settings-এ ছবির URL যাচাই করুন।',true);};}else{bannerImg.removeAttribute('src');banner.hidden=true;}const title=String(config.brand_title||config.portalTitle||'FAZ NETWORK');byId('brand-title-text').textContent=title;const subtitle=String(config.brand_subtitle||'');byId('brand-subtitle-text').textContent=subtitle;byId('brand-subtitle-text').hidden=!subtitle;const notice=String(config.notice_text||'').trim();if(notice)showStatus(notice);else showStatus('');const helpline=String(config.helpline_number||config.helpline||'').trim(),link=byId('footer-helpline');if(helpline){link.textContent=helpline;link.href='tel:'+helpline;link.parentElement.hidden=false;}else{link.textContent='';link.removeAttribute('href');link.parentElement.hidden=true;}const features=config.features||{online_payment:true,voucher_pin:true,qr_scan:true};const online=features.online_payment!==false,voucherEnabled=features.voucher_pin!==false,qr=features.qr_scan!==false;byId('tab-recharge-btn').hidden=!online;byId('section-recharge').hidden=!online;byId('tab-voucher-btn').hidden=!voucherEnabled;byId('section-voucher').hidden=!voucherEnabled;byId('qr-scan-button').hidden=!qr;if(!online&&voucherEnabled)switchPortalTab('voucher');else switchPortalTab('recharge');if(!online&&!voucherEnabled)showStatus('এই মুহূর্তে হটস্পট লগইন অপশন বন্ধ আছে। সাপোর্টে যোগাযোগ করুন।',true);}
+async function loadPublicPortalData(){try{const [config,payment]=await Promise.all([requestJson(BACKEND_BASE_URL+'/api/public/portal-config'),requestJson(BACKEND_BASE_URL+'/api/public/payment/settings')]);applyPortalSettings(config);renderPackages(config.packages||[]);const providers=payment.providers&&typeof payment.providers==='object'?payment.providers:{};paymentAccounts=Object.fromEntries(Object.entries(providers).filter(([,v])=>v&&v.enabled===true&&v.number).map(([key,v])=>[String(key).toLowerCase(),v]));renderMfsButtons(paymentAccounts);const method=String(payment.verificationMethod||payment.verification_method||'').toLowerCase();verificationMethod=['senderphonenumber','sender_phone','phone','phone_number'].includes(method)?'senderPhoneNumber':'transactionId';}catch(error){console.error('[Hotspot Portal] Configuration load failed:',error);showStatus(error.message||'হটস্পট সেটিংস লোড করা যায়নি।',true);renderPackages([]);renderMfsButtons({});}}
+function openMfsModal(provider,number,title){if(!selectedPackage){showStatus('দয়া করে প্রথমে একটি প্যাকেজ নির্বাচন করুন।',true);return;}currentProvider=provider;const names={bkash:'bKash',nagad:'Nagad',rocket:'Rocket',upay:'Upay'},name=names[provider]||title;byId('mfs-modal').querySelector('.modal-card').dataset.provider=provider;const logo=byId('modal-mfs-logo');logo.src='/assets/images/'+provider+'-logo.png';logo.alt=name;logo.onerror=()=>{logo.style.visibility='hidden';};byId('modal-mfs-title').textContent=title;byId('modal-wallet-number').textContent=number;byId('mfs-payment-instructions').textContent='১. '+name+' অ্যাপ খুলে Send Money নির্বাচন করুন। ২. '+formatTaka(selectedPackage.price)+' ঠিক এই নম্বরে পাঠান। ৩. কনফিগার করা যাচাই পদ্ধতি অনুযায়ী TrxID অথবা প্রেরকের নম্বর দিন।';byId('trx-field').hidden=verificationMethod==='senderPhoneNumber';byId('cust_trx').required=verificationMethod!=='senderPhoneNumber';byId('sender-phone-field').hidden=verificationMethod!=='senderPhoneNumber';byId('cust_phone').required=verificationMethod==='senderPhoneNumber';byId('cust_trx').value='';byId('cust_phone').value='';paymentSessionExpiresAt=Date.now()+300000;byId('mfs-modal').style.display='flex';startCountdown(300);}
+function closeMfsModal(){byId('mfs-modal').style.display='none';if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null;}}
+async function copyWalletNumber(){const number=byId('modal-wallet-number').textContent;try{await navigator.clipboard.writeText(number);showStatus('পেমেন্ট নম্বর কপি হয়েছে।');}catch(error){console.error('[Hotspot Portal] Clipboard copy failed:',error);showStatus('নম্বর কপি করা যায়নি। নম্বরটি হাতে কপি করুন: '+number,true);}}
+function startCountdown(seconds){if(countdownTimer)clearInterval(countdownTimer);let remaining=seconds;const display=byId('payment-timer');const tick=()=>{const m=String(Math.floor(Math.max(remaining,0)/60)).padStart(2,'0'),s=String(Math.max(remaining,0)%60).padStart(2,'0');display.textContent=m+':'+s;if(remaining<=0){closeMfsModal();showStatus('পেমেন্ট যাচাইয়ের সময় শেষ। আবার চেষ্টা করুন।',true);return;}remaining--;};tick();countdownTimer=setInterval(tick,1000);}
+async function handleVerification(){const phone=byId('cust_phone').value.trim(),trx=byId('cust_trx').value.trim().toUpperCase(),button=byId('btn-verify-payment');if(Date.now()>=paymentSessionExpiresAt){closeMfsModal();showStatus('পেমেন্ট সেশনের সময় শেষ। আবার শুরু করুন।',true);return;}if(verificationMethod==='senderPhoneNumber'&&!/^01\\d{9}$/.test(phone)){showStatus('যে নম্বর থেকে টাকা পাঠিয়েছেন সেই ১১ ডিজিটের নম্বর দিন।',true);return;}if(verificationMethod!=='senderPhoneNumber'&&(!trx||trx.length<4)){showStatus('সঠিক TrxID প্রদান করুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}if(!selectedPackage){showStatus('প্রথমে একটি প্যাকেজ নির্বাচন করুন।',true);return;}button.disabled=true;button.textContent='যাচাই করা হচ্ছে…';try{const payload={username:device.mac,password:device.mac,amount:selectedPackage.price,profile_id:selectedPackage.profile,paymentMethod:currentProvider,mac:device.mac,ip:device.ip,service_type:'hotspot'};if(verificationMethod==='senderPhoneNumber')payload.senderPhoneNumber=phone;else payload.trxId=trx;const result=await requestJson(BACKEND_BASE_URL+'/api/public/payment/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});closeMfsModal();showStatus('পেমেন্ট যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username||device.mac,result.password||device.mac,result.redirect_url);}catch(error){console.error('[Hotspot Portal] Payment verification failed:',error);showStatus(error.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='পেমেন্ট নিশ্চিত ও সংযোগ করুন';}}
+function parseQrCredentials(raw){const value=String(raw||'').trim();if(!value)return null;try{const parsed=JSON.parse(value);if(parsed&&typeof parsed==='object'){const username=String(parsed.username||parsed.user||parsed.pin||parsed.voucher_code||'').trim(),password=String(parsed.password||parsed.pass||parsed.voucher_password||'').trim();if(username)return{username,password};}}catch(error){}try{const url=new URL(value);const username=url.searchParams.get('username')||url.searchParams.get('user')||url.searchParams.get('pin'),password=url.searchParams.get('password')||url.searchParams.get('pass');if(username)return{username,password:password||''};}catch(error){}const match=value.match(/^([^:|\\s]+)\\s*[:|]\\s*(.+)$/);if(match)return{username:match[1].trim(),password:match[2].trim()};return{username:value,password:''};}
+function stopQrScanner(){if(scannerTimer){clearInterval(scannerTimer);scannerTimer=null;}if(scannerStream){scannerStream.getTracks().forEach(track=>track.stop());scannerStream=null;}const video=byId('qr-scanner-video');if(video){video.pause();video.srcObject=null;}scannerBusy=false;byId('qr-scanner-modal').style.display='none';byId('qr-scan-button').disabled=false;}
+function closeQrScanner(){stopQrScanner();}
+async function openQrScanner(){if(!navigator.mediaDevices?.getUserMedia){const raw=prompt('ক্যামেরা সমর্থিত নয়। QR কোডের টেক্সট দিন:');if(raw)applyScannedCredentials(raw);return;}if(!('BarcodeDetector'in window)){const raw=prompt('এই ব্রাউজারে QR স্ক্যান সুবিধা নেই। QR কোডের টেক্সট দিন:');if(raw)applyScannedCredentials(raw);return;}const button=byId('qr-scan-button');button.disabled=true;byId('qr-scanner-modal').style.display='flex';byId('qr-scanner-status').textContent='ক্যামেরা পারমিশন অপেক্ষা করছে…';try{scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});const video=byId('qr-scanner-video');video.srcObject=scannerStream;await video.play();const detector=new BarcodeDetector({formats:['qr_code']});byId('qr-scanner-status').textContent='ভাউচার QR কোড ক্যামেরার সামনে ধরুন।';scannerTimer=setInterval(async()=>{if(scannerBusy||!scannerStream||video.readyState<video.HAVE_ENOUGH_DATA)return;scannerBusy=true;try{const codes=await detector.detect(video);if(codes.length&&codes[0].rawValue){const raw=codes[0].rawValue;stopQrScanner();applyScannedCredentials(raw);}}catch(error){console.error('[Hotspot Portal] QR frame detection failed:',error);}finally{scannerBusy=false;}},250);}catch(error){console.error('[Hotspot Portal] Camera startup failed:',error);stopQrScanner();showStatus('ক্যামেরা চালু করা যায়নি। ব্রাউজারের Camera permission এবং HTTPS/Router hotspot context যাচাই করুন।',true);}}
+function applyScannedCredentials(raw){const credentials=parseQrCredentials(raw);if(!credentials?.username){showStatus('QR কোডে ভাউচার ইউজারনেম পাওয়া যায়নি।',true);return;}byId('voucher_pin').value=credentials.username.toUpperCase();if(credentials.password)byId('voucher_password').value=credentials.password;showStatus(credentials.password?'QR থেকে ভাউচার তথ্য পড়া হয়েছে।':'QR থেকে ইউজারনেম পড়া হয়েছে; পাসওয়ার্ড লিখুন।');}
+async function handleVoucherLogin(){const username=byId('voucher_pin').value.trim().toUpperCase(),password=byId('voucher_password').value,button=byId('voucher-login-button');if(!username||!password){showStatus('ভাউচার ইউজারনেম এবং পাসওয়ার্ড—দুটিই লিখুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}button.disabled=true;button.textContent='ভাউচার যাচাই হচ্ছে…';try{const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:username,voucher_password:password,mac:device.mac,ip:device.ip,login_url:device.login})});if(!result.username||!result.password)throw new Error('ভাউচার যাচাই হয়েছে, কিন্তু লগইন তথ্য ফেরত আসেনি। সাপোর্টে যোগাযোগ করুন।');showStatus('ভাউচার যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username,result.password,result.redirect_url);}catch(error){console.error('[Hotspot Portal] Voucher verification failed:',error);showStatus(error.message||'ভাউচার যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='ভেরিফাই করে সংযোগ করুন';}}
+document.addEventListener('DOMContentLoaded',()=>{const mac=byId('router-mac'),ip=byId('router-ip');if(mac)mac.value=device.mac||mac.value;if(ip)ip.value=device.ip||ip.value;const form=byId('mikrotik-auto-login');if(form)form.action=device.login;byId('tab-recharge-btn').addEventListener('click',()=>switchPortalTab('recharge'));byId('tab-voucher-btn').addEventListener('click',()=>switchPortalTab('voucher'));loadPublicPortalData();});
+window.switchPortalTab=switchPortalTab;window.handleVerification=handleVerification;window.handleVoucherLogin=handleVoucherLogin;window.openQrScanner=openQrScanner;window.closeQrScanner=closeQrScanner;window.closeMfsModal=closeMfsModal;window.copyWalletNumber=copyWalletNumber;window.normalizeMac=normalizeMac;
 })();
-</script>
-<script>
-    const BACKEND_BASE_URL = 'https://faznetwork-web.onrender.com';
-    const BACKEND_API_URL = BACKEND_BASE_URL + '/api/public/payment/confirm';
-    const VOUCHER_API_URL = BACKEND_BASE_URL + '/api/hotspot/verify-voucher';
-    const PUBLIC_SETTINGS_URL = BACKEND_BASE_URL + '/api/settings/public';
-
-    let selectedPackage = null;
-    let currentProvider = '';
-    let paymentAccounts = {};
-    let countdownTimer = null;
-    let verificationMethod = "transactionId";
-    let paymentSessionExpiresAt = 0;
-
-    function switchPortalTab(tab) {
-        const secRecharge = document.getElementById('section-recharge');
-        const secVoucher = document.getElementById('section-voucher');
-        const btnRecharge = document.getElementById('tab-recharge-btn');
-        const btnVoucher = document.getElementById('tab-voucher-btn');
-
-        if (tab === 'recharge') {
-            secRecharge.style.display = 'block';
-            secVoucher.style.display = 'none';
-            btnRecharge.classList.add('active');
-            btnVoucher.classList.remove('active');
-        } else {
-            secRecharge.style.display = 'none';
-            secVoucher.style.display = 'block';
-            btnRecharge.classList.remove('active');
-            btnVoucher.classList.add('active');
-        }
-    }
-
-    function formatTaka(value) {
-        const amount = Number(value);
-        return Number.isFinite(amount) ? '৳ ' + amount.toLocaleString('en-BD') : '৳ —';
-    }
-
-    function renderPackages(packages) {
-        const grid = document.getElementById('packages-grid');
-        const summary = document.getElementById('selected-package');
-        grid.replaceChildren();
-        selectedPackage = null;
-        summary.textContent = 'চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।';
-
-        const valid = packages.filter(pkg => pkg.profile && Number(pkg.price) > 0);
-        if (!valid.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;font-size:11px;color:red;">কোনো প্যাকেজ পাওয়া যায়নি।</div>';
-            return;
-        }
-
-        valid.forEach((pkg, index) => {
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = 'pkg-card';
-
-            if (index === 0) {
-                card.classList.add('selected');
-                selectedPackage = { profile: pkg.profile, price: Number(pkg.price), validity: pkg.validity || pkg.profile };
-                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + selectedPackage.validity + ' — ' + formatTaka(selectedPackage.price);
-            }
-
-            card.innerHTML = `<div class="pkg-time">${pkg.validity || pkg.profile}</div><div class="pkg-price">${formatTaka(pkg.price)}</div>`;
-            card.addEventListener('click', () => {
-                selectedPackage = { profile: pkg.profile, price: Number(pkg.price), validity: pkg.validity || pkg.profile };
-                grid.querySelectorAll('.pkg-card').forEach(item => item.classList.remove('selected'));
-                card.classList.add('selected');
-                summary.textContent = 'নির্বাচিত প্যাকেজ: ' + selectedPackage.validity + ' — ' + formatTaka(selectedPackage.price);
-            });
-            grid.appendChild(card);
-        });
-    }
-
-    function renderMfsButtons(accounts) {
-        const grid = document.getElementById('mfs-buttons-grid');
-        grid.replaceChildren();
-        const labels = { bkash: { name: 'bKash', color: '#e2136e', logo: '/assets/images/bkash-logo.png' }, nagad: { name: 'Nagad', color: '#f7941d', logo: '/assets/images/nagad-logo.png' }, rocket: { name: 'Rocket', color: '#832b73', logo: '/assets/images/rocket-logo.png' }, upay: { name: 'Upay', color: '#0054a6', logo: '/assets/images/upay-logo.png' } };
-        const activeProviders = Object.keys(labels).filter(k => accounts[k]);
-
-        if (!activeProviders.length) {
-            grid.innerHTML = '<div style="grid-column:1/-1;font-size:11px;color:orange;">কোনো পেমেন্ট মাধ্যম কনফিগার করা নেই।</div>';
-            return;
-        }
-
-        activeProviders.forEach(prov => {
-            const info = labels[prov];
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `mfs-btn ${prov}`;
-            btn.innerHTML = `<span class="mfs-logo-icon"><img src="${info.logo}" alt="${info.name}" class="mfs-official-logo"></span> <span>${info.name} দিয়ে পেমেন্ট</span>`;
-            btn.addEventListener('click', () => openMfsModal(prov, accounts[prov], info.name + ' গেটওয়ে'));
-            grid.appendChild(btn);
-        });
-    }
-
-    async function loadPublicPortalData() {
-        try {
-            const [homeRes, setRes, paymentRes] = await Promise.all([
-                fetch(BACKEND_BASE_URL + '/', { cache: 'no-store' }),
-                fetch(PUBLIC_SETTINGS_URL, { cache: 'no-store' }).catch(() => null),
-                fetch(BACKEND_BASE_URL + '/api/public/payment/settings', { cache: 'no-store' }).catch(() => null)
-            ]);
-
-            if (homeRes.ok) {
-                const html = await homeRes.text();
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const packages = Array.from(doc.querySelectorAll('[data-buy-hotspot][data-profile][data-price]')).map(b => ({
-                    profile: b.getAttribute('data-profile'),
-                    price: Number(b.getAttribute('data-price')),
-                    validity: b.getAttribute('data-validity')
-                }));
-                renderPackages(packages);
-            }
-
-            if (setRes && setRes.ok) {
-                const setJson = await setRes.json().catch(() => ({}));
-                paymentAccounts = setJson?.settings?.payment_accounts || {};
-                const configuredMethod = String(setJson?.settings?.payment_verification_method || setJson?.settings?.verification_method || "").toLowerCase();
-                verificationMethod = ["sender_phone","senderphonenumber","phone","phone_number"].includes(configuredMethod) ? "senderPhoneNumber" : "transactionId";
-                renderMfsButtons(paymentAccounts);
-
-                const settings = setJson?.settings || {};
-                if (settings.brand_title) document.getElementById('brand-title-text').textContent = settings.brand_title;
-                if (settings.subtitle) document.getElementById('brand-subtitle-text').textContent = settings.subtitle;
-                if (settings.helpline) {
-                    const hp = document.getElementById('footer-helpline');
-                    hp.textContent = settings.helpline;
-                    hp.href = 'tel:' + settings.helpline;
-                }
-            }
-            if (paymentRes && paymentRes.ok) {
-                const paymentSettings = await paymentRes.json().catch(() => ({}));
-                if (paymentSettings.providers) {
-                    paymentAccounts = Object.fromEntries(Object.entries(paymentSettings.providers).filter(([,v]) => v && v.enabled && v.number).map(([k,v]) => [k,v.number]));
-                    renderMfsButtons(paymentAccounts);
-                }
-                verificationMethod = paymentSettings.verificationMethod === 'senderPhoneNumber' ? 'senderPhoneNumber' : 'transactionId';
-            }
-        } catch (err) {
-            renderPackages([{ profile: '1-Hour', price: 10, validity: '১ ঘণ্টা' }, { profile: '12-Hour', price: 20, validity: '১২ ঘণ্টা' }]);
-            renderMfsButtons({ bkash: '01339932887', nagad: '01339932887' });
-        }
-    }
-
-    function openMfsModal(provider, number, title) {
-        if (!selectedPackage) { alert('দয়া করে প্রথমে একটি প্যাকেজ নির্বাচন করুন।'); return; }
-        currentProvider = provider;
-        const providerMeta = {
-            bkash: { name: 'bKash', logo: '/assets/images/bkash-logo.png' },
-            nagad: { name: 'Nagad', logo: '/assets/images/nagad-logo.png' },
-            rocket: { name: 'Rocket', logo: '/assets/images/rocket-logo.png' },
-            upay: { name: 'Upay', logo: '/assets/images/upay-logo.png' }
-        }[provider];
-        const modalCard = document.querySelector('#mfs-modal .modal-card');
-        modalCard.dataset.provider = provider;
-        const logo = document.getElementById('modal-mfs-logo');
-        logo.src = providerMeta.logo; logo.alt = providerMeta.name;
-        document.getElementById('modal-mfs-title').textContent = title;
-        document.getElementById('modal-wallet-number').textContent = number;
-        document.getElementById('mfs-payment-instructions').textContent =
-            '১. ' + providerMeta.name + ' অ্যাপ খুলে Send Money নির্বাচন করুন। ২. ' +
-            formatTaka(selectedPackage.price) + ' ঠিক এই নম্বরে পাঠান। ৩. কনফিগার করা যাচাই পদ্ধতি অনুযায়ী TrxID অথবা প্রেরকের নম্বর দিন।';
-        document.getElementById('trx-field').hidden = verificationMethod === 'senderPhoneNumber';
-        document.getElementById('cust_trx').required = verificationMethod !== 'senderPhoneNumber';
-        document.getElementById('sender-phone-field').hidden = verificationMethod !== 'senderPhoneNumber';
-        document.getElementById('cust_phone').required = verificationMethod === 'senderPhoneNumber';
-        document.getElementById('cust_trx').value = '';
-        document.getElementById('cust_phone').value = '';
-        paymentSessionExpiresAt = Date.now() + 300000;
-        document.getElementById('mfs-modal').style.display = 'flex';
-        startCountdown(300);
-    }
-
-    function closeMfsModal() {
-        document.getElementById('mfs-modal').style.display = 'none';
-        if (countdownTimer) clearInterval(countdownTimer);
-    }
-
-    function copyWalletNumber() {
-        const num = document.getElementById('modal-wallet-number').textContent;
-        navigator.clipboard.writeText(num);
-        alert('নম্বরটি কপি হয়েছে: ' + num);
-    }
-
-    function startCountdown(durationSeconds) {
-        if (countdownTimer) clearInterval(countdownTimer);
-        let timer = durationSeconds;
-        const display = document.getElementById('payment-timer');
-        countdownTimer = setInterval(() => {
-            let minutes = parseInt(timer / 60, 10);
-            let seconds = parseInt(timer % 60, 10);
-            minutes = minutes < 10 ? "0" + minutes : minutes;
-            seconds = seconds < 10 ? "0" + seconds : seconds;
-            display.textContent = minutes + ":" + seconds;
-            if (--timer < 0) {
-                clearInterval(countdownTimer);
-                alert('সময় শেষ! পেমেন্ট উইন্ডোটি বাতিল করা হলো।');
-                closeMfsModal();
-            }
-        }, 1000);
-    }
-
-    async function handleVerification() {
-        const phoneInput = document.getElementById('cust_phone').value.trim();
-        const trxInput = document.getElementById('cust_trx').value.trim().toUpperCase();
-        const routerMac = document.getElementById('router-mac').value.trim();
-        const routerIp = document.getElementById('router-ip').value.trim();
-        const btn = document.getElementById('btn-verify-payment');
-        if (Date.now() >= paymentSessionExpiresAt) { alert('পেমেন্ট সেশনের সময় শেষ। আবার শুরু করুন।'); closeMfsModal(); return; }
-        if (verificationMethod === 'senderPhoneNumber' && !/^01\\d{9}$/.test(phoneInput)) { alert('যে নম্বর থেকে টাকা পাঠিয়েছেন সেই ১১ ডিজিটের নম্বর দিন।'); return; }
-        if (verificationMethod !== 'senderPhoneNumber' && (!trxInput || trxInput.length < 4)) { alert('সঠিক TrxID প্রদান করুন।'); return; }
-        btn.disabled = true; btn.textContent = 'যাচাই করা হচ্ছে...';
-        try {
-            const payload = { username: routerMac, password: routerMac, amount: selectedPackage.price, profile_id: selectedPackage.profile, paymentMethod: currentProvider, mac: routerMac, ip: routerIp, service_type: 'hotspot' };
-            if (verificationMethod === 'senderPhoneNumber') payload.senderPhoneNumber = phoneInput; else payload.trxId = trxInput;
-            const res = await fetch(BACKEND_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) throw new Error(data.message || data.error || 'পেমেন্ট ভেরিফিকেশন ব্যর্থ হয়েছে।');
-            const autoForm = document.getElementById('mikrotik-auto-login');
-            document.getElementById('mt-user').value = routerMac; document.getElementById('mt-pass').value = routerMac;
-            alert('পেমেন্ট যাচাই সফল। MikroTik-এ MAC/MAC দিয়ে সংযোগ করা হচ্ছে...'); autoForm.submit();
-        } catch (err) { alert(err.message || 'সার্ভারের সাথে সংযোগ করা যায়নি।'); }
-        finally { btn.disabled = false; btn.textContent = 'পেমেন্ট নিশ্চিত ও সংযোগ করুন'; }
-    }
-    async function openQrScanner() {
-        if (!('BarcodeDetector' in window)) {
-            const code = prompt('ভাউচার পিন বা QR টেক্সট দিন:');
-            if (code) document.getElementById('voucher_pin').value = code.trim().toUpperCase();
-            return;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            await video.play();
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            const detector = new BarcodeDetector({ formats: ['qr_code'] });
-            
-            alert('ক্যামেরা চালু হয়েছে। QR কোড স্ক্যান করুন...');
-            const scanInterval = setInterval(async () => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const barcodes = await detector.detect(canvas).catch(() => []);
-                    if (barcodes.length > 0) {
-                        clearInterval(scanInterval);
-                        stream.getTracks().forEach(t => t.stop());
-                        video.remove();
-                        document.getElementById('voucher_pin').value = barcodes[0].rawValue.trim().toUpperCase();
-                        alert('QR স্ক্যান সফল!');
-                    }
-                }
-            }, 200);
-        } catch (e) {
-            alert('ক্যামেরা পারমিশন পাওয়া যায়নি।');
-        }
-    }
-
-    async function handleVoucherLogin() {
-        const pin = document.getElementById('voucher_pin').value.trim().toUpperCase();
-        const routerMac = document.getElementById('router-mac').value.trim();
-        const routerIp = document.getElementById('router-ip').value.trim();
-
-        if (!pin) {
-            alert('ভাউচার পিন দিন।');
-            return;
-        }
-
-        try {
-            const res = await fetch(VOUCHER_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voucher_code: pin, mac: routerMac, ip: routerIp })
-            });
-            const data = await res.json().catch(() => JSON.parse('{"success": false}'));
-            if (!res.ok || !data.success) {
-                alert(data.message || 'ভাউচার সঠিক নয় বা ব্যবহৃত হয়েছে।');
-                return;
-            }
-
-            const autoForm = document.getElementById('mikrotik-auto-login');
-            document.getElementById('mt-user').value = routerMac;
-            document.getElementById('mt-pass').value = routerMac;
-            autoForm.submit();
-        } catch (err) {
-            alert('সার্ভার ত্রুটি।');
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', loadPublicPortalData);
 </script>
 
 </body>
