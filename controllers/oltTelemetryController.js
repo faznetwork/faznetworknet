@@ -106,8 +106,9 @@ function normalizeReading(row, oltId) {
   const observedAt=row.observedAt ? new Date(row.observedAt) : new Date();
   if(Number.isNaN(observedAt.getTime()) || observedAt.getTime()>Date.now()+300000) throw new Error('Invalid observedAt timestamp.');
   const raw=row.raw&&typeof row.raw==="object"&&!Array.isArray(row.raw)?row.raw:{};
+  const hasRootOnuMac=typeof row.onuMac==="string"&&row.onuMac.trim()!=="";
   return {
-    oltId, onuId, onuMac:normalizeMac(row.onuMac||raw.onuMac||raw.onu_mac||raw.macAddress), pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
+    oltId, onuId, onuMac:normalizeMac(row.onuMac||raw.onuMac||raw.onu_mac||raw.macAddress), onuMacAuthoritative:hasRootOnuMac, pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
     ponPort:String(row.ponPort||'').trim().slice(0,100)||null,
     status, rx:power(row.rxPowerDbm,-50,10),
     tx:power(row.txPowerDbm,-50,20),
@@ -138,21 +139,37 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
       for(const r of normalized) {
         const matchedSession=matchPppoeSession(r.clientMacs,activeSessions.rows);
         let compactRouterMac="";
+        let routerMac=null;
         if(matchedSession) {
           r.pppoeUsername=String(matchedSession.username||"").trim();
           r.identityMatched=true;
           identityMatched++;
           compactRouterMac=normalizeClientMac(matchedSession.callerId);
-          const routerMac=compactRouterMac.match(/.{2}/g).join(":");
-          const compactOnuMac=normalizeClientMac(r.onuMac);
-          // Caller-id identifies the customer's router. Never store that value
-          // as the ONU MAC, even when the collector accidentally labels it ONU.
-          if(compactOnuMac && compactOnuMac===compactRouterMac) r.onuMac=null;
+          routerMac=compactRouterMac.match(/.{2}/g).join(":");
+        }
+
+        // The root-level onuMac is an explicit collector field and is authoritative.
+        // Apply caller-id filtering only to legacy raw-field MAC fallbacks.
+        const compactOnuMac=normalizeClientMac(r.onuMac);
+        if(compactOnuMac && compactOnuMac===compactRouterMac && !r.onuMacAuthoritative) r.onuMac=null;
+
+        // A payload may carry its own PPPoE username; if not, reuse the existing
+        // OLT/ONU association so a valid root ONU MAC survives a temporary session gap.
+        if(!r.pppoeUsername && r.onuMacAuthoritative) {
+          const previous=await client.query(
+            "SELECT pppoe_username FROM olt_telemetry WHERE olt_id=$1 AND onu_id=$2 LIMIT 1",
+            [r.oltId,r.onuId]
+          );
+          r.pppoeUsername=String(previous.rows[0]?.pppoe_username||"").trim()||null;
+        }
+        const customerUsername=String(r.pppoeUsername||"").trim();
+        if(customerUsername) {
           const safeOnuMac=r.onuMac;
           const safeOnuCompact=safeOnuMac?normalizeClientMac(safeOnuMac).toLowerCase():"";
           await client.query(`
             UPDATE customers c
                SET onu_mac=CASE
+                     WHEN $6::boolean AND $1::text IS NOT NULL THEN $1
                      WHEN $1::text IS NOT NULL AND NOT EXISTS (
                        SELECT 1 FROM customers other
                         WHERE other.id<>c.id
@@ -161,9 +178,9 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
                      WHEN $5::text<>'' AND regexp_replace(lower(COALESCE(c.onu_mac,'')),'[^0-9a-f]','','g')=lower($5) THEN NULL
                      ELSE c.onu_mac
                    END,
-                   router_mac=$2,updated_at=NOW()
+                   router_mac=COALESCE($2,c.router_mac),updated_at=NOW()
              WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
-          `,[safeOnuMac,routerMac,r.pppoeUsername,safeOnuCompact,compactRouterMac.toLowerCase()]);
+          `,[safeOnuMac,routerMac,customerUsername,safeOnuCompact,compactRouterMac.toLowerCase(),r.onuMacAuthoritative]);
         }
         const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
