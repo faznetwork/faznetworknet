@@ -340,6 +340,10 @@
             .main-content { margin-left: 0; }
         }
     
+        @media (min-width: 769px) {
+            html.admin-sidebar-collapsed .sidebar { left: calc(-1 * var(--sidebar-width)); }
+            html.admin-sidebar-collapsed .main-content { margin-left: 0; }
+        }
         .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:999}
         .sidebar-backdrop.show{display:block}
         /* Mobile drawer/backdrop hardening: navigation must never leave an overlay behind. */
@@ -2031,8 +2035,8 @@
             <div id="mobilePageLoadingBar" class="mobile-page-loading-bar" aria-hidden="true"></div>
             <div class="container-fluid gap-2">
                 <div class="d-flex align-items-center gap-2 min-w-0">
-                    <button id="mobileSidebarToggle" type="button" class="btn btn-outline-success d-md-none" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(); return false;">
-                        <span aria-hidden="true">☰</span>
+                    <button id="mobileSidebarToggle" type="button" class="btn btn-outline-success" aria-label="Open navigation" title="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(); return false;">
+                        <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
                     </button>
                     <span class="fs-6 fw-semibold text-secondary" id="pageTitle" data-key="dashboard">Dashboard</span>
                 </div>
@@ -4280,9 +4284,43 @@ window.editHotspotUser=function(username,event){
             }, true);
         }
 
-        function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);if(button)button.setAttribute('aria-expanded',open?'true':'false');}
+        function syncMobileSidebarState(){
+            const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');
+            const isMobile=window.innerWidth<=768;
+            const open=isMobile?Boolean(sidebar&&sidebar.classList.contains('show')):!document.documentElement.classList.contains('admin-sidebar-collapsed');
+            if(backdrop)backdrop.classList.toggle('show',isMobile&&open);
+            document.body.classList.toggle('sidebar-open',isMobile&&open);
+            if(button){button.setAttribute('aria-expanded',open?'true':'false');const label=isMobile?(open?'Close navigation':'Open navigation'):(open?'Collapse navigation':'Expand navigation');button.setAttribute('aria-label',label);button.setAttribute('title',label);}
+        }
         function closeSidebarMobile(){purgeStuckBackdrops();const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('show');const backdrop=document.getElementById('sidebarBackdrop');if(backdrop)backdrop.classList.remove('show');if(document.body)document.body.classList.remove('sidebar-open');syncMobileSidebarState();}
-        function toggleSidebar(){const sidebar=document.getElementById('sidebar');if(!sidebar||window.innerWidth>=768)return;sidebar.classList.toggle('show');syncMobileSidebarState();}
+        function toggleSidebar(){
+            const sidebar=document.getElementById('sidebar');if(!sidebar)return;
+            if(window.innerWidth<=768){sidebar.classList.toggle('show');syncMobileSidebarState();return;}
+            const root=document.documentElement,collapsed=root.classList.toggle('admin-sidebar-collapsed');
+            try{localStorage.setItem('fazAdminSidebarCollapsed:v1',collapsed?'1':'0');}catch(_){}
+            syncMobileSidebarState();
+        }
+        function restoreActiveSidebarMenu(){
+            const currentPath=window.location.pathname.replace(/\/$/,'')||'/';
+            const links=Array.from(document.querySelectorAll('#sidebar a[href]'));
+            links.forEach(link=>{link.classList.remove('active');link.removeAttribute('aria-current');});
+            const matches=links.filter(link=>{try{const url=new URL(link.getAttribute('href'),window.location.origin);return url.origin===window.location.origin&&url.pathname.replace(/\/$/,'')===currentPath&&!/^javascript:/i.test(link.getAttribute('href')||'');}catch(_){return false;}});
+            matches.forEach(link=>{
+                link.classList.add('active');link.setAttribute('aria-current','page');
+                let submenu=link.closest('ul.submenu');
+                while(submenu){
+                    submenu.classList.add('show');
+                    const parentToggle=submenu.previousElementSibling;
+                    if(parentToggle&&parentToggle.matches('button.dropdown-toggle')){
+                        parentToggle.setAttribute('aria-expanded','true');
+                        const arrow=parentToggle.querySelector('.arrow-icon');
+                        if(arrow){arrow.classList.add('bi-chevron-up');arrow.classList.remove('bi-chevron-down');}
+                    }
+                    submenu=submenu.parentElement?submenu.parentElement.closest('ul.submenu'):null;
+                }
+            });
+        }
+        restoreActiveSidebarMenu();
 
         function toggleSubmenu(event, button) {
             if (event) {
@@ -4294,8 +4332,12 @@ window.editHotspotUser=function(username,event){
             const isGeneralSettingsParent = button.classList.contains('general-settings-toggle');
             const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
             const isInsideGeneralSettings = /^\/admin\/settings(?:\/|$)/.test(currentPath);
-            // Keep General Settings expanded whenever any of its routes is active.
-            const isOpen = isGeneralSettingsParent && isInsideGeneralSettings
+            const containsCurrentRoute = Boolean(submenu && Array.from(submenu.querySelectorAll('a[href]')).some(link => {
+                try { return new URL(link.getAttribute('href'), window.location.origin).pathname.replace(/\/$/, '') === currentPath; }
+                catch (_) { return false; }
+            }));
+            // Keep the active route's parent expanded so returning to a page never hides its submenu.
+            const isOpen = containsCurrentRoute || (isGeneralSettingsParent && isInsideGeneralSettings)
                 ? true
                 : Boolean(submenu && !submenu.classList.contains('show'));
             if (submenu) submenu.classList.toggle('show', isOpen);
