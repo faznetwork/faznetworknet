@@ -32,19 +32,76 @@ function secureEqual(a,b) {
   const aa=Buffer.from(String(a||'')), bb=Buffer.from(String(b||''));
   return aa.length===bb.length && aa.length>0 && crypto.timingSafeEqual(aa,bb);
 }
+function requestTraceId(req) {
+  const supplied=String(req.get("x-request-id")||"").trim();
+  return /^[a-zA-Z0-9._:-]{1,80}$/.test(supplied) ? supplied : crypto.randomUUID();
+}
 function authenticateAgent(req,res,next) {
   const expected=String(process.env.OLT_COLLECTOR_TOKEN||'');
   const auth=String(req.get('authorization')||'');
   const token=auth.match(/^Bearer\s+(.+)$/i)?.[1] || '';
-  if (!expected) return res.status(503).json({success:false,message:'OLT collector is not configured on this server.'});
-  if (!secureEqual(token,expected)) return res.status(401).json({success:false,message:'Unauthorized collector.'});
+  if (!expected) {
+    console.error("[OLT telemetry auth] collector token is not configured", { requestId: requestTraceId(req) });
+    return res.status(503).json({success:false,message:'OLT collector is not configured on this server.'});
+  }
+  if (!secureEqual(token,expected)) {
+    console.warn("[OLT telemetry auth] rejected collector request", {
+      requestId: requestTraceId(req),
+      authorizationPresent: Boolean(auth),
+      bearerFormatValid: /^Bearer\s+.+$/i.test(auth)
+    });
+    return res.status(401).json({success:false,message:'Unauthorized collector.'});
+  }
   next();
 }
 function normalizeMac(value) {
-  const raw=String(value||'').trim().replace(/-/g,':').toLowerCase();
+  const raw=String(value??"").trim().toLowerCase();
   if (!raw) return null;
-  if (!/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw)) throw new Error('Invalid ONU MAC address.');
-  return raw;
+  const compact=raw.replace(/[\s:.-]/g,"");
+  if (!/^[0-9a-f]{12}$/.test(compact)) throw new Error("Invalid ONU MAC address.");
+  return compact.match(/.{2}/g).join(":");
+}
+function fieldValue(row,names) {
+  if(!row||typeof row!=="object"||Array.isArray(row)) return undefined;
+  for(const name of names) {
+    if(Object.prototype.hasOwnProperty.call(row,name) && row[name]!==undefined && row[name]!==null) return row[name];
+  }
+  return undefined;
+}
+function payloadSummary(req,body) {
+  const rows=Array.isArray(body?.readings)?body.readings:Array.isArray(body?.onuReadings)?body.onuReadings:Array.isArray(body?.onu_readings)?body.onu_readings:[];
+  const summarizeMac=value=>{
+    const text=typeof value==="string"?value.trim():"";
+    const compact=text.replace(/[\s:.-]/g,"");
+    return {present:Boolean(text),type:value===undefined||value===null?"missing":typeof value,format:/^[0-9a-f]{12}$/i.test(compact)?"recognized":text?"unrecognized":"missing"};
+  };
+  return {
+    requestId:requestTraceId(req),
+    contentType:String(req.get("content-type")||"").slice(0,100),
+    bodyType:Array.isArray(body)?"array":body===null?"null":typeof body,
+    topLevelKeys:body&&typeof body==="object"&&!Array.isArray(body)?Object.keys(body).slice(0,30):[],
+    oltIdPresent:Boolean(fieldValue(body,["oltId","olt_id"])),
+    readingsCount:rows.length,
+    readings:rows.slice(0,100).map((row,index)=>{
+      const raw=fieldValue(row,["raw","rawData","raw_data"]);
+      const clients=fieldValue(raw,["clientMacs","client_macs"]);
+      return {
+        index,
+        rowType:Array.isArray(row)?"array":row===null?"null":typeof row,
+        keys:row&&typeof row==="object"&&!Array.isArray(row)?Object.keys(row).slice(0,30):[],
+        onuIdPresent:Boolean(fieldValue(row,["onuId","onu_id","onuIndex","onu_index"])),
+        onuMac:summarizeMac(fieldValue(row,["onuMac","onu_mac"])),
+        statusType:fieldValue(row,["status","state"])===undefined?"missing":typeof fieldValue(row,["status","state"]),
+        ponPortPresent:Boolean(fieldValue(row,["ponPort","pon_port"])),
+        rxPowerPresent:fieldValue(row,["rxPowerDbm","rx_power_dbm","rxPower","rx_power"])!==undefined,
+        txPowerPresent:fieldValue(row,["txPowerDbm","tx_power_dbm","txPower","tx_power"])!==undefined,
+        observedAtPresent:fieldValue(row,["observedAt","observed_at"])!==undefined,
+        rawKeys:raw&&typeof raw==="object"&&!Array.isArray(raw)?Object.keys(raw).slice(0,30):[],
+        clientMacCount:Array.isArray(clients)?clients.length:0
+      };
+    }),
+    diagnosticsTruncated:rows.length>100
+  };
 }
 function normalizeClientMac(value) {
   const compact=String(value??"").replace(/[^0-9a-f]/gi,"").toUpperCase();
@@ -93,41 +150,98 @@ function safeRawJson(value) {
   } catch (_) { return "{}"; }
 }
 function normalizeReading(row, oltId) {
-  const onuId=String(row.onuId||'').trim().slice(0,160);
-  if (!onuId) throw new Error('Every reading must include onuId.');
-  const status=String(row.status||'unknown').toLowerCase();
-  if (!['online','offline','los','unknown'].includes(status)) throw new Error('Invalid ONU status.');
-  const power=(value,min,max)=>{
-    // V-SOL exposes RX/TX as OCTET STRING on some firmware revisions.
-    // Parse only a plain numeric string or an explicit dBm value; never guess
-    // whether encoded integer values are tenths/hundredths of a dBm.
-    return parseOpticalPowerDbm(value,min,max);
+  if(!row||typeof row!=="object"||Array.isArray(row)) throw new Error("reading must be a JSON object.");
+  const onuId=String(fieldValue(row,["onuId","onu_id","onuIndex","onu_index"])??"").trim().slice(0,160);
+  if(!onuId) throw new Error("required field onuId is missing.");
+  const issues=[];
+  const statusValue=String(fieldValue(row,["status","state"])??"unknown").trim().toLowerCase();
+  const statusMap={online:"online",up:"online",on:"online","1":"online",offline:"offline",down:"offline",off:"offline","0":"offline",los:"los",unknown:"unknown"};
+  const status=statusMap[statusValue]||"unknown";
+  if(!statusMap[statusValue]) issues.push({field:"status",reason:"unsupported-value-defaulted-to-unknown"});
+  const power=(names,min,max,field)=>{
+    const value=fieldValue(row,names);
+    const parsed=parseOpticalPowerDbm(value,min,max);
+    if(value!==undefined&&value!==null&&value!==""&&parsed===null) issues.push({field,reason:"unrecognized-or-out-of-range-value"});
+    return parsed;
   };
-  const observedAt=row.observedAt ? new Date(row.observedAt) : new Date();
-  if(Number.isNaN(observedAt.getTime()) || observedAt.getTime()>Date.now()+300000) throw new Error('Invalid observedAt timestamp.');
-  const raw=row.raw&&typeof row.raw==="object"&&!Array.isArray(row.raw)?row.raw:{};
-  const hasRootOnuMac=typeof row.onuMac==="string"&&row.onuMac.trim()!=="";
+  const observedValue=fieldValue(row,["observedAt","observed_at"]);
+  let observedAt=observedValue?new Date(observedValue):new Date();
+  if(Number.isNaN(observedAt.getTime())||observedAt.getTime()>Date.now()+300000) {
+    observedAt=new Date();
+    issues.push({field:"observedAt",reason:"invalid-value-defaulted-to-server-time"});
+  }
+  const rawValue=fieldValue(row,["raw","rawData","raw_data"]);
+  const raw=rawValue&&typeof rawValue==="object"&&!Array.isArray(rawValue)?rawValue:{};
+  const onuMacValue=fieldValue(row,["onuMac","onu_mac"]);
+  let onuMac=null;
+  let onuMacAuthoritative=false;
+  if(typeof onuMacValue==="string"&&onuMacValue.trim()) {
+    try {
+      onuMac=normalizeMac(onuMacValue);
+      onuMacAuthoritative=Boolean(onuMac);
+    } catch (_) {
+      issues.push({field:"onuMac",reason:"invalid-mac-format"});
+    }
+  } else if(onuMacValue!==undefined&&onuMacValue!==null&&onuMacValue!=="") {
+    issues.push({field:"onuMac",reason:"expected-string"});
+  } else {
+    issues.push({field:"onuMac",reason:"missing-root-field"});
+  }
+  const stringField=(names,max)=>{
+    const value=fieldValue(row,names);
+    return (typeof value==="string"||typeof value==="number"?String(value):"").trim().slice(0,max)||null;
+  };
+  const clientMacValue=fieldValue(raw,["clientMacs","client_macs"]);
   return {
-    oltId, onuId, onuMac:hasRootOnuMac?normalizeMac(row.onuMac):null, onuMacAuthoritative:hasRootOnuMac, pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
-    ponPort:String(row.ponPort||'').trim().slice(0,100)||null,
-    status, rx:power(row.rxPowerDbm,-50,10),
-    tx:power(row.txPowerDbm,-50,20),
+    oltId, onuId, onuMac, onuMacAuthoritative,
+    pppoeUsername:stringField(["pppoeUsername","pppoe_username"],160),
+    ponPort:stringField(["ponPort","pon_port"],100),
+    status,
+    rx:power(["rxPowerDbm","rx_power_dbm","rxPower","rx_power"],-50,10,"rxPowerDbm"),
+    tx:power(["txPowerDbm","tx_power_dbm","txPower","tx_power"],-50,20,"txPowerDbm"),
     observedAt:observedAt.toISOString(),
-    sourceAgent:String(row.sourceAgent||'').trim().slice(0,160)||null,
+    sourceAgent:stringField(["sourceAgent","source_agent"],160),
     raw:safeRawJson(raw),
-    clientMacs:Array.isArray(raw.clientMacs)?raw.clientMacs:[]
+    clientMacs:Array.isArray(clientMacValue)?clientMacValue:[],
+    normalizationIssues:issues
   };
 }
 exports.syncTelemetry = [authenticateAgent, async (req,res) => {
+  const requestId=requestTraceId(req);
+  const body=req.body||{};
+  const diagnostic=payloadSummary(req,body);
+  console.info("[OLT telemetry ingest] incoming payload summary", diagnostic);
   try {
-    await ensureSchema();
-    const body=req.body||{};
-    const oltId=String(body.oltId||'').trim().slice(0,160);
-    const readings=body.readings;
-    if(!oltId) return res.status(400).json({success:false,message:'oltId is required.'});
-    if(!Array.isArray(readings)||readings.length<1||readings.length>5000) return res.status(400).json({success:false,message:'readings must contain 1–5000 ONU entries.'});
+    const oltId=String(fieldValue(body,["oltId","olt_id"])||"").trim().slice(0,160);
+    const readings=fieldValue(body,["readings","onuReadings","onu_readings"]);
+    if(!oltId) {
+      console.warn("[OLT telemetry ingest] rejected payload", {requestId,reason:"missing-oltId",diagnostic});
+      return res.status(400).json({success:false,code:"MISSING_OLT_ID",message:"oltId is required.",requestId});
+    }
+    if(!Array.isArray(readings)||readings.length<1||readings.length>5000) {
+      console.warn("[OLT telemetry ingest] rejected payload", {requestId,reason:"invalid-readings-array",diagnostic});
+      return res.status(400).json({success:false,code:"INVALID_READINGS",message:"readings must contain 1–5000 ONU entries.",requestId});
+    }
     const normalized=[];
-    for(const row of readings) normalized.push(normalizeReading(row||{},oltId));
+    let skippedInvalidReadings=0;
+    for(let index=0;index<readings.length;index++) {
+      try {
+        const reading=normalizeReading(readings[index],oltId);
+        if(reading.normalizationIssues.length) {
+          console.warn("[OLT telemetry ingest] optional fields normalized", {requestId,index,issues:reading.normalizationIssues});
+        }
+        delete reading.normalizationIssues;
+        normalized.push(reading);
+      } catch(error) {
+        skippedInvalidReadings++;
+        console.warn("[OLT telemetry ingest] skipped invalid reading", {requestId,index,reason:error.message});
+      }
+    }
+    if(!normalized.length) {
+      console.warn("[OLT telemetry ingest] no valid readings to store", {requestId,skippedInvalidReadings,diagnostic});
+      return res.status(400).json({success:false,code:"NO_VALID_READINGS",message:"No readings included a valid onuId.",received:readings.length,skipped:skippedInvalidReadings,requestId});
+    }
+    await ensureSchema();
     const client=await db.getPool().connect();
     let count=0;
     let identityMatched=0;
@@ -212,10 +326,21 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
       await client.query('COMMIT');
     } catch(error) { try{await client.query('ROLLBACK')}catch(_){} throw error; }
     finally {client.release();}
-    return res.json({success:true,oltId,received:readings.length,processed:count,skippedStale:normalized.length-count,identityMatched,receivedAt:new Date().toISOString()});
+    return res.json({success:true,requestId,oltId,received:readings.length,processed:count,skipped:skippedInvalidReadings,skippedStale:normalized.length-count,identityMatched,receivedAt:new Date().toISOString()});
   } catch(error) {
-    console.error('[OLT telemetry ingest]',error.message);
-    return res.status(400).json({success:false,message:error.message||'Unable to store OLT telemetry.'});
+    const clientError=Number.isInteger(error.statusCode)&&error.statusCode>=400&&error.statusCode<500;
+    console.error("[OLT telemetry ingest] processing failure", {
+      requestId,
+      status:clientError?error.statusCode:500,
+      code:error.code||null,
+      message:error.message||"Unknown error"
+    });
+    return res.status(clientError?error.statusCode:500).json({
+      success:false,
+      code:clientError?"INVALID_TELEMETRY":"TELEMETRY_INGEST_FAILED",
+      message:clientError?error.message:"Unable to store OLT telemetry.",
+      requestId
+    });
   }
 }];
 exports.normalizeMac = normalizeMac;
