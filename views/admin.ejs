@@ -7172,7 +7172,7 @@ async function deletePlan(id,name){
             }
             const initials = metadata.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'CU';
             const sessionMeta = networkStatus.online ? '<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ' + escapeHtml(t.uptime) + ': ' + escapeHtml(user.session_uptime || '-') + '</div>' : '';
-            const routerStatusBadge = '<span class="customer-router-status-badge ' + (networkStatus.online ? 'is-online' : 'is-offline') + '"><i class="bi ' + (networkStatus.online ? 'bi-wifi' : 'bi-wifi-off') + '"></i>' + (networkStatus.online ? 'Router Online' : 'Router Offline') + '</span>';
+            const routerStatusBadge = '<br><span class="customer-status-badge ' + (networkStatus.online ? 'status-paid' : 'status-unpaid') + '"><i class="bi ' + (networkStatus.online ? 'bi-wifi' : 'bi-wifi-off') + '"></i>' + (networkStatus.online ? 'Router Online' : 'Router Offline') + '</span>';
             const isExpired = billingStatus === 'expired' || networkStatus.key === 'expired_status';
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
