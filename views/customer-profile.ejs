@@ -327,7 +327,7 @@ const bytes=v=>{const n=Number(v||0);if(!n)return'0 B';const u=['B','KB','MB','G
 const date=v=>v?FazDate.formatDate(v):'—';
 const open=x=>bootstrap.Modal.getOrCreateInstance($(x)).show();
 function render(){const c=state.customer,l=state.live,p=state.package||{},online=!!l.isLive,billingStatus=String(c.billing_status||'unpaid').toLowerCase(),billingLabel=String(c.billing_label||'Unpaid / Expired'),billingClass=String(c.billing_badge_class||'badge bg-danger'),s=String(c.status||'active').toLowerCase(),suspended=s==='suspended'||s==='inactive';
-$('name').textContent=c.name||'Customer';$('phone').textContent=c.phone||'—';$('username').textContent=c.username||'—';$('liveIp').textContent=(online?'IP '+(l.ip||'—'):'Offline · IP '+(l.ip||'—'))+' · Router MAC '+(hasValue(l.mac)?l.mac:(hasValue(c.routerMac)?c.routerMac:'—'));$('status').textContent='Billing: '+(billingStatus==='expired'?'Expired':billingLabel);$('status').className=billingStatus==='expired'?'badge bg-danger':billingClass;$('routerStatus').innerHTML='<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');$('routerStatus').className='badge '+(online?'bg-success':'bg-secondary');
+$('name').textContent=c.name||'Customer';$('phone').textContent=c.phone||'—';$('username').textContent=c.username||'—';$('liveIp').textContent=(online?'IP '+(l.ip||'—'):'Offline · IP '+(l.ip||'—'))+' · Router MAC '+(hasValue(l.mac)?l.mac:(hasValue(c.routerMac)?c.routerMac:'—'));$('status').textContent='Billing: '+(billingStatus==='expired'?'Expired':billingLabel);$('status').className=billingStatus==='expired'?'badge bg-danger':billingClass;$('routerStatus').innerHTML=l.routerStatusUnavailable?'<span class="live-dot me-1"></span>Router: Unavailable':!l.routerStatusVerified?'<span class="live-dot me-1"></span>Checking router':'<span class="live-dot me-1 '+(online?'online':'')+'"></span>Router: '+(online?'Online':'Offline');$('routerStatus').className='badge '+(l.routerStatusUnavailable?'bg-warning text-dark':!l.routerStatusVerified?'bg-secondary':online?'bg-success':'bg-secondary');
 $('pkg').textContent=p.name||c.packageName||'—';$('rate').textContent='Bandwidth '+(p.rateLimit||'Not set');const resolvedPool=hasValue(l.poolName)?l.poolName:(hasValue(p.poolName)?p.poolName:'');$('pool').textContent=resolvedPool||'Pool not resolved';$('days').textContent=billingLabel;$('expiry').textContent=date(c.expirationDate);$('cycle').textContent=String(c.billingCycle||'monthly')==='custom_days'?'Custom Days ('+Number(c.billingDurationDays||0)+' days)':'Monthly';$('uptime').textContent=online?(l.uptime||'Connected'):'Offline';$('rx').textContent=online?'Waiting for live rate…':'Offline';$('tx').textContent=online?'Waiting for live rate…':'Offline';$('trafficStatus').textContent=online?'Connected · sampling traffic…':'Offline · no active PPPoE session';$('reason').textContent=l.lastDisconnectReason||c.lastDisconnectReason||'Not available';
 [['fullName',c.fullName],['phone2',c.phone],['alt',c.alternativePhone],['nid',c.nid],['address',c.installationAddress],['area',c.areaZone],['connection',date(c.connectionDate)],['user2',c.username],['onu',savedOnuMac()],['routerMac',c.routerMac||''],['box',c.splitterBox],['core',c.fiberCore],['olt',c.oltPonPort],['remote',c.remoteAddress],['contactEmail',c.email],['contactWhatsapp',c.whatsapp_phone||c.phone],].forEach(([k,v])=>$(k).textContent=v||'—');$('onu').textContent=savedOnuMac()||'Awaiting ONU MAC';delete $('onu').dataset.oltVerified;delete $('onu').dataset.oltStale;$('pass').value=c.password||'';$('renewPkg').value=p.name||c.packageName||'';$('amount').value=Number(p.price||0).toFixed(2);$('suspend').innerHTML='<i class="bi '+(suspended?'bi-check-circle':'bi-slash-circle')+' me-1"></i>'+(suspended?'Reactivate Line':'Suspend Line');$('pkgSelect').innerHTML=(state.plans||[]).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+' · ৳'+Number(x.price||0).toFixed(2)+'</option>').join('')||'<option>No packages</option>';
 const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+date(x.date)+'</td><td>'+esc(x.packageName||p.name||'—')+'</td><td>৳'+Number(x.amount||0).toFixed(2)+'</td><td>'+esc(x.method||'—')+'</td><td class="mono">'+esc(x.trxId||'—')+'</td><td><span class="badge '+(String(x.status||'').toUpperCase()==='PAID'?'bg-success':'bg-secondary')+'">'+esc(x.status||'—')+'</span></td></tr>').join(''):'<tr><td colspan="7" class="text-center text-muted py-4">No transactions. Record the first payment above.</td></tr>'}
@@ -424,12 +424,14 @@ async function loadLiveSession(){
    if(unavailable)banner.textContent='Live router status temporarily unavailable; saved customer records remain available. Retrying automatically.';
   }
   if(unavailable){
+   state.live={...previous,routerStatusVerified:false,routerStatusUnavailable:true};
+   render();
    $('trafficStatus').textContent='Live traffic unavailable · retrying';
    console.warn('[Customer live traffic] '+(incoming.live_sync||'unavailable'));
    return;
   }
   const online=Boolean(incoming.online);
-  state.live={...previous,...incoming,mac:hasValue(incoming.mac)?incoming.mac:(previous.mac||''),ip:hasValue(incoming.ip)?incoming.ip:(previous.ip||''),poolName:hasValue(incoming.poolName)?incoming.poolName:(previous.poolName||''),isLive:online};
+  state.live={...previous,...incoming,mac:hasValue(incoming.mac)?incoming.mac:(previous.mac||''),ip:hasValue(incoming.ip)?incoming.ip:(previous.ip||''),poolName:hasValue(incoming.poolName)?incoming.poolName:(previous.poolName||''),isLive:online,routerStatusVerified:true,routerStatusUnavailable:false};
   const l=state.live;
   $('uptime').textContent=online?(l.uptime||'Connected'):'Offline';
   $('rx').textContent=online?(l.download||'0 bps'):'Offline';
@@ -441,6 +443,8 @@ async function loadLiveSession(){
  }catch(error){
   const banner=$('liveStatusBanner');
   if(banner){banner.classList.remove('d-none');banner.textContent='Live router status temporarily unavailable; saved customer records remain available. Retrying automatically.';}
+  state.live={...(state.live||{}),routerStatusVerified:false,routerStatusUnavailable:true};
+  render();
   $('trafficStatus').textContent='Live traffic unavailable · retrying';
   console.warn('[Customer live traffic]',error.message);
  }finally{livePollBusy=false;}
