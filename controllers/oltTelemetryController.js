@@ -33,8 +33,10 @@ function secureEqual(a,b) {
   return aa.length===bb.length && aa.length>0 && crypto.timingSafeEqual(aa,bb);
 }
 function requestTraceId(req) {
+  if(req.oltTelemetryRequestId) return req.oltTelemetryRequestId;
   const supplied=String(req.get("x-request-id")||"").trim();
-  return /^[a-zA-Z0-9._:-]{1,80}$/.test(supplied) ? supplied : crypto.randomUUID();
+  req.oltTelemetryRequestId=/^[a-zA-Z0-9._:-]{1,80}$/.test(supplied) ? supplied : crypto.randomUUID();
+  return req.oltTelemetryRequestId;
 }
 function authenticateAgent(req,res,next) {
   const expected=String(process.env.OLT_COLLECTOR_TOKEN||'');
@@ -156,8 +158,9 @@ function normalizeReading(row, oltId) {
   const issues=[];
   const statusValue=String(fieldValue(row,["status","state"])??"unknown").trim().toLowerCase();
   const statusMap={online:"online",up:"online",on:"online","1":"online",offline:"offline",down:"offline",off:"offline","0":"offline",los:"los",unknown:"unknown"};
-  const status=statusMap[statusValue]||"unknown";
-  if(!statusMap[statusValue]) issues.push({field:"status",reason:"unsupported-value-defaulted-to-unknown"});
+  const hasKnownStatus=Object.prototype.hasOwnProperty.call(statusMap,statusValue);
+  const status=hasKnownStatus?statusMap[statusValue]:"unknown";
+  if(!hasKnownStatus) issues.push({field:"status",reason:"unsupported-value-defaulted-to-unknown"});
   const power=(names,min,max,field)=>{
     const value=fieldValue(row,names);
     const parsed=parseOpticalPowerDbm(value,min,max);
