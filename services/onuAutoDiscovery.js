@@ -126,13 +126,14 @@ async function discoverFromSessions(sessions, { runId = null, sourceDeviceId = n
       continue;
     }
 
+    // Auto-discovery may enrich the OLT port, but only the authenticated OLT
+    // telemetry ingest can write customers.onu_mac from the payload root field.
     const update = await db.query(
       `UPDATE customers
-          SET onu_mac=$1, olt_pon_port=$2, updated_at=NOW()
-        WHERE id=$3
-          AND (NULLIF(TRIM(onu_mac), '') IS NULL OR LOWER(TRIM(onu_mac))=LOWER($1))
+          SET olt_pon_port=$1, updated_at=NOW()
+        WHERE id=$2
         RETURNING id, username`,
-      [onuMac, String(telemetry.ponPort).slice(0, 120), customer.id]
+      [String(telemetry.ponPort).slice(0, 120), customer.id]
     );
     if (update.rowCount !== 1) { ambiguous++; continue; }
 
