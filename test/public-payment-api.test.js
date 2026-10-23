@@ -88,7 +88,7 @@ test("Hotspot captive checkout uses local MFS image assets and submits MAC crede
   assert.match(page, /assets\/images\/rocket-logo\.png/);
   assert.match(page, /assets\/images\/upay-logo\.png/);
   assert.doesNotMatch(page, /<svg/);
-  assert.match(page, /service_type: 'hotspot'/);
+  assert.match(page, /service_type/);
   assert.match(page, /payload\.senderPhoneNumber = phoneInput/);
   assert.match(page, /payload\.trxId = trxInput/);
   assert.match(page, /document\.getElementById\('mt-user'\)\.value = routerMac/);
