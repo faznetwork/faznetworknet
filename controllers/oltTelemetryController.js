@@ -137,12 +137,19 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
       );
       for(const r of normalized) {
         const matchedSession=matchPppoeSession(r.clientMacs,activeSessions.rows);
+        let compactRouterMac="";
         if(matchedSession) {
           r.pppoeUsername=String(matchedSession.username||"").trim();
           r.identityMatched=true;
           identityMatched++;
-          const compactRouterMac=normalizeClientMac(matchedSession.callerId);
+          compactRouterMac=normalizeClientMac(matchedSession.callerId);
           const routerMac=compactRouterMac.match(/.{2}/g).join(":");
+          const compactOnuMac=normalizeClientMac(r.onuMac);
+          // Caller-id identifies the customer's router. Never store that value
+          // as the ONU MAC, even when the collector accidentally labels it ONU.
+          if(compactOnuMac && compactOnuMac===compactRouterMac) r.onuMac=null;
+          const safeOnuMac=r.onuMac;
+          const safeOnuCompact=safeOnuMac?normalizeClientMac(safeOnuMac).toLowerCase():"";
           await client.query(`
             UPDATE customers c
                SET onu_mac=CASE
@@ -151,24 +158,29 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
                         WHERE other.id<>c.id
                           AND regexp_replace(lower(COALESCE(other.onu_mac,'')),'[^0-9a-f]','','g')=$4
                      ) THEN $1
+                     WHEN $5::text<>'' AND regexp_replace(lower(COALESCE(c.onu_mac,'')),'[^0-9a-f]','','g')=lower($5) THEN NULL
                      ELSE c.onu_mac
                    END,
                    router_mac=$2,updated_at=NOW()
              WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
-          `,[r.onuMac,routerMac,r.pppoeUsername,r.onuMac? r.onuMac.replace(/[^0-9a-f]/gi,"").toLowerCase(): ""]);
+          `,[safeOnuMac,routerMac,r.pppoeUsername,safeOnuCompact,compactRouterMac.toLowerCase()]);
         }
         const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
           VALUES ($1,$2,$3::macaddr,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW())
           ON CONFLICT (olt_id,onu_id) DO UPDATE SET
-            onu_mac=COALESCE(EXCLUDED.onu_mac,olt_telemetry.onu_mac),
+            onu_mac=CASE
+              WHEN EXCLUDED.onu_mac IS NOT NULL THEN EXCLUDED.onu_mac
+              WHEN $12::text<>'' AND regexp_replace(lower(COALESCE(olt_telemetry.onu_mac::text,'')),'[^0-9a-f]','','g')=lower($12) THEN NULL
+              ELSE olt_telemetry.onu_mac
+            END,
             pppoe_username=COALESCE(EXCLUDED.pppoe_username,olt_telemetry.pppoe_username),
             pon_port=COALESCE(EXCLUDED.pon_port,olt_telemetry.pon_port),
             status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
             observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
           WHERE EXCLUDED.observed_at >= olt_telemetry.observed_at
           RETURNING id
-        `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
+        `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw,compactRouterMac.toLowerCase()]);
         if(upsertResult.rows.length) count++;
       }
       await client.query('COMMIT');
