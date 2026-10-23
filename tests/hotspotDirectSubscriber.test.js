@@ -110,12 +110,12 @@ test("unused scratch cards show PIN and password rather than a MAC in the vouche
 test("captive portal calls the hosted backend and submits the MikroTik login handshake",()=>{
  const portal=read("public/login.html");
  const auth=read("controllers/hotspotAuthController.js");
- assert.match(portal,/const BACKEND_BASE_URL = 'https:\/\/faznetwork-web\.onrender\.com'/);
- assert.match(portal,/function submitMikrotikLogin\(mac,redirectUrl\)/);
- assert.match(portal,/form\.action=loginUrl/);
+ assert.match(portal,/const BACKEND_BASE_URL='https:\/\/faznetwork-web\.onrender\.com'/);
+ assert.match(portal,/function submitMikrotikLogin\(username,password,redirectUrl\)/);
+ assert.match(portal,/form\.action=device\.login/);
  assert.match(portal,/form\.submit\(\)/);
  assert.match(portal,/login_url:device\.login/);
- assert.match(portal,/submitMikrotikLogin\(result\.username\|\|device\.mac,result\.redirect_url\)/);
+ assert.match(portal,/submitMikrotikLogin\(result\.username,result\.password,result\.redirect_url\)/);
  assert.match(auth,/const requestedLoginUrl=String\(req\.body\?\.login_url\|\|req\.body\?\.link_login_only\|\|""\)\.trim\(\)/);
  assert.match(auth,/success:true,message:"Hotspot account activated for this device\."/);
  assert.match(auth,/redirect_url:redirectUrl/);
