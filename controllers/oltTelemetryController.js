@@ -154,6 +154,32 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
           r.pppoeUsername=String(previous.rows[0]?.pppoe_username||"").trim()||null;
         }
         const customerUsername=String(r.pppoeUsername||"").trim();
+        let rejectedRouterMacNorm = "";
+        if(customerUsername && r.onuMacAuthoritative && r.onuMac) {
+          const [customerIdentity, sessionIdentity] = await Promise.all([
+            client.query(
+              "SELECT router_mac FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",
+              [customerUsername]
+            ),
+            Promise.resolve(activeSessions.rows.find(session =>
+              String(session.username||"").trim().toLowerCase() === customerUsername.toLowerCase()
+            ) || null)
+          ]);
+          const rootMacNorm=normalizeClientMac(r.onuMac);
+          const customerRouterMacNorm=normalizeClientMac(customerIdentity.rows[0]?.router_mac);
+          const sessionRouterMacNorm=normalizeClientMac(sessionIdentity?.callerId);
+          if(rootMacNorm && (rootMacNorm===customerRouterMacNorm || rootMacNorm===sessionRouterMacNorm)) {
+            // A router's PPPoE caller-id is not the ONU's hardware identity.
+            // Quarantine this root value so it cannot contaminate the customer or telemetry record.
+            rejectedRouterMacNorm=rootMacNorm;
+            r.onuMac=null;
+            r.onuMacAuthoritative=false;
+            console.warn("[OLT telemetry] rejected ONU MAC matching the customer's Router MAC", {
+              oltId:r.oltId, onuId:r.onuId, username:customerUsername
+            });
+          }
+        }
+        r.onuMacRejectedAsRouter=Boolean(rejectedRouterMacNorm);
         if(customerUsername && r.onuMacAuthoritative && r.onuMac) {
           await client.query(
             "UPDATE customers SET onu_mac=$1,updated_at=NOW() WHERE LOWER(BTRIM(username))=LOWER(BTRIM($2))",
@@ -164,15 +190,24 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
           VALUES ($1,$2,$3::macaddr,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW())
           ON CONFLICT (olt_id,onu_id) DO UPDATE SET
-            onu_mac=COALESCE(EXCLUDED.onu_mac,olt_telemetry.onu_mac),
+            onu_mac=CASE WHEN $12::boolean THEN NULL ELSE COALESCE(EXCLUDED.onu_mac,olt_telemetry.onu_mac) END,
             pppoe_username=COALESCE(EXCLUDED.pppoe_username,olt_telemetry.pppoe_username),
             pon_port=COALESCE(EXCLUDED.pon_port,olt_telemetry.pon_port),
             status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
             observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
           WHERE EXCLUDED.observed_at >= olt_telemetry.observed_at
           RETURNING id
-        `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
-        if(upsertResult.rows.length) count++;
+        `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw,r.onuMacRejectedAsRouter]);
+        if(upsertResult.rows.length) {
+          count++;
+          if(r.onuMacRejectedAsRouter && rejectedRouterMacNorm) {
+            // Remove only the known-contaminated saved value; preserve any unrelated identity.
+            await client.query(
+              "UPDATE customers SET onu_mac=NULL,updated_at=NOW() WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) AND REGEXP_REPLACE(LOWER(COALESCE(onu_mac,'')),'[^0-9a-f]','','g')=$2",
+              [customerUsername,rejectedRouterMacNorm.toLowerCase()]
+            );
+          }
+        }
       }
       await client.query('COMMIT');
     } catch(error) { try{await client.query('ROLLBACK')}catch(_){} throw error; }
