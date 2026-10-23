@@ -29,7 +29,7 @@ test("settings save only enabled profile names, and public config resolves exist
  assert.match(controller,/hotspot_profile_metadata/);
  assert.match(controller,/packages/);
  assert.match(login,/config\.packages/);
- assert.match(controller,/Number\.isFinite\(price\)&&price>0/);
+ assert.ok(controller.includes("if(!Number.isFinite(price)||price<=0)return null;"));
 });
 
 test("admin hotspot portal settings reports configuration-store failures",()=>{
