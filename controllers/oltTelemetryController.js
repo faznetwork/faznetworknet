@@ -44,6 +44,23 @@ function normalizeMac(value) {
   if (!/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw)) throw new Error('Invalid ONU MAC address.');
   return raw;
 }
+function normalizeClientMac(value) {
+  const compact=String(value??"").replace(/[^0-9a-f]/gi,"").toUpperCase();
+  return compact.length===12 ? compact : "";
+}
+function matchPppoeUsername(clientMacs,sessions) {
+  if(!Array.isArray(clientMacs)||!Array.isArray(sessions)) return null;
+  const matched=new Map();
+  for(const clientMac of clientMacs) {
+    const mac=normalizeClientMac(clientMac);
+    if(!mac) continue;
+    for(const session of sessions) {
+      const username=String(session.username||"").trim();
+      if(username && normalizeClientMac(session.callerId)===mac) matched.set(username.toLowerCase(),username);
+    }
+  }
+  return matched.size===1 ? [...matched.values()][0] : null;
+}
 function getOpticalHealth(telemetry, now = Date.now()) {
   if (!telemetry || telemetry.identityVerified !== true || telemetry.stale === true) {
     return { level: "unknown", label: telemetry?.stale ? "Stale telemetry" : "RX not available" };
@@ -92,7 +109,8 @@ function normalizeReading(row, oltId) {
     tx:power(row.txPowerDbm,-50,20),
     observedAt:observedAt.toISOString(),
     sourceAgent:String(row.sourceAgent||'').trim().slice(0,160)||null,
-    raw:safeRawJson(row.raw)
+    raw:safeRawJson(row.raw),
+    clientMacs:Array.isArray(row.raw?.clientMacs)?row.raw.clientMacs:[]
   };
 }
 exports.syncTelemetry = [authenticateAgent, async (req,res) => {
@@ -109,8 +127,18 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
     let count=0;
     try {
       await client.query('BEGIN');
+      const activeSessions=await client.query(
+        "SELECT username,caller_id AS \"callerId\" FROM pppoe_live_sessions WHERE LOWER(COALESCE(service,''))='pppoe' AND received_at >= NOW()-INTERVAL '3 minutes' AND caller_id IS NOT NULL"
+      );
+      let identityMatched=0;
       for(const r of normalized) {
-        await client.query(`
+        const matchedUsername=matchPppoeUsername(r.clientMacs,activeSessions.rows);
+        if(matchedUsername) {
+          r.pppoeUsername=matchedUsername;
+          r.identityMatched=true;
+          identityMatched++;
+        }
+        const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
           VALUES ($1,$2,$3::macaddr,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW())
           ON CONFLICT (olt_id,onu_id) DO UPDATE SET
@@ -120,13 +148,14 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
             status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
             observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
           WHERE EXCLUDED.observed_at >= olt_telemetry.observed_at
+          RETURNING id
         `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
-        count++;
+        if(upsertResult.rows.length) count++;
       }
       await client.query('COMMIT');
     } catch(error) { try{await client.query('ROLLBACK')}catch(_){} throw error; }
     finally {client.release();}
-    return res.json({success:true,oltId,received:readings.length,processed:count,receivedAt:new Date().toISOString()});
+    return res.json({success:true,oltId,received:readings.length,processed:count,skippedStale:normalized.length-count,identityMatched,receivedAt:new Date().toISOString()});
   } catch(error) {
     console.error('[OLT telemetry ingest]',error.message);
     return res.status(400).json({success:false,message:error.message||'Unable to store OLT telemetry.'});
