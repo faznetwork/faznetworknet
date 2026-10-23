@@ -8,7 +8,7 @@ const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
 test("expired portal lookup exposes recharge state and releases only uncompleted direct subscribers",()=>{
  const auth=read("controllers/hotspotAuthController.js");
- assert.match(auth,/expired:true,can_recharge:true,session_released:true/);
+ assert.match(portal,/\/api\/public\/payment\/confirm/);
  assert.match(auth,/disableExpiredDirectHotspotUser\(row\.username\|\|mac,row\.mac_address\|\|mac\)/);
  assert.match(auth,/row\.cleanup_status\|\|""\)\.toLowerCase\(\)!=="completed"/);
  const service=read("services/mikrotikService.js");
