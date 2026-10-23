@@ -7285,7 +7285,7 @@ async function deletePlan(id,name){
                 setText('modalCustomerTitle',(customer.fullName||customer.full_name||name)+' · '+(customer.username||name));
                 const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.textContent=data.liveStatusAvailable===true?((live.online?'● Online':'○ Offline')+(live.online&&uptime?' · Uptime: '+uptime:'')):'Router Unavailable';}
                 setText('cpLiveStatus',statusText);const liveBadge=modalEl.querySelector('#cpLiveStatus');if(liveBadge)liveBadge.className='badge '+statusClass;
-                setText('cpAssignedIp',live.ip||customer.remote_address||'—');setText('cpCallerId',live.mac||customer.caller_id||'—');setText('cpUptime',uptime||'—');setText('cpRx',bytes(live.bytesIn));setText('cpTx',bytes(live.bytesOut));
+                setText('cpAssignedIp',data.liveStatusAvailable===true?(live.ip||'—'):'—');setText('cpCallerId',data.liveStatusAvailable===true?(live.mac||'—'):'—');setText('cpUptime',data.liveStatusAvailable===true?(uptime||'—'):'—');setText('cpRx',bytes(live.bytesIn));setText('cpTx',bytes(live.bytesOut));
                 setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',live.ip||'—');
                 const bill=modalEl.querySelector('#cpBillingStatus');if(bill)bill.value=String(customer.billing_status||'Unpaid').toLowerCase();
                 const disabled=Boolean(customer.disabled);const toggle=modalEl.querySelector('#cpSecretToggle');if(toggle){toggle.checked=!disabled;toggle.dataset.username=customer.username||name;}
