@@ -491,7 +491,7 @@
 <script>
 (function(){
 'use strict';
-const BACKEND_BASE_URL='https://faznetwork-web.onrender.com';
+const BACKEND_BASE_URL='https://faznetwork.com';
 const params=new URLSearchParams(window.location.search);
 const device={mac:normalizeMac(params.get('mac')||document.getElementById('router-mac')?.value||''),ip:params.get('ip')||document.getElementById('router-ip')?.value||'',login:params.get('link-login-only')||'$(link-login-only)',original:params.get('link-orig')||'$(link-orig)',chapId:params.get('chap-id')||'',chapChallenge:params.get('chap-challenge')||''};
 let selectedPackage=null,currentProvider='',paymentAccounts={},countdownTimer=null,paymentSessionExpiresAt=0,verificationMethod='transactionId',scannerStream=null,scannerTimer=null,scannerBusy=false;
