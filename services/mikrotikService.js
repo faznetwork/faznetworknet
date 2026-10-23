@@ -1562,7 +1562,26 @@ class MikroTikService {
       return {username:name,disabled:Boolean(disabled)};
     });
   }
-  async kickActiveUser(username) { const name = this._str(username).trim(); return this._withConnection("active PPPoE user kick", async (connection) => { const rows = await connection.write("/ppp/active/print"); const matches = (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.name) === name && this._str(item.service).toLowerCase() === "pppoe" && item[".id"]); if (!matches.length) return { username: name, kicked: false, count: 0, message: "User is not currently online." }; for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]); return { username: name, kicked: true, count: matches.length }; }); }
+  async kickActiveUser(username) {
+    const name = this._str(username).trim();
+    if (!name) throw new Error("PPPoE username is required to disconnect a session.");
+    return this._withConnection("active PPPoE user kick", async (connection) => {
+      const rows = await connection.write("/ppp/active/print");
+      const normalizedName = name.toLowerCase();
+      const matches = (Array.isArray(rows) ? rows : []).filter((item) =>
+        this._str(item.name).trim().toLowerCase() === normalizedName &&
+        this._str(item.service).trim().toLowerCase() === "pppoe" &&
+        Boolean(item[".id"])
+      );
+      if (!matches.length) {
+        return { username: name, kicked: false, count: 0, message: "Customer is already offline; no active PPPoE session was found." };
+      }
+      for (const session of matches) {
+        await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
+      }
+      return { username: name, kicked: true, count: matches.length, message: "Active PPPoE session disconnected. The customer device can reconnect automatically." };
+    });
+  }
 }
 
 const mikrotikService=new MikroTikService();
