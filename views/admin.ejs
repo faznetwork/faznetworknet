@@ -1800,6 +1800,13 @@
 </style>
 <style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
+<script>
+    try {
+        if (window.innerWidth > 768 && localStorage.getItem('fazAdminSidebarCollapsed:v1') === '1') {
+            document.documentElement.classList.add('admin-sidebar-collapsed');
+        }
+    } catch (_) {}
+</script>
 </head>
 <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
 
@@ -4321,6 +4328,7 @@ window.editHotspotUser=function(username,event){
             });
         }
         restoreActiveSidebarMenu();
+        syncMobileSidebarState();
 
         function toggleSubmenu(event, button) {
             if (event) {
