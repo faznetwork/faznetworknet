@@ -28,7 +28,7 @@ test("RouterOS CHAP/PAP submission helper is retained for the verified credentia
 test("voucher inputs require username and password without remember-member legacy controls",()=>{
  assert.match(portal,/id="voucher_pin"/);
  assert.match(portal,/id="voucher_password"/);
- assert.match(script,/voucher username/i);
+ assert.match(script,/voucher_code:username/);
  assert.match(portal,/autocomplete="username"/);
  assert.match(portal,/autocomplete="current-password"/);
  assert.doesNotMatch(portal,/remember-voucher|remember-member|id="router-error"/);
