@@ -22,7 +22,7 @@ test("RouterOS CHAP/PAP submission helper is retained for the verified credentia
  assert.match(script,/function submitMikrotikLogin\(username,password,redirectUrl\)/);
  assert.match(script,/device\.chapChallenge\?md5Hex\(String\.fromCharCode\(chapIdentifierByte\(device\.chapId\)\)\+rawPassword\+decodeChapChallenge\(device\.chapChallenge\)\):rawPassword/);
  assert.match(script,/form\.submit\(\)/);
- assert.match(script,/id="member_username"/);
+ assert.doesNotMatch(script,/submitMemberLogin|member_username|member_password/);
 });
 
 test("voucher inputs require username and password without remember-member legacy controls",()=>{
