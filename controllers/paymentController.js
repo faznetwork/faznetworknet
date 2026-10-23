@@ -90,6 +90,60 @@ async function renewalExpirationDate(durationMonths,query=db.query,currentExpiry
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
 async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const expiration=await renewalExpirationDate(c.duration_months,query,c.expiration_date||c.expiry_date),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});onRouterMutation();await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
 async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
+const webhookQuarantineBuckets=new Map();
+function allowWebhookQuarantine(req) {
+ const key=String(req.ip||req.socket?.remoteAddress||"unknown"),now=Date.now();
+ const bucket=webhookQuarantineBuckets.get(key)||{startedAt:now,count:0};
+ if(now-bucket.startedAt>=60000){bucket.startedAt=now;bucket.count=0;}
+ bucket.count++;
+ webhookQuarantineBuckets.set(key,bucket);
+ if(webhookQuarantineBuckets.size>5000){
+  for(const [ip,item] of webhookQuarantineBuckets)if(now-item.startedAt>=60000)webhookQuarantineBuckets.delete(ip);
+ }
+ return bucket.count<=30;
+}
+function sanitizeWebhookPayload(value,depth=0) {
+ if(depth>6)return "[max-depth]";
+ if(typeof value==="string")return value.slice(0,4096);
+ if(Array.isArray(value))return value.slice(0,100).map(item=>sanitizeWebhookPayload(item,depth+1));
+ if(value&&typeof value==="object"){
+  const clean={};
+  for(const [key,item] of Object.entries(value).slice(0,100)){
+   if(/token|secret|authorization/i.test(key))continue;
+   clean[key.slice(0,100)]=sanitizeWebhookPayload(item,depth+1);
+  }
+  return clean;
+ }
+ if(value===null||typeof value==="number"||typeof value==="boolean")return value;
+ return String(value).slice(0,1024);
+}
+async function saveUnmatchedWebhook(req,reason) {
+ if(!allowWebhookQuarantine(req)){
+  const error=new Error("Webhook quarantine rate limit exceeded.");
+  error.code="WEBHOOK_QUARANTINE_RATE_LIMIT";
+  throw error;
+ }
+ const body=req.body&&typeof req.body==="object"?req.body:{rawBody:req.body??null};
+ const serialized=JSON.stringify(sanitizeWebhookPayload(body)??{});
+ const payloadBytes=Buffer.byteLength(serialized,"utf8");
+ const storedPayload=payloadBytes>16384?JSON.stringify({truncated:true,payloadBytes,preview:serialized.slice(0,12000)}):serialized;
+ await db.query(
+  "INSERT INTO payment_webhook_quarantine(status,rejection_code,raw_payload) VALUES('unmatched',$1,$2::jsonb)",
+  [String(reason||"WEBHOOK_REJECTED").slice(0,80),storedPayload]
+ );
+ return payloadBytes;
+}
+async function quarantineWebhookResponse(req,res,reason) {
+ try{
+  const payloadBytes=await saveUnmatchedWebhook(req,reason);
+  console.log("[Payment Webhook] Stored rejected SMS as unmatched.",{reason,payloadBytes});
+  return res.status(202).json({success:true,status:"unmatched",code:"WEBHOOK_QUARANTINED",reason});
+ }catch(error){
+  if(error?.code==="WEBHOOK_QUARANTINE_RATE_LIMIT")return res.status(429).json({success:false,status:"unmatched",code:error.code});
+  console.error("[Payment Webhook] Could not store rejected SMS.",{reason,error:error?.message||String(error)});
+  return res.status(503).json({success:false,status:"unmatched",code:"WEBHOOK_QUARANTINE_FAILED"});
+ }
+}
 async function webhook(req,res){
  let claimedTransactionId=null,routerSucceeded=false;
  try{
@@ -100,10 +154,17 @@ async function webhook(req,res){
   // Existing app_settings remain a safe compatibility fallback while the singleton table initializes.
   try { webhookConfig=await require("../services/webhookSettingsService").get(); }
   catch(error) { console.error("[Payment Webhook] Could not load webhook_settings; using legacy configuration fallback:", error.message); }
-  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true"){console.warn("[Payment Webhook] Rejected: automation disabled.");return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});}
+  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true"){
+    console.log("[Payment Webhook] Rejected: automation disabled.");
+    return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
+   }
   const expected=String(webhookConfig.secret||settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
-  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected))){console.warn("[Payment Webhook] Rejected: missing or mismatched token.");return res.status(401).json({success:false,error:"Unauthorized webhook."});}
+  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected))){
+    const reason=expected?"INVALID_WEBHOOK_TOKEN":"WEBHOOK_TOKEN_NOT_CONFIGURED";
+    console.log("[Payment Webhook] Token validation failed; quarantining payload as unmatched.",{reason});
+    return quarantineWebhookResponse(req,res,reason);
+   }
   // MacroDroid's receiving-number token describes the SIM that received the SMS, not
   // the MFS merchant account mentioned in the payment. Validate only a recipient
   // explicitly present in the SMS text or a dedicated recipient header/query value.
@@ -170,7 +231,9 @@ async function webhook(req,res){
    try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimedTransactionId,String(req.body?.username||""),JSON.stringify(detail)]);}catch(auditError){console.error("[CRITICAL] Webhook reconciliation audit write failed",claimedTransactionId,auditError?.message||auditError);}
    console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",detail);
   }
-  if(error?.code==="UNTRUSTED_FORWARDER_SENDER"||error?.code==="INVALID_RECIPIENT"){console.warn("[Payment Webhook] Rejected SMS:",error.code);return res.status(403).json({success:false,code:error.code,error:error.message});}
+  if(error?.code==="UNTRUSTED_FORWARDER_SENDER"||error?.code==="INVALID_RECIPIENT"){
+    return quarantineWebhookResponse(req,res,error.code);
+   }
   return errorResponse(res,error,claimedTransactionId!==null&&routerSucceeded?500:(error?.statusCode||400));
  }
 }
