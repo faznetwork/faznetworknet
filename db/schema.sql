@@ -188,6 +188,18 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Untrusted webhook messages are retained for review, outside payment tables
+-- used by automatic TrxID verification and provisioning.
+CREATE TABLE IF NOT EXISTS payment_webhook_quarantine (
+  id BIGSERIAL PRIMARY KEY,
+  status VARCHAR(20) NOT NULL DEFAULT 'unmatched' CHECK (status = 'unmatched'),
+  rejection_code VARCHAR(80) NOT NULL,
+  raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payment_webhook_quarantine_received
+  ON payment_webhook_quarantine(received_at DESC);
+
 CREATE TABLE IF NOT EXISTS hotspot_vouchers (
   id BIGSERIAL PRIMARY KEY,
   username VARCHAR(100) NOT NULL UNIQUE,
