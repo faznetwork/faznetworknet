@@ -37,7 +37,23 @@ app.use(session({
     sameSite:"lax"
   }
 }));
-app.use(express.json({limit:"1mb"}));app.use(express.urlencoded({extended:true,limit:"1mb"}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
+app.use(express.json({limit:"1mb"}));
+app.use((err,req,res,next)=>{
+  if(req.path==="/api/olt/sync-telemetry"&&err?.type==="entity.parse.failed") {
+    const bodyBuffer=Buffer.isBuffer(err.body)?err.body:null;
+    console.warn("[OLT telemetry ingest] invalid JSON body", {
+      method:req.method,
+      path:req.path,
+      contentType:String(req.get("content-type")||"").slice(0,100),
+      contentLength:String(req.get("content-length")||"").slice(0,20),
+      receivedBytes:bodyBuffer?.length??null,
+      parserError:String(err.message||"JSON parse failed").slice(0,160)
+    });
+    return res.status(400).json({success:false,code:"INVALID_JSON",message:"Request body must be valid JSON."});
+  }
+  return next(err);
+});
+app.use(express.urlencoded({extended:true,limit:"1mb"}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
 app.get("/payment",(req,res)=>res.sendFile(path.join(__dirname,"public","payment.html")));
 // Branding is read from a short-lived in-memory cache, never queried per EJS template.
 app.use(async(req,res,next)=>{try{res.locals.brandSettings=await appSettingsService.getBrandSettings();}catch(_){res.locals.brandSettings=await appSettingsService.getBrandSettings().catch(()=>({company_name:"FAZ NETWORK",logo_url:"",favicon_url:"",support_phone:"01339932887",whatsapp_number:"",office_address:"FAZ NETWORK, Bangladesh",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved."}));}next();});
