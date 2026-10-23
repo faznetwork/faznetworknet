@@ -452,7 +452,19 @@ async function loadLiveSession(){
 async function loadAuditLogs(){try{const d=await api('/api/customers/'+encodeURIComponent(id)+'/audit-logs');const logs=Array.isArray(d.logs)?d.logs:[];$('auditLedger').innerHTML=logs.length?logs.map(x=>{const action=String(x.action||'UPDATE').toUpperCase();const cls=action==='RENEW'?'bg-success':action==='KICK'?'bg-warning text-dark':action==='SUSPEND'?'bg-danger':action==='REACTIVATE'?'bg-info text-dark':'bg-primary';let detail=x.details||'';try{const j=JSON.parse(detail);detail=j.message||detail}catch(_){}return '<tr><td class="text-nowrap">'+FazDate.formatDateTime(x.created_at)+'</td><td><span class="badge '+cls+'">'+esc(action)+'</span></td><td>'+esc(detail)+'</td><td><span class="badge bg-light text-dark border">'+esc(x.admin_id||'admin')+'</span></td><td class="mono small">'+esc(x.ip_address||'—')+'</td></tr>'}).join(''):'<tr><td colspan="5" class="text-center text-muted py-4">No activity logs recorded yet.</td></tr>'}catch(e){$('auditLedger').innerHTML='<tr><td colspan="5" class="text-center text-danger py-4">'+esc(e.message)+'</td></tr>'}}
 async function act(url,body,msg){try{await api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});toast(msg);await load()}catch(e){toast(e.message,'danger')}}
 $('syncMikrotik').onclick=()=>{if(confirm('Sync this customer’s saved panel details to MikroTik? This will create or update the PPPoE secret without deleting the panel customer record.'))act('/api/customers/'+encodeURIComponent(id)+'/sync-mikrotik',{},'Customer synced to MikroTik.')};
-$('kick').onclick=()=>{if(confirm('Disconnect this active PPPoE session?'))act('/api/customers/'+id+'/kick',{},'Session disconnected.')};
+$('kick').onclick=async()=>{
+ if(!confirm('Disconnect this active PPPoE session?'))return;
+ const button=$('kick');
+ button.disabled=true;
+ try{
+  const result=await api('/api/customers/'+encodeURIComponent(id)+'/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  if(result.kicked)toast(result.message||'Active PPPoE session disconnected. The customer device can reconnect automatically.');
+  else toast(result.message||'Customer is already offline; no active PPPoE session was found.','warning');
+  await load();
+  await loadLiveSession();
+ }catch(error){toast(error.message,'danger');}
+ finally{button.disabled=false;}
+};
 $('renew').onclick=$('firstPayment').onclick=()=>open('renewModal');
 $('renewForm').onsubmit=async e=>{e.preventDefault();const method=$('method').value,trx=$('trx').value.trim(),amount=Number($('amount').value);if(method!=='cash'&&!trx)return toast('Trx ID is required for mobile banking.','danger');if(!confirm('Confirm exact payment of ৳'+amount.toFixed(2)+' and renew +1 month?'))return;try{await api('/api/customers/'+id+'/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,method,trxId:trx})});bootstrap.Modal.getInstance($('renewModal'))?.hide();toast('Payment recorded and customer renewed.');await load()}catch(e){toast(e.message,'danger')}};
 $('suspend').onclick=()=>{const off=['suspended','inactive'].includes(String(state.customer.status).toLowerCase())||state.customer.disabled;if(confirm(off?'Reactivate this line?':'Suspend this line and move it to EXPIRED profile?'))act('/api/customers/'+id+'/toggle-status',{suspend:!off},off?'Customer reactivated.':'Customer suspended.')};
