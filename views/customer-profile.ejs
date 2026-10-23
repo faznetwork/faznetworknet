@@ -356,11 +356,10 @@ async function loadNetworkMap(){
    const td=attachedTelemetry?{telemetry:attachedTelemetry}:await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
-    const liveOnuMac=String(t.onuMac||'').trim();
     hasCollectorTelemetry=true;
     $('topoPon').textContent=t.ponPort||'Auto-detecting...';
     $('topoOnu').textContent=t.onuId||'Auto-detecting...';
-    $('topoOnuMac').textContent='ONU MAC: '+(liveOnuMac?liveOnuMac+(t.stale?' · stale':''):'Auto-mapping...');
+    $('topoOnuMac').textContent='ONU MAC: '+(hasValue(state.customer?.onuMac)?state.customer.onuMac:'Awaiting ONU MAC');
     $('topoRx').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm';
     const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
     const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
@@ -373,7 +372,7 @@ async function loadNetworkMap(){
     // Telemetry enriches the topology and signal metrics; the ONU MAC field remains sourced from customers.onu_mac.
     if(t.ponPort)$('topoPon').dataset.loaded='true';
     if(t.onuId)$('topoOnu').dataset.loaded='true';
-    if(!t.stale&&t.onuMac)$('topoOnuMac').dataset.loaded='true';
+    if(hasValue(state.customer?.onuMac))$('topoOnuMac').dataset.loaded='true';
     if(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined)$('topoRx').dataset.loaded='true';
     $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
     $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');
