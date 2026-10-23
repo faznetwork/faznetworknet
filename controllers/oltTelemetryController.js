@@ -153,8 +153,15 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
         const compactOnuMac=normalizeClientMac(r.onuMac);
         if(compactOnuMac && compactOnuMac===compactRouterMac && !r.onuMacAuthoritative) r.onuMac=null;
 
-        // A payload may carry its own PPPoE username; use that when session matching
-        // is temporarily unavailable so a valid root ONU MAC can still update its customer.
+        // A payload may carry its own PPPoE username; if not, reuse the existing
+        // OLT/ONU association so a valid root ONU MAC survives a temporary session gap.
+        if(!r.pppoeUsername && r.onuMacAuthoritative) {
+          const previous=await client.query(
+            "SELECT pppoe_username FROM olt_telemetry WHERE olt_id=$1 AND onu_id=$2 LIMIT 1",
+            [r.oltId,r.onuId]
+          );
+          r.pppoeUsername=String(previous.rows[0]?.pppoe_username||"").trim()||null;
+        }
         const customerUsername=String(r.pppoeUsername||"").trim();
         if(customerUsername) {
           const safeOnuMac=r.onuMac;
