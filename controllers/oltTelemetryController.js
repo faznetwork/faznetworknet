@@ -143,20 +143,19 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
           identityMatched++;
           const compactRouterMac=normalizeClientMac(matchedSession.callerId);
           const routerMac=compactRouterMac.match(/.{2}/g).join(":");
-          if(r.onuMac) {
-            await client.query(`
-              UPDATE customers c
-                 SET onu_mac=$1,router_mac=$2,updated_at=NOW()
-               WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
-                 AND NOT EXISTS (
-                   SELECT 1 FROM customers other
-                    WHERE other.id<>c.id
-                      AND regexp_replace(lower(COALESCE(other.onu_mac,'')),'[^0-9a-f]','','g')=$4
-                 )
-            `,[r.onuMac,routerMac,r.pppoeUsername,r.onuMac.replace(/[^0-9a-f]/gi,"").toLowerCase()]);
-          } else {
-            await client.query(`UPDATE customers SET router_mac=$1,updated_at=NOW() WHERE LOWER(BTRIM(username))=LOWER(BTRIM($2))`,[routerMac,r.pppoeUsername]);
-          }
+          await client.query(`
+            UPDATE customers c
+               SET onu_mac=CASE
+                     WHEN $1::text IS NOT NULL AND NOT EXISTS (
+                       SELECT 1 FROM customers other
+                        WHERE other.id<>c.id
+                          AND regexp_replace(lower(COALESCE(other.onu_mac,'')),'[^0-9a-f]','','g')=$4
+                     ) THEN $1
+                     ELSE c.onu_mac
+                   END,
+                   router_mac=$2,updated_at=NOW()
+             WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
+          `,[r.onuMac,routerMac,r.pppoeUsername,r.onuMac? r.onuMac.replace(/[^0-9a-f]/gi,"").toLowerCase(): ""]);
         }
         const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
