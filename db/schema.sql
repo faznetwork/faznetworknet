@@ -389,6 +389,7 @@ ALTER TABLE packages ADD CONSTRAINT packages_price_check CHECK(price >= 0);
 ALTER TABLE packages ALTER COLUMN rate_limit DROP NOT NULL;
 
 -- 360-degree customer management hub fields.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS router_mac VARCHAR(32);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS alternative_phone VARCHAR(40);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS olt_pon_port VARCHAR(120);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS distribution_box VARCHAR(150);
