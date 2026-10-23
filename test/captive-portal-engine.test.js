@@ -5,72 +5,85 @@ const fs=require("node:fs");
 const path=require("node:path");
 const vm=require("node:vm");
 const html=fs.readFileSync(path.join(__dirname,"..","public","login.html"),"utf8");
-const script=(html.match(/<script>\s*\(function\(\)\{[\s\S]*?<\/script>/)||[])[0]||"";
+const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+const script=scripts[0]?.[1]||"";
 
-test("captive portal parses RouterOS redirect context and submits the canonical MAC login form",()=>{
+test("captive portal preserves RouterOS redirect context and the canonical login form",()=>{
+ assert.equal(scripts.length,1);
  assert.match(html,/link-login-only/);
  assert.match(html,/link-orig/);
  assert.match(html,/name="username"/);
  assert.match(html,/name="password"/);
- assert.match(script,/let loginUrl=device\.login/);
- assert.match(script,/form\.action=loginUrl/);
+ assert.match(script,/login:params\.get\('link-login-only'\)/);
+ assert.match(script,/form\.action=device\.login/);
  assert.match(script,/form\.submit\(\)/);
  assert.match(script,/normalizeMac/);
+ assert.match(script,/decodeChapChallenge/);
+ assert.doesNotThrow(()=>new vm.Script(script,{filename:"public/login.html"}));
 });
 
-test("captive portal uses public branding and settings endpoints without exposing admin endpoints",()=>{
- assert.match(script,/\/api\/hotspot\/public-branding/);
- assert.match(script,/\/api\/settings\/public/);
- assert.match(script,/if\(data\.banner_url&&box&&image\)/);
+test("captive portal consumes public settings and never calls protected admin APIs",()=>{
  assert.match(script,/\/api\/public\/portal-config/);
- assert.match(script,/data\.display_mode==='custom_code'/);
- assert.match(script,/addNoticeTicker/);
- assert.match(script,/applyFeatures/);
+ assert.match(script,/\/api\/public\/payment\/settings/);
+ assert.match(script,/\/api\/settings\/public/);
+ assert.match(script,/generalSettings\.logo_url/);
+ assert.match(script,/generalSettings\.company_name/);
+ assert.match(script,/display_mode/);
+ assert.match(script,/logoUrl/);
+ assert.match(script,/bannerUrl/);
+ assert.match(script,/features\.online_payment/);
+ assert.match(script,/features\.voucher_pin/);
  assert.doesNotMatch(script,/\/api\/settings\/general/);
  assert.doesNotMatch(script,/\/api\/packages-admin/);
+ assert.doesNotMatch(script,/\/api\/admin\/hotspot-portal-settings/);
 });
 
-test("captive portal has one master action and routes payment, PIN and QR through the existing backend APIs",()=>{
- assert.equal((html.match(/id="btn-master-action"/g)||[]).length,1);
- assert.match(script,/\/api\/verify-trx/);
- assert.match(script,/\/api\/hotspot-auth\/activate/);
+test("captive portal exposes only voucher and online recharge choices",()=>{
+ assert.equal((html.match(/id="tab-recharge-btn"/g)||[]).length,1);
+ assert.equal((html.match(/id="tab-voucher-btn"/g)||[]).length,1);
+ assert.match(html,/id="voucher_pin"/);
+ assert.match(html,/id="voucher_password"/);
+ assert.doesNotMatch(html,/member_username|member_password|m-btn-member|btn-master-action/);
+ assert.doesNotMatch(script,/\/api\/hotspot-auth\/activate/);
+ assert.doesNotMatch(script,/\/api\/hotspot-auth\/device-lookup/);
+});
+
+test("voucher login sends username, password and router context to the existing claim endpoint",()=>{
  assert.match(script,/\/api\/hotspot-auth\/claim-voucher/);
- assert.match(script,/\/api\/hotspot-auth\/device-lookup/);
- assert.match(script,/function handleMasterAction/);
- assert.match(script,/function startQrScanner/);
- assert.match(script,/facingMode:'environment'/);
+ assert.match(script,/voucher_code:username/);
+ assert.match(script,/voucher_password:password/);
+ assert.match(script,/mac:device\.mac,ip:device\.ip,login_url:device\.login/);
+ assert.match(script,/if\(!result\.username\|\|!result\.password\)/);
+ assert.match(script,/submitMikrotikLogin\(result\.username,result\.password,result\.redirect_url\)/);
 });
 
-test("captive portal includes eight cyclic package palettes and never requires a phone for MAC-bound quick connect",()=>{
- assert.equal((script.match(/\{bg:'rgba\(/g)||[]).length,8);
- assert.match(script,/PALETTES\[index%PALETTES\.length\]/);
- assert.match(script,/body:JSON\.stringify\(\{mac:device\.mac,ip:device\.ip,login_url:device\.login\}\)/);
- assert.match(script,/if\(!pin\)/);
- assert.doesNotMatch(html,/name="phone"[^>]+required/);
+test("online recharge verifies payment through the existing public API before RouterOS login",()=>{
+ assert.match(script,/\/api\/public\/payment\/confirm/);
+ assert.match(script,/service_type:'hotspot'/);
+ assert.match(script,/profile_id:selectedPackage\.profile/);
+ assert.match(script,/payload\.senderPhoneNumber=phone/);
+ assert.match(script,/payload\.trxId=trx/);
+ assert.match(script,/submitMikrotikLogin\(result\.username\|\|device\.mac,result\.password\|\|device\.mac,result\.redirect_url\)/);
 });
 
-test("captive portal avoids duplicate inline and listener master-button handlers",()=>{
- assert.doesNotMatch(html,/onclick="handleMasterAction\(\)"/);
- assert.match(script,/byId\('btn-master-action'\)\.addEventListener\('click',handleMasterAction\)/);
+test("QR scanner handles credentials and stops camera resources on completion or cancellation",()=>{
+ assert.match(script,/function parseQrCredentials/);
+ assert.match(script,/BarcodeDetector/);
+ assert.match(script,/getUserMedia/);
+ assert.match(script,/function stopQrScanner/);
+ assert.match(script,/track\.stop\(\)/);
+ assert.match(script,/function closeQrScanner/);
+ assert.match(html,/id="qr-scanner-modal"/);
+ assert.match(html,/id="qr-scan-button"/);
 });
 
-test("captive portal inline JavaScript parses without syntax errors",()=>{
- const inline=Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(match=>match[1]).find(source=>source.includes("const BACKEND_BASE_URL"));
- assert.ok(inline,"main captive portal script must exist");
- assert.doesNotThrow(()=>new vm.Script(inline,{filename:"public/login.html"}));
-});
-
-test("online TrxID checkout in the captive login page does not require a customer phone",()=>{
- const start=script.indexOf("async function handleMasterAction()");
- const end=script.indexOf("window.handleMasterAction=handleMasterAction;",start);
+test("online TrxID checkout does not require a customer phone when sender-phone verification is not configured",()=>{
+ const start=script.indexOf("async function handleVerification()");
+ const end=script.indexOf("function parseQrCredentials",start);
  const handler=script.slice(start,end);
- const onlineStart=handler.indexOf("if(currentMethod==='online')");
- const onlineEnd=handler.indexOf("if(currentMethod==='pin')",onlineStart);
- const onlineHandler=handler.slice(onlineStart,onlineEnd);
- assert.ok(start>=0&&end>start&&onlineStart>=0&&onlineEnd>onlineStart,"online checkout handler must exist");
- assert.match(onlineHandler,/VERIFY_API_URL/);
- assert.match(onlineHandler,/trxId:trx/);
- assert.match(onlineHandler,/package_id:selectedPackage[.]profile/);
- assert.doesNotMatch(onlineHandler,/direct_subscriber_phone/);
- assert.doesNotMatch(onlineHandler,/INVALID_ACCOUNT_PHONE/);
+ assert.ok(start>=0&&end>start,"online checkout handler must exist");
+ assert.match(handler,/verificationMethod==='senderPhoneNumber'/);
+ assert.match(handler,/trx\.length<4/);
+ assert.doesNotMatch(handler,/direct_subscriber_phone/);
+ assert.doesNotMatch(handler,/INVALID_ACCOUNT_PHONE/);
 });

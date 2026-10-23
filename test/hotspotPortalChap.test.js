@@ -21,8 +21,8 @@ test("RouterOS captive portal parses CHAP and redirect query parameters",()=>{
 });
 
 test("embedded MD5 and RouterOS CHAP byte decoding match known vectors",()=>{
-  const start=html.indexOf("function md5Hex(input){");
-  const end=html.indexOf("function submitMikrotikLogin(mac,redirectUrl){",start);
+  const start=html.indexOf("function chapIdentifierByte(value){");
+  const end=html.indexOf("function submitMikrotikLogin(username,password,redirectUrl){",start);
   assert.ok(start>=0&&end>start,"self-contained CHAP helper functions must exist");
   const helperSource=html.slice(start,end);
   const context={};

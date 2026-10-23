@@ -18,6 +18,6 @@ test("expired portal lookup exposes recharge state and releases only uncompleted
  assert.match(service,/=disabled=yes/);
  assert.match(service,/=profile=expired_profile/);
  const portal=read("public/login.html");
- assert.match(portal,/requestJson\(DEVICE_LOOKUP_URL/);
- assert.match(portal,/result\.expired&&result\.can_recharge/);
+ assert.doesNotMatch(portal,/DEVICE_LOOKUP_URL/);
+ assert.match(portal,/\/api\/public\/payment\/confirm/);
 });
