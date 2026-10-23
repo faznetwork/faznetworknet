@@ -282,7 +282,7 @@ async function createCustomer(req, res) {
           username: customer.username,
           password: customer.password,
           profile: customer.effectiveProfile,
-          callerId: customer.onuMac,
+          callerId: customer.routerMac || undefined,
           comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
           disabled: (dateStatus(customer.expirationDate) === "expired" && !customer.billingExpiryOverride) || customer.disabled
         });
@@ -309,7 +309,7 @@ async function createCustomer(req, res) {
             String(process.env.ROUTER_HOST || ""),
             customer.expirationDate,
             dateStatus(customer.expirationDate)==="expired"?"expired":customer.disabled?"inactive":"active",
-            customer.onuMac || null
+            customer.routerMac || null
           ]
         );
       }
@@ -350,7 +350,7 @@ async function syncPanelCustomersToMikroTik(req,res){
     // This is an explicit admin push from the current Billing Panel records.
     // Tombstoned usernames are excluded defensively, even if a damaged database
     // somehow contains both a current customer row and a deletion tombstone.
-    const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
+    const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.router_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled,u.caller_id AS stored_caller_id
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE c.username IS NOT NULL AND BTRIM(c.username)<>''
@@ -372,7 +372,7 @@ async function syncPanelCustomersToMikroTik(req,res){
       const finalStatus=expired?"expired":(disabled?"suspended":dateStatus(expiry));
       return {
         id:customer.id,username,password:customer.password||"",profile,comment,disabled,
-        callerId:clean(customer.onu_mac,100),
+        callerId:clean(customer.router_mac||customer.stored_caller_id,100),
         phone:formatBdPhoneNumber(customer.phone)==="—"?"":formatBdPhoneNumber(customer.phone),
         expirationDate:expiry,finalStatus
       };
@@ -415,7 +415,7 @@ async function syncPanelCustomersToMikroTik(req,res){
 async function syncSingleCustomerToMikroTik(req,res){
   try{
     const key=clean(req.params.id,100);
-    const found=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
+    const found=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.router_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled,u.caller_id AS stored_caller_id
       FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1))
       LIMIT 1`,[key]);
@@ -445,7 +445,7 @@ async function syncSingleCustomerToMikroTik(req,res){
         ? Boolean(expired||["inactive","suspended"].includes(customerState))
         : Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
     const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
-    const callerId=clean(row.onu_mac,100);
+    const callerId=clean(row.router_mac||row.stored_caller_id,100);
     const sync=await mikrotikService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
     const result=(sync.results||[]).find(item=>String(item.username||"").toLowerCase()===username.toLowerCase());
     if(!result||!["updated","created"].includes(result.status))return res.status(502).json({success:false,message:result?.reason||"MikroTik did not confirm the PPPoE secret update.",result});
@@ -1139,7 +1139,7 @@ async function updateCustomer(req,res){
     const disabled=requestedAccountStatus?requestedAccountStatus==="suspended":body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
     const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
-    const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100);
+    const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100),routerMac=clean(body.routerMac||row.router_mac,100);
     const remoteAddressInput=String(body.remoteAddress??body.remote_address??"").trim();
     if((hasOwn("remoteAddress")||hasOwn("remote_address"))&&remoteAddressInput){
       const octets=remoteAddressInput.split(".");
@@ -1162,12 +1162,12 @@ async function updateCustomer(req,res){
         const oldSecret=await mikrotikService.getPppoeSecret(previousUsername);
         const newSecret=await mikrotikService.getPppoeSecret(username);
         if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled,remoteAddress,allowStaticRemoteAddress:true});
-        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
+        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
       }else{
         const secret=await mikrotikService.getPppoeSecret(username);
-        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac,remoteAddress,allowStaticRemoteAddress:true});
+        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
       }
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
@@ -1177,7 +1177,7 @@ async function updateCustomer(req,res){
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,remote_address,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NULLIF($12,''),NOW(),NOW())
       ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),remote_address=EXCLUDED.remote_address,synced_at=NOW(),updated_at=NOW()`,
-      [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus,onuMac,remoteAddress]);
+      [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus,routerMac,remoteAddress]);
     await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date,billingCycle:row.billing_cycle,billingDurationDays:row.billing_duration_days,billingExpiryOverride:row.billing_expiry_override},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate,billingCycle,billingDurationDays,billingExpiryOverride,billingStatus:nextBillingStatus}},ipAddress:getIpAddress(req)});
     if(packageChanged) await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed from ${row.package_name||row.profile} to ${packageDefinition.name}`,previousPackage:row.package_name,previousProfile:row.profile,newPackage:packageDefinition.name,newProfile:profileName},ipAddress:getIpAddress(req)});
     return res.json({success:true,message:"Customer profile saved and synchronized with MikroTik.",customer:result.rows[0],kicked:packageChanged});
