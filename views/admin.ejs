@@ -7206,6 +7206,20 @@ async function deletePlan(id,name){
                   '</div></div></td>' +
             '</tr>';
         }
+        async function fetchCustomerLiveStatus(customerKey){
+            const key=String(customerKey||'').trim();
+            if(!key)return{success:false,liveStatusAvailable:false,live:{status:'unavailable',online:false,isLive:false,ip:'',mac:'',uptime:'',bytesIn:0,bytesOut:0}};
+            try{
+                const result=await jsonFetch('/api/customers/'+encodeURIComponent(key)+'/live-session',{timeout:8000,cache:'no-store'});
+                if(!result||result.success===false||!result.live||typeof result.live!=='object')throw new Error(result?.message||'Live-session API returned an invalid response.');
+                const sync=String(result.live.live_sync||'').toLowerCase();
+                const available=result.liveStatusAvailable===true&&!['timeout','unavailable'].includes(sync);
+                return{...result,liveStatusAvailable:available,live:available?result.live:{...result.live,status:'unavailable',online:false,isLive:false}};
+            }catch(error){
+                console.warn('[Customer 360] Live-session lookup failed:',error);
+                return{success:false,liveStatusAvailable:false,live:{status:'unavailable',online:false,isLive:false,ip:'',mac:'',uptime:'',bytesIn:0,bytesOut:0,diagnostic:String(error?.message||error)}};
+            }
+        }
         async function openCustomerProfile(username,prefetchedData){
             const name=String(username||'').trim();
             const modalEl=document.getElementById('editCustomerModal');
@@ -7248,7 +7262,7 @@ async function deletePlan(id,name){
                 if(!name)throw new Error('Customer username is missing.');
                 const data=prefetchedData||await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 if(!data||data.success===false||!data.customer||typeof data.customer!=='object')throw new Error(data?.message||'Customer profile response is empty or invalid.');
-                const customer=data.customer||{},live=data.live&&typeof data.live==='object'?data.live:{online:false,bytesIn:0,bytesOut:0},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
+                const liveStatus=await fetchCustomerLiveStatus(data.customer.username||name);const customer=data.customer||{},live=liveStatus.live,liveAvailable=liveStatus.liveStatusAvailable,plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
                 const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
                 const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(!el)return;if(id==='cpExpiration'){setCustomerDateValue(el,value);return;}el.value=value??'';};
                 const telemetry=data.telemetry&&typeof data.telemetry==='object'?data.telemetry:null;
@@ -7267,17 +7281,17 @@ async function deletePlan(id,name){
                 const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
                 const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
-                const statusText=live.online?'Online':'Offline';
-                const statusClass=live.online?'bg-success':'bg-secondary';
+                const statusText=liveAvailable?(live.online?'Online':'Offline'):'Router Unavailable';
+                const statusClass=liveAvailable?(live.online?'bg-success':'bg-secondary'):'bg-warning text-dark';
                 const uptime=String(live.uptime||'');
                 const bytes=(v)=>{const n=Number(v||0);if(!Number.isFinite(n)||n<=0)return '0 B';const u=['B','KB','MB','GB','TB'];const i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return (n/Math.pow(1024,i)).toFixed(i>=3?1:i?1:0)+' '+u[i];};
                 const remaining=days===null?'—':days<0?'Expired '+Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' ago':days===0?'Expires today':'Remaining: '+days+' day'+(days===1?'':'s');
                 const selectedPlan=plans.find(p=>String(p.profileName||'').toLowerCase()===String(customer.profile||'').toLowerCase())||plans.find(p=>String(p.name||'').toLowerCase()===String(customer.package_name||'').toLowerCase());
                 setText('modalCustomerTitle',(customer.fullName||customer.full_name||name)+' · '+(customer.username||name));
-                const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.innerHTML=(live.online?'● Online':'○ Offline')+(live.online&&uptime?' · Uptime: '+escapeHtml(uptime):'');}
+                const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.textContent=!liveAvailable?'⚠ Router Unavailable':(live.online?'● Online':'○ Offline')+(live.online&&uptime?' · Uptime: '+escapeHtml(uptime):'');}
                 setText('cpLiveStatus',statusText);const liveBadge=modalEl.querySelector('#cpLiveStatus');if(liveBadge)liveBadge.className='badge '+statusClass;
-                setText('cpAssignedIp',live.ip||customer.remote_address||'—');setText('cpCallerId',live.mac||customer.caller_id||'—');setText('cpUptime',uptime||'—');setText('cpRx',bytes(live.bytesIn));setText('cpTx',bytes(live.bytesOut));
-                setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',live.ip||'—');
+                setText('cpAssignedIp',liveAvailable?(live.ip||'—'):'—');setText('cpCallerId',liveAvailable?(live.mac||'—'):'—');setText('cpUptime',liveAvailable&&live.online?(uptime||'—'):'—');setText('cpRx',liveAvailable?bytes(live.bytesIn):'—');setText('cpTx',liveAvailable?bytes(live.bytesOut):'—');
+                setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',liveAvailable?(live.ip||'—'):'—');
                 const bill=modalEl.querySelector('#cpBillingStatus');if(bill)bill.value=String(customer.billing_status||'Unpaid').toLowerCase();
                 const disabled=Boolean(customer.disabled);const toggle=modalEl.querySelector('#cpSecretToggle');if(toggle){toggle.checked=!disabled;toggle.dataset.username=customer.username||name;}
                 const accountStatus=modalEl.querySelector('#cpAccountStatus');if(accountStatus)accountStatus.value=['active','suspended','expired'].includes(String(customer.status||'').toLowerCase())?String(customer.status).toLowerCase():(disabled?'suspended':(safeDate&&safeDate<today?'expired':'active'));
@@ -7375,7 +7389,7 @@ async function deletePlan(id,name){
             window.__customerHubBound=true;
             const hub=()=>document.getElementById('editCustomerModal');
             const hubSetText=(id,v)=>{const e=hub()?.querySelector('#'+id);if(e)e.textContent=v??'—';};
-            const refreshHubLive=async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username||m.getAttribute('aria-hidden')==='true')return;try{const d=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(username));const live=d.live||{},online=Boolean(live.online),pill=m.querySelector('#modalCustomerLivePill'),badge=m.querySelector('#cpLiveStatus');if(pill){pill.className='badge '+(online?'bg-success':'bg-secondary')+' rounded-pill px-3 py-2 ms-auto';pill.textContent=(online?'● Online':'○ Offline')+(online&&live.uptime?' · Uptime: '+live.uptime:'');}if(badge){badge.className='badge '+(online?'bg-success':'bg-secondary');badge.textContent=online?'Online':'Offline';}hubSetText('cpAssignedIp',live.ip||'—');hubSetText('cpCallerId',live.mac||'—');hubSetText('cpUptime',live.uptime||'—');hubSetText('cpRx',(()=>{const n=Number(live.bytesIn||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpTx',(()=>{const n=Number(live.bytesOut||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpLiveIp',live.ip||'—');}catch(_){/* keep last live state */}};
+            const refreshHubLive=async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username||m.getAttribute('aria-hidden')==='true')return;const result=await fetchCustomerLiveStatus(username),live=result.live||{},available=result.liveStatusAvailable===true,online=available&&Boolean(live.online),pill=m.querySelector('#modalCustomerLivePill'),badge=m.querySelector('#cpLiveStatus'),statusClass=available?(online?'bg-success':'bg-secondary'):'bg-warning text-dark',statusText=available?(online?'Online':'Offline'):'Router Unavailable';if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2 ms-auto';pill.textContent=!available?'⚠ Router Unavailable':(online?'● Online':'○ Offline')+(online&&live.uptime?' · Uptime: '+live.uptime:'');}if(badge){badge.className='badge '+statusClass;badge.textContent=statusText;}hubSetText('cpAssignedIp',available?(live.ip||'—'):'—');hubSetText('cpCallerId',available?(live.mac||'—'):'—');hubSetText('cpUptime',available&&online?(live.uptime||'—'):'—');hubSetText('cpRx',available?(()=>{const n=Number(live.bytesIn||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})():'—');hubSetText('cpTx',available?(()=>{const n=Number(live.bytesOut||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})():'—');hubSetText('cpLiveIp',available?(live.ip||'—'):'—');};
             const modalElement=hub();
             if(modalElement&&!modalElement.dataset.liveBound){modalElement.dataset.liveBound='1';modalElement.addEventListener('shown.bs.modal',()=>{refreshHubLive();clearInterval(modalElement._liveTimer);modalElement._liveTimer=setInterval(refreshHubLive,5000);});modalElement.addEventListener('hidden.bs.modal',()=>{clearInterval(modalElement._liveTimer);modalElement._liveTimer=null;});}
             const hubLoading=(button,on,label)=>{if(!button)return;if(on){button.dataset.originalText=button.innerHTML;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>'+label;}else{button.disabled=false;button.innerHTML=button.dataset.originalText||label;}};
@@ -7658,15 +7672,16 @@ async function deletePlan(id,name){
                 const response = await jsonFetch('/api/customers/profile?username=' + encodeURIComponent(username), {timeout:6000});
                 if (quickViewRequestId !== window.__customerQuickViewRequestId) return;
                 const customer = response.customer || {};
-                const liveData = response.live || {};
-                const isOnline = Boolean(liveData.online);
-                const liveAvailable = response.liveStatusAvailable !== false && !['timeout','unavailable'].includes(String(response.live_sync||'').toLowerCase());
+                const liveStatus = await fetchCustomerLiveStatus(customer.username || username);
+                const liveData = liveStatus.live || {};
+                const liveAvailable = liveStatus.liveStatusAvailable === true;
+                const isOnline = liveAvailable && Boolean(liveData.online);
                 const status = modalEl.querySelector('#quickViewStatus');
                 if (status) { status.className = 'quick-status ' + (isOnline?'online':'offline'); status.innerHTML = '<i class="bi bi-circle-fill"></i>' + (liveAvailable?(isOnline?'Online':'Offline'):'Live status unavailable'); }
                 const setQuick = (id,value) => { const el=modalEl.querySelector('#'+id); if(el)el.textContent=value || '—'; };
                 setQuick('quickViewUptime', isOnline ? (liveData.uptime || '—') : '—');
-                setQuick('quickViewIp', liveData.ip || customer.remote_address || ip);
-                setQuick('quickViewMac', liveData.mac || customer.caller_id || customer.onu_mac || mac);
+                setQuick('quickViewIp', liveAvailable ? (liveData.ip || '—') : '—');
+                setQuick('quickViewMac', liveAvailable ? (liveData.mac || customer.caller_id || customer.onu_mac || mac) : '—');
                 setQuick('quickViewPackage', customer.package_name || customer.profile || packageName);
                 setQuick('quickViewExpiry', formatQuickDate(customer.expirationDate || customer.expiration_date || expiryRaw));
                 setQuick('quickViewLoadNote', !liveAvailable ? 'Live status is temporarily unavailable; saved customer details remain available.' : (isOnline ? 'Live session updated just now.' : 'Customer record loaded. No active PPPoE session detected.'));
