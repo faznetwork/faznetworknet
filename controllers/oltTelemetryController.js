@@ -139,18 +139,24 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
       for(const r of normalized) {
         const matchedSession=matchPppoeSession(r.clientMacs,activeSessions.rows);
         let compactRouterMac="";
+        let routerMac=null;
         if(matchedSession) {
           r.pppoeUsername=String(matchedSession.username||"").trim();
           r.identityMatched=true;
           identityMatched++;
           compactRouterMac=normalizeClientMac(matchedSession.callerId);
-          const routerMac=compactRouterMac.match(/.{2}/g).join(":");
-          const compactOnuMac=normalizeClientMac(r.onuMac);
-          // Caller-id identifies the customer's router. Never store that value
-          // as the ONU MAC, even when the collector accidentally labels it ONU.
-          // The root-level onuMac is the collector's explicit hardware identity.
-          // Only use the caller-id contamination guard for legacy raw-field fallbacks.
-          if(compactOnuMac && compactOnuMac===compactRouterMac && !r.onuMacAuthoritative) r.onuMac=null;
+          routerMac=compactRouterMac.match(/.{2}/g).join(":");
+        }
+
+        // The root-level onuMac is an explicit collector field and is authoritative.
+        // Apply caller-id filtering only to legacy raw-field MAC fallbacks.
+        const compactOnuMac=normalizeClientMac(r.onuMac);
+        if(compactOnuMac && compactOnuMac===compactRouterMac && !r.onuMacAuthoritative) r.onuMac=null;
+
+        // A payload may carry its own PPPoE username; use that when session matching
+        // is temporarily unavailable so a valid root ONU MAC can still update its customer.
+        const customerUsername=String(r.pppoeUsername||"").trim();
+        if(customerUsername) {
           const safeOnuMac=r.onuMac;
           const safeOnuCompact=safeOnuMac?normalizeClientMac(safeOnuMac).toLowerCase():"";
           await client.query(`
@@ -165,9 +171,9 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
                      WHEN $5::text<>'' AND regexp_replace(lower(COALESCE(c.onu_mac,'')),'[^0-9a-f]','','g')=lower($5) THEN NULL
                      ELSE c.onu_mac
                    END,
-                   router_mac=$2,updated_at=NOW()
+                   router_mac=COALESCE($2,c.router_mac),updated_at=NOW()
              WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($3))
-          `,[safeOnuMac,routerMac,r.pppoeUsername,safeOnuCompact,compactRouterMac.toLowerCase(),r.onuMacAuthoritative]);
+          `,[safeOnuMac,routerMac,customerUsername,safeOnuCompact,compactRouterMac.toLowerCase(),r.onuMacAuthoritative]);
         }
         const upsertResult=await client.query(`
           INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
