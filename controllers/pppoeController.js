@@ -246,6 +246,13 @@ async function ingestLiveSessions(req, res) {
            VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
           [session.username, session.address, session.uptime, session.service, String(session.bytesIn), String(session.bytesOut), session.callerId]
         );
+        // PPPoE session payloads own router_mac; this sync never changes onu_mac.
+        if(session.callerId) {
+          await client.query(
+            "UPDATE customers SET router_mac=$1,updated_at=NOW() WHERE LOWER(BTRIM(username))=LOWER(BTRIM($2))",
+            [session.callerId,session.username]
+          );
+        }
       }
       await client.query("COMMIT");
     } catch (error) {
