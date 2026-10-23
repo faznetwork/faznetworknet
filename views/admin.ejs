@@ -130,6 +130,8 @@
         }
         .submenu.show { display: block; }
         /* General Settings uses the same sidebar accordion, with a short smooth reveal. */
+        html.admin-route-restoring .submenu.general-settings-submenu,
+        html.admin-route-restoring .general-settings-toggle .arrow-icon { transition: none !important; }
         .submenu.general-settings-submenu { display: block; max-height: 0; overflow: hidden; visibility: hidden; transition: max-height .24s ease, visibility .24s ease; }
         .submenu.general-settings-submenu.show { max-height: 360px; visibility: visible; }
         .general-settings-toggle .arrow-icon { transition: transform .24s ease; }
@@ -1817,7 +1819,7 @@
         const isLegacyDashboard = isAdminRoot && (params.get('view') === 'dashboard' || (!params.has('view') && !window.location.hash));
         const isDashboardRoute = path === '/admin/dashboard' || isLegacyDashboard;
         if (/^\/admin(?:\/|$)/.test(path) && !isDashboardRoute) {
-            document.documentElement.classList.add('admin-route-initial');
+            document.documentElement.classList.add('admin-route-initial', 'admin-route-restoring');
         }
     })();
 </script>
@@ -4343,6 +4345,7 @@ window.editHotspotUser=function(username,event){
         }
         restoreActiveSidebarMenu();
         syncMobileSidebarState();
+        document.documentElement.classList.remove('admin-route-restoring');
 
         function toggleSubmenu(event, button) {
             if (event) {
