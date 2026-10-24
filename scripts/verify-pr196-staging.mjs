@@ -112,6 +112,18 @@ async function main() {
     assert(configuredDbKeys.length === 0, "Database connection variables must be unset for these mocked tests: " + configuredDbKeys.join(", ") + ".");
     report("Database isolation", "PASS", "no database connection environment variables present");
 
+    const stagingRaw = process.env.STAGING_URL;
+    assert(stagingRaw, "STAGING_URL is required before tests can run.");
+    let stagingParsed;
+    try { stagingParsed = new URL(stagingRaw); }
+    catch { throw new Error("STAGING_URL must be a valid absolute URL."); }
+    assert(stagingParsed.protocol === "https:", "STAGING_URL must use HTTPS.");
+    assert(!stagingParsed.username && !stagingParsed.password && !stagingParsed.search && !stagingParsed.hash, "STAGING_URL must not contain credentials, a query, or a fragment.");
+    assert(stagingParsed.pathname === "/" || stagingParsed.pathname === "", "STAGING_URL must be the staging origin only, without a path.");
+    const stagingHost = stagingParsed.hostname.toLowerCase();
+    assert(stagingHost !== "faznetwork.com" && stagingHost !== "www.faznetwork.com" && stagingHost !== "faznetwork-web.onrender.com" && !stagingHost.includes("faznetwork-web-prod"), "Known production hostname blocked.");
+    report("Staging URL safety", "PASS", "HTTPS origin validated; health request remains read-only");
+
     const packagePath = path.join(ROOT, "package.json");
     assert(fs.existsSync(packagePath), "package.json is missing.");
     assert(fs.existsSync(path.join(ROOT, "package-lock.json")), "package-lock.json is missing.");
