@@ -160,7 +160,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  if(type==="hotspot"&&eventName==="renewal"){
   console.log("[Hotspot Notification Alert] Status:",channelResults.filter(result=>["sms","whatsapp","email"].includes(result.channel)));
  }
- return {success:!channelResults.some(result=>result.status==="failed")&&!(selected&&skippedResults.length>0),event:eventName,userType:type,results:[...channelResults,...(selected?skippedResults:[])]};
+ return {success:!channelResults.some(result=>result.status==="failed"),event:eventName,userType:type,results:[...channelResults,...(selected?skippedResults:[])]};
 }
 function dispatchNotification(payload={}){
  // Intentionally detached from request lifecycles: delivery cannot delay or roll back billing.
