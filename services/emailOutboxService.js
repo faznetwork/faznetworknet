@@ -92,10 +92,12 @@ async function markDelivered(id, { providerMessageId = null } = {}) {
     `UPDATE email_outbox
      SET status='sent', provider_message_id=$2, delivered_at=NOW(), lease_until=NULL,
          last_error_code=NULL,last_error_message=NULL,updated_at=NOW()
-     WHERE id=$1 AND status='processing'`,
+     WHERE id=$1 AND status='processing'
+     RETURNING recipient_address,event_key`,
     [id, providerMessageId ? String(providerMessageId).slice(0, 255) : null]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox job was not marked sent because its processing lease was lost.");
+  await require("./messageHistoryService").recordMessage({channel:"email",to:result.rows[0].recipient_address,message:"Email notification delivered successfully.",event:result.rows[0].event_key,status:"sent",gateway:"email_outbox",providerMessageId:providerMessageId||null});
 }
 
 async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message = "Email delivery failed.", retryAfterMs, maxAttempts = 8 } = {}) {
@@ -110,6 +112,7 @@ async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message =
     [id, terminal ? "failed" : "pending", delayMs, String(code).slice(0, 80), String(message).replace(/[\r\n\t]+/g, " ").slice(0, 500)]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox retry state was not saved because its processing lease was lost.");
+  if (terminal) { const job=await db.query("SELECT recipient_address,event_key FROM email_outbox WHERE id=$1 LIMIT 1",[id]); if(job.rows[0])await require("./messageHistoryService").recordMessage({channel:"email",to:job.rows[0].recipient_address,message:"Email notification delivery failed.",event:job.rows[0].event_key,status:"failed",error:String(message||"Email delivery failed.").slice(0,1000),gateway:"email_outbox"}); }
   return { terminal, delayMs };
 }
 
