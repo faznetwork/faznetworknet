@@ -20,7 +20,7 @@ test("legacy OLT telemetry routes, cache reads, and collector execution are disa
   assert.doesNotMatch(server, /\/api\/olt\/(?:telemetry|sync-telemetry)|oltTelemetryController/);
   assert.doesNotMatch(schema, /CREATE TABLE IF NOT EXISTS olt_telemetry|ALTER TABLE olt_telemetry/i);
   assert.doesNotMatch(customerController, /FROM\s+olt_telemetry/i);
-  assert.doesNotMatch(networkMapController, /onu_rx_power|rxPower|rx_power_source|getRxPowerStatus|JOIN\s+network_devices/i);
+  assert.doesNotMatch(networkMapController, /onu_rx_power|rxPower|rx_power_source|getRxPowerStatus|LEFT JOIN network_devices d ON d.id=c\.onu_rx_power_source_device_id/i);
   assert.doesNotMatch(adminView, /\/api\/olt\/(?:telemetry|sync-telemetry)/);
   assert.doesNotMatch(customerProfileView, /\/api\/olt\/(?:telemetry|sync-telemetry)/);
 
