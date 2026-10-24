@@ -23,7 +23,7 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
   return crypto.randomUUID();
 }
 
-async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false } = {}) {
+async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null } = {}) {
   if (String(process.env.EMAIL_WORKER_ENABLED || "").toLowerCase() !== "true") {
     throw new Error("Native email worker is disabled; email was not queued. Configure EMAIL_WORKER_ENABLED=true before enabling queued email flows.");
   }
@@ -40,7 +40,8 @@ async function enqueueEmail({ event = "manual", to, subject, html, text, idempot
   const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
   const encryptedPayload = encryptPayload(payload);
   const key = makeIdempotencyKey({ idempotencyKey, event: normalizedEvent, recipient, payload });
-  const result = await db.query(
+  const query = client ? client.query.bind(client) : db.query.bind(db);
+  const result = await query(
     `INSERT INTO email_outbox
       (idempotency_key, event_key, recipient_address, payload_ciphertext, status, attempts, available_at, created_at, updated_at)
      VALUES ($1,$2,$3,$4,'pending',0,$5,NOW(),NOW())
@@ -49,7 +50,7 @@ async function enqueueEmail({ event = "manual", to, subject, html, text, idempot
     [key, normalizedEvent, recipient, encryptedPayload, new Date(availableAt)]
   );
   if (result.rows[0]) return { accepted: true, duplicate: false, jobId: result.rows[0].id, status: result.rows[0].status };
-  const existing = await db.query(
+  const existing = await query(
     "SELECT id,status,created_at FROM email_outbox WHERE idempotency_key=$1 LIMIT 1",
     [key]
   );
