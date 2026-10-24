@@ -77,7 +77,7 @@ function defaultEmailTemplate(event,context){
  return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
 }
 
-async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,useMessageDirectly=false,emailClient=null}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,excludeChannels=[],useMessageDirectly=false,emailClient=null}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to||recipient;
  const recipientPhone=normalizePhone(rawPhone);
@@ -110,8 +110,13 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   return formatMessage(settings,eventName,context,message,custom);
  };
  const selected=Array.isArray(channels)?new Set(channels):null;
+ const excluded=new Set(Array.isArray(excludeChannels)?excludeChannels:[]);
  const jobs=[];
- const channelEnabled=(name)=>selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
+ const channelEnabled=(name)=>{
+  if(excluded.has(name))return false;
+  if(emailClient&&name==="email")return bool(settings,"notification_channel_email_enabled",false)&&(!selected||selected.has(name));
+  return selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
+ };
  const ruleEvents=renewalRuleEvents(type,eventName);
  const ruleEnabled=(name)=>{
   const keys=ruleEvents.map(ruleEvent=>"notification_rule_"+type+"_"+ruleEvent+"_"+name+"_enabled");
