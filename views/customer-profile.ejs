@@ -334,27 +334,17 @@ const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>
 async function loadNetworkMap(){
  if(networkMapBusy)return;networkMapBusy=true;
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
- let hasCollectorTelemetry=false;
  // Render customer/session data first. The optional network-map endpoint may fail
  // independently; it must never prevent known customer IP/MAC/pool from appearing.
  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
  renderRouterIdentity();
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
-  // Show useful saved inventory immediately, but label it clearly as unverified.
-  // Only fresh authenticated OLT telemetry may be called a live/verified ONU MAC.
-  if(!$('topoPon').dataset.loaded) $('topoPon').textContent='Auto-detecting...';
-  if(!$('topoOnu').dataset.loaded) $('topoOnu').textContent='Auto-detecting...';
-  if(!$('topoOnuMac').dataset.loaded) $('topoOnuMac').textContent='ONU MAC: Auto-mapping...';
-  if(!$('topoRx').dataset.loaded) $('topoRx').textContent='— dBm';
-  $('topoHealth').innerHTML='<span class="topology-health warning">Awaiting live reading</span>';
-  $('topologyOverall').textContent='Awaiting telemetry';
-  $('topologyOverall').className='topology-health warning';
-
   // Legacy push telemetry has been retired. Keep customer inventory and saved RX values visible;
   // direct OLT polling will be introduced as a separate, verified integration.
   $('topoPon').textContent=state?.customer?.oltPonPort||'Not reported';
   $('topoOnu').textContent='Direct OLT polling not configured';
+  $('topoOnuMac').textContent='ONU MAC: '+(savedOnuMac()||'Not assigned');
   $('topoHealth').textContent='Live optical telemetry is unavailable';
   $('topologyOverall').textContent='Direct OLT polling not configured';
   $('topologyOverall').className='topology-health warning';
@@ -369,13 +359,11 @@ async function loadNetworkMap(){
   const currentLive=state?.live||{},currentCustomer=state?.customer||{};
   const finalMac=(hasValue(currentLive.mac)?currentLive.mac:'')||(hasValue(d.routerMac)?d.routerMac:'')||(hasValue(currentCustomer.routerMac)?currentCustomer.routerMac:'');
   if(hasValue(finalMac)){mac.textContent=finalMac;}
-  // Legacy customer-column readings must not overwrite fresher collector telemetry.
-  if(!hasCollectorTelemetry){
+  // Show only the existing saved customer RX reading; it is not represented as live telemetry.
    const rx=d.rxPower||{};
    const validRx=rx.dbm!==null&&rx.dbm!==undefined&&Number.isFinite(Number(rx.dbm));
    $('onuRxPowerValue').textContent=validRx?Number(rx.dbm).toFixed(2)+' dBm':'—';
-   $('onuRxPowerSource').textContent=rx.observedAt?'Saved customer OLT reading · '+(rx.sourceDevice||'OLT')+' · '+new Date(rx.observedAt).toLocaleString():'Awaiting verified OLT reading';
-  }
+   $('onuRxPowerSource').textContent=rx.observedAt?'Saved customer RX reading · '+(rx.sourceDevice||'device')+' · '+new Date(rx.observedAt).toLocaleString():'No saved customer RX reading';
   const list=Array.isArray(d.observations)?d.observations:[];
   rows.innerHTML=list.length?list.map(o=>'<tr><td>'+esc(o.observationType||'—')+'</td><td class="mono">'+esc(o.identityValue||'—')+'</td><td>'+esc(o.matchStatus||'—')+'</td><td>'+esc(o.sourceDevice||'—')+'</td><td>'+esc(o.observedAt?new Date(o.observedAt).toLocaleString():'—')+'</td></tr>').join(''):'<tr><td colspan="5" class="text-muted text-center py-3">No network observations recorded yet. Run read-only discovery from Device Management.</td></tr>';
  }catch(e){
