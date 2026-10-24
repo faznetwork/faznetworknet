@@ -133,7 +133,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  const whatsappRuleEnabled=ruleEnabled("whatsapp");
  const whatsappEligible=whatsappChannelEnabled&&(whatsappRuleEnabled||explicitPppoeRenewalWhatsApp||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone;
  const whatsappSkipReasons=[];
- if(isPppoeRenewal&&!whatsappEligible&&(explicitPppoeRenewalWhatsApp||!selected)){
+ if(isPppoeRenewal&&!whatsappEligible&&explicitPppoeRenewalWhatsApp){
   const reason=excluded.has("whatsapp")?"channel_excluded":!whatsappChannelEnabled?"channel_disabled":!validWhatsAppPhone?"invalid_phone":"rule_disabled";
   whatsappSkipReasons.push({channel:"whatsapp",status:"skipped",reason});
   console.warn("[Manual Renewal WhatsApp] Notification skipped:",JSON.stringify({username:customerUsername,reason,hasRecipient:Boolean(rawPhone),event:rawEvent||eventName}));
