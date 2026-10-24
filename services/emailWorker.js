@@ -31,6 +31,12 @@ async function processJob(job) {
     return;
   }
 
+  if (payload.expiresAt && Number.isFinite(new Date(payload.expiresAt).getTime()) && new Date(payload.expiresAt).getTime() <= Date.now()) {
+    await outbox.scheduleRetry(job.id, { attempts: MAX_ATTEMPTS, maxAttempts: MAX_ATTEMPTS, code: "EMAIL_EXPIRED", message: "Email expired before delivery and was not sent." });
+    console.warn("[EmailWorker] Expired email job was not sent.", { jobId: job.id, event: job.event_key });
+    return;
+  }
+
   try {
     const result = await emailService.sendEmail({
       to: payload.to,
