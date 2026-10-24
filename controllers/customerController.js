@@ -923,7 +923,7 @@ async function renew(req,res){
     const trxId="CASH-"+Date.now()+"-"+(customer?.id||username);
     await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES('cash',$1,$2,'PAID',$3,$4,TRUE)",[trxId,paidAmount,username,phone]);
     await logAuditAction({customerId:customer?.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${paidAmount.toFixed(2)} via cash (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount:paidAmount,method:"cash",trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",customer:customer||routerUser,to:phone||customer?.mobile||customer?.account_phone||customer?.mobile_number||customer?.contact_no||routerUser?.mobile||routerUser?.account_phone||routerUser?.mobile_number||routerUser?.contact_no,username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+newExpDate+".",variables:{name:fullName||username,username,amount:paidAmount,gateway:"cash",trx_id:trxId,new_expiry_date:newExpDate}});
+    const notificationDispatch=require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",customer:customer||routerUser,to:customer?.whatsapp_phone||customer?.whatsapp||customer?.phone||customer?.mobile||customer?.account_phone||customer?.mobile_number||customer?.contact_no||routerUser?.whatsapp_phone||routerUser?.whatsapp||routerUser?.phone||routerUser?.mobile||routerUser?.account_phone||routerUser?.mobile_number||routerUser?.contact_no||phone,channels:["whatsapp"],username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+newExpDate+".",variables:{name:fullName||username,username,amount:paidAmount,gateway:"cash",trx_id:trxId,new_expiry_date:newExpDate}});notificationDispatch.task.then(result=>{if(!result?.success)console.error("[Manual Renewal WhatsApp] All Customer delivery failed:",JSON.stringify({username,results:result?.results||[],error:result?.error||null}));else console.info("[Manual Renewal WhatsApp] All Customer delivery result:",JSON.stringify({username,results:result?.results||[]}));});
     return res.json({success:true,username,newExpDate,message:`User ${username} renewed until ${newExpDate}`});
   }catch(error){return errorResponse(res,error);}
 }
@@ -1338,16 +1338,18 @@ async function renewCustomerById(req,res){try{const payload=await resolveCustome
     await mikrotikService.kickActiveUser(payload.customer.username);await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET expiry_date=$1,status='active',disabled=FALSE,comment=$2,billing_status='paid',last_paid_at=NOW(),paid_until=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'PAID',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${amount.toFixed(2)} via ${method} (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount,method,trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
     const notificationName=payload.customer.name||payload.customer.fullName||payload.customer.username;
     const packageName=payload.package?.name||payload.package?.planName||payload.customer.packageName||payload.customer.profile||"";
-    require("../services/notificationDispatcher").dispatchNotification({
+    const notificationDispatch=require("../services/notificationDispatcher").dispatchNotification({
       userType:"pppoe",
       event:"renewal",
       customer:payload.customer,
-      to:payload.customer.phone||payload.customer.mobile||payload.customer.account_phone||payload.customer.mobile_number||payload.customer.contact_no,
+      to:payload.customer.whatsapp_phone||payload.customer.whatsapp||payload.customer.phone||payload.customer.mobile||payload.customer.account_phone||payload.customer.mobile_number||payload.customer.contact_no,
+      channels:["whatsapp"],
       username:payload.customer.username,
       message:"আপনার FAZ NETWORK সংযোগ নবায়ন সম্পন্ন হয়েছে। নতুন মেয়াদ: "+newExpDate+"। ধন্যবাদ।",
       variables:{name:notificationName,username:payload.customer.username,package:packageName,package_name:packageName,amount,gateway:method,trx_id:trxId,new_expiry_date:newExpDate,expiry_date:newExpDate}
     });
-    return res.json({success:true,newExpDate,trxId,amount,method,message:"Payment recorded and customer renewed. Notification delivery is queued according to the configured Notification Rules."});}catch(error){return errorResponse(res,error);}}
+    notificationDispatch.task.then(result=>{if(!result?.success)console.error("[Manual Renewal WhatsApp] Customer 360 delivery failed:",JSON.stringify({username:payload.customer.username,results:result?.results||[],error:result?.error||null}));else console.info("[Manual Renewal WhatsApp] Customer 360 delivery result:",JSON.stringify({username:payload.customer.username,results:result?.results||[]}));});
+    return res.json({success:true,newExpDate,trxId,amount,method,message:"Payment recorded and customer renewed. WhatsApp notification delivery is tracked separately."});}catch(error){return errorResponse(res,error);}}
 async function changeCustomerPackage(req,res){
   try{
     const payload=await resolveCustomer360(req.params.id);
