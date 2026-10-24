@@ -21,9 +21,21 @@ let wakeResolve = null;
 function classifyFailure(result) {
   const code = String(result?.code || "").toUpperCase();
   const message = String(result?.error || "Email delivery failed.");
-  const permanentCodes = new Set(["EMAIL_PAYLOAD_INVALID", "EAUTH", "EENVELOPE"]);
-  const permanentMessage = /valid recipient|subject is required|body is required|SMTP Host is required|SMTP Username|SMTP Password|valid From Email|EMAIL_PAYLOAD_ENCRYPTION_KEY/i.test(message);
-  return { permanent: permanentCodes.has(code) || permanentMessage, code: code || "EMAIL_DELIVERY_FAILED", message };
+  const permanentCodes = new Set([
+    "EMAIL_PAYLOAD_INVALID", "EAUTH", "EENVELOPE",
+    "ERESEND_NOT_CONFIGURED", "ERESEND_SENDER_NOT_VERIFIED"
+  ]);
+  const resendHttpStatus = /^ERESEND_HTTP_(\\d{3})$/.exec(code);
+  const permanentResendResponse = Boolean(resendHttpStatus &&
+    Number(resendHttpStatus[1]) >= 400 &&
+    Number(resendHttpStatus[1]) < 500 &&
+    Number(resendHttpStatus[1]) !== 429);
+  const permanentMessage = /valid recipient|subject is required|body is required|SMTP Host is required|SMTP Username|SMTP Password|valid From Email|EMAIL_PAYLOAD_ENCRYPTION_KEY|Resend HTTP API is not configured|Resend sender is not configured/i.test(message);
+  return {
+    permanent: permanentCodes.has(code) || permanentResendResponse || permanentMessage,
+    code: code || "EMAIL_DELIVERY_FAILED",
+    message
+  };
 }
 
 async function processJob(job) {
