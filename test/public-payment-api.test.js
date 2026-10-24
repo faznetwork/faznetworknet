@@ -88,7 +88,7 @@ test("Hotspot captive checkout uses local MFS image assets and submits MAC crede
   assert.match(page, /assets\/images\/rocket-logo\.png/);
   assert.match(page, /assets\/images\/upay-logo\.png/);
   // Inline SVG is used only for the QR-camera control; MFS payment logos must remain local image assets.
-  assert.match(page, /<button[^>]*id="qr-scan-button"[^>]*>[\s\S]*?<svg\\b[\\s\\S]*?<\\/svg>[\\s\\S]*?<\\/button>/);
+  assert.match(page, /<button[^>]*id="qr-scan-button"[^>]*>[\s\S]*?<svg\b[\s\S]*?<\/svg>[\s\S]*?<\/button>/);
   assert.match(page, /class="mfs-official-logo"/);
   assert.match(page, /service_type/);
   assert.match(page, /payload\.senderPhoneNumber=phone/);
