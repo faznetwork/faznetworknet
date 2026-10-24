@@ -47,12 +47,10 @@ async function runNetworkDiscovery() {
     let matched = 0;
     let unmatched = 0;
     let discovered = 0;
-    let onuAutoMapped = 0;
-    let onuAutoAmbiguous = 0;
 
     await db.query(
       "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
-      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null, onuAutoMapped, onuAutoAmbiguous })]
+      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null })]
     );
 
     for (const session of sessions) {
@@ -121,7 +119,7 @@ async function runNetworkDiscovery() {
     );
     await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
     console.log("[NETWORK DISCOVERY] run=" + runId + " status=" + status + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
-    return { runId, status, discovered, matched, unmatched, onuAutoMapped, onuAutoAmbiguous };
+    return { runId, status, discovered, matched, unmatched };
   } catch (error) {
     if (runId) {
       await db.query(
