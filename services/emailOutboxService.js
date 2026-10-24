@@ -24,7 +24,7 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
   return crypto.randomUUID();
 }
 
-async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null } = {}) {
+async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null, userType = null } = {}) {
   if (!(await emailNotificationState.isEnabled(client))) {
     throw new Error("Email notifications are disabled in Notification Hub; email was not queued.");
   }
@@ -38,7 +38,8 @@ async function enqueueEmail({ event = "manual", to, subject, html, text, idempot
 
   const normalizedEvent = String(event || "manual").trim().slice(0, MAX_EVENT_LENGTH) || "manual";
   if (expiresAt !== null && !Number.isFinite(new Date(expiresAt).getTime())) throw new Error("Email outbox expiresAt must be a valid date.");
-  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
+  const normalizedUserType = ["hotspot", "pppoe"].includes(String(userType || "").toLowerCase()) ? String(userType).toLowerCase() : null;
+  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, userType: normalizedUserType, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
   const encryptedPayload = encryptPayload(payload);
   const key = makeIdempotencyKey({ idempotencyKey, event: normalizedEvent, recipient, payload });
   const query = client ? client.query.bind(client) : db.query.bind(db);
@@ -97,7 +98,13 @@ async function markDelivered(id, { providerMessageId = null } = {}) {
     [id, providerMessageId ? String(providerMessageId).slice(0, 255) : null]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox job was not marked sent because its processing lease was lost.");
-  await require("./messageHistoryService").recordMessage({channel:"email",to:result.rows[0].recipient_address,message:"Email notification delivered successfully.",event:result.rows[0].event_key,status:"sent",gateway:"email_outbox",providerMessageId:providerMessageId||null});
+  const payloadRow = await db.query("SELECT payload_ciphertext FROM email_outbox WHERE id=$1 LIMIT 1",[id]);
+  let userType = null;
+  if (payloadRow.rows[0]?.payload_ciphertext) {
+    try { userType = require("./emailPayloadCrypto").decryptPayload(payloadRow.rows[0].payload_ciphertext)?.userType || null; }
+    catch (error) { console.error("[EmailOutbox] Could not recover customer type for history:", String(error?.message || error).slice(0,200)); }
+  }
+  await require("./messageHistoryService").recordMessage({channel:"email",to:result.rows[0].recipient_address,message:"Email notification delivered successfully.",event:result.rows[0].event_key,status:"sent",gateway:"email_outbox",providerMessageId:providerMessageId||null,userType});
 }
 
 async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message = "Email delivery failed.", retryAfterMs, maxAttempts = 8 } = {}) {
@@ -112,7 +119,17 @@ async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message =
     [id, terminal ? "failed" : "pending", delayMs, String(code).slice(0, 80), String(message).replace(/[\r\n\t]+/g, " ").slice(0, 500)]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox retry state was not saved because its processing lease was lost.");
-  if (terminal) { const job=await db.query("SELECT recipient_address,event_key FROM email_outbox WHERE id=$1 LIMIT 1",[id]); if(job.rows[0])await require("./messageHistoryService").recordMessage({channel:"email",to:job.rows[0].recipient_address,message:"Email notification delivery failed.",event:job.rows[0].event_key,status:"failed",error:String(message||"Email delivery failed.").slice(0,1000),gateway:"email_outbox"}); }
+  if (terminal) {
+    const job=await db.query("SELECT recipient_address,event_key,payload_ciphertext FROM email_outbox WHERE id=$1 LIMIT 1",[id]);
+    if(job.rows[0]) {
+      let userType=null;
+      if(job.rows[0].payload_ciphertext) {
+        try { userType=require("./emailPayloadCrypto").decryptPayload(job.rows[0].payload_ciphertext)?.userType||null; }
+        catch(error) { console.error("[EmailOutbox] Could not recover customer type for failed history:",String(error?.message||error).slice(0,200)); }
+      }
+      await require("./messageHistoryService").recordMessage({channel:"email",to:job.rows[0].recipient_address,message:"Email notification delivery failed.",event:job.rows[0].event_key,status:"failed",error:String(message||"Email delivery failed.").slice(0,1000),gateway:"email_outbox",userType});
+    }
+  }
   return { terminal, delayMs };
 }
 

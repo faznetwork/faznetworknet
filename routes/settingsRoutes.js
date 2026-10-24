@@ -19,6 +19,8 @@ router.post("/hotspot-engine",controller.saveHotspotEngine);
 router.get("/all",controller.getAllSettings);
 router.post("/update",controller.updateSettings);
 router.get("/sms-history",require("../controllers/smsHistoryController").list);
+router.post("/sms-history/delete-selected",require("../controllers/smsHistoryController").deleteSelected);
+router.post("/sms-history/delete-filtered",require("../controllers/smsHistoryController").deleteFiltered);
 router.post("/message-history/:id/retry",require("../controllers/smsHistoryController").retry);
 router.post("/notifications/test",controller.testNotification);
 router.get("/notifications/whatsapp/status",controller.whatsappStatus);

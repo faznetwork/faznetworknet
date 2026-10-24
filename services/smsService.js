@@ -121,12 +121,12 @@ async function sendSmsCore({to,phone,message,event="manual",variables={},token:o
  const providerResponse=await requestProvider({url:endpoint,method,params,token:apiToken});
  return {success:true,mode,method,providerResponse};
 }
-async function recordSmsDelivery({to,phone,message,event="manual",status,error,mode,method,httpStatus}={}) {
+async function recordSmsDelivery({to,phone,message,event="manual",status,error,mode,method,httpStatus,userType=null}={}) {
  try {
   const db=require("../db");
   await db.getPool().query(
-   "INSERT INTO sms_delivery_logs(recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,channel,recipient_address,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())",
-   [safeText(phone||to,40),safeText(message,4000),safeText(event,80)||"manual",status,safeText(mode,40)||null,safeText(method,20)||null,Number.isInteger(httpStatus)?httpStatus:null,error?safeText(error,1000):null,"sms",safeText(phone||to,254)]
+   "INSERT INTO sms_delivery_logs(recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,channel,recipient_address,user_type,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())",
+   [safeText(phone||to,40),safeText(message,4000),safeText(event,80)||"manual",status,safeText(mode,40)||null,safeText(method,20)||null,Number.isInteger(httpStatus)?httpStatus:null,error?safeText(error,1000):null,"sms",safeText(phone||to,254),["hotspot","pppoe"].includes(String(userType||"").toLowerCase())?String(userType).toLowerCase():null]
   );
  } catch (_) { /* History must never block a message send. */ }
 }
@@ -147,14 +147,14 @@ async function sendSms(args={}){
   const provider=result?.providerResponse||result?.provider_response||{};
   const httpStatus=Number(provider.httpStatus||provider.statusCode||0);
   if(!error&&result?.skipped)error=String(result.reason||"Message skipped");
-  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null});
+  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null,userType:input.userType});
  }
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
  const settings=await settingsService.getAllSettings();const config=EVENT_CONFIG[event];
- if(config&&!settingsService.bool(settings[config.enabled])){await recordSmsDelivery({to:phone||to,phone:phone||to,message,event,status:"skipped",error:"Notification event is disabled in settings.",mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled"});return {success:true,skipped:true,reason:"event_disabled"};}
+ if(config&&!settingsService.bool(settings[config.enabled])){return {success:true,skipped:true,reason:"event_disabled"};}
  const resolved={company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...extra,...variables};
  const rendered=useMessageDirectly?renderTemplate(message,resolved):eventTemplate(settings,event,resolved,message);
- return sendSms({to,phone,message:rendered,event,variables:resolved,settings});
+ return sendSms({to,phone,message:rendered,event,variables:resolved,settings,userType:extra.userType});
 }
 module.exports={sendSms,sendNotification,renderTemplate,eventTemplate,EVENT_CONFIG,parseMapping,DEFAULT_MAPPING};

@@ -63,7 +63,7 @@ test("PPPoE renewal dispatch uses the enabled payment WhatsApp rule and normaliz
   assert.equal(result.success,true);
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].channel,"whatsapp");
-  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test",event:"pppoe_renewal"}]);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Renewal test",event:"pppoe_renewal",userType:"pppoe"}]);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
@@ -82,7 +82,7 @@ test("custom PPPoE renewal template replaces runtime variables for WhatsApp",asy
  try{
   const result=await dispatchNow({userType:"pppoe",event:"pppoe_renewal",customer:{username:"alice",full_name:"Alice",phone:"01712345678"},username:"alice",message:"Default",variables:{new_expiry_date:"2026-11-16"}});
   assert.equal(result.success,true);
-  assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK.",event:"pppoe_renewal"}]);
+  assert.deepEqual(sent,[{to:"8801712345678",message:"Hi Alice, alice renews until 2026-11-16 at FAZ NETWORK.",event:"pppoe_renewal",userType:"pppoe"}]);
  }finally{settingsService.getAllSettings=originalGetAllSettings;whatsappService.sendMessage=originalSendMessage;db.query=originalDbQuery;}
 });
 
@@ -164,7 +164,7 @@ for(const scenario of [
     message:"Fallback message"
    });
    assert.equal(result.success,true);
-   assert.deepEqual(sent,[{to:"8801712345678",message:"প্রিয় "+scenario.name+", "+scenario.package+"; username=test-user; expiry="+scenario.expiry,event:scenario.event}]);
+   assert.deepEqual(sent,[{to:"8801712345678",message:"প্রিয় "+scenario.name+", "+scenario.package+"; username=test-user; expiry="+scenario.expiry,event:scenario.event,userType:scenario.type}]);
   }finally{
    settingsService.getAllSettings=originalGetAllSettings;
    whatsappService.sendMessage=originalSendMessage;
@@ -262,7 +262,7 @@ test("manual PPPoE renewal respects global channel and renewal-rule toggles",asy
  }
 });
 
-test("explicit manual renewal records a skipped history entry when recipient number is invalid",async()=>{
+test("manual renewal with invalid recipient is skipped without creating delivery history",async()=>{
  const originalGetAllSettings=settingsService.getAllSettings;
  const originalDbQuery=db.query;
  const history=require("../services/messageHistoryService");
@@ -278,10 +278,7 @@ test("explicit manual renewal records a skipped history entry when recipient num
   });
   assert.equal(result.success,true);
   assert.deepEqual(result.results,[{channel:"whatsapp",status:"skipped",reason:"invalid_phone"}]);
-  assert.equal(recorded.length,1);
-  assert.equal(recorded[0].channel,"whatsapp");
-  assert.equal(recorded[0].status,"skipped");
-  assert.equal(recorded[0].event,"renewal");
+  assert.equal(recorded.length,0);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   db.query=originalDbQuery;
