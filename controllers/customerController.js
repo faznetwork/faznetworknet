@@ -1191,8 +1191,8 @@ async function resolveCustomer360(idValue){
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
-  // Customer 360 must never open a MikroTik API socket. All optional live data
-  // comes from PostgreSQL push snapshots and is ignored once older than 3 minutes.
+  // Customer 360 must never open a MikroTik API socket. Recent PPPoE session
+  // snapshots remain available independently of the retired OLT telemetry pipeline.
   const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult]=await Promise.allSettled([
     db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
