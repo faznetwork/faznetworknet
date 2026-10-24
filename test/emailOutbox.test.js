@@ -55,7 +55,7 @@ test("enqueueEmail stores encrypted payload and uses a durable idempotency key",
   setTestKey();
   let queryArgs;
   db.query = async (sql, args) => {
-    if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+    if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
     assert.match(sql, /INSERT INTO email_outbox/);
     queryArgs = args;
     return { rows: [{ id: 51, status: "pending", created_at: new Date() }], rowCount: 1 };
@@ -76,7 +76,7 @@ test("duplicate enqueue returns the existing job instead of creating a second ro
   let calls = 0;
   db.query = async sql => {
     calls++;
-    if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+    if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
     if (sql.includes("INSERT INTO email_outbox")) return { rows: [], rowCount: 0 };
     return { rows: [{ id: 51, status: "pending", created_at: new Date() }], rowCount: 1 };
   };
@@ -96,7 +96,7 @@ test("enqueueEmail uses the supplied transaction client for insert and duplicate
   const client = {
     query: async (sql, args) => {
       statements.push({ sql, args });
-      if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+      if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
       if (sql.includes("INSERT INTO email_outbox")) return { rows: [], rowCount: 0 };
       return { rows: [{ id: 82, status: "pending", created_at: new Date() }], rowCount: 1 };
     }
@@ -108,7 +108,7 @@ test("enqueueEmail uses the supplied transaction client for insert and duplicate
   assert.equal(result.duplicate, true);
   assert.equal(result.jobId, 82);
   assert.equal(statements.length, 3);
-  assert.match(statements[0].sql, /notification_channel_email_enabled/);
+  assert.match(statements[0].sql, /app_settings/);
   assert.match(statements[1].sql, /INSERT INTO email_outbox/);
   assert.match(statements[2].sql, /SELECT id,status,created_at FROM email_outbox/);
   assert.equal(statements[1].args[0], "admin-invitation:82");
@@ -118,7 +118,7 @@ test("enqueueEmail propagates transaction-client insert errors without falling b
   setTestKey();
   db.query = async () => { throw new Error("pool fallback must not occur"); };
   const client = { query: async sql => {
-    if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+    if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
     throw new Error("forced outbox insert failure");
   } };
   await assert.rejects(
