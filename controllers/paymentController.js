@@ -351,6 +351,7 @@ async function manualMatch(req,res){
   const t=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
   if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
   const tx=t.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  if(tx.service_type&&String(tx.service_type).toLowerCase()!==serviceType)return res.status(409).json({success:false,error:"This transaction belongs to a different service type and cannot be reassigned."});
   if(tx.used===true||["paid","processed","processing","duplicate"].includes(status))return res.status(409).json({success:false,error:"This transaction has already been claimed or processed and cannot be manually matched."});
   if(status!=="unmatched")return res.status(409).json({success:false,error:"Only unmatched transactions can be manually matched."});
   if(serviceType==="hotspot")return await manualMatchHotspot(req,res,tx,trxId);
@@ -403,6 +404,7 @@ async function forceProvisionHotspot(req,res){
   const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
   if(!found.rows?.length)return res.status(404).json({success:false,code:"TRANSACTION_NOT_FOUND",error:"Payment transaction was not found."});
   const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  if(tx.service_type&&String(tx.service_type).toLowerCase()!=="hotspot")return fail(409,"SERVICE_TYPE_MISMATCH","This transaction is not a Hotspot payment.");
   transactionId=tx.id;
   originalStatus=status;
   if(!["unmatched","processing","processed","paid"].includes(status))return res.status(409).json({success:false,code:"TRANSACTION_NOT_ELIGIBLE",error:"Only unmatched, stale processing, or completed payment transactions can be force provisioned."});
