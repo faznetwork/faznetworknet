@@ -18,7 +18,8 @@ This document describes rollout steps only. The code branch does not change Rend
 3. Only after the outbox schema is present and SMTP has been verified, set `EMAIL_WORKER_ENABLED=true`.
 4. Optional worker controls:
    - `EMAIL_WORKER_POLL_MS` (default 5000; bounded 1000–30000)
-   - `EMAIL_WORKER_BATCH_SIZE` (default 10; bounded 1–50)
+   - `EMAIL_WORKER_BATCH_SIZE` (default 10; bounded 1–50 and further clamped to the lease-safe batch size)
+   - `EMAIL_WORKER_CONCURRENCY` (default 3; bounded 1–10)
    - `EMAIL_WORKER_LEASE_SECONDS` (default 90; bounded 30–600)
    - `EMAIL_WORKER_MAX_ATTEMPTS` (default 8; bounded 1–20)
 
