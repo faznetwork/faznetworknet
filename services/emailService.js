@@ -75,6 +75,7 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
 
 async function sendEmail({ to, subject, html, text, event = "manual", sensitive = false } = {}) {
   const recipient = String(to || "").trim();
+  const body = String(text || html || "").slice(0, 4000);
   let result;
   try {
     const { recipient: validatedRecipient, title } = validateEmailRequest({ to, subject, html, text });
@@ -95,7 +96,7 @@ async function sendEmail({ to, subject, html, text, event = "manual", sensitive 
         channel: "email",
         to: recipient,
         // OTPs and invitation links are never written to the message-history body.
-        message: sensitive ? "[sensitive email payload omitted]" : "Subject: " + String(subject || "").slice(0, 200),
+        message: sensitive ? "[sensitive email payload omitted]" : "Subject: " + String(subject || "").slice(0, 200) + "\n" + body,
         event,
         status: result?.success ? "sent" : "failed",
         error: result?.success ? null : result?.error,
