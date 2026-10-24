@@ -372,30 +372,83 @@ async function sendInvitationEmail(invitation, rawToken, client = null) {
 async function createUser(req, res) {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = normalizeRole(req.body?.role);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
-  if (!['staff','admin','super_admin'].includes(role)) return res.status(400).json({ success: false, message: 'Select a valid role.' });
-  if (req.auth?.role === 'admin' && role !== 'staff') return res.status(403).json({ success: false, message: 'Admins may invite staff accounts only.' });
-  if (req.auth?.role !== 'super_admin' && role === 'super_admin') return res.status(403).json({ success: false, message: 'Only the owner may invite a Super Admin.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, code: 'INVALID_EMAIL', message: 'Enter a valid email address.' });
+  if (!['staff','admin','super_admin'].includes(role)) return res.status(400).json({ success: false, code: 'INVALID_ROLE', message: 'Select a valid role.' });
+  if (req.auth?.role === 'admin' && role !== 'staff') return res.status(403).json({ success: false, code: 'ROLE_FORBIDDEN', message: 'Admins may invite staff accounts only.' });
+  if (req.auth?.role !== 'super_admin' && role === 'super_admin') return res.status(403).json({ success: false, code: 'ROLE_FORBIDDEN', message: 'Only the owner may invite a Super Admin.' });
+
   try {
-    const existing = await db.query(
-      "SELECT 1 FROM admin_users WHERE lower(email)=lower($1) UNION ALL SELECT 1 FROM admin_invitations WHERE status='pending' AND lower(email)=lower($1) LIMIT 1",
-      [email]
-    );
-    if (existing.rows.length) return res.status(409).json({ success: false, message: 'Email is already registered or has a pending invitation.' });
+    // Token creation is kept inside the guarded lifecycle so crypto/provider failures
+    // are logged and returned as a deliberate API response, never an unhandled 500.
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     const created = await db.withTransaction(async client => {
-      const inserted = await client.query(
-        "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES (NULL,$1,$2,$3,'pending',$4,$5) RETURNING id,email,role,status,created_at,expires_at",
-        [email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
+      const registered = await client.query(
+        'SELECT id FROM admin_users WHERE lower(email)=lower($1) LIMIT 1',
+        [email]
       );
-      if (!inserted.rows.length) throw new Error('Invitation row was not created.');
-      await sendInvitationEmail(inserted.rows[0], rawToken, client);
-      return inserted;
+      if (registered.rows.length) {
+        const conflict = new Error('This email is already registered to an account.');
+        conflict.code = 'EMAIL_ALREADY_REGISTERED';
+        conflict.httpStatus = 409;
+        throw conflict;
+      }
+
+      const pending = await client.query(
+        "SELECT id FROM admin_invitations WHERE status='pending' AND lower(email)=lower($1) LIMIT 1 FOR UPDATE",
+        [email]
+      );
+      if (pending.rows.length) {
+        const conflict = new Error('A pending invitation already exists for this email.');
+        conflict.code = 'INVITATION_ALREADY_PENDING';
+        conflict.httpStatus = 409;
+        throw conflict;
+      }
+
+      // Reuse the most recent failed row instead of inserting another row for the
+      // same address. This supports installations with stricter historical indexes
+      // while preserving the existing invitation record and its audit history.
+      const failed = await client.query(
+        "SELECT id FROM admin_invitations WHERE status='failed' AND lower(email)=lower($1) ORDER BY updated_at DESC, id DESC LIMIT 1 FOR UPDATE",
+        [email]
+      );
+
+      let invitation;
+      if (failed.rows.length) {
+        invitation = await client.query(
+          "UPDATE admin_invitations SET username=NULL, role=$1, token_hash=$2, otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, status='pending', created_by=$3, expires_at=$4, created_at=NOW(), updated_at=NOW() WHERE id=$5 AND status='failed' RETURNING id,email,role,status,created_at,expires_at",
+          [role, tokenHash, String(req.session?.adminUser || 'owner'), expiresAt, failed.rows[0].id]
+        );
+        if (!invitation.rows.length) {
+          const conflict = new Error('The failed invitation changed while retrying. Refresh the invitation list and retry.');
+          conflict.code = 'INVITATION_STATE_CHANGED';
+          conflict.httpStatus = 409;
+          throw conflict;
+        }
+      } else {
+        invitation = await client.query(
+          "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES (NULL,$1,$2,$3,'pending',$4,$5) RETURNING id,email,role,status,created_at,expires_at",
+          [email, role, tokenHash, String(req.session?.adminUser || 'owner'), expiresAt]
+        );
+      }
+
+      if (!invitation.rows.length) {
+        const error = new Error('Invitation row was not created.');
+        error.code = 'INVITATION_ROW_NOT_CREATED';
+        throw error;
+      }
+      await sendInvitationEmail(invitation.rows[0], rawToken, client);
+      return invitation;
     });
+
     await writeAudit(req, 'admin_invitation_created', null, { email, role, invitationId: created.rows[0].id });
-    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.' });
+    return res.status(201).json({
+      success: true,
+      invitation: created.rows[0],
+      message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.'
+    });
   } catch (error) {
     const message = String(error?.message || error || 'Unknown invitation creation error');
     const constraint = String(error?.constraint || '');
@@ -405,22 +458,32 @@ async function createUser(req, res) {
       detail: String(error?.detail || '').slice(0, 300) || undefined,
       message: message.slice(0, 500)
     });
+
+    if (error?.httpStatus === 409 && error?.code) {
+      return res.status(409).json({ success: false, code: error.code, message });
+    }
     if (error?.code === '23505') {
       const pendingEmailConflict = /admin_invitations_pending_email|uq_admin_invitations_pending_email_ci/i.test(constraint);
       const registeredEmailConflict = /admin_users_email|uq_admin_users_email_ci/i.test(constraint);
       if (pendingEmailConflict) {
-        return res.status(409).json({ success: false, code: 'INVITATION_ALREADY_PENDING', message: 'A pending invitation already exists for this email. Cancel it or use the existing invitation before retrying.' });
+        return res.status(409).json({ success: false, code: 'INVITATION_ALREADY_PENDING', message: 'A pending invitation already exists for this email. Refresh the invitation list before retrying.' });
       }
       if (registeredEmailConflict) {
         return res.status(409).json({ success: false, code: 'EMAIL_ALREADY_REGISTERED', message: 'This email is already registered to an account.' });
       }
-      return res.status(409).json({ success: false, code: 'INVITATION_UNIQUE_CONFLICT', message: 'A conflicting invitation or account record already exists. Refresh the invitation list and retry only if no pending invitation is shown.' });
+      return res.status(409).json({ success: false, code: 'INVITATION_UNIQUE_CONFLICT', message: 'A conflicting invitation or account record exists. Refresh the invitation list and retry.' });
     }
     if (/email notifications are disabled/i.test(message)) {
       return res.status(503).json({ success: false, code: 'EMAIL_NOTIFICATIONS_DISABLED', message: 'Invitation was not created because email delivery is disabled in Notification Hub.' });
     }
     if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient|email subject|email html|email body|resend|smtp|encryption key/i.test(message)) {
-      return res.status(503).json({ success: false, code: String(error?.code || 'EMAIL_QUEUE_UNAVAILABLE'), message: 'Invitation was not created because its email could not be queued. Check Notification Hub, Resend configuration, and the email worker.' });
+      return res.status(503).json({ success: false, code: String(error?.code || 'EMAIL_QUEUE_UNAVAILABLE'), message: 'Invitation could not be queued. Check Notification Hub, Resend configuration, and the email worker.' });
+    }
+    if (error?.code === 'INVITATION_ROW_NOT_CREATED') {
+      return res.status(500).json({ success: false, code: error.code, message: 'The invitation record could not be created. Check the server log for this failure code.' });
+    }
+    if (error?.code === 'ERR_CRYPTO' || /crypto|randombytes|digest/i.test(message)) {
+      return res.status(503).json({ success: false, code: 'INVITATION_TOKEN_GENERATION_FAILED', message: 'A secure invitation token could not be generated. Please retry; if this continues, contact the system administrator.' });
     }
     return res.status(500).json({ success: false, code: 'INVITATION_CREATE_FAILED', message: 'Invitation creation failed due to a server error. Check server logs using the invitation failure code.' });
   }
