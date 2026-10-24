@@ -2602,19 +2602,6 @@
                 <div class="mt-3 small text-muted">Live IP: <span id="cpLiveIp" class="fw-semibold text-dark">—</span></div>
               </div></div></div>
             </div>
-            <div class="row g-3 mt-1" id="cpOpticalTelemetryCards">
-              <div class="col-12 col-lg-5"><div class="card border-0 shadow-sm h-100"><div class="card-body">
-                <div class="small text-success fw-bold mb-2">ONU IDENTITY</div>
-                <div class="small text-muted">ONU MAC</div><div id="cpOnuIdentityMac" class="fw-semibold text-break mb-2">ONU MAC not assigned</div>
-                <div class="row g-2"><div class="col-6"><div class="small text-muted">ONU ID</div><code id="cpOnuIdentityId">—</code></div><div class="col-6"><div class="small text-muted">PON Port</div><code id="cpOnuIdentityPon">—</code></div></div>
-                <div id="cpOnuIdentitySource" class="small text-muted mt-3">Waiting for verified OLT telemetry</div>
-              </div></div></div>
-              <div class="col-12 col-lg-7"><div class="card border-0 shadow-sm h-100"><div class="card-body">
-                <div class="d-flex justify-content-between align-items-center gap-2 mb-3"><div class="small text-success fw-bold">OPTICAL HEALTH</div><span id="cpOpticalHealthBadge" class="badge text-bg-secondary">RX not available</span></div>
-                <div class="row g-3"><div class="col-6"><div class="small text-muted">RX Power</div><div id="cpOpticalRx" class="fs-5 fw-bold">—</div></div><div class="col-6"><div class="small text-muted">TX Power</div><div id="cpOpticalTx" class="fs-5 fw-bold">—</div></div></div>
-                <div id="cpOpticalObservedAt" class="small text-muted mt-3">Live OLT data pending</div>
-              </div></div></div>
-            </div>
           </div>
           <div class="tab-pane fade" id="cp-tab-billing">
             <div class="row g-3">
@@ -3060,20 +3047,6 @@
   #editCustomerModal #cpAssignedIp,
   #editCustomerModal #cpCallerId,
   #editCustomerModal #cpLiveIp,
-  #editCustomerModal #cpOnuIdentityMac,
-  #editCustomerModal #cpOnuIdentityId,
-  #editCustomerModal #cpOnuIdentityPon,
-  #editCustomerModal #cpOpticalObservedAt {
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-  #editCustomerModal #cpOpticalTelemetryCards .card-body {
-    padding: .7rem;
-  }
-  #editCustomerModal #cpOpticalRx,
-  #editCustomerModal #cpOpticalTx {
-    font-size: 1rem !important;
-  }
 }
 </style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
 </body></html>`);
@@ -7242,15 +7215,6 @@ async function deletePlan(id,name){
                 const customer=data.customer||{},live=data.live&&typeof data.live==='object'?data.live:{online:false,bytesIn:0,bytesOut:0},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
                 const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
                 const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(!el)return;if(id==='cpExpiration'){setCustomerDateValue(el,value);return;}el.value=value??'';};
-                const opticalBadge=modalEl.querySelector('#cpOpticalHealthBadge');
-                setText('cpOnuIdentityMac',customer.onuMac||'ONU MAC not assigned');
-                setText('cpOnuIdentityId','—');
-                setText('cpOnuIdentityPon',customer.oltPonPort||'—');
-                setText('cpOpticalRx','—');
-                setText('cpOpticalTx','—');
-                setText('cpOpticalObservedAt','Direct OLT polling is not configured');
-                setText('cpOnuIdentitySource','Saved customer inventory only; no live OLT telemetry');
-                if(opticalBadge){opticalBadge.textContent='Not configured';opticalBadge.className='badge text-bg-secondary';}
                 const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
                 const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
