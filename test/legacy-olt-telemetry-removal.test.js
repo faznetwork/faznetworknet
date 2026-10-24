@@ -34,9 +34,13 @@ test("cleanup migration only clears OLT telemetry cache and telemetry records", 
   assert.match(migration, /UPDATE\s+customers\s+SET[\s\S]*onu_rx_power_dbm\s*=\s*NULL/i);
   assert.match(migration, /onu_rx_power_observed_at\s*=\s*NULL/i);
   assert.match(migration, /onu_rx_power_source_device_id\s*=\s*NULL/i);
-  assert.match(migration, /DELETE FROM\s+olt_telemetry/i);
+  assert.match(migration, /DROP TABLE olt_telemetry/i);
+  assert.match(migration, /onu_mac\s*=\s*NULL/i);
+  assert.match(migration, /olt_pon_port\s*=\s*NULL/i);
   const customerUpdate = migration.match(/UPDATE\s+customers[\s\S]*?;/i)?.[0] || "";
-  assert.doesNotMatch(customerUpdate, /router_mac|onu_mac|username|password|balance|package|billing|transaction/i);
+  assert.match(customerUpdate, /onu_mac\s*=\s*NULL/i);
+  assert.match(customerUpdate, /olt_pon_port\s*=\s*NULL/i);
+  assert.doesNotMatch(customerUpdate, /router_mac|username|password|balance|package|billing|transaction/i);
   assert.doesNotMatch(migration, /DELETE FROM\s+customers/i);
   assert.match(migration, /to_regclass/i);
 });
@@ -61,4 +65,21 @@ test("customer, billing, and MikroTik network-discovery structures remain intact
   assert.match(networkMapRoutes, /router\.get\("\/customers\/:id", controller\.getCustomerMap\)/);
   assert.match(networkDiscovery, /routeros_api|mikrotik_api/);
   assert.match(networkDiscovery, /routerMac/);
+});
+
+
+test("customer creation and edit preserve SQL parameter slots while retiring ONU fields", () => {
+  const customerController = read("controllers/customerController.js");
+  assert.match(customerController, /onuMac:\s*null/);
+  assert.match(customerController, /oltPonPort:\s*null/);
+  assert.match(customerController, /null, customer\.remarks \|\| null, customer\.expirationDate/);
+  assert.match(customerController, /customer\.alternativePhone \|\| null, null, customer\.distributionBox/);
+  assert.match(customerController, /areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox/);
+  assert.doesNotMatch(customerController, /c\.phone,c\.onu_mac,c\.router_mac/);
+  assert.doesNotMatch(customerController, /onuMac:clean\(customer\.onu_mac/);
+  assert.doesNotMatch(customerController, /oltPonPort:clean\(customer\.olt_pon_port/);
+  assert.match(customerController, /routerMac=clean\(body\.routerMac\|\|row\.router_mac,100\)/);
+  assert.match(customerController, /callerId:routerMac\|\|undefined/);
+  assert.match(customerController, /FROM transactions/);
+  assert.match(customerController, /billing_status/);
 });

@@ -10,7 +10,7 @@ exports.getCustomerMap = async (req, res) => {
     if (!key) return res.status(400).json({ success: false, message: "Customer ID or username is required." });
 
     const customerResult = await db.query(
-      "SELECT c.id, c.username, c.onu_mac, c.fiber_box FROM customers c WHERE c.id::text=$1 OR LOWER(c.username)=LOWER($1) LIMIT 2",
+      "SELECT c.id, c.username, c.fiber_box FROM customers c WHERE c.id::text=$1 OR LOWER(c.username)=LOWER($1) LIMIT 2",
       [key]
     );
     if (customerResult.rows.length === 0) return res.status(404).json({ success: false, message: "Customer not found." });
@@ -39,7 +39,7 @@ exports.getCustomerMap = async (req, res) => {
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
-      provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
+      provisioned: { fiberBox: customer.fiber_box || null },
       routerMac: routerObservation?.observedValue?.routerMac || null,
       observations: observations.rows,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
