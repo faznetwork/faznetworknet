@@ -45,7 +45,7 @@ exports.getCustomerMap = async (req, res) => {
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
       lastObservedAt: latest?.observedAt || null,
       notes: [
-        "ONU MAC is retained as customer inventory; OLT optical telemetry ingestion is retired.",
+        "ONU MAC is sourced from customer fiber inventory until an OLT/PON adapter verifies it.",
         "Router MAC is sourced from MikroTik PPPoE caller-id observations.",
         "Unknown and ambiguous identities are not automatically attached to this customer."
       ]
