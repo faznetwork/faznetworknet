@@ -52,6 +52,7 @@ test("staff invitation and encrypted email job use the same transaction client",
     const client = {
       query: async (sql, args) => {
         statements.push({ sql, args });
+        if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
         if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
         if (sql.includes("INSERT INTO email_outbox")) return { rows: [{ id: 77, status: "pending" }], rowCount: 1 };
         throw new Error("Unexpected query in invitation transaction: " + sql);
@@ -70,11 +71,12 @@ test("staff invitation and encrypted email job use the same transaction client",
   }, res);
   assert.equal(res.statusCode, 201);
   assert.equal(committed, true);
-  assert.equal(statements.length, 2);
-  assert.match(statements[0].sql, /INSERT INTO admin_invitations/);
-  assert.match(statements[1].sql, /INSERT INTO email_outbox/);
-  assert.equal(statements[1].args[0], "admin-invitation:501");
-  assert.doesNotMatch(statements[1].args[3], /phase3.staff/);
+  assert.equal(statements.length, 3);
+  assert.match(statements[0].sql, /notification_channel_email_enabled/);
+  assert.match(statements[1].sql, /INSERT INTO admin_invitations/);
+  assert.match(statements[2].sql, /INSERT INTO email_outbox/);
+  assert.equal(statements[2].args[0], "admin-invitation:501");
+  assert.doesNotMatch(statements[2].args[3], /phase3.staff/);
 });
 
 test("invitation is not committed when its transactional outbox insert fails", async () => {
@@ -92,6 +94,7 @@ test("invitation is not committed when its transactional outbox insert fails", a
     try {
       return await callback({
         query: async sql => {
+          if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
           if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
           if (sql.includes("INSERT INTO email_outbox")) throw new Error("email outbox insert failure");
           throw new Error("Unexpected query in invitation transaction: " + sql);
