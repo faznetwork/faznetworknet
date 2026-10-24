@@ -110,3 +110,23 @@ test("accepts Bangla digits and MacroDroid text fields",()=>{
   assert.equal(extractAmount("Received ১০.০০ Tk. Fee ০.০০ Tk. Balance ২০.০০ Tk"),10);
   assert.equal(extractTransactionId("TrxID: ABC1234567"),"ABC1234567");
 });
+
+
+test("extracts MFS Ref user ID from real bKash SMS and keeps punctuation out",()=>{
+  const result=parseSms({sender:"bKash",message:"You have received Tk 500.00 from 01710415717. Ref 10006. Fee Tk 0.00. TrxID DJN4FI3J8G at 23/10/2026 17:23"},{},{});
+  assert.equal(result.customerRef,"10006");
+  assert.equal(result.referenceUser,"10006");
+  assert.equal(result.matchedUsername,"10006");
+  assert.equal(result.amount,500);
+  assert.equal(result.trxId,"DJN4FI3J8G");
+});
+
+test("supports explicit Reference colon format and alphanumeric usernames",()=>{
+  const result=parseSms({sender:"Nagad",message:"Received Tk 50.00. Reference: user_1006-AB. TrxID NAGAD123456"},{},{});
+  assert.equal(result.customerRef,"user_1006-AB");
+});
+
+test("does not capture empty or punctuation-only Ref values",()=>{
+  assert.equal(require("../services/paymentWebhookParser").extractReference("Ref . TrxID ABC1234567"),"");
+  assert.equal(require("../services/paymentWebhookParser").extractReference("Reference: ."),"");
+});
