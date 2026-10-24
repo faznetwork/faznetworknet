@@ -418,7 +418,7 @@ async function createUser(req, res) {
       let invitation;
       if (failed.rows.length) {
         invitation = await client.query(
-          "UPDATE admin_invitations SET username=NULL, role=$1, token_hash=$2, otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, status='pending', created_by=$3, expires_at=$4, created_at=NOW(), updated_at=NOW() WHERE id=$5 AND status='failed' RETURNING id,email,role,status,created_at,expires_at",
+          "UPDATE admin_invitations SET role=$1, token_hash=$2, otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, status='pending', created_by=$3, expires_at=$4, created_at=NOW(), updated_at=NOW() WHERE id=$5 AND status='failed' RETURNING id,email,role,status,created_at,expires_at",
           [role, tokenHash, String(req.session?.adminUser || 'owner'), expiresAt, failed.rows[0].id]
         );
         if (!invitation.rows.length) {
@@ -429,7 +429,7 @@ async function createUser(req, res) {
         }
       } else {
         invitation = await client.query(
-          "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES (NULL,$1,$2,$3,'pending',$4,$5) RETURNING id,email,role,status,created_at,expires_at",
+          "INSERT INTO admin_invitations (email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,'pending',$4,$5) RETURNING id,email,role,status,created_at,expires_at",
           [email, role, tokenHash, String(req.session?.adminUser || 'owner'), expiresAt]
         );
       }
