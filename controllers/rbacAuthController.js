@@ -2,7 +2,6 @@
 
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
 const db = require('../db');
 const { getAdminCredentials } = require('../middleware/adminAuth');
 const { normalizeRole } = require('../middleware/rbac');
@@ -34,109 +33,38 @@ function createMailer() {
 }
 
 async function sendLoginNotification(user, loginType, req) {
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
-  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || 'faznetwork.com@gmail.com').trim();
-  if (!mailerUrl || !mailerToken) {
-    throw new Error('Apps Script mailer is not configured for login notifications.');
-  }
-
-  const endpoint = new URL(mailerUrl);
-  if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-      !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-    throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-  }
-  if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-
-  const payload = {
-    type: 'login_alert',
-    token: mailerToken,
-    to: recipient,
-    username: String(user.username || 'unknown').slice(0, 60),
-    role: String(user.role || 'staff').slice(0, 30),
-    loginType: loginType === 'first_login' ? 'first_login' : 'login',
-    loginAt: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false }),
-    timeZone: 'Asia/Dhaka',
-    ipAddress: String(req?.ip || '').slice(0, 64) || 'Unavailable',
-    userAgent: String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable'
-  };
-
-  const response = await fetch(endpoint.toString(), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(20000),
-    redirect: 'follow'
+  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || '').trim();
+  if (!recipient) throw new Error('ADMIN_LOGIN_NOTIFICATION_EMAIL must be configured for login alerts.');
+  const loginAt = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false });
+  const username = String(user.username || 'unknown').slice(0, 60);
+  const role = String(user.role || 'staff').slice(0, 30);
+  const ipAddress = String(req?.ip || '').slice(0, 64) || 'Unavailable';
+  const userAgent = String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable';
+  const normalizedLoginType = loginType === 'first_login' ? 'first_login' : 'login';
+  const title = normalizedLoginType === 'first_login' ? 'FAZ NETWORK first login alert' : 'FAZ NETWORK login alert';
+  const text = 'Account: ' + username + '\nRole: ' + role + '\nLogin type: ' + normalizedLoginType + '\nTime (Asia/Dhaka): ' + loginAt + '\nIP: ' + ipAddress + '\nUser agent: ' + userAgent;
+  const html = '<h2>FAZ NETWORK login alert</h2><p><b>Account:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Login type:</b> ' + escapeHtml(normalizedLoginType) + '</p><p><b>Time (Asia/Dhaka):</b> ' + escapeHtml(loginAt) + '</p><p><b>IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User agent:</b> ' + escapeHtml(userAgent) + '</p>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: recipient, subject: title, text, html, event: 'admin_login_alert',
+    idempotencyKey: 'admin-login-alert:' + String(user.id || username) + ':' + Date.now()
   });
-  const responseText = await response.text();
-  let result;
-  try { result = JSON.parse(responseText); }
-  catch { throw new Error('Apps Script login notification returned an invalid response.'); }
-  if (!response.ok || result.success !== true) {
-    throw new Error('Apps Script login notification failed: ' + String(result.error || 'request rejected').slice(0, 120));
-  }
 }
 
-async function sendOtpEmail(user, code) {
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
-
-  // Prefer the HTTPS Apps Script mailer when configured. SMTP remains available
-  // as a backwards-compatible fallback for paid/other hosting environments.
-  if (mailerUrl || mailerToken) {
-    if (!mailerUrl || !mailerToken) {
-      throw new Error('Apps Script OTP mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
-    }
-
-    let endpoint;
-    try {
-      endpoint = new URL(mailerUrl);
-    } catch {
-      throw new Error('OTP_MAILER_URL is invalid.');
-    }
-    if (endpoint.protocol !== 'https:' ||
-        endpoint.hostname !== 'script.google.com' ||
-        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-    }
-    if (mailerToken.length < 32) {
-      throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-    }
-
-    let response;
-    try {
-      response = await fetch(endpoint.toString(), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token: mailerToken, to: user.email, code }),
-        signal: AbortSignal.timeout(20000),
-        redirect: 'follow'
-      });
-    } catch (error) {
-      throw new Error('Apps Script OTP mailer request failed: ' + String(error.name || 'network error'));
-    }
-
-    const responseText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      throw new Error('Apps Script OTP mailer returned an invalid response.');
-    }
-    if (!response.ok || result.success !== true) {
-      const safeError = String(result.error || 'request rejected').slice(0, 120);
-      throw new Error('Apps Script OTP mailer failed: ' + safeError);
-    }
-    return;
-  }
-
-  const transporter = createMailer();
-  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
-  await transporter.sendMail({
-    from, to: user.email,
-    subject: 'FAZ NETWORK sign-in verification code',
-    text: 'Hello ' + user.username + ',\n\nYour FAZ NETWORK first-login verification code is ' + code + '. It expires in 5 minutes. If you did not request this, contact your system administrator.\n\nDo not share this code.',
-    html: '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(user.username) + ',</p><p>Your first-login verification code is:</p><div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px;background:#f0fdf4;border-radius:10px;text-align:center">' + code + '</div><p>This code expires in <b>5 minutes</b>. Do not share it.</p><p>If you did not request this code, contact your system administrator.</p></div>'
+async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp') {
+  const recipient = String(user.email || '').trim();
+  if (!recipient) throw new Error('A verified email address is required to deliver the OTP.');
+  const expiry = new Date(expiresAt || Date.now() + OTP_TTL_MS);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now()) throw new Error('OTP has expired and will not be queued.');
+  const invitationOtp = purpose === 'invitation_otp';
+  const title = invitationOtp ? 'FAZ NETWORK invitation verification code' : 'FAZ NETWORK sign-in verification code';
+  const label = invitationOtp ? 'invitation verification code' : 'first-login verification code';
+  const username = String(user.username || 'user').slice(0, 60);
+  const text = 'Hello ' + username + ',\n\nYour FAZ NETWORK ' + label + ' is ' + code + '. It expires in 5 minutes. Do not share this code.';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(username) + ',</p><p>Your ' + escapeHtml(label) + ' is:</p><div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px;background:#f0fdf4;border-radius:10px;text-align:center">' + escapeHtml(code) + '</div><p>This code expires in <b>5 minutes</b>. Do not share it.</p></div>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: recipient, subject: title, text, html, event: invitationOtp ? 'admin_invitation_otp' : 'admin_login_otp',
+    sensitive: true, expiresAt: expiry,
+    idempotencyKey: 'admin-otp:' + String(user.id || user.username || recipient) + ':' + expiry.getTime()
   });
 }
 
@@ -222,7 +150,7 @@ async function login(req, res) {
         const codeHash = hashOtp(user.id, code);
         await db.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3', [codeHash, expiresAt, user.id]);
         try {
-          await sendOtpEmail(user, code);
+          await sendOtpEmail(user, code, expiresAt, 'admin_otp');
         } catch (mailError) {
           await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [user.id]).catch(() => {});
           console.error('[RBAC OTP] Email delivery failed:', mailError.message);
@@ -384,52 +312,14 @@ async function sendInvitationEmail(invitation, rawToken) {
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
   const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
-
-  // Prefer the existing Google Apps Script mailer for invitation links. SMTP is
-  // retained as a fallback when the Apps Script mailer is not configured.
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
-  if (mailerUrl || mailerToken) {
-    if (!mailerUrl || !mailerToken) throw new Error('Apps Script mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
-    let endpoint;
-    try { endpoint = new URL(mailerUrl); } catch { throw new Error('OTP_MAILER_URL is invalid.'); }
-    if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-    }
-    if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-    let response;
-    try {
-      response = await fetch(endpoint.toString(), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'invitation', token: mailerToken, to: invitation.email,
-          username: String(invitation.username || '').slice(0, 60),
-          role: roleLabel, link
-        }),
-        signal: AbortSignal.timeout(20000),
-        redirect: 'follow'
-      });
-    } catch (error) {
-      throw new Error('Apps Script invitation mailer request failed: ' + String(error.name || 'network error'));
-    }
-    let result;
-    try { result = JSON.parse(await response.text()); }
-    catch { throw new Error('Apps Script invitation mailer returned an invalid response.'); }
-    if (!response.ok || result.success !== true) {
-      throw new Error('Apps Script invitation mailer failed: ' + String(result.error || 'request rejected').slice(0, 120));
-    }
-    return;
-  }
-
-  const transporter = createMailer();
-  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
-  await transporter.sendMail({
-    from, to: invitation.email,
-    subject: 'FAZ NETWORK — invitation to join as ' + roleLabel,
-    text: 'Hello ' + invitation.username + ',\\n\\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\\n\\n' + link + '\\n\\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
-    html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>Hello ' + escapeHtml(invitation.username) + ',</p><p>You have been invited to join FAZ NETWORK as <b>' + escapeHtml(roleLabel) + '</b>.</p><p>Open the secure invitation link below. We will send a one-time verification code to this email before you can set your password.</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in <b>24 hours</b> and can be cancelled by the administrator. If you were not expecting this, ignore this email.</p></div>'
+  const username = String(invitation.username || '').slice(0, 60);
+  const title = 'Invitation to FAZ NETWORK';
+  const text = 'Hello ' + username + ',\n\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and verify your email here: ' + link + '\n\nThis invitation expires in 24 hours.';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(username) + ',</p><p>You have been invited to join as <b>' + escapeHtml(roleLabel) + '</b>.</p><p><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in 24 hours.</p></div>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: invitation.email, subject: title, text, html, event: 'admin_invitation',
+    sensitive: true, expiresAt: invitation.expires_at,
+    idempotencyKey: 'admin-invitation:' + String(invitation.id)
   });
 }
 
@@ -555,7 +445,7 @@ async function sendInvitationOtp(req, res) {
     const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
     const otpExpires=new Date(Date.now()+OTP_TTL_MS);
     await db.query('UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status=\'pending\'',[otpHash,otpExpires,invite.id]);
-    try { await sendOtpEmail(invite,code); }
+    try { await sendOtpEmail(invite,code,otpExpires,'invitation_otp'); }
     catch(mailError) {
       await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(()=>{});
       console.error('[RBAC invitation] OTP delivery failed:',mailError.message);
