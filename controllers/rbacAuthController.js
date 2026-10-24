@@ -193,7 +193,7 @@ async function verifyOtp(req, res) {
   }
 
   const code = String(req.body?.otp || '').trim();
-  if (!/^\\d{6}$/.test(code)) {
+  if (!/^\d{6}$/.test(code)) {
     req.session.pendingOtpAttempts = Number(req.session.pendingOtpAttempts || 0) + 1;
     return req.session.save(error => {
       if (error) {
