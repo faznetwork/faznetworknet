@@ -18,7 +18,7 @@ test("same-date monthly expiry clamps the 29th, 30th and 31st to target month en
 test("same-date monthly renewal stacks from a future expiry and returns date-only output",()=>{
   const result=service.calculateSameDateExpiry(2,"2026-11-30",new Date("2026-10-25T00:00:00.000Z"));
   assert.equal(result,"2027-01-30");
-  assert.match(result,/^\\d{4}-\\d{2}-\\d{2}$/);
+  assert.match(result,/^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("cutoff formatter validates date-only calendar dates",()=>{
