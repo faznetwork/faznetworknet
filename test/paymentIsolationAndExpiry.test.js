@@ -17,7 +17,7 @@ test("Captive portal submits an explicit Hotspot type and package_id", () => {
 test("Hotspot-originated webhook payments never enter the PPPoE customer resolver", () => {
   const webhook = source.slice(source.indexOf("async function webhook"), source.indexOf("async function dynamicWebhook"));
   assert.match(webhook, /serviceType=String\(req\.body\?\.service_type\|\|req\.body\?\.serviceType/);
-  assert.match(webhook, /if\(serviceType!==\"hotspot\"&&serviceType===\"pppoe\"&&payment\.customerRef\)/);
+  assert.ok(webhook.includes('if(serviceType==="pppoe"&&payment.customerRef)'));
   assert.match(webhook, /if\(!user&&serviceType===\"pppoe\"&&payment\.senderPhone\)/);
   assert.doesNotMatch(webhook, /if\(!user&&payment\.senderPhone\)/);
 });
