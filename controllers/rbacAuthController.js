@@ -181,7 +181,7 @@ async function verifyOtp(req, res) {
   const code = String(req.body?.otp || '').trim();
   if (!/^\d{6}$/.test(code)) {
     req.session.pendingOtpAttempts = Number(req.session.pendingOtpAttempts || 0) + 1;
-    return req.session.save(() => res.status(400).render('verify-otp', { error: 'Enter the 6-digit code sent to your email.' }));
+    return req.session.save(() => res.status(400).render('verify-otp', { error: 'Enter the 6-digit code queued for delivery to your email.' }));
   }
   try {
     const result = await db.query('SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, otp_attempts, status FROM admin_users WHERE id=$1 LIMIT 1', [userId]);
