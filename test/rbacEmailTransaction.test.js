@@ -141,16 +141,17 @@ test("verifyOtp returns service-unavailable and logs when invalid-code attempt p
   const logged = [];
   const originalConsoleError = console.error;
   console.error = (...args) => logged.push(args);
+  let queryCount = 0;
   db.query = async sql => {
-    if (sql.startsWith("SELECT id, username, email, role")) {
+    queryCount += 1;
+    if (queryCount === 1) {
       return { rows: [{
         id: 601, username: "otp.test", email: "otp.test@example.test", role: "staff",
         is_first_login: true, otp_code_hash: "a".repeat(64),
         otp_expires_at: new Date(Date.now() + 60000), otp_attempts: 0, status: "active"
       }] };
     }
-    if (sql.includes("SET otp_attempts=otp_attempts+1")) throw new Error("injected otp attempt write failure");
-    throw new Error("Unexpected query: " + sql);
+    throw new Error("injected OTP persistence failure at query " + queryCount);
   };
   const req = {
     body: { otp: "000000" },
