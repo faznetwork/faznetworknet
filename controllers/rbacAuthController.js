@@ -340,6 +340,9 @@ async function createUser(req, res) {
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] Invitation creation failed:', error.message);
+    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient/i.test(String(error.message||''))) {
+      return res.status(503).json({ success:false, message:'Invitation was not created because its email could not be queued. Check the email worker, outbox schema, and payload encryption key.' });
+    }
     return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
   }
 }
@@ -368,6 +371,9 @@ async function resendInvitation(req,res) {
     return res.json({success:true,message:'Invitation email queued for '+user.email+'.'});
   } catch(error) {
     console.error('[RBAC invitation] Resend failed:',error.message);
+    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient/i.test(String(error.message||''))) {
+      return res.status(503).json({success:false,message:'Replacement invitation was not committed because its email could not be queued. Check the email worker, outbox schema, and payload encryption key.'});
+    }
     return res.status(500).json({success:false,message:'Unable to resend invitation.'});
   }
 }
