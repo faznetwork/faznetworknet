@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
+    "collect:olt": "node scripts/olt-collector.js",
     "build": "node scripts/verify-build.js"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "express-session": "^1.18.2",
     "connect-pg-simple": "^10.0.0",
     "nodemailer": "^10.1.0",
+    "net-snmp": "^3.26.0",
     "@whiskeysockets/baileys": "^6.7.18",
     "qrcode": "^1.5.4",
     "pino": "^9.6.0",

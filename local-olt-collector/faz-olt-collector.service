@@ -1,0 +1,23 @@
+[Unit]
+Description=FAZ NETWORK Local OLT Telemetry Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fazolt
+Group=fazolt
+WorkingDirectory=/opt/faz-olt-collector
+EnvironmentFile=/opt/faz-olt-collector/.env
+ExecStart=/opt/faz-olt-collector/.venv/bin/python /opt/faz-olt-collector/collector.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/faz-olt-collector
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
