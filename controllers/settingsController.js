@@ -241,15 +241,15 @@ async function testEmail(req,res){
   const result=await Promise.race([emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding.",signal:abortController.signal}),timeoutPromise]);
   if(!result.success){
    const code=String(result.code||"");
-   const status=code==="ETIMEDOUT"||["ECONNECTION","ECONNREFUSED","ENETUNREACH","EHOSTUNREACH","ESOCKET","ECONNRESET","EAI_AGAIN"].includes(code)?504:(code==="SMTP_CONFIG_INVALID"||/required|valid recipient|valid from email/i.test(String(result.error||""))?400:502);
+   const status=code==="ETIMEDOUT"?504:(code==="SMTP_CONFIG_INVALID"||code==="ERESEND_NOT_CONFIGURED"||code==="ERESEND_SENDER_NOT_VERIFIED"||/required|valid recipient|valid from email/i.test(String(result.error||""))?400:502);
    return res.status(status).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",error:result.error||"Test email delivery failed.",code:code||"EMAIL_TEST_FAILED",details:result});
   }
-  return res.set("Cache-Control","no-store").json({success:true,message:"SMTP test email sent successfully.",result});
+  return res.set("Cache-Control","no-store").json({success:true,message:result.provider==="resend"?"Test email accepted by Resend HTTP API.":"SMTP test email sent successfully.",result});
  }catch(error){
   const message=String(error?.message||"SMTP test failed.");
   console.error("[SettingsController] SMTP test failed:",{code:error?.code||"SMTP_TEST_FAILED",message:message.slice(0,300)});
   const code=String(error?.code||"SMTP_TEST_FAILED");
-  const status=code==="ETIMEDOUT"||["ECONNECTION","ECONNREFUSED","ENETUNREACH","EHOSTUNREACH","ESOCKET","ECONNRESET","EAI_AGAIN"].includes(code)?504:(/required|valid recipient|test email subject/i.test(message)?400:502);
+  const status=code==="ETIMEDOUT"?504:(code==="ERESEND_NOT_CONFIGURED"||code==="ERESEND_SENDER_NOT_VERIFIED"||/required|valid recipient|test email subject/i.test(message)?400:502);
   return res.status(status).set("Cache-Control","no-store").json({success:false,message,error:message,code});
  }finally{if(timeout)clearTimeout(timeout);}
 }
