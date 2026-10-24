@@ -19,7 +19,7 @@ BEGIN
   ELSE
     RAISE EXCEPTION 'Required column admin_invitations.username does not exist';
   END IF;
-END
+END;
 $admin_invitation_username_nullable$;
 
 COMMIT;
