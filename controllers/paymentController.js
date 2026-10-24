@@ -209,13 +209,17 @@ async function webhook(req,res){
     if(!claim.rows.length)throw new Error("Could not persist the payment claim.");
     claimedTransactionId=claim.rows[0].id;
     const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
+    const notificationDispatcher=require("../services/notificationDispatcher");
+    const notificationPayload={userType:"pppoe",event:"payment",customer,to:customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.fullName||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration,email_idempotency_key:"pppoe-payment:"+String(claimedTransactionId)+":paid"}};
     await db.withTransaction(async client=>{
      await persistCustomerRenewal(client.query.bind(client),customer,renewal);
      const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+     const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+     if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
     });
     claimedTransactionId=null;
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",customer,to:customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.fullName||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}});
+    notificationDispatcher.dispatchNotification({...notificationPayload,channels:["sms","whatsapp"]});
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
@@ -359,13 +363,17 @@ async function manualMatch(req,res){
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
+  const notificationDispatcher=require("../services/notificationDispatcher");
+  const notificationPayload={userType:"pppoe",event:"renewal",to:customer.phone,customer,username:user.rows[0].username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+String(renewal.expiration||"")+".",variables:{name:customer.full_name||customer.name||user.rows[0].username,username:user.rows[0].username,amount:tx.amount,gateway:tx.channel,trx_id:tx.trx_id,new_expiry_date:renewal.expiration,email_idempotency_key:"pppoe-payment:"+String(tx.id)+":paid"}};
   await db.withTransaction(async client=>{
    await persistCustomerRenewal(client.query.bind(client),customer,renewal);
    const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
    if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+   const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+   if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
   });
   claimedTransactionId=null;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",to:customer.phone,username:user.rows[0].username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+String(renewal.expiration||"")+".",variables:{name:customer.full_name||customer.name||user.rows[0].username,username:user.rows[0].username,amount:tx.amount,gateway:tx.channel,trx_id:tx.trx_id,new_expiry_date:renewal.expiration}});
+  notificationDispatcher.dispatchNotification({...notificationPayload,channels:["sms","whatsapp"]});
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
