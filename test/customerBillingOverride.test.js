@@ -114,7 +114,7 @@ test("billing cron includes a customer on the exact Dhaka expiry date and confir
     const {runBillingExpiration}=require("../jobs/billingCron");
     const result=await runBillingExpiration();
     const expiryQuery=calls.find(x=>x.sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"));
-    assert.match(expiryQuery.sql,/expiration_date <= \\(NOW\\(\\) AT TIME ZONE 'Asia\\/Dhaka'\\)::date - \\$2::int/);
+    assert.ok(expiryQuery.sql.includes("expiration_date <= (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int"));
     assert.equal(kickedUsername,"expiry-day-user");
     assert.equal(result.expired,1);
     assert.equal(result.failed,0);
