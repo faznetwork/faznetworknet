@@ -584,6 +584,7 @@ CREATE TABLE IF NOT EXISTS admin_invitations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_admin_invitations_status_created ON admin_invitations(status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_username_ci ON admin_invitations(lower(username)) WHERE status='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_email_ci ON admin_invitations(lower(email)) WHERE status='pending';
 
 
