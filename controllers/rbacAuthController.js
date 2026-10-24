@@ -454,8 +454,8 @@ async function cancelInvitation(req, res) {
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'Invalid invitation ID.' });
   try {
     const result = req.auth?.role === 'super_admin'
-      ? await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id,email,role", [id])
-      : await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' AND role='staff' AND lower(created_by)=lower($2) RETURNING id,email,role", [id,String(req.session.adminUser || '')]);
+      ? await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id,username,email,role", [id])
+      : await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' AND role='staff' AND lower(created_by)=lower($2) RETURNING id,username,email,role", [id,String(req.session.adminUser || '')]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'Pending invitation not found; it may already be accepted or cancelled.' });
     await writeAudit(req, 'admin_invitation_cancelled', null, { invitationId:id, username:result.rows[0].username, email:result.rows[0].email });
     return res.json({ success: true, message: 'Invitation cancelled. Its link can no longer be used.' });
