@@ -353,7 +353,7 @@ async function listUsers(req, res) {
 }
 
 async function sendInvitationEmail(invitation, rawToken, client = null) {
-  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
+  const configuredBase = String(process.env.BASE_URL || process.env.APP_URL || 'https://faznetwork.com').trim().replace(/\/+$/, '');
   let base;
   try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
@@ -700,4 +700,4 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, sendInvitationEmail, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
