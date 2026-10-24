@@ -31,15 +31,25 @@ test("SMS history rejects unsupported filters without querying database",async()
  finally{db.query=original;}
 });
 
-test("PPPoE history view includes legacy rows without customer classification",async()=>{
+test("PPPoE filter excludes unclassified legacy rows",async()=>{
  const original=db.query,calls=[];
- db.query=async(sql,params)=>{calls.push({sql,params});if(sql.includes("COUNT(*)"))return {rows:[{total:2,sent:2,failed:0,skipped:0}]};return {rows:[{id:2,user_type:"unclassified",status:"sent"},{id:1,user_type:"unclassified",status:"sent"}]};};
+ db.query=async(sql,params)=>{calls.push({sql,params});if(sql.includes("COUNT(*)"))return {rows:[{total:1,sent:1,failed:0,skipped:0}]};return {rows:[{id:2,user_type:"pppoe",status:"sent"}]};};
  const res={statusCode:200,status(n){this.statusCode=n;return this;},set(){return this;},json(body){this.body=body;return this;}};
- try{
-  await controller.list({query:{userType:"pppoe"}},res);
-  assert.equal(res.statusCode,200);
-  assert.ok(calls[0].sql.includes("user_type=$1 OR user_type IS NULL"));
-  assert.equal(res.body.total,2);
-  assert.equal(res.body.logs[0].user_type,"unclassified");
- }finally{db.query=original;}
+ try{await controller.list({query:{userType:"pppoe"}},res);assert.equal(res.statusCode,200);assert.ok(calls[0].sql.includes("user_type=$1"));assert.equal(calls[0].sql.includes("user_type IS NULL"),false);assert.equal(res.body.logs[0].user_type,"pppoe");}
+ finally{db.query=original;}
+});
+test("All and Unclassified customer type filters have distinct SQL scope",async()=>{
+ const original=db.query;
+ const run=async(userType)=>{const calls=[];db.query=async(sql,params)=>{calls.push({sql,params});if(sql.includes("COUNT(*)"))return {rows:[{total:0,sent:0,failed:0,skipped:0}]};return {rows:[]};};const res={statusCode:200,status(n){this.statusCode=n;return this;},set(){return this;},json(body){this.body=body;return this;}};await controller.list({query:{userType}},res);return {calls,res};};
+ try{const all=await run("all"),legacy=await run("unclassified");assert.equal(all.res.statusCode,200);assert.equal(all.calls[0].sql.includes("user_type="),false);assert.equal(legacy.res.statusCode,200);assert.ok(legacy.calls[0].sql.includes("user_type IS NULL"));}
+ finally{db.query=original;}
+});
+test("History UI offers All and Unclassified, and confirms filtered deletion",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const source=fs.readFileSync(path.join(__dirname,"../views/admin.ejs"),"utf8");
+ assert.match(source,/option value="all">All customer types/);
+ assert.match(source,/option value="unclassified">Unclassified \/ legacy/);
+ assert.match(source,/smsHistoryUpdateSelection\(\)/);
+ assert.match(source,/PERMANENTLY delete/);
+ assert.match(source,/smsHistorySelectPage/);
 });
