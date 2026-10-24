@@ -2,8 +2,35 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const db = require("../db");
+const state = require("../services/emailNotificationState");
 
-test("email worker and queue use the persisted Notification Hub setting, not the legacy env toggle", async () => {
+test("email notification state reads the persisted flag and interprets only explicit true values as enabled", async () => {
+  const originalQuery = db.query;
+  const calls = [];
+  try {
+    db.query = async (sql, params) => {
+      calls.push({ sql, params });
+      return { rows: [{ value: "true" }] };
+    };
+    assert.equal(await state.isEnabled(), true);
+    assert.match(calls[0].sql, /notification_channel_email_enabled|key = \$1/);
+    assert.deepEqual(calls[0].params, ["notification_channel_email_enabled"]);
+
+    db.query = async () => ({ rows: [{ value: "false" }] });
+    assert.equal(await state.isEnabled(), false);
+    db.query = async () => ({ rows: [] });
+    assert.equal(await state.isEnabled(), false);
+    db.query = async () => ({ rows: [{ value: "unexpected" }] });
+    assert.equal(await state.isEnabled(), false);
+    db.query = async () => { throw new Error("database unavailable"); };
+    await assert.rejects(state.isEnabled(), /database unavailable/);
+  } finally {
+    db.query = originalQuery;
+  }
+});
+
+test("email worker control and queue gates use the persisted setting, not the legacy env toggle", () => {
   const fs = require("node:fs");
   const worker = fs.readFileSync(require.resolve("../services/emailWorker"), "utf8");
   const outbox = fs.readFileSync(require.resolve("../services/emailOutboxService"), "utf8");
@@ -12,12 +39,4 @@ test("email worker and queue use the persisted Notification Hub setting, not the
   assert.doesNotMatch(worker, /process\.env\.EMAIL_WORKER_ENABLED/);
   assert.match(outbox, /await emailNotificationState\.isEnabled\(\)/);
   assert.doesNotMatch(outbox, /process\.env\.EMAIL_WORKER_ENABLED/);
-});
-
-test("email notification state reads only the persisted channel flag and fails closed on missing value", async () => {
-  const fs = require("node:fs");
-  const state = fs.readFileSync(require.resolve("../services/emailNotificationState"), "utf8");
-  assert.match(state, /notification_channel_email_enabled/);
-  assert.match(state, /value === "true" \|\| value === "1"/);
-  assert.match(state, /await db\.query/);
 });
