@@ -87,6 +87,39 @@ test("duplicate enqueue returns the existing job instead of creating a second ro
   assert.equal(result.jobId, 51);
 });
 
+test("enqueueEmail uses the supplied transaction client for insert and duplicate lookup", async () => {
+  setTestKey();
+  const statements = [];
+  db.query = async () => { throw new Error("db.query must not be used when a transaction client is supplied"); };
+  const client = {
+    query: async (sql, args) => {
+      statements.push({ sql, args });
+      if (sql.includes("INSERT INTO email_outbox")) return { rows: [], rowCount: 0 };
+      return { rows: [{ id: 82, status: "pending", created_at: new Date() }], rowCount: 1 };
+    }
+  };
+  const result = await outbox.enqueueEmail({
+    to: "admin@example.com", subject: "Invitation", text: "Invite link",
+    idempotencyKey: "admin-invitation:82", client
+  });
+  assert.equal(result.duplicate, true);
+  assert.equal(result.jobId, 82);
+  assert.equal(statements.length, 2);
+  assert.match(statements[0].sql, /INSERT INTO email_outbox/);
+  assert.match(statements[1].sql, /SELECT id,status,created_at FROM email_outbox/);
+  assert.equal(statements[0].args[0], "admin-invitation:82");
+});
+
+test("enqueueEmail propagates transaction-client insert errors without falling back to pool queries", async () => {
+  setTestKey();
+  db.query = async () => { throw new Error("pool fallback must not occur"); };
+  const client = { query: async () => { throw new Error("forced outbox insert failure"); } };
+  await assert.rejects(
+    outbox.enqueueEmail({ to: "admin@example.com", subject: "OTP", text: "123456", idempotencyKey: "otp:1", client }),
+    /forced outbox insert failure/
+  );
+});
+
 test("claimBatch uses a transaction and PostgreSQL SKIP LOCKED", async () => {
   let statement = "";
   db.withTransaction = async callback => callback({
