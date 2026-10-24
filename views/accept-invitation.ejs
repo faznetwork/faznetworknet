@@ -4,15 +4,13 @@
 <body><main class="card"><h1>FAZ <span>NETWORK</span></h1>
 <% if (error) { %><div class="alert" role="alert"><%= error %></div><% } %>
 <% if (invitation && token) { %>
-<p class="muted">You have been invited to join FAZ NETWORK. Verify this email with a one-time code, then choose your username and password.</p>
+<p class="muted">You have been invited to join FAZ NETWORK. This secure invitation link verifies your email. Choose your username and password to activate your account.</p>
 <div class="info"><b>Email:</b> <%= invitation.email || '' %><br><b>Role:</b> <%= invitation.role || '' %></div>
-<button class="wide" type="button" id="sendOtp">Send OTP to this email</button><p id="otpResult" class="muted" aria-live="polite"></p>
 <form method="post" action="/invite/<%= encodeURIComponent(token) %>/accept" autocomplete="on">
-<label for="otp">6-digit email OTP</label><input id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
 <label for="username">Choose username</label><input id="username" name="username" minlength="3" maxlength="60" pattern="[A-Za-z0-9._-]+" autocomplete="username" required>
 <label for="password">Create password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
 <label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
-<p class="muted">Password must be 12–128 characters. Username must be 3–60 characters using letters, numbers, dot, underscore or hyphen. Password must be 12–128 characters. The account is created only after OTP verification and password setup.</p><button class="wide" type="submit">Verify and create account</button></form>
-<script>document.getElementById('sendOtp').addEventListener('click',async function(){const b=this,r=document.getElementById('otpResult');b.disabled=true;r.textContent='Sending OTP…';try{const x=await fetch('/invite/<%= encodeURIComponent(token) %>/send-otp',{method:'POST',headers:{Accept:'application/json'},credentials:'same-origin'});const d=await x.json();if(!x.ok||!d.success)throw new Error(d.message||'Could not send OTP');r.textContent=d.message;}catch(e){r.textContent=e.message;}finally{b.disabled=false;}});</script>
+<p class="muted">Password must be 12–128 characters. Username must be 3–60 characters using letters, numbers, dot, underscore or hyphen. Your account will be activated after the invitation token and password are validated.</p><button class="wide" type="submit">Activate account and sign in</button></form>
+
 <% } else { %><p class="muted">This invitation link is not available.</p><% } %>
 </main></body></html>
