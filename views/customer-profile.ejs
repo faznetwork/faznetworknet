@@ -334,72 +334,36 @@ const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>
 async function loadNetworkMap(){
  if(networkMapBusy)return;networkMapBusy=true;
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
- let hasCollectorTelemetry=false;
  // Render customer/session data first. The optional network-map endpoint may fail
  // independently; it must never prevent known customer IP/MAC/pool from appearing.
  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
  renderRouterIdentity();
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
-  // Show useful saved inventory immediately, but label it clearly as unverified.
-  // Only fresh authenticated OLT telemetry may be called a live/verified ONU MAC.
-  if(!$('topoPon').dataset.loaded) $('topoPon').textContent='Auto-detecting...';
-  if(!$('topoOnu').dataset.loaded) $('topoOnu').textContent='Auto-detecting...';
-  if(!$('topoOnuMac').dataset.loaded) $('topoOnuMac').textContent='ONU MAC: Auto-mapping...';
-  if(!$('topoRx').dataset.loaded) $('topoRx').textContent='— dBm';
-  $('topoHealth').innerHTML='<span class="topology-health warning">Awaiting live reading</span>';
-  $('topologyOverall').textContent='Awaiting telemetry';
+  // Legacy push telemetry has been retired. Keep customer inventory and saved RX values visible;
+  // direct OLT polling will be introduced as a separate, verified integration.
+  $('topoPon').textContent=state?.customer?.oltPonPort||'Not reported';
+  $('topoOnu').textContent='Direct OLT polling not configured';
+  $('topoOnuMac').textContent='ONU MAC: '+(savedOnuMac()||'Not assigned');
+  $('topoHealth').textContent='Live optical telemetry is unavailable';
+  $('topologyOverall').textContent='Direct OLT polling not configured';
   $('topologyOverall').className='topology-health warning';
-
-  // Prefer the controller-attached telemetry snapshot; fallback lookup is keyed by PPPoE username, not a required saved ONU MAC.
-  try {
-   const attachedTelemetry=d.liveTelemetry||d.oltTelemetry;
-   const td=attachedTelemetry?{telemetry:attachedTelemetry}:await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
-   const t=td.telemetry;
-   if(t){
-    hasCollectorTelemetry=true;
-    $('topoPon').textContent=t.ponPort||'Auto-detecting...';
-    $('topoOnu').textContent=t.onuId||'Auto-detecting...';
-    $('topoOnuMac').textContent='ONU MAC: '+(savedOnuMac()||'Awaiting ONU MAC');
-    $('topoRx').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm';
-    const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
-    const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
-    const lastSeenValue=t.lastSeenAt||t.observedAt||t.receivedAt||null;
-    const lastSeenLabel=lastSeenValue?new Date(lastSeenValue).toLocaleString():'timestamp unavailable';
-    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span> <span class="topology-health '+(t.stale?'warning':'')+'">Last seen: '+esc(lastSeenLabel)+(t.stale?' (Stale)':'')+'</span>';
-    $('topologyOverall').textContent=t.stale?'OLT telemetry stale':(t.status==='online'&&!t.stale?'Live OLT telemetry':'OLT telemetry received');
-    $('topologyOverall').className='topology-health '+healthClass;
-
-    // Telemetry enriches the topology and signal metrics; the ONU MAC field remains sourced from customers.onu_mac.
-    if(t.ponPort)$('topoPon').dataset.loaded='true';
-    if(t.onuId)$('topoOnu').dataset.loaded='true';
-    if(savedOnuMac())$('topoOnuMac').dataset.loaded='true';
-    if(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined)$('topoRx').dataset.loaded='true';
-    $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
-    $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');
-    $('onuRxPowerSource').textContent=(t.stale?'STALE · ':'')+'OLT '+(t.oltId||'—')+' · PON '+(t.ponPort||'—')+' · ONU '+(t.onuId||'—')+' · observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—');
-    $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
-    $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');
-    $('onuTxPowerValue').textContent='TX power: '+(t.txPowerDbm===null||t.txPowerDbm===undefined?'—':Number(t.txPowerDbm).toFixed(2)+' dBm');
-    $('onuTelemetryFreshness').textContent='Last seen: '+lastSeenLabel+(t.stale?' (Stale)':'');
-    $('onuTelemetryFreshness').className='small mt-1 '+(t.stale?'text-warning':'text-muted');
-   } else {
-    $('onuTelemetryStatus').textContent='ONU status: awaiting verified OLT telemetry';
-   }
-  } catch(telemetryError) { $('onuTelemetryStatus').textContent='OLT telemetry unavailable · retrying'; }
+  $('onuTelemetryStatus').textContent='Live ONU status unavailable until direct OLT polling is configured';
+  $('onuTelemetryStatus').className='small mt-1 text-muted';
+  $('onuTxPowerValue').textContent='TX power: —';
+  $('onuTelemetryFreshness').textContent='No live OLT telemetry source configured';
+  $('onuTelemetryFreshness').className='small mt-1 text-muted';
   status.textContent=d.discoveryStatus==='observations_available'?'Observations available':'Awaiting first discovery';
   status.className='fw-semibold '+(d.discoveryStatus==='observations_available'?'text-success':'text-muted');
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
   const currentLive=state?.live||{},currentCustomer=state?.customer||{};
   const finalMac=(hasValue(currentLive.mac)?currentLive.mac:'')||(hasValue(d.routerMac)?d.routerMac:'')||(hasValue(currentCustomer.routerMac)?currentCustomer.routerMac:'');
   if(hasValue(finalMac)){mac.textContent=finalMac;}
-  // Legacy customer-column readings must not overwrite fresher collector telemetry.
-  if(!hasCollectorTelemetry){
+  // Show only the existing saved customer RX reading; it is not represented as live telemetry.
    const rx=d.rxPower||{};
    const validRx=rx.dbm!==null&&rx.dbm!==undefined&&Number.isFinite(Number(rx.dbm));
    $('onuRxPowerValue').textContent=validRx?Number(rx.dbm).toFixed(2)+' dBm':'—';
-   $('onuRxPowerSource').textContent=rx.observedAt?'Saved customer OLT reading · '+(rx.sourceDevice||'OLT')+' · '+new Date(rx.observedAt).toLocaleString():'Awaiting verified OLT reading';
-  }
+   $('onuRxPowerSource').textContent=rx.observedAt?'Saved customer RX reading · '+(rx.sourceDevice||'device')+' · '+new Date(rx.observedAt).toLocaleString():'No saved customer RX reading';
   const list=Array.isArray(d.observations)?d.observations:[];
   rows.innerHTML=list.length?list.map(o=>'<tr><td>'+esc(o.observationType||'—')+'</td><td class="mono">'+esc(o.identityValue||'—')+'</td><td>'+esc(o.matchStatus||'—')+'</td><td>'+esc(o.sourceDevice||'—')+'</td><td>'+esc(o.observedAt?new Date(o.observedAt).toLocaleString():'—')+'</td></tr>').join(''):'<tr><td colspan="5" class="text-muted text-center py-3">No network observations recorded yet. Run read-only discovery from Device Management.</td></tr>';
  }catch(e){

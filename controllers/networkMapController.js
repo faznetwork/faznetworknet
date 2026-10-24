@@ -1,6 +1,5 @@
 const db = require("../db");
 const { getRxPowerStatus } = require("../lib/network/rxPowerStatus");
-const { isTelemetryStale, telemetryLastSeen } = require("../lib/network/oltTelemetryFreshness");
 
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
@@ -38,42 +37,6 @@ exports.getCustomerMap = async (req, res) => {
     const routerObservation = observations.rows.find(
       (item) => item.observationType === "pppoe_session"
     ) || null;
-    let oltTelemetry = null;
-    try {
-      const telemetryResult = await db.query(
-        "SELECT t.olt_id AS \"oltId\", t.onu_id AS \"onuId\", t.onu_mac::text AS \"onuMac\", " +
-        "t.pppoe_username AS \"pppoeUsername\", t.pon_port AS \"ponPort\", t.status, " +
-        "t.rx_power_dbm AS \"rxPowerDbm\", t.tx_power_dbm AS \"txPowerDbm\", " +
-        "t.observed_at AS \"observedAt\", t.received_at AS \"receivedAt\", t.source_agent AS \"sourceAgent\" " +
-        "FROM customers c " +
-        "JOIN olt_telemetry t ON (" +
-        "t.onu_mac=CASE WHEN c.onu_mac ~* '^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$' THEN REPLACE(c.onu_mac,'-',':')::macaddr ELSE NULL END " +
-        "OR LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) " +
-        "WHERE LOWER(c.username)=LOWER($1) " +
-        "ORDER BY (LOWER(COALESCE(t.pppoe_username,''))=LOWER(c.username)) DESC, t.observed_at DESC LIMIT 1",
-        [customer.username]
-      );
-      oltTelemetry = telemetryResult.rows[0] || null;
-      if (oltTelemetry) {
-        oltTelemetry.stale = isTelemetryStale(oltTelemetry);
-        oltTelemetry.lastSeenAt = telemetryLastSeen(oltTelemetry);
-        const rx = oltTelemetry.rxPowerDbm;
-        oltTelemetry.signalLevel = rx === null || rx === undefined ? "unknown" : Number(rx) < -27 ? "weak" : Number(rx) <= -25 ? "warning" : "good";
-        oltTelemetry.identityVerified = Boolean(
-          String(oltTelemetry.pppoeUsername || "").trim().toLowerCase() === String(customer.username || "").trim().toLowerCase() ||
-          (String(customer.onu_mac || "").trim() &&
-           String(oltTelemetry.onuMac || "").trim().toLowerCase().replace(/-/g, ":") ===
-           String(customer.onu_mac || "").trim().toLowerCase().replace(/-/g, ":"))
-        );
-        oltTelemetry.matchedBy = String(oltTelemetry.pppoeUsername || "").trim().toLowerCase() === String(customer.username || "").trim().toLowerCase()
-          ? "pppoe_username"
-          : oltTelemetry.identityVerified ? "saved_onu_mac" : "unknown";
-        if (!oltTelemetry.identityVerified) oltTelemetry.stale = true;
-      }
-    } catch (telemetryError) {
-      // Telemetry is optional; a missing table/reading must not break Customer 360 mapping.
-      console.warn("[Network map customer API] OLT telemetry lookup skipped:", telemetryError.message);
-    }
     const rxStatus = getRxPowerStatus(
       customer.onu_rx_power_observed_at,
       customer.onu_rx_power_dbm
@@ -84,8 +47,6 @@ exports.getCustomerMap = async (req, res) => {
       provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
       rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: rxStatus },
       routerMac: routerObservation?.observedValue?.routerMac || null,
-      liveTelemetry: oltTelemetry,
-      oltTelemetry,
       observations: observations.rows,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
       lastObservedAt: latest?.observedAt || null,
