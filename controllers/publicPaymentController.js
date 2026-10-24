@@ -254,9 +254,10 @@ async function verifyRenewal(req, res) {
     if (!Number.isFinite(expected) || expected <= 0 || Math.round(submittedAmount * 100) !== Math.round(expected * 100)) {
       return fail(res, 400, "The submitted bill amount does not match the current monthly bill.");
     }
-    const trx = await db.query("SELECT trx_id,amount,channel,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1", [trxId]);
+    const trx = await db.query("SELECT trx_id,amount,channel,status,used,service_type FROM transactions WHERE UPPER(TRIM(trx_id))=$1 AND (service_type='pppoe' OR service_type IS NULL) LIMIT 1", [trxId]);
     if (!trx.rows.length) return fail(res, 404, "Transaction ID has not been received yet. Please retry after your payment notification has been processed.");
     const row = trx.rows[0];
+    if (row.service_type && String(row.service_type).toLowerCase() !== "pppoe") return fail(res, 409, "This transaction belongs to a different service type.");
     if (String(row.channel || "").toLowerCase() !== method) return fail(res, 400, "The selected payment provider does not match this transaction.");
     if (Math.round(Number(row.amount) * 100) !== Math.round(expected * 100)) return fail(res, 400, "The transaction amount does not match your bill.");
     if (String(row.status || "").toLowerCase() !== "unmatched" || row.used === true) return fail(res, 409, "This transaction ID has already been used or is not available for verification.");

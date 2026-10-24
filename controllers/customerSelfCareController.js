@@ -1,6 +1,7 @@
 const crypto=require("crypto");
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
+const renewalService=require("../services/renewalService");
 const COOKIE="faz_customer_session",SESSION_SECONDS=43200;
 const rootSecret=String(process.env.CUSTOMER_SESSION_SECRET||"").trim();
 const secret=()=>rootSecret?crypto.createHmac("sha256",rootSecret).update("faznetwork:customer-self-care:session-v1").digest("hex"):"";
@@ -97,20 +98,18 @@ async function renew(req,res){
   if(tx.used||String(tx.status||"").trim().toLowerCase()!=="unmatched")return res.status(409).json({success:false,message:"This transaction has already been used or cannot be verified."});
   const registeredPhone=phone(c?.phone||u?.phone||s.phone);const transactionUsername=String(tx.matched_username||"").trim().toLowerCase();if(transactionUsername&&transactionUsername!==s.sub.toLowerCase()&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This TrxID is linked to another account."});if(!transactionUsername&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This payment could not be linked to your registered account. Contact support for manual verification."});
   if(Math.round(Number(tx.amount)*100)!==Math.round(expected*100))return res.status(400).json({success:false,message:"Payment amount does not match your bill of ৳"+expected.toFixed(2)+".",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[s.sub,tx.id]);
+  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1,service_type='pppoe' WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[s.sub,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,message:"This transaction has already been claimed."});claimed=tx.id;
-  const months=Math.max(1,Number(c?.duration_months||1)),now=new Date(),today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(now),current=String(c?.expiration_date||u?.expiry_date||"").slice(0,10),base=current&&current>=today?current:today;
-  const [yy,mm,dd]=base.split("-").map(Number),target=new Date(Date.UTC(yy,mm-1+months,1)),last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();target.setUTCDate(Math.min(dd,last));const expiry=target.toISOString().slice(0,10);
+  const expiry=await renewalService.calculateExpiry({durationMonths:Math.max(1,Number(c?.duration_months||1)),query:db.query,currentExpiryDate:c?.expiration_date||u?.expiry_date});
   const profile=clean(c?.linked_profile_name||c?.profile||packageFallback?.profile_name||packageFallback?.plan_name||u?.profile,100),password=String(c?.password||u?.password||"");
   const comment="Customer: "+String(c?.full_name||s.name||s.sub)+" | Phone: "+String(c?.phone||u?.phone||s.phone||"")+" | EXP: "+expiry+" | TrxID: "+trx;
-  await mikrotikService.updateSecret(s.sub,{password,profile,comment,disabled:false});
+  await renewalService.applyRouterRenewal(mikrotikService,s.sub,{password,profile,comment,disabled:false,onMutation:()=>{routerSucceeded=true;}});
   // RouterOS has changed the secret; preserve the durable processing claim on any later failure.
-  routerSucceeded=true;
-  await mikrotikService.kickActiveUser(s.sub);
+  // The shared renewal service marks RouterOS mutation success before kicking the session.
   await db.withTransaction(async client=>{
    if(c)await client.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',paid_until=$1,monthly_bill=$2,updated_at=NOW() WHERE id=$3",[expiry,expected,c.id]);
    await client.query("UPDATE pppoe_users SET profile=$1,disabled=false,status='active',expiry_date=$2,billing_status='paid',paid_until=$2,comment=$3,updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[profile,expiry,comment,s.sub]);
-   const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[s.sub,claimed]);
+   const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,service_type='pppoe',needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[s.sub,claimed]);
    if(!finalized.rows.length)throw new Error("PPPoE renewal completed but payment finalization did not update the claimed transaction.");
   });
   claimed=null;
@@ -123,7 +122,7 @@ async function renew(req,res){
     if(!rollback.rows.length)console.error("[Customer self-care renewal] Claim rollback found no processing row for transaction",claimed);
    }catch(rollbackError){console.error("[Customer self-care renewal] Failed to rollback transaction claim",claimed,rollbackError?.message||rollbackError);}
   }else if(claimed!==null&&routerSucceeded){
-   console.error("[CRITICAL_PARTIAL_PROVISION] PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimed,username:s.sub,error:e?.message||String(e)});
+   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimed]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimed,s.sub,JSON.stringify({reason:"ROUTEROS_SUCCEEDED_DB_FINALIZATION_FAILED",username:s.sub,error:e?.message||String(e),recordedAt:new Date().toISOString()})]);}catch(auditError){console.error("[CRITICAL] Customer self-care reconciliation audit write failed",{transactionId:claimed,error:auditError?.message||String(auditError)});}console.error("[CRITICAL_PARTIAL_PROVISION] PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimed,username:s.sub,error:e?.message||String(e)});
   }
   return res.status(500).json({success:false,message:routerSucceeded?"Renewal reached MikroTik but database finalization needs administrator review. Do not retry this TrxID; contact support.":"Payment verification or renewal failed; the transaction claim was released when possible."});
  }

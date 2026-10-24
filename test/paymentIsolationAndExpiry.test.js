@@ -17,7 +17,7 @@ test("Captive portal submits an explicit Hotspot type and package_id", () => {
 test("Hotspot-originated webhook payments never enter the PPPoE customer resolver", () => {
   const webhook = source.slice(source.indexOf("async function webhook"), source.indexOf("async function dynamicWebhook"));
   assert.match(webhook, /serviceType=String\(req\.body\?\.service_type\|\|req\.body\?\.serviceType/);
-  assert.match(webhook, /if\(serviceType!==\"hotspot\"&&serviceType===\"pppoe\"&&payment\.customerRef\)/);
+  assert.ok(webhook.includes('if(serviceType==="pppoe"&&payment.customerRef)'));
   assert.match(webhook, /if\(!user&&serviceType===\"pppoe\"&&payment\.senderPhone\)/);
   assert.doesNotMatch(webhook, /if\(!user&&payment\.senderPhone\)/);
 });
@@ -57,9 +57,25 @@ test("PPPoE rolling-30 renewal stacks on an existing future expiry", async () =>
 
 test("PPPoE rolling-30 renewal starts today when the previous expiry is in the past", async () => {
   const query = async () => ({ rows: [{ value: "rolling_30" }] });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const expected = new Date(today + "T00:00:00Z");
   expected.setUTCDate(expected.getUTCDate() + 30);
   const result = await paymentController.renewalExpirationDate(1, query, "2000-01-01");
   assert.equal(result, expected.toISOString().slice(0, 10));
+});
+
+test("shared renewal service stacks future expiry and starts expired accounts from Dhaka today",async()=>{
+ const service=require("../services/renewalService");
+ const query=async()=>({rows:[{value:"rolling_30"}]});
+ assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2099-01-10",now:new Date("2026-10-25T12:00:00Z")}),"2099-02-09");
+ assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2000-01-01",now:new Date("2026-10-25T12:00:00Z")}),"2026-11-24");
+});
+test("new payment records and manual claims explicitly separate PPPoE and Hotspot",()=>{
+ const schema=fs.readFileSync(path.join(root,"db/schema.sql"),"utf8");
+ assert.match(schema,/ADD COLUMN IF NOT EXISTS service_type VARCHAR\(20\)/);
+ const webhook=source.slice(source.indexOf("async function webhook"),source.indexOf("async function dynamicWebhook"));
+ assert.match(webhook,/service_type/);
+ assert.match(webhook,/reference_user/);
+ assert.match(source,/claim_flow='manual_hotspot',matched_username=\$2,service_type='hotspot'/);
+ assert.match(source,/claim_flow='pppoe',matched_username=\$1,service_type='pppoe'/);
 });
