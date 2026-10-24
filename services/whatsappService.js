@@ -712,7 +712,7 @@ function normalizeWhatsAppJid(value) {
   return normalizePhone(value) + "@s.whatsapp.net";
 }
 
-async function sendMessage({ to, message, event = "manual" } = {}) {
+async function sendMessage({ to, message, event = "manual", userType = null } = {}) {
   const history = require("./messageHistoryService");
   let result = null, failure = null;
   const body = String(message || "").slice(0, 4000);
@@ -732,7 +732,7 @@ async function sendMessage({ to, message, event = "manual" } = {}) {
       status: failure ? "failed" : "sent",
       error: failure ? String(failure.message || failure) : null,
       gateway: "baileys",
-      providerMessageId: result?.key?.id || null
+      providerMessageId: result?.key?.id || null, userType
     });
   }
 }
