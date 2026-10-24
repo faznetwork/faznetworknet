@@ -2,8 +2,9 @@
 
 const db = require("../db");
 
-async function isEnabled() {
-  const result = await db.query(
+async function isEnabled(client = null) {
+  const query = client ? client.query.bind(client) : db.query.bind(db);
+  const result = await query(
     "SELECT value FROM app_settings WHERE key = $1 LIMIT 1",
     ["notification_channel_email_enabled"]
   );
