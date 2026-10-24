@@ -35,7 +35,9 @@ test("cleanup migration only clears OLT telemetry cache and telemetry records", 
   assert.match(migration, /onu_rx_power_observed_at\s*=\s*NULL/i);
   assert.match(migration, /onu_rx_power_source_device_id\s*=\s*NULL/i);
   assert.match(migration, /DELETE FROM\s+olt_telemetry/i);
-  const customerUpdate = migration.match(/UPDATE\s+customers[\s\S]*?;/i)?.[0] || "";\n  assert.doesNotMatch(customerUpdate, /router_mac|onu_mac|username|password|balance|package|billing|transaction/i);\n  assert.doesNotMatch(migration, /DELETE FROM\s+customers/i);
+  const customerUpdate = migration.match(/UPDATE\s+customers[\s\S]*?;/i)?.[0] || "";
+  assert.doesNotMatch(customerUpdate, /router_mac|onu_mac|username|password|balance|package|billing|transaction/i);
+  assert.doesNotMatch(migration, /DELETE FROM\s+customers/i);
   assert.match(migration, /to_regclass/i);
 });
 
