@@ -701,7 +701,13 @@ CREATE INDEX IF NOT EXISTS idx_network_topology_links_to ON network_topology_lin
 
 
 
--- OLT optical telemetry cache is retired. RouterOS network discovery remains enabled.
+-- Automated ONU optical telemetry cache. Values are written only by a verified OLT collector.
+-- NULL means the OLT has not supplied a valid reading; no manual input is used.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_dbm NUMERIC(6,2)
+  CHECK (onu_rx_power_dbm IS NULL OR (onu_rx_power_dbm >= -50 AND onu_rx_power_dbm <= 10));
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_observed_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_source_device_id BIGINT
+  REFERENCES network_devices(id) ON DELETE SET NULL;
 
 
 -- Legacy OLT telemetry schema upgrades are retired; do not recreate or query this table at startup.
