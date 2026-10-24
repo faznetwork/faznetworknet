@@ -16,6 +16,7 @@ async function list(req,res){
   if(from&&to&&from>to)throw new Error("Start date must be on or before end date.");
   const clauses=[],params=[];
   if(userType){params.push(userType);clauses.push("user_type=$"+params.length);}
+  if(!status)clauses.push("status <> 'skipped'");
   if(query){params.push("%"+query+"%");clauses.push("(recipient_address ILIKE $"+params.length+" OR recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+" OR error ILIKE $"+params.length+")");}
   if(status){params.push(status);clauses.push("status=$"+params.length);}
   if(channel){params.push(channel);clauses.push("channel=$"+params.length);}
