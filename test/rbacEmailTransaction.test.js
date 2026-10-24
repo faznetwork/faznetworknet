@@ -145,7 +145,8 @@ test("invitation acceptance does not require an email OTP", async () => {
   let selectSql = "";
   db.withTransaction = async callback => callback({
     query: async sql => {
-      selectSql = sql;
+      if (sql.includes("FOR UPDATE")) selectSql = sql;
+      if (sql.includes("SELECT 1 FROM admin_users")) return { rows: [{ id: 1 }], rowCount: 1 };
       return { rows: [invite], rowCount: 1 };
     }
   });
