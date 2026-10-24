@@ -24,7 +24,7 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
   return crypto.randomUUID();
 }
 
-async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null } = {}) {
+async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null, userType = null } = {}) {
   if (!(await emailNotificationState.isEnabled(client))) {
     throw new Error("Email notifications are disabled in Notification Hub; email was not queued.");
   }
@@ -38,7 +38,8 @@ async function enqueueEmail({ event = "manual", to, subject, html, text, idempot
 
   const normalizedEvent = String(event || "manual").trim().slice(0, MAX_EVENT_LENGTH) || "manual";
   if (expiresAt !== null && !Number.isFinite(new Date(expiresAt).getTime())) throw new Error("Email outbox expiresAt must be a valid date.");
-  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
+  const normalizedUserType = ["hotspot", "pppoe"].includes(String(userType || "").toLowerCase()) ? String(userType).toLowerCase() : null;
+  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, userType: normalizedUserType, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
   const encryptedPayload = encryptPayload(payload);
   const key = makeIdempotencyKey({ idempotencyKey, event: normalizedEvent, recipient, payload });
   const query = client ? client.query.bind(client) : db.query.bind(db);
