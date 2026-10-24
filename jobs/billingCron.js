@@ -119,7 +119,7 @@ async function runBillingExpiration(){
           }
         });
         if(!overridden&&customer.phone){
-          notificationDispatcher.dispatchNotification({...notificationPayload,channels:["sms","whatsapp"]});
+          notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
         }
 
         await logAuditAction({
