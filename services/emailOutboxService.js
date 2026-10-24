@@ -119,7 +119,17 @@ async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message =
     [id, terminal ? "failed" : "pending", delayMs, String(code).slice(0, 80), String(message).replace(/[\r\n\t]+/g, " ").slice(0, 500)]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox retry state was not saved because its processing lease was lost.");
-  if (terminal) { const job=await db.query("SELECT recipient_address,event_key FROM email_outbox WHERE id=$1 LIMIT 1",[id]); if(job.rows[0])await require("./messageHistoryService").recordMessage({channel:"email",to:job.rows[0].recipient_address,message:"Email notification delivery failed.",event:job.rows[0].event_key,status:"failed",error:String(message||"Email delivery failed.").slice(0,1000),gateway:"email_outbox"}); }
+  if (terminal) {
+    const job=await db.query("SELECT recipient_address,event_key,payload_ciphertext FROM email_outbox WHERE id=$1 LIMIT 1",[id]);
+    if(job.rows[0]) {
+      let userType=null;
+      if(job.rows[0].payload_ciphertext) {
+        try { userType=require("./emailPayloadCrypto").decryptPayload(job.rows[0].payload_ciphertext)?.userType||null; }
+        catch(error) { console.error("[EmailOutbox] Could not recover customer type for failed history:",String(error?.message||error).slice(0,200)); }
+      }
+      await require("./messageHistoryService").recordMessage({channel:"email",to:job.rows[0].recipient_address,message:"Email notification delivery failed.",event:job.rows[0].event_key,status:"failed",error:String(message||"Email delivery failed.").slice(0,1000),gateway:"email_outbox",userType});
+    }
+  }
   return { terminal, delayMs };
 }
 
