@@ -142,7 +142,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
    const subject=renderEmailTemplate(subjectSource,context,false).replace(/[\r\n]+/g," ").trim().slice(0,200);
    const html=renderEmailTemplate(bodySource,context,true);
    const text=html.replace(/<\s*br\s*\/?>/gi,"\n").replace(/<\/(p|div|li|h[1-6])>/gi,"\n").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/[ \t]+\n/g,"\n").trim();
-   return emailService.sendEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName});
+   return emailOutboxService.enqueueEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName,idempotencyKey:variables.email_idempotency_key||undefined});
   }]);
  }
  const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
