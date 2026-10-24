@@ -157,6 +157,6 @@ test("email test endpoint verifies and sends through SMTP", async () => {
   await settingsController.testEmail({ body: { to: "admin@example.com", subject: "Provider test" } }, response);
   assert.equal(response.statusCode, 200);
   assert.equal(response.payload.success, true);
-  assert.match(response.payload.message, /SMTP connection verified/);
+  assert.match(response.payload.message, /SMTP test email sent successfully/);
   assert.equal(response.payload.result.provider, "smtp");
 });
