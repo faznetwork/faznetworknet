@@ -98,7 +98,13 @@ async function markDelivered(id, { providerMessageId = null } = {}) {
     [id, providerMessageId ? String(providerMessageId).slice(0, 255) : null]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox job was not marked sent because its processing lease was lost.");
-  await require("./messageHistoryService").recordMessage({channel:"email",to:result.rows[0].recipient_address,message:"Email notification delivered successfully.",event:result.rows[0].event_key,status:"sent",gateway:"email_outbox",providerMessageId:providerMessageId||null});
+  const payloadRow = await db.query("SELECT payload_ciphertext FROM email_outbox WHERE id=$1 LIMIT 1",[id]);
+  let userType = null;
+  if (payloadRow.rows[0]?.payload_ciphertext) {
+    try { userType = require("./emailPayloadCrypto").decryptPayload(payloadRow.rows[0].payload_ciphertext)?.userType || null; }
+    catch (error) { console.error("[EmailOutbox] Could not recover customer type for history:", String(error?.message || error).slice(0,200)); }
+  }
+  await require("./messageHistoryService").recordMessage({channel:"email",to:result.rows[0].recipient_address,message:"Email notification delivered successfully.",event:result.rows[0].event_key,status:"sent",gateway:"email_outbox",providerMessageId:providerMessageId||null,userType});
 }
 
 async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message = "Email delivery failed.", retryAfterMs, maxAttempts = 8 } = {}) {
