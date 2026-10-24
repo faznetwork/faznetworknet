@@ -3,6 +3,7 @@ const settingsService=require("./appSettings");
 const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
+const messageHistoryService=require("./messageHistoryService");
 const emailOutboxService=require("./emailOutboxService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
@@ -35,7 +36,7 @@ function renewalRuleEvents(type,eventName){
 }
 function extractCustomerPhone(customer={}){
  const account=customer||{};
- return account.phone||account.mobile||account.account_phone||account.mobile_number||account.contact_no||"";
+ return account.whatsapp_phone||account.whatsapp||account.phone||account.mobile||account.account_phone||account.mobile_number||account.contact_no||"";
 }
 function isValidBdWhatsAppPhone(value){return /^8801[3-9]\d{8}$/.test(String(value||""));}
 function smsEvent(event){const map={payment:"payment_receipt",payment_receipt:"payment_receipt",recharge:"payment_receipt",renewal:"payment_receipt",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"line_expiry",expired:"line_expiry"};return map[event]||event;}
@@ -124,14 +125,24 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   if(keys.some(key=>Object.prototype.hasOwnProperty.call(settings,key)))return false;
   return name==="sms"&&type==="pppoe"&&["payment","expiry_warning","expired"].includes(eventName);
  };
- const whatsappChannelEnabled=channelEnabled("whatsapp");
- const whatsappRuleEnabled=ruleEnabled("whatsapp");
- if(isPppoeRenewal&&whatsappChannelEnabled&&validWhatsAppPhone&&!whatsappRuleEnabled)console.warn("[Dispatcher] Notification blocked: Rule disabled for PPPoE Renewal WhatsApp.");
- if(isPppoeRenewal&&!whatsappChannelEnabled)console.warn("[Dispatcher] WhatsApp skipped: channel disabled for PPPoE Renewal.");
- if(isPppoeRenewal&&whatsappChannelEnabled&&!validWhatsAppPhone)console.warn("[Dispatcher] WhatsApp skipped: no valid PPPoE customer phone.");
- if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
+ const explicitPppoeRenewalWhatsApp=type==="pppoe"&&eventName==="renewal"&&selected?.has("whatsapp");
  const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
- if(whatsappChannelEnabled&&(whatsappRuleEnabled||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName})]);
+ // Explicitly selected channels bypass global channel/rule toggles for this dispatch,
+ // while excludeChannels remains an intentional hard stop.
+ const whatsappChannelEnabled=!excluded.has("whatsapp")&&(selected?selected.has("whatsapp"):bool(settings,"notification_channel_whatsapp_enabled",false));
+ const whatsappRuleEnabled=ruleEnabled("whatsapp");
+ const whatsappEligible=whatsappChannelEnabled&&(whatsappRuleEnabled||explicitPppoeRenewalWhatsApp||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone;
+ const whatsappSkipReasons=[];
+ if(isPppoeRenewal&&!whatsappEligible&&(explicitPppoeRenewalWhatsApp||!selected)){
+  const reason=excluded.has("whatsapp")?"channel_excluded":!whatsappChannelEnabled?"channel_disabled":!validWhatsAppPhone?"invalid_phone":"rule_disabled";
+  whatsappSkipReasons.push({channel:"whatsapp",status:"skipped",reason});
+  console.warn("[Manual Renewal WhatsApp] Notification skipped:",JSON.stringify({username:customerUsername,reason,hasRecipient:Boolean(rawPhone),event:rawEvent||eventName}));
+  if(rawPhone){
+   await messageHistoryService.recordMessage({channel:"whatsapp",to:rawPhone,message:String(message||"PPPoE renewal notification"),event:rawEvent||eventName,status:"skipped",error:"WhatsApp delivery skipped: "+reason,gateway:"baileys"});
+  }
+ }
+ if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
+ if(whatsappEligible)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName})]);
  if(channelEnabled("email")&&ruleEnabled("email")){
   let recipientEmail=String(customer?.email||"").trim();
   if(!recipientEmail&&customerUsername!=="unknown"){
@@ -156,7 +167,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   const whatsappResult=channelResults.find(result=>result.channel==="whatsapp")||{status:"skipped",reason:!validWhatsAppPhone?"invalid_phone":!whatsappChannelEnabled?"channel_disabled":"rule_disabled"};
   console.log("[Hotspot WhatsApp Alert] Status:",whatsappResult);
  }
- return {success:settled.every(r=>r.status==="fulfilled"&&(r.value?.success!==false)),event:eventName,userType:type,results:channelResults};
+ return {success:settled.every(r=>r.status==="fulfilled"&&(r.value?.success!==false))&&whatsappSkipReasons.length===0,event:eventName,userType:type,results:[...channelResults,...whatsappSkipReasons]};
 }
 function dispatchNotification(payload={}){
  // Intentionally detached from request lifecycles: delivery cannot delay or roll back billing.
