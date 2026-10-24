@@ -140,15 +140,15 @@ test("sensitive email history never includes the OTP or invitation body", async 
   }
 });
 
-test("SMTP network timeout falls back to Resend HTTP API", async () => {
+test("configured Resend HTTP API is the primary transport and bypasses SMTP", async () => {
   settingsService.getAllSettings = async () => validSettings();
   const previousKey = process.env.RESEND_API_KEY;
   process.env.RESEND_API_KEY = "unit-test-key";
-  let closed = false;
-  nodemailer.createTransport = () => ({
-    sendMail: async () => { const error = new Error("connect timed out"); error.code = "ETIMEDOUT"; throw error; },
-    close() { closed = true; }
-  });
+  let smtpCalled = false;
+  nodemailer.createTransport = () => {
+    smtpCalled = true;
+    return { sendMail: async () => { throw new Error("SMTP must not run when Resend is configured"); }, close() {} };
+  };
   global.fetch = async (url, options) => {
     assert.equal(url, "https://api.resend.com/emails");
     assert.equal(options.headers.Authorization, "Bearer unit-test-key");
@@ -159,17 +159,17 @@ test("SMTP network timeout falls back to Resend HTTP API", async () => {
     assert.equal(result.success, true);
     assert.equal(result.provider, "resend");
     assert.equal(result.messageId, "resend-test-id");
-    assert.equal(closed, true);
+    assert.equal(smtpCalled, false);
   } finally {
     if (previousKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = previousKey;
   }
 });
 
-test("SMTP authentication failures do not trigger Resend fallback", async () => {
+test("without a Resend key, SMTP authentication failures remain explicit and do not call Resend", async () => {
   settingsService.getAllSettings = async () => validSettings();
   const previousKey = process.env.RESEND_API_KEY;
-  process.env.RESEND_API_KEY = "unit-test-key";
+  delete process.env.RESEND_API_KEY;
   let fetched = false;
   nodemailer.createTransport = () => ({
     sendMail: async () => { const error = new Error("Invalid login"); error.code = "EAUTH"; throw error; },
