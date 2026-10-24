@@ -34,3 +34,15 @@ test("database schema INSERT blocks do not leave a trailing comma before ON CONF
  assert.doesNotMatch(schema,/,(?:\s*\r?\n\s*)ON CONFLICT/i,
   "PostgreSQL rejects a trailing comma before ON CONFLICT");
 });
+
+test("email Test button does not save Notification Hub settings",()=>{
+ const source=fs.readFileSync(path.join(__dirname,"..","views/admin.ejs"),"utf8");
+ const start=source.indexOf("async function runEmailTest()");
+ const end=source.indexOf('document.getElementById("smtpPasswordToggle")',start);
+ assert.notEqual(start,-1,"runEmailTest handler must exist");
+ assert.notEqual(end,-1,"runEmailTest handler must have a clear boundary");
+ const handler=source.slice(start,end);
+ assert.match(handler,/fetch\("\/api\/settings\/notifications\/email\/test"/);
+ assert.doesNotMatch(handler,/saveNotificationHub\s*\(/,
+  "Test Email must test saved SMTP settings without triggering Save Notification Hub");
+});
