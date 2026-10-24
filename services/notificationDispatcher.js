@@ -6,12 +6,13 @@ const whatsappService=require("./whatsappService");
 const messageHistoryService=require("./messageHistoryService");
 const emailOutboxService=require("./emailOutboxService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expiry:"expired",suspended:"suspension",manual_suspension:"suspension",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
  const raw=String(rawEvent||"").toLowerCase();
  if(raw==="welcome"||raw==="welcome_message"||eventName==="welcome")return ["welcome_message"];
  if(type==="pppoe"){
   if(raw==="pppoe_expired"||eventName==="expired")return ["pppoe_expired","expired"];
+  if(eventName==="suspension"||raw==="pppoe_suspended")return ["pppoe_suspended","suspended"];
   if(eventName==="expiry_warning"||raw==="pppoe_expiry_warning")return ["pppoe_expiry_warning"];
   if(["payment","renewal","recharge"].includes(eventName))return raw==="pppoe_payment"||eventName==="payment"?["pppoe_payment","pppoe_renewal"]:["pppoe_renewal","pppoe_payment"];
  }
@@ -36,7 +37,7 @@ function renewalRuleEvents(type,eventName){
 }
 function extractCustomerPhone(customer={}){
  const account=customer||{};
- return account.whatsapp_phone||account.whatsapp||account.phone||account.mobile||account.account_phone||account.mobile_number||account.contact_no||"";
+ return [account.whatsapp_phone,account.whatsapp,account.phone,account.mobile,account.account_phone,account.mobile_number,account.contact_no].map(value=>String(value||"").trim()).find(Boolean)||"";
 }
 function isValidBdWhatsAppPhone(value){return /^8801[3-9]\d{8}$/.test(String(value||""));}
 function smsEvent(event){const map={payment:"payment_receipt",payment_receipt:"payment_receipt",recharge:"payment_receipt",renewal:"payment_receipt",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"line_expiry",expired:"line_expiry"};return map[event]||event;}
@@ -112,45 +113,37 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  };
  const selected=Array.isArray(channels)?new Set(channels):null;
  const excluded=new Set(Array.isArray(excludeChannels)?excludeChannels:[]);
- const jobs=[];
- const channelEnabled=(name)=>{
-  if(excluded.has(name))return false;
-  if(emailClient&&name==="email")return bool(settings,"notification_channel_email_enabled",false)&&(!selected||selected.has(name));
-  return selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
- };
+ const jobs=[],skippedResults=[];
+ const history=require("./messageHistoryService");
+ const availableChannels=["sms","whatsapp","email"];
  const ruleEvents=renewalRuleEvents(type,eventName);
- const ruleEnabled=(name)=>{
+ const ruleEnabled=name=>{
   const keys=ruleEvents.map(ruleEvent=>"notification_rule_"+type+"_"+ruleEvent+"_"+name+"_enabled");
   if(keys.some(key=>Object.prototype.hasOwnProperty.call(settings,key)&&settingsService.bool(settings[key])))return true;
   if(keys.some(key=>Object.prototype.hasOwnProperty.call(settings,key)))return false;
-  return name==="sms"&&type==="pppoe"&&["payment","expiry_warning","expired"].includes(eventName);
+  return name==="sms"&&type==="pppoe"&&["payment","expiry_warning","expired","suspension"].includes(eventName);
  };
- const explicitPppoeRenewalWhatsApp=type==="pppoe"&&eventName==="renewal"&&selected?.has("whatsapp");
- const explicitHotspotRenewalWhatsApp=type==="hotspot"&&eventName==="renewal"&&selected?.has("whatsapp");
- // Explicitly selected channels bypass global channel/rule toggles for this dispatch,
- // while excludeChannels remains an intentional hard stop.
- const whatsappChannelEnabled=!excluded.has("whatsapp")&&(selected?selected.has("whatsapp"):bool(settings,"notification_channel_whatsapp_enabled",false));
- const whatsappRuleEnabled=ruleEnabled("whatsapp");
- const whatsappEligible=whatsappChannelEnabled&&(whatsappRuleEnabled||explicitPppoeRenewalWhatsApp||explicitHotspotRenewalWhatsApp||explicitHotspotPipeline)&&validWhatsAppPhone;
- const whatsappSkipReasons=[];
- if(isPppoeRenewal&&!whatsappEligible&&explicitPppoeRenewalWhatsApp){
-  const reason=excluded.has("whatsapp")?"channel_excluded":!whatsappChannelEnabled?"channel_disabled":!validWhatsAppPhone?"invalid_phone":"rule_disabled";
-  whatsappSkipReasons.push({channel:"whatsapp",status:"skipped",reason});
-  console.warn("[Manual Renewal WhatsApp] Notification skipped:",JSON.stringify({username:customerUsername,reason,hasRecipient:Boolean(rawPhone),event:rawEvent||eventName}));
-  if(rawPhone){
-   await messageHistoryService.recordMessage({channel:"whatsapp",to:rawPhone,message:String(message||"PPPoE renewal notification"),event:rawEvent||eventName,status:"skipped",error:"WhatsApp delivery skipped: "+reason,gateway:"baileys"});
-  }
+ const recordSkipped=async(channel,recipient,reason)=>{
+  skippedResults.push({channel,status:"skipped",reason});
+  console.info("[Notification Hub] Channel skipped:",JSON.stringify({channel,event:rawEvent||eventName,username:customerUsername,reason}));
+  await history.recordMessage({channel,to:recipient||customer?.email||customerUsername,message:String(message||("FAZ NETWORK notification: "+eventName)),event:rawEvent||eventName,status:"skipped",error:"Notification skipped: "+reason,gateway:channel==="whatsapp"?"baileys":channel==="email"?(settings.email_provider_mode||"outbox"):(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")});
+ };
+ let recipientEmail=String(customer?.email||"").trim();
+ if(!recipientEmail&&customerUsername!=="unknown"){
+  try{const linked=await db.query("SELECT email FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);recipientEmail=String(linked.rows?.[0]?.email||"").trim();}
+  catch(error){console.warn("[Email] Customer email lookup failed for "+customerUsername+": "+String(error?.message||error).slice(0,160));}
  }
- if(channelEnabled("sms")&&(ruleEnabled("sms")||explicitHotspotPipeline)&&smsPhone)jobs.push(["sms",async()=>smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:explicitHotspotPipeline?"manual":smsEvent(eventName),variables:context,settings,useMessageDirectly:true})]);
- if(whatsappEligible)jobs.push(["whatsapp",async()=>whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName})]);
- if(channelEnabled("email")&&ruleEnabled("email")){
-  let recipientEmail=String(customer?.email||"").trim();
-  if(!recipientEmail&&customerUsername!=="unknown"){
-   try{const linked=await db.query("SELECT email FROM customers WHERE username=$1 LIMIT 1",[customerUsername]);recipientEmail=String(linked.rows?.[0]?.email||"").trim();}
-   catch(error){console.warn("[Email] Customer email lookup failed for "+customerUsername+": "+String(error?.message||error).slice(0,160));}
-  }
-  if(!recipientEmail)console.info("[Email] Skipped: No email address found for customer: "+customerUsername);
-  else jobs.push(["email",async()=>{
+ for(const channel of availableChannels){
+  if(selected&&!selected.has(channel))continue;
+  const recipient=channel==="email"?recipientEmail:channel==="sms"?smsPhone:recipientPhone;
+  const validRecipient=channel==="email"?Boolean(recipientEmail):channel==="sms"?Boolean(smsPhone):validWhatsAppPhone;
+  if(excluded.has(channel)){await recordSkipped(channel,recipient,"channel_excluded");continue;}
+  if(!bool(settings,"notification_channel_"+channel+"_enabled",false)){await recordSkipped(channel,recipient,"channel_disabled");continue;}
+  if(!ruleEnabled(channel)){await recordSkipped(channel,recipient,"event_rule_disabled");continue;}
+  if(!validRecipient){if(channel==="email")console.info("[Email] Skipped: No email address found for customer: "+customerUsername);await recordSkipped(channel,recipient,channel==="email"?"missing_email":"invalid_phone");continue;}
+  jobs.push([channel,async()=>{
+   if(channel==="sms")return smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true});
+   if(channel==="whatsapp")return whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName});
    const custom=await getCustomTemplate(type,rawEvent,eventName,"email");
    const defaults=defaultEmailTemplate(eventName,context);
    const subjectSource=custom&&custom.email_subject?custom.email_subject:defaults.subject;
@@ -162,12 +155,12 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   }]);
  }
  const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
- const channelResults=settled.map((r,i)=>({channel:jobs[i][0],status:r.status,...(r.status==="fulfilled"?{result:r.value}:{error:String(r.reason?.message||r.reason).slice(0,300)})}));
+ const channelResults=settled.map((r,i)=>{const value=r.status==="fulfilled"?r.value:null;const status=r.status!=="fulfilled"?"failed":value?.skipped?"skipped":value?.success===false?"failed":jobs[i][0]==="email"&&value?.accepted?"queued":"sent";return {channel:jobs[i][0],status,...(r.status==="fulfilled"?{result:value}:{error:String(r.reason?.message||r.reason).slice(0,300)})};});
+ for(let i=0;i<settled.length;i++){const item=settled[i],channel=jobs[i][0];if(channel==="email"&&(item.status==="rejected"||(item.status==="fulfilled"&&item.value?.success===false)))await history.recordMessage({channel:"email",to:recipientEmail,message:String(message||("FAZ NETWORK notification: "+eventName)),event:rawEvent||eventName,status:"failed",error:String(item.status==="rejected"?(item.reason?.message||item.reason):(item.value?.error||"Email enqueue failed")).slice(0,1000),gateway:settings.email_provider_mode||"outbox"});}
  if(type==="hotspot"&&eventName==="renewal"){
-  const whatsappResult=channelResults.find(result=>result.channel==="whatsapp")||{status:"skipped",reason:!validWhatsAppPhone?"invalid_phone":!whatsappChannelEnabled?"channel_disabled":"rule_disabled"};
-  console.log("[Hotspot WhatsApp Alert] Status:",whatsappResult);
+  console.log("[Hotspot Notification Alert] Status:",channelResults.filter(result=>["sms","whatsapp","email"].includes(result.channel)));
  }
- return {success:settled.every(r=>r.status==="fulfilled"&&(r.value?.success!==false))&&whatsappSkipReasons.length===0,event:eventName,userType:type,results:[...channelResults,...whatsappSkipReasons]};
+ return {success:!channelResults.some(result=>result.status==="failed")&&!(selected&&skippedResults.length>0),event:eventName,userType:type,results:[...channelResults,...(selected?skippedResults:[])]};
 }
 function dispatchNotification(payload={}){
  // Intentionally detached from request lifecycles: delivery cannot delay or roll back billing.
