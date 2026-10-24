@@ -2294,24 +2294,16 @@
         
         <section data-notify-panel="email" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyEmailEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyEmailEnabled">Enable Email Notifications</label></div>
-          <div class="row g-3">
-            <div class="col-md-6"><label class="form-label" for="emailProviderMode">Email Provider Mode</label><select id="emailProviderMode" class="form-select"><option value="apps_script">Google Apps Script Web App (Recommended)</option><option value="smtp">Custom SMTP Server (Fallback)</option></select></div>
-            <div class="col-md-6 d-flex align-items-end"><div class="small text-muted pb-2">Choose how FAZ NETWORK sends notification emails. Apps Script uses your authorized MailApp Web App.</div></div>
-          </div>
-          <div id="emailAppsScriptFields" class="row g-3 mt-1">
-            <div class="col-12"><label class="form-label" for="emailAppsScriptUrl">Web App Exec URL</label><input id="emailAppsScriptUrl" type="url" class="form-control" maxlength="1000" placeholder="https://script.google.com/macros/s/AKfycb.../exec" autocomplete="url"><div class="form-text">Use the deployed Apps Script Web App URL ending in /exec. Only HTTPS Google Apps Script URLs are accepted.</div></div>
-            <div class="col-md-8"><label class="form-label" for="emailAppsScriptToken">Secret API Token</label><div class="input-group"><input id="emailAppsScriptToken" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved token"><button type="button" class="btn btn-outline-secondary" id="emailAppsScriptTokenToggle" aria-label="Show Apps Script token"><i class="bi bi-eye"></i></button></div><div id="emailAppsScriptTokenHint" class="form-text"></div></div>
-            <div class="col-md-4 d-flex align-items-end"><div class="alert alert-light border small mb-0 w-100"><i class="bi bi-shield-lock me-1 text-success"></i>Token is stored server-side and never sent back to the browser.</div></div>
-          </div>
-          <div id="emailSmtpFields" class="row g-3 mt-1" style="display:none">
-            <div class="col-md-8"><label class="form-label" for="smtpHost">SMTP Host</label><input id="smtpHost" class="form-control" maxlength="253" placeholder="smtp.example.com"></div>
+          <div class="mb-3"><h6 class="fw-bold mb-1">Native SMTP Email Engine</h6><p class="small text-muted mb-0">Email delivery runs through the FAZ NETWORK Node.js service and durable PostgreSQL outbox. SMTP credentials remain server-side in Notification Hub settings.</p></div>
+          <div id="emailSmtpFields" class="row g-3 mt-1">
+            <div class="col-md-8"><label class="form-label" for="smtpHost">SMTP Host</label><input id="smtpHost" class="form-control" maxlength="253" placeholder="smtp.gmail.com"></div>
             <div class="col-md-4"><label class="form-label" for="smtpPort">SMTP Port</label><input id="smtpPort" type="number" class="form-control" min="1" max="65535" value="587" required></div>
             <div class="col-md-4"><div class="form-check form-switch mt-md-4 pt-md-2"><input class="form-check-input" id="smtpSecure" type="checkbox"><label class="form-check-label" for="smtpSecure">Secure SSL/TLS (typically port 465)</label></div></div>
             <div class="col-md-8"><label class="form-label" for="smtpUsername">Username / Email Address</label><input id="smtpUsername" type="email" class="form-control" autocomplete="username" maxlength="254" placeholder="billing@example.com"></div>
             <div class="col-md-6"><label class="form-label" for="smtpPassword">SMTP Password / App Password</label><div class="input-group"><input id="smtpPassword" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep saved password"><button type="button" class="btn btn-outline-secondary" id="smtpPasswordToggle" aria-label="Show SMTP password"><i class="bi bi-eye"></i></button></div><div id="smtpPasswordHint" class="form-text"></div></div>
             <div class="col-md-6"><label class="form-label" for="emailFromName">From Name</label><input id="emailFromName" class="form-control" maxlength="160" value="FAZ NETWORK Billing"></div>
             <div class="col-md-6"><label class="form-label" for="emailFromAddress">From Email</label><input id="emailFromAddress" type="email" class="form-control" maxlength="254" placeholder="billing@example.com"></div>
-            <div class="col-12"><div class="alert alert-light border small mb-0"><i class="bi bi-shield-lock me-1 text-success"></i>SMTP credentials are stored server-side and never returned to the browser.</div></div>
+            <div class="col-12"><div class="alert alert-light border small mb-0"><i class="bi bi-shield-lock me-1 text-success"></i>SMTP credentials are stored server-side and never returned to the browser. OTP and invitation payloads are encrypted while queued.</div></div>
           </div>
           <hr class="my-4">
           <div class="row g-3">
@@ -5275,15 +5267,15 @@ async function deletePlan(id,name){
           try{
             const d=await jsonFetch('/api/settings/all'),s=d.settings||{};systemSettingsCache=s;
             const mode=['bulk_sms'].includes(s.sms_provider_mode||s.sms_gateway_mode)?'custom_http':(s.sms_provider_mode||s.sms_gateway_mode||'disabled');
-            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',emailProviderMode:s.email_provider_mode||'apps_script',emailAppsScriptUrl:s.email_apps_script_url,smtpHost:s.smtp_host,smtpPort:s.smtp_port||"587",smtpUsername:s.smtp_username,emailFromName:s.email_from_name||"FAZ NETWORK Billing",emailFromAddress:s.email_from_address};
+            const values={setCompanyName:s.company_name||'FAZ NETWORK',setPublicBaseUrl:s.public_base_url,setLogoUrl:s.logo_url,setFaviconUrl:s.favicon_url,setSupportPhone:s.support_phone,setWhatsapp:s.whatsapp_number,setOfficeAddress:s.office_address,setBtrcLicense:s.btrc_license_number,setCopyright:s.footer_copyright,setBillingCycle:s.billing_cycle_type||'rolling_30',setGraceDays:s.grace_period_days||'0',setSmsMode:mode,smsProviderPreset:s.sms_provider_preset||'greenweb',setSmsSender:s.sms_sender_id,setSmsApiUrl:s.sms_api_url,setSmsApiMethod:['POST','POST_JSON','POST_FORM','GET'].includes(s.sms_api_method)?(s.sms_api_method==='POST'?'POST_JSON':s.sms_api_method):'POST_JSON',setSmsDeviceUrl:s.sms_device_webhook_url||s.sms_device_url,smsDeviceMethod:s.sms_device_http_method||'POST_JSON',emailProviderMode:'smtp',smtpHost:s.smtp_host,smtpPort:s.smtp_port||"587",smtpUsername:s.smtp_username,emailFromName:s.email_from_name||"FAZ NETWORK Billing",emailFromAddress:s.email_from_address};
             for(const [id,value] of Object.entries(values)){const el=document.getElementById(id);if(el)el.value=value||'';}
             const checkValues={notifySmsEnabled:s.notification_channel_sms_enabled??'true',notifyWhatsappEnabled:s.notification_channel_whatsapp_enabled??'false',notifyEmailEnabled:s.notification_channel_email_enabled??'false',smtpSecure:s.smtp_secure??'false'};
             for(const [id,value] of Object.entries(checkValues)){const el=document.getElementById(id);if(el)el.checked=String(value)==='true';}
-            for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['smtpPassword','smtp_password'],['emailAppsScriptToken','email_apps_script_token']]){const el=document.getElementById(id);if(el)el.value='';}
+            for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['smtpPassword','smtp_password']]){const el=document.getElementById(id);if(el)el.value='';}
             document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';
             document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Gateway token saved. Leave blank to retain it.':'No gateway token configured.';
             
-            document.getElementById('smtpPasswordHint').textContent=s.smtp_password_configured?'SMTP password saved. Leave blank to retain it.':'No SMTP password configured.';document.getElementById('emailAppsScriptTokenHint').textContent=s.email_apps_script_token_configured?'Secret token saved. Leave blank to retain it.':'No Apps Script token configured.';
+            document.getElementById('smtpPasswordHint').textContent=s.smtp_password_configured?'SMTP password saved. Leave blank to retain it.':'No SMTP password configured.';
             renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
             renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
             renderNotificationRules(s);
@@ -5293,17 +5285,7 @@ async function deletePlan(id,name){
         }
         async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
         document.getElementById('setSmsMode')?.addEventListener('change',()=>{toggleSmsProviderFields();if(document.getElementById('setSmsMode').value==='provider_preset')document.getElementById('smsProviderPreset')?.dispatchEvent(new Event('change'));});
-        function toggleEmailProviderFields(){
-          const mode=document.getElementById('emailProviderMode')?.value||'apps_script';
-          const apps=document.getElementById('emailAppsScriptFields'),smtp=document.getElementById('emailSmtpFields');
-          if(apps)apps.style.display=mode==='apps_script'?'':'none';
-          if(smtp)smtp.style.display=mode==='smtp'?'':'none';
-        }
-        document.getElementById('emailProviderMode')?.addEventListener('change',toggleEmailProviderFields);
-        document.getElementById('emailAppsScriptTokenToggle')?.addEventListener('click',()=>{
-          const input=document.getElementById('emailAppsScriptToken'),button=document.getElementById('emailAppsScriptTokenToggle'),show=input.type==='password';
-          input.type=show?'text':'password';button.innerHTML=show?'<i class="bi bi-eye-slash"></i>':'<i class="bi bi-eye"></i>';button.setAttribute('aria-label',show?'Hide Apps Script token':'Show Apps Script token');
-        });
+        function toggleEmailProviderFields(){const smtp=document.getElementById('emailSmtpFields');if(smtp)smtp.style.display='';}
         document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}}); 
         document.getElementById('systemBillingForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({billing_cycle_type:document.getElementById('setBillingCycle').value,grace_period_days:document.getElementById('setGraceDays').value,expiry_action:document.querySelector('input[name="setExpiryAction"]:checked')?.value||'quarantine'},'systemBillingSaveBtn','systemBillingResult');}catch(_){}}); 
         function collectNotificationPayload(){
@@ -5319,13 +5301,13 @@ async function deletePlan(id,name){
             
             
             notification_channel_email_enabled:document.getElementById('notifyEmailEnabled').checked,
-            email_provider_mode:document.getElementById('emailProviderMode').value,email_apps_script_url:document.getElementById('emailAppsScriptUrl').value,
+            email_provider_mode:'smtp',
             smtp_host:document.getElementById('smtpHost').value,smtp_port:document.getElementById('smtpPort').value,smtp_secure:document.getElementById('smtpSecure').checked,smtp_username:document.getElementById('smtpUsername').value,email_from_name:document.getElementById('emailFromName').value,email_from_address:document.getElementById('emailFromAddress').value,
             
           };
           document.querySelectorAll('.notify-rule').forEach(el=>{payload['notification_rule_'+el.dataset.type+'_'+el.dataset.event+'_'+el.dataset.channel+'_enabled']=el.checked;});
-          const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,smtpPassword=document.getElementById('smtpPassword').value,emailAppsScriptToken=document.getElementById('emailAppsScriptToken').value;
-          if(apiKey)payload.sms_api_key=apiKey;if(deviceToken)payload.sms_device_token=deviceToken;if(smtpPassword)payload.smtp_password=smtpPassword;if(emailAppsScriptToken)payload.email_apps_script_token=emailAppsScriptToken;
+          const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,smtpPassword=document.getElementById('smtpPassword').value;
+          if(apiKey)payload.sms_api_key=apiKey;if(deviceToken)payload.sms_device_token=deviceToken;if(smtpPassword)payload.smtp_password=smtpPassword;
           return payload;
         }
         async function saveNotificationHub(){
