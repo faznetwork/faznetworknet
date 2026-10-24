@@ -83,91 +83,57 @@ test("sendEmail catches invalid recipients and missing SMTP credentials", async 
 });
 
 
-function validAppsScriptSettings(overrides = {}) {
-  return {
+test("legacy Apps Script database mode is ignored and SMTP remains canonical", async () => {
+  settingsService.getAllSettings = async () => validSettings({
     email_provider_mode: "apps_script",
-    email_apps_script_url: "https://script.google.com/macros/s/AKfycbExample/exec",
-    email_apps_script_token: "script-secret-token",
-    ...overrides
+    email_apps_script_url: "https://script.google.com/macros/s/legacy/exec",
+    email_apps_script_token: "legacy-token"
+  });
+  let transportConfig;
+  nodemailer.createTransport = config => {
+    transportConfig = config;
+    return { sendMail: async () => ({ messageId: "smtp-canonical", accepted: ["customer@example.com"], rejected: [] }), close() {} };
   };
-}
-
-test("Apps Script provider POSTs the required JSON payload and accepts successful JSON", async () => {
-  settingsService.getAllSettings = async () => validAppsScriptSettings();
-  let request;
-  global.fetch = async (url, options) => {
-    request = { url, options, body: JSON.parse(options.body) };
-    return { ok: true, status: 200, text: async () => JSON.stringify({ success: true, message: "Email sent", messageId: "gas-message-1" }) };
-  };
-
-  const result = await emailService.sendEmail({ to: "customer@example.com", subject: "Renewal", html: "<p>Hello</p>", text: "Hello" });
+  const result = await emailService.sendEmail({ to: "customer@example.com", subject: "Canonical", text: "Hello" });
   assert.equal(result.success, true);
-  assert.equal(result.provider, "apps_script");
-  assert.equal(result.messageId, "gas-message-1");
-  assert.equal(request.url, "https://script.google.com/macros/s/AKfycbExample/exec");
-  assert.equal(request.options.method, "POST");
-  assert.equal(request.options.redirect, "follow");
-  assert.equal(request.options.headers["Content-Type"], "text/plain;charset=utf-8");
-  assert.deepEqual(request.body, {
-    token: "script-secret-token",
-    type: "notification",
-    to: "customer@example.com",
-    subject: "Renewal",
-    html: "<p>Hello</p>"
+  assert.equal(result.provider, "smtp");
+  assert.equal(result.messageId, "smtp-canonical");
+  assert.equal(transportConfig.host, "smtp.example.com");
+  assert.equal(emailService.providerMode({ email_provider_mode: "apps_script" }), "smtp");
+});
+
+test("sensitive email history never includes the OTP or invitation body", async () => {
+  const history = require("../services/messageHistoryService");
+  const originalRecordMessage = history.recordMessage;
+  let recorded;
+  history.recordMessage = async payload => { recorded = payload; };
+  settingsService.getAllSettings = async () => validSettings();
+  nodemailer.createTransport = () => ({
+    sendMail: async () => ({ messageId: "sensitive-message", accepted: ["admin@example.com"], rejected: [] }),
+    close() {}
   });
+  try {
+    const result = await emailService.sendEmail({
+      to: "admin@example.com", subject: "Verification code",
+      text: "OTP 123456 must never appear in logs", html: "<p>OTP 123456</p>",
+      event: "admin_login_otp", sensitive: true
+    });
+    assert.equal(result.success, true);
+    assert.equal(recorded.message, "[sensitive email payload omitted]");
+    assert.doesNotMatch(recorded.message, /123456/);
+  } finally {
+    history.recordMessage = originalRecordMessage;
+  }
 });
 
-test("Apps Script mode validates configuration and does not require SMTP credentials", async () => {
-  settingsService.getAllSettings = async () => validAppsScriptSettings();
-  const verification = await emailService.verifyConnection();
-  assert.equal(verification.success, true);
-  assert.equal(verification.provider, "apps_script");
-  assert.equal(typeof global.fetch, "function");
-
-  settingsService.getAllSettings = async () => validAppsScriptSettings({ email_apps_script_token: "" });
-  const missingToken = await emailService.sendEmail({ to: "customer@example.com", subject: "Test", html: "<p>Hello</p>" });
-  assert.equal(missingToken.success, false);
-  assert.match(missingToken.error, /Secret API Token/);
-});
-
-test("Apps Script delivery rejects unsuccessful JSON and non-JSON responses", async () => {
-  settingsService.getAllSettings = async () => validAppsScriptSettings();
-  global.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ success: false, error: "Invalid token" }) });
-  const rejected = await emailService.sendEmail({ to: "customer@example.com", subject: "Test", html: "<p>Hello</p>" });
-  assert.equal(rejected.success, false);
-  assert.match(rejected.error, /Invalid token/);
-
-  const warnings = [];
-  console.warn = (...args) => warnings.push(args);
-  global.fetch = async () => ({
-    ok: false,
-    status: 403,
-    redirected: true,
-    url: "https://script.googleusercontent.com/macros/echo",
-    headers: { get: name => name.toLowerCase() === "content-type" ? "text/html; charset=utf-8" : null },
-    text: async () => "<html>Forbidden redirect response</html>"
-  });
-  const nonJson = await emailService.sendEmail({ to: "customer@example.com", subject: "Test", html: "<p>Hello</p>" });
-  assert.equal(nonJson.success, false);
-  assert.match(nonJson.error, /non-JSON response \(HTTP 403\)/);
-  const providerWarnings = warnings.filter(args => String(args[0] || "").includes("[EmailService]"));
-  assert.equal(providerWarnings.length, 1);
-  assert.equal(providerWarnings[0][1].status, 403);
-  assert.equal(providerWarnings[0][1].redirected, true);
-  assert.match(providerWarnings[0][1].preview, /Forbidden redirect response/);
-});
-
-test("Apps Script URL validation blocks non-Google or non-HTTPS endpoints", async () => {
-  settingsService.getAllSettings = async () => validAppsScriptSettings({ email_apps_script_url: "http://example.com/exec" });
-  const result = await emailService.verifyConnection();
-  assert.equal(result.success, false);
-  assert.match(result.error, /HTTPS Google Apps Script/);
-});
-
-test("Email test endpoint reports Apps Script success only when its JSON confirms delivery", async () => {
+test("email test endpoint verifies and sends through SMTP", async () => {
   const settingsController = require("../controllers/settingsController");
-  settingsService.getAllSettings = async () => validAppsScriptSettings();
-  global.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ success: true, message: "Sent by MailApp" }) });
+  settingsService.getAllSettings = async () => validSettings();
+  nodemailer.createTransport = () => ({
+    verify: async () => true,
+    sendMail: async () => ({ messageId: "test-endpoint-message", accepted: ["admin@example.com"], rejected: [] }),
+    close() {}
+  });
   const response = {
     statusCode: 200, headers: {}, payload: null,
     status(code) { this.statusCode = code; return this; },
@@ -177,18 +143,6 @@ test("Email test endpoint reports Apps Script success only when its JSON confirm
   await settingsController.testEmail({ body: { to: "admin@example.com", subject: "Provider test" } }, response);
   assert.equal(response.statusCode, 200);
   assert.equal(response.payload.success, true);
-  assert.match(response.payload.message, /Google Apps Script confirmed/);
-  assert.equal(response.payload.result.provider, "apps_script");
-
-  global.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ success: false, error: "Token mismatch" }) });
-  const failedResponse = {
-    statusCode: 200, headers: {}, payload: null,
-    status(code) { this.statusCode = code; return this; },
-    set(key, value) { this.headers[key] = value; return this; },
-    json(value) { this.payload = value; return this; }
-  };
-  await settingsController.testEmail({ body: { to: "admin@example.com", subject: "Provider test" } }, failedResponse);
-  assert.equal(failedResponse.statusCode, 502);
-  assert.equal(failedResponse.payload.success, false);
-  assert.match(failedResponse.payload.message, /Token mismatch/);
+  assert.match(response.payload.message, /SMTP connection verified/);
+  assert.equal(response.payload.result.provider, "smtp");
 });
