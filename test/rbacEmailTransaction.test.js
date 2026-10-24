@@ -237,3 +237,55 @@ test("verifyOtp surfaces session persistence failure for malformed OTP input", a
     console.error = originalConsoleError;
   }
 });
+
+
+test("invitation email uses BASE_URL before APP_URL and puts the same custom-domain link in HTML and text", async () => {
+  const outbox = require("../services/emailOutboxService");
+  const originalEnqueue = outbox.enqueueEmail;
+  const originalBaseUrl = process.env.BASE_URL;
+  const originalAppUrl = process.env.APP_URL;
+  const originalPublicBaseUrl = process.env.PUBLIC_BASE_URL;
+  let payload;
+  outbox.enqueueEmail = async value => { payload = value; return { queued: true }; };
+  process.env.BASE_URL = "https://primary.example.test/";
+  process.env.APP_URL = "https://secondary.example.test";
+  process.env.PUBLIC_BASE_URL = "https://legacy-render.example.test";
+  try {
+    await controller.sendInvitationEmail({ id: 700, email: "invitee@example.test", role: "staff", expires_at: new Date(Date.now() + 86400000) }, "test-token");
+    const expectedLink = "https://primary.example.test/invite/test-token";
+    assert.match(payload.html, new RegExp(expectedLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.ok(payload.text.includes(expectedLink));
+    assert.doesNotMatch(payload.html + payload.text, /onrender\\.com|secondary\\.example\\.test|legacy-render\\.example\\.test/);
+  } finally {
+    outbox.enqueueEmail = originalEnqueue;
+    for (const [key, value] of [["BASE_URL", originalBaseUrl], ["APP_URL", originalAppUrl], ["PUBLIC_BASE_URL", originalPublicBaseUrl]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
+
+test("invitation email falls back to faznetwork.com when BASE_URL and APP_URL are absent", async () => {
+  const outbox = require("../services/emailOutboxService");
+  const originalEnqueue = outbox.enqueueEmail;
+  const originalBaseUrl = process.env.BASE_URL;
+  const originalAppUrl = process.env.APP_URL;
+  const originalPublicBaseUrl = process.env.PUBLIC_BASE_URL;
+  let payload;
+  outbox.enqueueEmail = async value => { payload = value; return { queued: true }; };
+  delete process.env.BASE_URL;
+  delete process.env.APP_URL;
+  process.env.PUBLIC_BASE_URL = "https://legacy-render.example.test";
+  try {
+    await controller.sendInvitationEmail({ id: 701, email: "invitee@example.test", role: "staff", expires_at: new Date(Date.now() + 86400000) }, "fallback-token");
+    const expectedLink = "https://faznetwork.com/invite/fallback-token";
+    assert.ok(payload.html.includes('href="' + expectedLink + '"'));
+    assert.ok(payload.html.includes(">" + expectedLink + "</p>"));
+    assert.ok(payload.text.includes(expectedLink));
+    assert.doesNotMatch(payload.html + payload.text, /onrender\\.com|legacy-render\\.example\\.test/);
+  } finally {
+    outbox.enqueueEmail = originalEnqueue;
+    for (const [key, value] of [["BASE_URL", originalBaseUrl], ["APP_URL", originalAppUrl], ["PUBLIC_BASE_URL", originalPublicBaseUrl]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
