@@ -20,20 +20,8 @@ function safeEqualHex(left, right) {
   return crypto.timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
 }
 
-function createMailer() {
-  const host = String(process.env.SMTP_HOST || '').trim();
-  const user = String(process.env.SMTP_USER || '').trim();
-  const pass = String(process.env.SMTP_PASS || '');
-  if (!host || !user || !pass) throw new Error('Email OTP is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASS in Render.');
-  const port = Number(process.env.SMTP_PORT || 587);
-  return nodemailer.createTransport({
-    host, port, secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465,
-    auth: { user, pass }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000
-  });
-}
-
 async function sendLoginNotification(user, loginType, req) {
-  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || '').trim();
+  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || 'faznetwork.com@gmail.com').trim();
   if (!recipient) throw new Error('ADMIN_LOGIN_NOTIFICATION_EMAIL must be configured for login alerts.');
   const loginAt = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false });
   const username = String(user.username || 'unknown').slice(0, 60);
@@ -45,7 +33,7 @@ async function sendLoginNotification(user, loginType, req) {
   const text = 'Account: ' + username + '\nRole: ' + role + '\nLogin type: ' + normalizedLoginType + '\nTime (Asia/Dhaka): ' + loginAt + '\nIP: ' + ipAddress + '\nUser agent: ' + userAgent;
   const html = '<h2>FAZ NETWORK login alert</h2><p><b>Account:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Login type:</b> ' + escapeHtml(normalizedLoginType) + '</p><p><b>Time (Asia/Dhaka):</b> ' + escapeHtml(loginAt) + '</p><p><b>IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User agent:</b> ' + escapeHtml(userAgent) + '</p>';
   return require('../services/emailOutboxService').enqueueEmail({
-    to: recipient, subject: title, text, html, event: 'admin_login_alert',
+    to: recipient, subject: title, text, html, event: 'admin_login_alert', sensitive: true,
     idempotencyKey: 'admin-login-alert:' + String(user.id || username) + ':' + Date.now()
   });
 }
