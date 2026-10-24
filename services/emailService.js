@@ -80,7 +80,7 @@ async function sendResendEmail({ recipient, title, html, text }, settings) {
   if (!apiKey) throw new Error("Resend fallback is not configured: RESEND_API_KEY is missing.");
   const fromAddress = String(settings.email_from_address || settings.smtp_username || "").trim();
   const fromName = String(settings.email_from_name || "FAZ NETWORK Billing").trim();
-  if (!fromAddress || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(fromAddress)) {
+  if (!fromAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress)) {
     throw new Error("A valid verified sender email is required for Resend fallback.");
   }
   const controller = new AbortController();
