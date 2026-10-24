@@ -1,7 +1,7 @@
 "use strict";
 const db = require("../db");
 const ALLOWED_EVENTS = new Set([
-  "pppoe_renewal", "pppoe_payment", "pppoe_expiry_warning", "pppoe_expired",
+  "pppoe_renewal", "pppoe_payment", "pppoe_expiry_warning", "pppoe_expired", "pppoe_suspended",
   "hotspot_purchase", "hotspot_renewal", "hotspot_expiry_warning", "hotspot_expired", "welcome_message"
 ]);
 const ALLOWED_CHANNELS = new Set(["whatsapp", "sms", "email"]);
