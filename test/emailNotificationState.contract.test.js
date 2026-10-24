@@ -37,6 +37,6 @@ test("email worker control and queue gates use the persisted setting, not the le
   assert.match(worker, /emailNotificationState\.isEnabled\(\)/);
   assert.match(worker, /Disabled by the persisted Notification Hub setting/);
   assert.doesNotMatch(worker, /process\.env\.EMAIL_WORKER_ENABLED/);
-  assert.match(outbox, /await emailNotificationState\.isEnabled\(\)/);
+  assert.match(outbox, /await emailNotificationState\.isEnabled\(client\)/);
   assert.doesNotMatch(outbox, /process\.env\.EMAIL_WORKER_ENABLED/);
 });
