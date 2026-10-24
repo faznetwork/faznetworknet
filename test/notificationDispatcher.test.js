@@ -278,10 +278,7 @@ test("manual renewal with invalid recipient is skipped without creating delivery
   });
   assert.equal(result.success,true);
   assert.deepEqual(result.results,[{channel:"whatsapp",status:"skipped",reason:"invalid_phone"}]);
-  assert.equal(recorded.length,1);
-  assert.equal(recorded[0].channel,"whatsapp");
-  assert.equal(recorded[0].status,"skipped");
-  assert.equal(recorded[0].event,"renewal");
+  assert.equal(recorded.length,0);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   db.query=originalDbQuery;
