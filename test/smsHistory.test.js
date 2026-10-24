@@ -14,14 +14,14 @@ test("SMS history validates date filters and bounds pagination",()=>{
 test("SMS history API applies filters, returns status totals, and never interpolates search input",async()=>{
  const original=db.query,calls=[];
  db.query=async(sql,params)=>{calls.push({sql,params});if(sql.includes("COUNT(*)"))return {rows:[{total:1,sent:1,failed:0,skipped:0}]};return {rows:[{id:8,recipient_phone:"01712345678",message:"Hello",event_key:"manual",status:"sent"}]};};
- const req={query:{search:"0171%_ OR true",status:"sent",event:"manual",from:"2026-10-01",to:"2026-10-23",limit:"200",offset:"-5"}};
+ const req={query:{userType:"pppoe",search:"0171%_ OR true",status:"sent",event:"manual",from:"2026-10-01",to:"2026-10-23",limit:"200",offset:"-5"}};
  const headers={};const res={statusCode:200,status(n){this.statusCode=n;return this;},set(k,v){headers[k]=v;return this;},json(body){this.body=body;return this;}};
  try{
   await controller.list(req,res);
   assert.equal(res.statusCode,200);assert.equal(headers["Cache-Control"],"no-store");
   assert.equal(res.body.total,1);assert.equal(res.body.stats.sent,1);assert.equal(res.body.logs[0].recipient_phone,"01712345678");
-  assert.equal(calls[0].params[0],"%0171%_ OR true%");assert.equal(calls[0].params[1],"sent");assert.equal(calls[1].params.at(-2),100);assert.equal(calls[1].params.at(-1),0);
-  assert.match(calls[0].sql,/recipient_phone ILIKE \$1 OR message ILIKE \$1/);
+  assert.equal(calls[0].params[0],"pppoe");assert.equal(calls[0].params[1],"%0171%_ OR true%");assert.equal(calls[0].params[2],"sent");assert.equal(calls[1].params.at(-2),100);assert.equal(calls[1].params.at(-1),0);
+  assert.match(calls[0].sql,/user_type=\$1/);assert.match(calls[0].sql,/recipient_phone ILIKE \$2 OR message ILIKE \$2/);
  }finally{db.query=original;}
 });
 test("SMS history rejects unsupported filters without querying database",async()=>{
