@@ -5318,9 +5318,8 @@ async function deletePlan(id,name){
           const to=document.getElementById("emailTestRecipient").value.trim(),subject=document.getElementById("emailTestSubject").value.trim();
           if(!to||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){result.className="alert alert-warning py-2 small mb-0";result.textContent="Enter a valid recipient email address.";return;}
           if(!subject){result.className="alert alert-warning py-2 small mb-0";result.textContent="Enter a test email subject.";return;}
-          if(button)button.disabled=true;result.className="alert alert-info py-2 small mb-0";result.textContent="Validating the active email provider and sending test email…";
+          if(button)button.disabled=true;result.className="alert alert-info py-2 small mb-0";result.textContent="Checking saved SMTP settings and sending test email…";
           try{
-            await saveNotificationHub();
             const response=await fetch("/api/settings/notifications/email/test",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({to,subject}),cache:"no-store"});
             const data=await response.json().catch(()=>({message:"Invalid server response"}));
             if(!response.ok||!data.success)throw new Error(data.message||data.error||data.details?.error||"Email provider test failed.");
