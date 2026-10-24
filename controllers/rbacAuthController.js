@@ -38,7 +38,7 @@ async function sendLoginNotification(user, loginType, req) {
   });
 }
 
-async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp') {
+async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp', client = null) {
   const recipient = String(user.email || '').trim();
   if (!recipient) throw new Error('A verified email address is required to deliver the OTP.');
   const expiry = new Date(expiresAt || Date.now() + OTP_TTL_MS);
@@ -52,7 +52,7 @@ async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp') {
   return require('../services/emailOutboxService').enqueueEmail({
     to: recipient, subject: title, text, html, event: invitationOtp ? 'admin_invitation_otp' : 'admin_login_otp',
     sensitive: true, expiresAt: expiry,
-    idempotencyKey: 'admin-otp:' + String(user.id || user.username || recipient) + ':' + expiry.getTime()
+    idempotencyKey: 'admin-otp:' + String(user.id || user.username || recipient) + ':' + expiry.getTime(), client
   });
 }
 
@@ -293,7 +293,7 @@ async function listUsers(req, res) {
   }
 }
 
-async function sendInvitationEmail(invitation, rawToken) {
+async function sendInvitationEmail(invitation, rawToken, client = null) {
   const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
   let base;
   try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
@@ -307,7 +307,7 @@ async function sendInvitationEmail(invitation, rawToken) {
   return require('../services/emailOutboxService').enqueueEmail({
     to: invitation.email, subject: title, text, html, event: 'admin_invitation',
     sensitive: true, expiresAt: invitation.expires_at,
-    idempotencyKey: 'admin-invitation:' + String(invitation.id)
+    idempotencyKey: 'admin-invitation:' + String(invitation.id), client
   });
 }
 
@@ -329,17 +329,15 @@ async function createUser(req, res) {
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const created = await db.query(
-      "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
-      [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
-    );
-    try {
-      await sendInvitationEmail(created.rows[0], rawToken);
-    } catch (mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
-      console.error('[RBAC invitation] Email delivery failed:', mailError.message);
-      return res.status(503).json({ success: false, message: 'Invitation email could not be queued. Check SMTP settings and EMAIL_PAYLOAD_ENCRYPTION_KEY, then retry.' });
-    }
+    const created = await db.withTransaction(async client => {
+      const inserted = await client.query(
+        "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
+        [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
+      );
+      if (!inserted.rows.length) throw new Error('Invitation row was not created.');
+      await sendInvitationEmail(inserted.rows[0], rawToken, client);
+      return inserted;
+    });
     await writeAudit(req, 'admin_invitation_created', null, { username, email, role, invitationId: created.rows[0].id });
     return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.' });
   } catch (error) {
@@ -432,13 +430,11 @@ async function sendInvitationOtp(req, res) {
     const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
     const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
     const otpExpires=new Date(Date.now()+OTP_TTL_MS);
-    await db.query('UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status=\'pending\'',[otpHash,otpExpires,invite.id]);
-    try { await sendOtpEmail(invite,code,otpExpires,'invitation_otp'); }
-    catch(mailError) {
-      await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
-      console.error('[RBAC invitation] OTP delivery failed:',mailError.message);
-      return res.status(503).json({success:false,message:'Could not send OTP to the invited email. Please retry later.'});
-    }
+    await db.withTransaction(async client=>{
+      const updated=await client.query("UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status='pending' AND expires_at>NOW() RETURNING id",[otpHash,otpExpires,invite.id]);
+      if(!updated.rows.length)throw new Error('Invitation is no longer pending or has expired.');
+      await sendOtpEmail(invite,code,otpExpires,'invitation_otp',client);
+    });
     return res.json({success:true,message:'OTP queued for delivery to the invited email. It expires in 5 minutes.'});
   } catch(error) {
     console.error('[RBAC invitation] OTP request failed:',error.message);
