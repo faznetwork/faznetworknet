@@ -10,6 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 test("legacy OLT telemetry routes, cache reads, and collector execution are disabled", () => {
   const server = read("server.js");
+  const dashboardController = read("controllers/dashboardController.js");
   const schema = read("db/schema.sql");
   const customerController = read("controllers/customerController.js");
   const networkMapController = read("controllers/networkMapController.js");
@@ -24,7 +25,7 @@ test("legacy OLT telemetry routes, cache reads, and collector execution are disa
   assert.doesNotMatch(networkMapController, /onu_rx_power|rxPower|rx_power_source|getRxPowerStatus|LEFT JOIN network_devices d ON d.id=c\.onu_rx_power_source_device_id/i);
   assert.doesNotMatch(adminView, /\/api\/olt\/(?:telemetry|sync-telemetry)/);
   assert.doesNotMatch(customerProfileView, /\/api\/olt\/(?:telemetry|sync-telemetry)|Network Topology Bridge|ONU RX Power|onuRxPowerValue|topoPon/i);
-  assert.doesNotMatch(adminView, /cpOpticalTelemetryCards|cpOpticalHealthBadge|cpOpticalRx|cpOpticalTx/);
+  assert.doesNotMatch(adminView, /cpOpticalTelemetryCards|cpOpticalHealthBadge|cpOpticalRx|cpOpticalTx|nocFiberValue|nocFiberSub|nocOltStatus|nocUrgentBody|nocPonSummary/);
 
   assert.doesNotMatch(collector, /pysnmp|urllib\.request|def collect\(|def push\(|while\s+True|RENDER_INGEST_URL/);
   assert.match(collector, /OLT telemetry collector is disabled/);
