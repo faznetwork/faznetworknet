@@ -63,3 +63,19 @@ test("PPPoE rolling-30 renewal starts today when the previous expiry is in the p
   const result = await paymentController.renewalExpirationDate(1, query, "2000-01-01");
   assert.equal(result, expected.toISOString().slice(0, 10));
 });
+
+test("shared renewal service stacks future expiry and starts expired accounts from Dhaka today",async()=>{
+ const service=require("../services/renewalService");
+ const query=async()=>({rows:[{value:"rolling_30"}]});
+ assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2099-01-10",now:new Date("2026-10-25T12:00:00Z")}),"2099-02-09");
+ assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2000-01-01",now:new Date("2026-10-25T12:00:00Z")}),"2026-11-24");
+});
+test("new payment records and manual claims explicitly separate PPPoE and Hotspot",()=>{
+ const schema=fs.readFileSync(path.join(root,"db/schema.sql"),"utf8");
+ assert.match(schema,/ADD COLUMN IF NOT EXISTS service_type VARCHAR\(20\)/);
+ const webhook=source.slice(source.indexOf("async function webhook"),source.indexOf("async function dynamicWebhook"));
+ assert.match(webhook,/service_type/);
+ assert.match(webhook,/reference_user/);
+ assert.match(source,/claim_flow='manual_hotspot',matched_username=\$2,service_type='hotspot'/);
+ assert.match(source,/claim_flow='pppoe',matched_username=\$1,service_type='pppoe'/);
+});
