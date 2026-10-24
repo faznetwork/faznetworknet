@@ -176,7 +176,7 @@ for(const scenario of [
 
 test("Email dispatch renders the email subject and HTML template with escaped customer variables",async()=>{
  const originalGetAllSettings=settingsService.getAllSettings,originalDbQuery=db.query;
- const emailService=require("../services/emailService"),originalSend=emailService.sendEmail;
+ const emailOutboxService=require("../services/emailOutboxService"),originalEnqueue=emailOutboxService.enqueueEmail;
  const sent=[];
  settingsService.getAllSettings=async()=>({
   company_name:"FAZ NETWORK",notification_channel_email_enabled:"true",
@@ -184,7 +184,7 @@ test("Email dispatch renders the email subject and HTML template with escaped cu
   notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false"
  });
  db.query=async(sql)=>sql.includes("FROM notification_templates")?{rows:[{template_body:"<p>Hello {name}</p>",email_subject:"Payment {amount} - {company_name}",email_body:"<p>Hello {name}, account {username}</p>"}]}:{rows:[]};
- emailService.sendEmail=async payload=>{sent.push(payload);return {success:true,messageId:"email-test"};};
+ emailOutboxService.enqueueEmail=async payload=>{sent.push(payload);return {accepted:true,duplicate:false,jobId:17,status:"pending"};};
  try{
   const result=await dispatchNow({userType:"pppoe",event:"pppoe_payment",customer:{username:"alice",full_name:"A <Admin>",email:"alice@example.com"},username:"alice",variables:{amount:"525",package:"30 Mbps",expiry_date:"2026-10-31"}});
   assert.equal(result.success,true);
@@ -193,7 +193,7 @@ test("Email dispatch renders the email subject and HTML template with escaped cu
   assert.equal(sent[0].subject,"Payment 525 - FAZ NETWORK");
   assert.match(sent[0].html,/A &lt;Admin&gt;/);
   assert.match(sent[0].html,/alice/);
- }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;emailService.sendEmail=originalSend;}
+ }finally{settingsService.getAllSettings=originalGetAllSettings;db.query=originalDbQuery;emailOutboxService.enqueueEmail=originalEnqueue;}
 });
 
 test("Email dispatch logs and skips customers without an email address",async()=>{
