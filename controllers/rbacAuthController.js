@@ -397,12 +397,32 @@ async function createUser(req, res) {
     await writeAudit(req, 'admin_invitation_created', null, { email, role, invitationId: created.rows[0].id });
     return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.' });
   } catch (error) {
-    if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
-    console.error('[RBAC] Invitation creation failed:', error.message);
-    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient/i.test(String(error.message||''))) {
-      return res.status(503).json({ success:false, message:'Invitation was not created because its email could not be queued. Check the email worker, outbox schema, and payload encryption key.' });
+    const message = String(error?.message || error || 'Unknown invitation creation error');
+    const constraint = String(error?.constraint || '');
+    console.error('[RBAC] Invitation creation failed.', {
+      code: String(error?.code || 'UNKNOWN'),
+      constraint: constraint || undefined,
+      detail: String(error?.detail || '').slice(0, 300) || undefined,
+      message: message.slice(0, 500)
+    });
+    if (error?.code === '23505') {
+      const pendingEmailConflict = /admin_invitations_pending_email|uq_admin_invitations_pending_email_ci/i.test(constraint);
+      const registeredEmailConflict = /admin_users_email|uq_admin_users_email_ci/i.test(constraint);
+      if (pendingEmailConflict) {
+        return res.status(409).json({ success: false, code: 'INVITATION_ALREADY_PENDING', message: 'A pending invitation already exists for this email. Cancel it or use the existing invitation before retrying.' });
+      }
+      if (registeredEmailConflict) {
+        return res.status(409).json({ success: false, code: 'EMAIL_ALREADY_REGISTERED', message: 'This email is already registered to an account.' });
+      }
+      return res.status(409).json({ success: false, code: 'INVITATION_UNIQUE_CONFLICT', message: 'A conflicting invitation or account record already exists. Refresh the invitation list and retry only if no pending invitation is shown.' });
     }
-    return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
+    if (/email notifications are disabled/i.test(message)) {
+      return res.status(503).json({ success: false, code: 'EMAIL_NOTIFICATIONS_DISABLED', message: 'Invitation was not created because email delivery is disabled in Notification Hub.' });
+    }
+    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient|email subject|email html|email body|resend|smtp|encryption key/i.test(message)) {
+      return res.status(503).json({ success: false, code: String(error?.code || 'EMAIL_QUEUE_UNAVAILABLE'), message: 'Invitation was not created because its email could not be queued. Check Notification Hub, Resend configuration, and the email worker.' });
+    }
+    return res.status(500).json({ success: false, code: 'INVITATION_CREATE_FAILED', message: 'Invitation creation failed due to a server error. Check server logs using the invitation failure code.' });
   }
 }
 
