@@ -5321,7 +5321,7 @@ async function deletePlan(id,name){
           if(!subject){result.className="alert alert-warning py-2 small mb-0";result.textContent="Enter a test email subject.";return;}
           if(button)button.disabled=true;result.className="alert alert-info py-2 small mb-0";result.textContent="Validating the active email provider and sending test email…";
           try{
-            await saveNotificationHub();
+            result.textContent="Testing the saved SMTP configuration. Unsaved settings will not be saved by this test.";
             const response=await fetch("/api/settings/notifications/email/test",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({to,subject}),cache:"no-store"});
             const data=await response.json().catch(()=>({message:"Invalid server response"}));
             if(!response.ok||!data.success)throw new Error(data.message||data.error||data.details?.error||"Email provider test failed.");
@@ -5345,7 +5345,7 @@ async function deletePlan(id,name){
           const resultEl=document.getElementById('systemSmsResult');
           if(button)button.disabled=true;
           try{
-            await saveNotificationHub();
+            if(resultEl)resultEl.textContent='Testing the saved notification settings. Unsaved settings will not be saved by this test.';
             const to=channel==='sms'?document.getElementById('notifySmsTestTo').value:channel==='whatsapp'?document.getElementById('notifySmsTestTo').value:'';
             const message=channel==='sms'?document.getElementById('notifySmsTestMessage').value:'FAZ NETWORK test notification';
             const response=await fetch('/api/settings/notifications/test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({channel,to,message,...extra}),cache:'no-store'});
