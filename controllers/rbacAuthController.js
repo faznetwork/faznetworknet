@@ -136,14 +136,11 @@ async function login(req, res) {
         const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
         const expiresAt = new Date(Date.now() + OTP_TTL_MS);
         const codeHash = hashOtp(user.id, code);
-        await db.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3', [codeHash, expiresAt, user.id]);
-        try {
-          await sendOtpEmail(user, code, expiresAt, 'admin_otp');
-        } catch (mailError) {
-          await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [user.id]).catch(() => {});
-          console.error('[RBAC OTP] Email delivery failed:', mailError.message);
-          return res.status(503).render('login', { next: nextTarget, error: 'Verification email could not be queued. Contact the administrator; no session was created.' });
-        }
+        await db.withTransaction(async client => {
+          const updated=await client.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE RETURNING id', [codeHash, expiresAt, user.id]);
+          if(!updated.rows.length)throw new Error('First-login OTP could not be stored because the account state changed.');
+          await sendOtpEmail(user, code, expiresAt, 'admin_otp', client);
+        });
         req.session.pendingOtpUserId = user.id;
         req.session.pendingOtpNext = nextTarget;
         req.session.pendingOtpIssuedAt = Date.now();
@@ -357,17 +354,16 @@ async function resendInvitation(req,res) {
     if(user.is_first_login!==true)return res.status(409).json({success:false,message:'This account has already completed verification.'});
     if(req.auth?.role==='admin'&&user.role!=='staff')return res.status(403).json({success:false,message:'Admins may invite Staff accounts only.'});
     if(req.auth?.role!=='admin'&&req.auth?.role!=='super_admin')return res.status(403).json({success:false,message:'Not authorized.'});
-    await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
     const rawToken=crypto.randomBytes(32).toString('base64url');
     const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt=new Date(Date.now()+24*60*60*1000);
-    const invite=await db.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
-    try { await sendInvitationEmail(invite.rows[0],rawToken); }
-    catch(mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
-      console.error('[RBAC invitation] Resend failed:',mailError.message);
-      return res.status(503).json({success:false,message:'Invitation email could not be queued. Check SMTP settings and EMAIL_PAYLOAD_ENCRYPTION_KEY, then retry.'});
-    }
+    const invite=await db.withTransaction(async client=>{
+      await client.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
+      const inserted=await client.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
+      if(!inserted.rows.length)throw new Error('Replacement invitation was not created.');
+      await sendInvitationEmail(inserted.rows[0],rawToken,client);
+      return inserted;
+    });
     await writeAudit(req,'admin_invitation_resent',id,{invitationId:invite.rows[0].id,email:user.email,role:user.role});
     return res.json({success:true,message:'Invitation email queued for '+user.email+'.'});
   } catch(error) {
