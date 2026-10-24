@@ -56,6 +56,20 @@ test("SMTP secure mode and port 465 are normalized", async () => {
   assert.equal(config.port, 465);
 });
 
+test("SMTP transports enforce bounded connect, greeting, and socket timeouts on both Gmail ports", () => {
+  const plain = emailService.normalizeSmtpConfig(validSettings({ smtp_host: "smtp.gmail.com", smtp_port: "587", smtp_secure: "false" }));
+  const secure = emailService.normalizeSmtpConfig(validSettings({ smtp_host: "smtp.gmail.com", smtp_port: "465", smtp_secure: "true" }));
+  for (const config of [plain, secure]) {
+    assert.equal(config.connectionTimeout, 5000);
+    assert.equal(config.greetingTimeout, 5000);
+    assert.equal(config.socketTimeout, 7000);
+  }
+  assert.equal(plain.secure, false);
+  assert.equal(plain.port, 587);
+  assert.equal(secure.secure, true);
+  assert.equal(secure.port, 465);
+});
+
 test("verifyConnection reports SMTP handshake success and exposes bounded errors", async () => {
   let config, closed = false;
   nodemailer.createTransport = value => { config = value; return { verify: async () => true, close: () => { closed = true; } }; };

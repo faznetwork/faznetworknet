@@ -27,9 +27,9 @@ function normalizeSmtpConfig(config = {}) {
     host, port, secure,
     auth: { user, pass },
     from: { name: fromName || "FAZ NETWORK Billing", address: fromEmail },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 12000
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 7000
   };
 }
 

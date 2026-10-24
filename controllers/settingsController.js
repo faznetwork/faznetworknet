@@ -225,19 +225,26 @@ async function testNotification(req,res){
  }catch(error){return errorResponse(res,error,502);}
 }
 async function testEmail(req,res){
+ const deadlineMs=10_000;
+ let timeout;
  try{
   const to=String(req.body?.to||req.body?.recipientEmail||"").trim();
   const subject=String(req.body?.subject||"").trim();
   if(!to||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to))throw new Error("A valid recipient email address is required.");
   if(!subject)throw new Error("Test email subject is required.");
-  if(subject.length>200)throw new Error("Email subject must be 200 characters or fewer.");
+  if(subject.length>200)throw new Error("Test email subject must be 200 characters or fewer.");
   const emailService=require("../services/emailService");
-  const verification=await emailService.verifyConnection();
-  if(!verification.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:verification.error||"Email provider configuration verification failed.",details:verification});
-  const result=await emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding."});
-  if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",details:result,verification});
-  return res.set("Cache-Control","no-store").json({success:true,message:"SMTP connection verified and test email sent successfully.",verification,result});
- }catch(error){return errorResponse(res,error,502);}
+  const timeoutPromise=new Promise((_,reject)=>{timeout=setTimeout(()=>{const error=new Error("SMTP connection timed out after 10 seconds. Check Render outbound SMTP connectivity and Gmail SMTP settings.");error.code="ETIMEDOUT";reject(error);},deadlineMs);});
+  // A successful test send proves SMTP connectivity and delivery. Avoid a separate verify()
+  // handshake, which doubles the network wait and can stall the interactive request.
+  const result=await Promise.race([emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding."}),timeoutPromise]);
+  if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",details:result});
+  return res.set("Cache-Control","no-store").json({success:true,message:"SMTP test email sent successfully.",result});
+ }catch(error){
+  const message=String(error?.message||"SMTP test failed.");
+  console.error("[SettingsController] SMTP test failed:",{code:error?.code||"SMTP_TEST_FAILED",message:message.slice(0,300)});
+  return res.status(502).set("Cache-Control","no-store").json({success:false,message,error:message,code:error?.code||"SMTP_TEST_FAILED"});
+ }finally{if(timeout)clearTimeout(timeout);}
 }
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").getStatusSnapshot()});}catch(error){return errorResponse(res,error,503);}}
 async function whatsappQr(req,res){try{const status=await require("../services/whatsappService").getStatusSnapshot();return res.set("Cache-Control","no-store, no-cache, must-revalidate").json({success:true,hasQr:Boolean(status.qrDataUrl),qrDataUrl:status.qrDataUrl||null,status:status.status,isLinked:status.isLinked});}catch(error){return errorResponse(res,error,503);}}
