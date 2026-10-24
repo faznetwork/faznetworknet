@@ -108,6 +108,11 @@ function startEmailWorker() {
     console.info("[EmailWorker] Disabled; set EMAIL_WORKER_ENABLED=true after the outbox migration and encryption key are configured.");
     return { enabled: false, stop: async () => {} };
   }
+  try { require("./emailPayloadCrypto").validateKey(); }
+  catch (error) {
+    console.error("[EmailWorker] Refusing to start because encrypted payloads cannot be read:", String(error.message || error));
+    return { enabled: false, reason: "encryption_key_invalid", stop: async () => {} };
+  }
   if (loopPromise) return { enabled: true, stop: stopEmailWorker };
   stopped = false;
   loopPromise = runLoop().catch(error => {
