@@ -708,8 +708,7 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_source_device_id BIG
   REFERENCES network_devices(id) ON DELETE SET NULL;
 
 
-ALTER TABLE olt_telemetry ADD COLUMN IF NOT EXISTS pppoe_username VARCHAR(160);
-
+-- Legacy OLT telemetry schema upgrades are retired; do not recreate or query this table at startup.
 
 -- Dedicated RouterOS connection records for MikroTik Management > Add Device.
 -- Separate from network_devices inventory and completely independent of customer/billing tables.
