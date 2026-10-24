@@ -25,7 +25,7 @@ function classifyFailure(result) {
     "EMAIL_PAYLOAD_INVALID", "EAUTH", "EENVELOPE",
     "ERESEND_NOT_CONFIGURED", "ERESEND_SENDER_NOT_VERIFIED"
   ]);
-  const resendHttpStatus = /^ERESEND_HTTP_(\\d{3})$/.exec(code);
+  const resendHttpStatus = /^ERESEND_HTTP_(\d{3})$/.exec(code);
   const permanentResendResponse = Boolean(resendHttpStatus &&
     Number(resendHttpStatus[1]) >= 400 &&
     Number(resendHttpStatus[1]) < 500 &&
