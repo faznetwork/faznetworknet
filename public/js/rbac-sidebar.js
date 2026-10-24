@@ -34,7 +34,7 @@
   window.loadStaffInvitations=async function(){
     const tbody=document.getElementById('rbacInvitationsBody');
     if(!tbody)return;
-    tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">Loading invitations…</td></tr>';
+    tbody.innerHTML='<tr><td colspan="5" class="text-center text-muted py-4">Loading invitations…</td></tr>';
     try{
       const response=await fetch('/api/admin/users/invitations',{credentials:'same-origin',headers:{Accept:'application/json'}});
       const data=await response.json();
@@ -43,8 +43,8 @@
         const created=inv.created_at?new Date(inv.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
         const expires=inv.expires_at?new Date(inv.expires_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
         const canCancel=inv.status==='pending';
-        return '<tr><td class="fw-semibold">'+esc(inv.username)+'</td><td>'+esc(inv.email)+'</td><td>'+esc(inv.role)+'</td><td>'+esc(created)+'</td><td>'+esc(expires)+'</td><td>'+(canCancel?'<button class="btn btn-sm btn-outline-danger" type="button" data-cancel-invitation="'+Number(inv.id)+'" data-invitation-email="'+esc(inv.email)+'"><i class="bi bi-x-circle me-1"></i>Cancel</button>':'<span class="badge text-bg-danger">Email failed</span>')+'</td></tr>';
-      }).join('')||'<tr><td colspan="6" class="text-center text-muted py-4">No pending invitations.</td></tr>';
+        return '<tr><td>'+esc(inv.email)+'</td><td>'+esc(inv.role)+'</td><td>'+esc(created)+'</td><td>'+esc(expires)+'</td><td>'+(canCancel?'<button class="btn btn-sm btn-outline-danger" type="button" data-cancel-invitation="'+Number(inv.id)+'" data-invitation-email="'+esc(inv.email)+'"><i class="bi bi-x-circle me-1"></i>Cancel</button>':'<span class="badge text-bg-danger">Email failed</span>')+'</td></tr>';
+      }).join('')||'<tr><td colspan="5" class="text-center text-muted py-4">No pending invitations.</td></tr>';
       tbody.querySelectorAll('[data-cancel-invitation]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Cancel the invitation for '+button.dataset.invitationEmail+'? The link will stop working.'))return;
         button.disabled=true;
@@ -56,7 +56,7 @@
           await window.loadStaffInvitations();
         }catch(error){window.alert(error.message);button.disabled=false;}
       }));
-    }catch(error){tbody.innerHTML='<tr><td colspan="6" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
+    }catch(error){tbody.innerHTML='<tr><td colspan="5" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
   };
   window.loadStaffManagement=async function(){
     if(!['super_admin','admin'].includes(role)){window.alert('You do not have permission to view staff management.');return;}

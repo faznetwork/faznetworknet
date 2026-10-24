@@ -64,7 +64,7 @@ test("staff invitation and encrypted email job use the same transaction client",
   };
   const res = responseRecorder();
   await controller.createUser({
-    body: { username: invitation.username, email: invitation.email, role: "staff" },
+    body: { email: invitation.email, role: "staff" },
     auth: { role: "super_admin" },
     session: { adminUser: "owner", userId: 1, role: "super_admin" },
     ip: "127.0.0.1"
@@ -73,6 +73,7 @@ test("staff invitation and encrypted email job use the same transaction client",
   assert.equal(committed, true);
   assert.equal(statements.length, 3);
   assert.match(statements[0].sql, /INSERT INTO admin_invitations/);
+  assert.match(statements[0].sql, /VALUES \(NULL,\$1,\$2,\$3/);
   assert.match(statements[1].sql, /app_settings/);
   assert.match(statements[2].sql, /INSERT INTO email_outbox/);
   assert.equal(statements[2].args[0], "admin-invitation:501");
@@ -117,6 +118,14 @@ test("invitation is not committed when its transactional outbox insert fails", a
   assert.match(res.body.message, /Invitation was not created because its email could not be queued/);
 });
 
+test("invitation acceptance requires the invitee-selected username", async () => {
+  const token = "A".repeat(40);
+  const res = responseRecorder();
+  await controller.acceptInvitation({ params: { token }, body: { otp: "123456", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.locals.error, /Username must be 3/);
+});
+
 test("invitation acceptance rejects an expired OTP under a row lock", async () => {
   const token = "A".repeat(40);
   const invite = {
@@ -132,7 +141,7 @@ test("invitation acceptance rejects an expired OTP under a row lock", async () =
     }
   });
   const res = responseRecorder();
-  await controller.acceptInvitation({ params: { token }, body: { otp: "123456", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
+  await controller.acceptInvitation({ params: { token }, body: { username: "phase3.expired", otp: "123456", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
   assert.match(selectSql, /FOR UPDATE/);
   assert.equal(res.statusCode, 400);
   assert.match(res.locals.error, /OTP expired or locked/);

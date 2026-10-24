@@ -569,7 +569,7 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_ticket
 -- Email invitations are separate from accounts until OTP verification and password setup succeed.
 CREATE TABLE IF NOT EXISTS admin_invitations (
   id BIGSERIAL PRIMARY KEY,
-  username VARCHAR(60) NOT NULL,
+  username VARCHAR(60),
   email VARCHAR(254) NOT NULL,
   role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin','admin','staff')),
   target_user_id BIGINT REFERENCES admin_users(id) ON DELETE CASCADE,
