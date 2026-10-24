@@ -34,7 +34,7 @@ The matching `db/schema.sql` definition supports fresh installs and the reposito
 - SMTP credentials continue to come from database settings; the encryption key is used only for queued payload encryption.
 - OTPs and invitation links are encrypted with AES-256-GCM before persistence, omitted from delivery-history message bodies, and not sent after their expiry.
 - Outbox insertion is durable after PostgreSQL confirms the enqueue. SMTP is not an exactly-once transport: a process crash after provider acceptance but before the job is marked sent can result in a duplicate retry.
-- Email jobs that cannot be decrypted are not processed; the worker refuses to start if the encryption key is missing or invalid.
+- Email jobs that cannot be decrypted are not processed; the worker refuses to start if the encryption key is missing or invalid. Do not rotate the key while queued jobs remain unless you have a reviewed re-encryption procedure.
 - Keep the worker disabled until the migration/schema, encryption key, SMTP settings, and test suite are verified.
 
 ## Verification required before merge or production rollout
