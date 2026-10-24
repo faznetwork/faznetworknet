@@ -3,6 +3,7 @@
 const outbox = require("./emailOutboxService");
 const crypto = require("./emailPayloadCrypto");
 const emailService = require("./emailService");
+const emailNotificationState = require("./emailNotificationState");
 
 const POLL_INTERVAL_MS = Math.max(1000, Math.min(30000, Number(process.env.EMAIL_WORKER_POLL_MS) || 5000));
 const LEASE_SECONDS = Math.max(30, Math.min(600, Number(process.env.EMAIL_WORKER_LEASE_SECONDS) || 90));
@@ -76,16 +77,70 @@ async function processJob(job) {
   }
 }
 
+async function waitForNextPoll() {
+  await new Promise(resolve => {
+    wakeResolve = resolve;
+    wakeTimer = setTimeout(() => {
+      wakeTimer = null;
+      wakeResolve = null;
+      resolve();
+    }, POLL_INTERVAL_MS);
+    if (typeof wakeTimer.unref === "function") wakeTimer.unref();
+  });
+  wakeTimer = null;
+}
+
 async function runLoop() {
+  let lastEnabledState = null;
+  let lastOperationalError = null;
   while (!stopped) {
+    let enabled;
+    try {
+      enabled = await emailNotificationState.isEnabled();
+      lastOperationalError = null;
+    } catch (error) {
+      const message = String(error.message || error);
+      if (message !== lastOperationalError) {
+        console.error("[EmailWorker] Could not read the persisted email notification setting; delivery is paused.", { error: message });
+        lastOperationalError = message;
+      }
+      await waitForNextPoll();
+      continue;
+    }
+
+    if (enabled !== lastEnabledState) {
+      console.info(enabled ? "[EmailWorker] Enabled by the persisted Notification Hub setting." : "[EmailWorker] Disabled by the persisted Notification Hub setting.");
+      lastEnabledState = enabled;
+    }
+    if (!enabled) {
+      await waitForNextPoll();
+      continue;
+    }
+
+    try {
+      crypto.validateKey();
+    } catch (error) {
+      const message = String(error.message || error);
+      if (message !== lastOperationalError) {
+        console.error("[EmailWorker] Delivery is paused because the payload encryption key is unavailable or invalid.", { error: message });
+        lastOperationalError = message;
+      }
+      await waitForNextPoll();
+      continue;
+    }
+
     let jobs = [];
     try {
       jobs = await outbox.claimBatch({ limit: BATCH_SIZE, leaseSeconds: LEASE_SECONDS });
+      lastOperationalError = null;
     } catch (error) {
-      console.error("[EmailWorker] Could not claim outbox jobs.", { error: String(error.message || error) });
+      const message = String(error.message || error);
+      if (message !== lastOperationalError) {
+        console.error("[EmailWorker] Could not claim outbox jobs.", { error: message });
+        lastOperationalError = message;
+      }
     }
     if (jobs.length) {
-      // Bounded parallelism keeps throughput predictable while the claim batch is sized to its lease.
       let nextIndex = 0;
       const workerCount = Math.min(WORKER_CONCURRENCY, jobs.length);
       await Promise.all(Array.from({ length: workerCount }, async () => {
@@ -96,32 +151,17 @@ async function runLoop() {
           try {
             await processJob(job);
           } catch (error) {
-            // Failure to persist a job state is operationally significant; log it and allow the lease to recover.
             console.error("[EmailWorker] Job state update failed; lease recovery will be required.", { jobId: job.id, error: String(error.message || error) });
           }
         }
       }));
       continue;
     }
-    await new Promise(resolve => {
-      wakeResolve = resolve;
-      wakeTimer = setTimeout(() => { wakeTimer = null; wakeResolve = null; resolve(); }, POLL_INTERVAL_MS);
-      if (typeof wakeTimer.unref === "function") wakeTimer.unref();
-    });
-    wakeTimer = null;
+    await waitForNextPoll();
   }
 }
 
 function startEmailWorker() {
-  if (String(process.env.EMAIL_WORKER_ENABLED || "").toLowerCase() !== "true") {
-    console.info("[EmailWorker] Disabled; set EMAIL_WORKER_ENABLED=true after the outbox migration and encryption key are configured.");
-    return { enabled: false, stop: async () => {} };
-  }
-  try { require("./emailPayloadCrypto").validateKey(); }
-  catch (error) {
-    console.error("[EmailWorker] Refusing to start because encrypted payloads cannot be read:", String(error.message || error));
-    return { enabled: false, reason: "encryption_key_invalid", stop: async () => {} };
-  }
   if (loopPromise) return { enabled: true, stop: stopEmailWorker };
   stopped = false;
   loopPromise = runLoop().catch(error => {
@@ -129,7 +169,7 @@ function startEmailWorker() {
     loopPromise = null;
     stopped = true;
   });
-  console.info("[EmailWorker] Started.", { pollMs: POLL_INTERVAL_MS, batchSize: BATCH_SIZE, concurrency: WORKER_CONCURRENCY, leaseSeconds: LEASE_SECONDS });
+  console.info("[EmailWorker] Control loop started; delivery follows the persisted Notification Hub setting.");
   return { enabled: true, stop: stopEmailWorker };
 }
 

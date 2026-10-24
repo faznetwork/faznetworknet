@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const db = require("../db");
 const { encryptPayload } = require("./emailPayloadCrypto");
+const emailNotificationState = require("./emailNotificationState");
 
 const MAX_EVENT_LENGTH = 100;
 const MAX_RECIPIENT_LENGTH = 254;
@@ -24,8 +25,8 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
 }
 
 async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null } = {}) {
-  if (String(process.env.EMAIL_WORKER_ENABLED || "").toLowerCase() !== "true") {
-    throw new Error("Native email worker is disabled; email was not queued. Configure EMAIL_WORKER_ENABLED=true before enabling queued email flows.");
+  if (!(await emailNotificationState.isEnabled(client))) {
+    throw new Error("Email notifications are disabled in Notification Hub; email was not queued.");
   }
   const recipient = normalizeEmail(to);
   const title = String(subject || "").trim();
