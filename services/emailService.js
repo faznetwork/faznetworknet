@@ -73,6 +73,49 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
   }
 }
 
+const SMTP_NETWORK_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "ESOCKET", "ECONNRESET", "EAI_AGAIN"]);
+
+async function sendResendEmail({ recipient, title, html, text }, settings) {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) throw new Error("Resend fallback is not configured: RESEND_API_KEY is missing.");
+  const fromAddress = String(settings.email_from_address || settings.smtp_username || "").trim();
+  const fromName = String(settings.email_from_name || "FAZ NETWORK Billing").trim();
+  if (!fromAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress)) {
+    throw new Error("A valid verified sender email is required for Resend fallback.");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: fromName + " <" + fromAddress + ">",
+        to: [recipient], subject: title,
+        ...(html ? { html: String(html) } : {}),
+        ...(text ? { text: String(text) } : {})
+      }),
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(String(payload.message || payload.error || "Resend HTTP API rejected the email (HTTP " + response.status + ")."));
+      error.code = "ERESEND_HTTP_" + response.status;
+      throw error;
+    }
+    return { success: true, provider: "resend", messageId: payload.id || null, accepted: [recipient], rejected: [] };
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      const timeoutError = new Error("Resend HTTP API timed out after 5 seconds.");
+      timeoutError.code = "ETIMEDOUT";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function sendEmail({ to, subject, html, text, event = "manual", sensitive = false } = {}) {
   const recipient = String(to || "").trim();
   const body = String(text || html || "").slice(0, 4000);
@@ -127,4 +170,4 @@ async function verifyConnection(emailConfig) {
   }
 }
 
-module.exports = { sendEmail, verifyConnection, normalizeSmtpConfig, providerMode };
+module.exports = { sendEmail, verifyConnection, normalizeSmtpConfig, providerMode, sendResendEmail };
