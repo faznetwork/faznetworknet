@@ -15,7 +15,7 @@ async function list(req,res){
   if(event&&!ALLOWED_EVENTS.has(event))throw new Error("Choose a supported event.");
   if(from&&to&&from>to)throw new Error("Start date must be on or before end date.");
   const clauses=[],params=[];
-  if(userType){params.push(userType);clauses.push("user_type=$"+params.length);}
+  if(userType){params.push(userType);clauses.push(userType==="pppoe"?"(user_type=$"+params.length+" OR user_type IS NULL)":"user_type=$"+params.length);}
   if(!status)clauses.push("status <> 'skipped'");
   if(query){params.push("%"+query+"%");clauses.push("(recipient_address ILIKE $"+params.length+" OR recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+" OR error ILIKE $"+params.length+")");}
   if(status){params.push(status);clauses.push("status=$"+params.length);}
@@ -26,7 +26,7 @@ async function list(req,res){
   const where=clauses.length?" WHERE "+clauses.join(" AND "):"";
   const count=await db.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE status='sent')::int AS sent,COUNT(*) FILTER (WHERE status='failed')::int AS failed,COUNT(*) FILTER (WHERE status='skipped')::int AS skipped FROM sms_delivery_logs"+where,params);
   const total=Number(count.rows?.[0]?.total||0);
-  const rows=await db.query("SELECT id,user_type,channel,recipient_address,recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,provider_message_id,created_at FROM sms_delivery_logs"+where+" ORDER BY created_at DESC,id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,limit,offset]);
+  const rows=await db.query("SELECT id,CASE WHEN user_type IS NULL THEN 'unclassified' ELSE user_type END AS user_type,channel,recipient_address,recipient_phone,message,event_key,status,gateway_mode,http_method,http_status,error,provider_message_id,created_at FROM sms_delivery_logs"+where+" ORDER BY created_at DESC,id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,limit,offset]);
   return res.set("Cache-Control","no-store").json({success:true,logs:rows.rows||[],total,limit,offset,stats:{total,sent:Number(count.rows?.[0]?.sent||0),failed:Number(count.rows?.[0]?.failed||0),skipped:Number(count.rows?.[0]?.skipped||0)}});
  }catch(error){return res.status(400).set("Cache-Control","no-store").json({success:false,message:String(error?.message||"Unable to load message history.")});}
 }
