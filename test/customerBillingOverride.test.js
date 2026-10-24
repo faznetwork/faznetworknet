@@ -96,6 +96,64 @@ test("billing cron marks a past-due migration override expired without changing 
   }
 });
 
+test("billing cron includes a customer on the exact Dhaka expiry date and confirms RouterOS session removal",async()=>{
+  const originalQuery=db.query,originalTransaction=db.withTransaction;
+  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser;
+  const calls=[];
+  try{
+    db.query=async(sql,params=[])=>{
+      calls.push({sql,params});
+      if(sql.includes("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')"))return {rows:[{key:"grace_period_days",value:"0"},{key:"expiry_action",value:"disable_secret"}]};
+      if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:43,username:"expiry-day-user",full_name:"Expiry Day User",package_name:"Home 30",phone:null,expiration_date:"2026-10-25",status:"active",billing_expiry_override:false}]};
+      return {rows:[]};
+    };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{calls.push({sql,params});return {rows:[],rowCount:1};}});
+    mikrotik.toggleSecret=async()=>({success:true});
+    let kickedUsername=null;
+    mikrotik.kickActiveUser=async username=>{kickedUsername=username;return {username,kicked:true,count:1,message:"Active PPPoE session disconnected."};};
+    const {runBillingExpiration}=require("../jobs/billingCron");
+    const result=await runBillingExpiration();
+    const expiryQuery=calls.find(x=>x.sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"));
+    assert.ok(expiryQuery.sql.includes("expiration_date <= (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int"));
+    assert.equal(kickedUsername,"expiry-day-user");
+    assert.equal(result.expired,1);
+    assert.equal(result.failed,0);
+    assert.equal(calls.some(x=>x.sql.includes("UPDATE customers SET status='expired'")),true);
+  }finally{
+    db.query=originalQuery;
+    db.withTransaction=originalTransaction;
+    mikrotik.toggleSecret=originalToggle;
+    mikrotik.kickActiveUser=originalKick;
+  }
+});
+
+test("billing cron does not mark a subscriber expired when RouterOS session removal fails",async()=>{
+  const originalQuery=db.query,originalTransaction=db.withTransaction;
+  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser;
+  const calls=[];
+  try{
+    db.query=async(sql,params=[])=>{
+      calls.push({sql,params});
+      if(sql.includes("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')"))return {rows:[{key:"grace_period_days",value:"0"},{key:"expiry_action",value:"disable_secret"}]};
+      if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:44,username:"router-kick-failure",full_name:"Kick Failure",package_name:"Home 30",phone:null,expiration_date:"2026-10-25",status:"active",billing_expiry_override:false}]};
+      return {rows:[]};
+    };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{calls.push({sql,params});return {rows:[],rowCount:1};}});
+    mikrotik.toggleSecret=async()=>({success:true});
+    mikrotik.kickActiveUser=async()=>{throw new Error("RouterOS API remove failed");};
+    const {runBillingExpiration}=require("../jobs/billingCron");
+    const result=await runBillingExpiration();
+    assert.equal(result.expired,0);
+    assert.equal(result.failed,1);
+    assert.equal(calls.some(x=>x.sql.includes("UPDATE customers SET status='expired'")),false);
+  }finally{
+    db.query=originalQuery;
+    db.withTransaction=originalTransaction;
+    mikrotik.toggleSecret=originalToggle;
+    mikrotik.kickActiveUser=originalKick;
+  }
+});
+
 test("single-customer sync preserves an overridden past-due line when no local PPPoE row exists",async()=>{
   const originalQuery=db.query,originalSync=mikrotik.syncPanelCustomerSecrets;
   let syncedCustomers=[];
