@@ -959,13 +959,16 @@ CREATE TABLE IF NOT EXISTS sms_delivery_logs (
   http_status INTEGER,
   error TEXT,
   provider_message_id VARCHAR(255),
+  user_type VARCHAR(20) CHECK (user_type IS NULL OR user_type IN ('hotspot','pppoe')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE sms_delivery_logs ADD COLUMN IF NOT EXISTS user_type VARCHAR(20);
 ALTER TABLE sms_delivery_logs ADD COLUMN IF NOT EXISTS recipient_address VARCHAR(254);
 ALTER TABLE sms_delivery_logs ADD COLUMN IF NOT EXISTS channel VARCHAR(20) NOT NULL DEFAULT 'sms';
 ALTER TABLE sms_delivery_logs ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255);
 UPDATE sms_delivery_logs SET recipient_address = recipient_phone WHERE recipient_address IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sms_delivery_logs_channel_created ON sms_delivery_logs(channel, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sms_delivery_logs_user_type_created ON sms_delivery_logs(user_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sms_delivery_logs_created_at ON sms_delivery_logs(created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_sms_delivery_logs_phone_created ON sms_delivery_logs(recipient_phone, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sms_delivery_logs_status_created ON sms_delivery_logs(status, created_at DESC);
