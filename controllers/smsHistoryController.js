@@ -2,20 +2,20 @@
 const db=require("../db");
 const ALLOWED_STATUS=new Set(["sent","failed","skipped"]);
 const ALLOWED_CHANNEL=new Set(["sms","whatsapp","email"]);
-const ALLOWED_USER_TYPE=new Set(["hotspot","pppoe"]);
+const ALLOWED_USER_TYPE=new Set(["all","hotspot","pppoe","unclassified"]);
 const ALLOWED_EVENTS=new Set(["manual","broadcast","payment","payment_receipt","renewal","welcome","expiry_warning","expired","line_expiry","recharge","pppoe_payment","pppoe_renewal","pppoe_expiry_warning","pppoe_expired","hotspot_purchase","hotspot_renewal","hotspot_expiry_warning","hotspot_expired"]);
 function boundedInt(value,fallback,min,max){const parsed=Number.parseInt(String(value??""),10);return Number.isInteger(parsed)?Math.max(min,Math.min(max,parsed)):fallback;}
 function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z"))||new Date(raw+"T00:00:00Z").toISOString().slice(0,10)!==raw)throw new Error("Invalid "+label+" date.");return raw;}
 async function list(req,res){
  try{
-  const userType=String(req.query.userType||"").trim().toLowerCase(),query=String(req.query.search||"").trim().slice(0,120),status=String(req.query.status||"").trim().toLowerCase(),channel=String(req.query.channel||"").trim().toLowerCase(),event=String(req.query.event||"").trim().toLowerCase(),from=validDate(req.query.from,"start"),to=validDate(req.query.to,"end"),limit=boundedInt(req.query.limit,25,1,100),offset=boundedInt(req.query.offset,0,0,10000000);
-  if(userType&&!ALLOWED_USER_TYPE.has(userType))throw new Error("Choose Hotspot or PPPoE customer type.");
+  const userType=String(req.query.userType||"pppoe").trim().toLowerCase(),query=String(req.query.search||"").trim().slice(0,120),status=String(req.query.status||"").trim().toLowerCase(),channel=String(req.query.channel||"").trim().toLowerCase(),event=String(req.query.event||"").trim().toLowerCase(),from=validDate(req.query.from,"start"),to=validDate(req.query.to,"end"),limit=boundedInt(req.query.limit,25,1,100),offset=boundedInt(req.query.offset,0,0,10000000);
+  if(!ALLOWED_USER_TYPE.has(userType))throw new Error("Choose All, PPPoE, Hotspot or Unclassified customer type.");
   if(status&&!ALLOWED_STATUS.has(status))throw new Error("Choose a supported message status.");
   if(channel&&!ALLOWED_CHANNEL.has(channel))throw new Error("Choose SMS, WhatsApp or email.");
   if(event&&!ALLOWED_EVENTS.has(event))throw new Error("Choose a supported event.");
   if(from&&to&&from>to)throw new Error("Start date must be on or before end date.");
   const clauses=[],params=[];
-  if(userType){params.push(userType);clauses.push(userType==="pppoe"?"(user_type=$"+params.length+" OR user_type IS NULL)":"user_type=$"+params.length);}
+  if(userType==="pppoe"||userType==="hotspot"){params.push(userType);clauses.push("user_type=$"+params.length);}else if(userType==="unclassified"){clauses.push("user_type IS NULL");}
   if(!status)clauses.push("status <> 'skipped'");
   if(query){params.push("%"+query+"%");clauses.push("(recipient_address ILIKE $"+params.length+" OR recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+" OR error ILIKE $"+params.length+")");}
   if(status){params.push(status);clauses.push("status=$"+params.length);}
@@ -54,12 +54,12 @@ async function retry(req,res){
 
 function historyDeleteFilters(query={}) {
  const userType=String(query.userType||"").trim().toLowerCase(),search=String(query.search||"").trim().slice(0,120),status=String(query.status||"").trim().toLowerCase(),channel=String(query.channel||"").trim().toLowerCase(),event=String(query.event||"").trim().toLowerCase(),from=validDate(query.from,"start"),to=validDate(query.to,"end");
- if(!ALLOWED_USER_TYPE.has(userType))throw new Error("Choose Hotspot or PPPoE customer type before deleting history.");
+ if(!ALLOWED_USER_TYPE.has(userType))throw new Error("Choose All, PPPoE, Hotspot or Unclassified before deleting history.");
  if(status&&!ALLOWED_STATUS.has(status))throw new Error("Choose a supported message status.");
  if(channel&&!ALLOWED_CHANNEL.has(channel))throw new Error("Choose SMS, WhatsApp or email.");
  if(event&&!ALLOWED_EVENTS.has(event))throw new Error("Choose a supported event.");
  if(from&&to&&from>to)throw new Error("Start date must be on or before end date.");
- const clauses=[],params=[];params.push(userType);clauses.push("user_type=$"+params.length);
+ const clauses=[],params=[];if(userType==="pppoe"||userType==="hotspot"){params.push(userType);clauses.push("user_type=$"+params.length);}else if(userType==="unclassified"){clauses.push("user_type IS NULL");}
  if(search){params.push("%"+search+"%");clauses.push("(recipient_address ILIKE $"+params.length+" OR recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+" OR error ILIKE $"+params.length+")");}
  if(status){params.push(status);clauses.push("status=$"+params.length);}
  if(channel){params.push(channel);clauses.push("channel=$"+params.length);}
