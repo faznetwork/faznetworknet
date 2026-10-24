@@ -236,6 +236,16 @@ BEGIN
       USING (expiry_date AT TIME ZONE 'UTC')::date;
   END IF;
 END $$;
+-- Additive metadata for safe service isolation and SMS Reference matching.
+-- Existing transaction rows are intentionally not guessed into a service type.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS service_type VARCHAR(20);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference_user VARCHAR(100);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS matched_username VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_transactions_service_type_status
+  ON transactions(service_type, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_reference_user
+  ON transactions(LOWER(reference_user)) WHERE reference_user IS NOT NULL;
+
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS used BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(100);
