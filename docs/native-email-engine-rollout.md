@@ -1,4 +1,4 @@
-# Native Email Engine Rollout (Phase 1–2)
+# Native Email Engine Rollout (Phase 1–3)
 
 This document describes rollout steps only. The code branch does not change Render settings, execute SQL against production, or send live emails.
 
@@ -45,3 +45,54 @@ The matching `db/schema.sql` definition supports fresh installs and the reposito
 - Test queue enqueue, retry, stale lease recovery, OTP expiry, and invitation delivery using a non-production database and inbox.
 - Perform browser smoke tests for Notification Hub settings, save/reload behavior, and menu/submenu navigation.
 - Review logs for secrets, OTP values, invitation tokens, or full message bodies; none should appear.
+
+
+## Phase 3 transaction-boundary guarantees
+
+- PPPoE webhook renewal and manual PPPoE payment matching enqueue the email job through the same PostgreSQL transaction client that persists the customer renewal and finalizes the payment transaction. A failed outbox insert aborts those PostgreSQL changes.
+- Billing expiration performs RouterOS work before opening the database transaction. The customer/PPPoE expiration-state writes and enabled email outbox enqueue then commit together. RouterOS is an external system and cannot be rolled back by PostgreSQL; a DB failure after RouterOS mutation must remain visible for reconciliation.
+- Invitation creation and resend persist the invitation row and its encrypted email job in one transaction. First-login OTP and invitation OTP hash/expiry updates are committed with the corresponding encrypted outbox job.
+- Invitation acceptance locks the pending invitation row with `FOR UPDATE`, validates invitation/OTP expiry and attempt limits under that lock, then updates the account and consumes the invitation in one transaction.
+- The dispatcher must check the returned result from email-only dispatch inside a business transaction. A failed enqueue must throw and roll back the transaction; it must not be treated as successful just because `dispatchNow` resolved.
+
+## Staging-only verification checklist
+
+Use an isolated staging PostgreSQL database and a dedicated test inbox. Do not point the test worker at production data or use real customer addresses.
+
+1. **Preflight**
+   - Apply the additive outbox migration to staging only after taking a verified staging backup.
+   - Set a staging-only `EMAIL_PAYLOAD_ENCRYPTION_KEY` generated with `openssl rand -base64 32`.
+   - Configure SMTP credentials in staging settings and verify the SMTP test-email action targets only the controlled inbox.
+   - Enable `EMAIL_WORKER_ENABLED=true` only after the schema, encryption key and SMTP configuration have been verified.
+   - Keep all secrets out of test output, screenshots, and logs.
+
+2. **Transactional atomicity**
+   - Force the outbox insert to fail during a staging PPPoE payment/renewal transaction. Verify the customer renewal and transaction finalization roll back together; verify the transaction remains available for the existing reconciliation path.
+   - Repeat for manual PPPoE payment matching.
+   - Force an outbox insert failure during a billing expiration DB transaction. Verify the customer and PPPoE status changes roll back together. Because RouterOS changes occur before the DB transaction, record and verify the expected reconciliation state rather than repeating RouterOS operations automatically.
+   - Force an invitation/OTP enqueue failure. Verify invitation creation or OTP hash/expiry updates roll back and no orphaned pending invitation or OTP state remains.
+   - Enqueue the same stable idempotency key twice and verify only one row is created and the existing row is returned.
+
+3. **Worker and retry behavior**
+   - Observe a valid job transition from `pending` to `processing` to `sent`; verify payload ciphertext does not expose OTPs, invitation tokens, or message bodies.
+   - Simulate a transient SMTP connection timeout or provider 4xx response and verify retry scheduling follows the configured exponential backoff and jitter, bounded by the maximum attempt count.
+   - Verify a permanent authentication/configuration error is surfaced clearly and classified according to the existing worker policy; do not use an invalid password as the only retry test.
+   - Simulate a worker crash after SMTP acceptance but before `sent` is recorded. Confirm the lease is recovered and document that duplicate delivery is possible because SMTP is not exactly-once.
+
+4. **Strict five-minute OTP expiry**
+   - Request a first-login OTP and invitation OTP; verify the persisted `otp_expires_at` is approximately five minutes after issuance.
+   - Verify an OTP is rejected once the server-side expiry timestamp has passed, regardless of email delivery time.
+   - Leave an OTP email queued until after its `expiresAt`; verify the worker does not call SMTP for it and records the expired job outcome.
+   - Verify the maximum-attempt limit, successful single use, and two concurrent invitation-acceptance requests. Only one request may consume the invitation and activate/create the account.
+
+5. **Real-browser smoke tests**
+   - Notification Hub: save SMTP host/port/TLS/from fields, reload, and verify saved non-secret fields remain correct while passwords/secrets are not exposed in page responses.
+   - Test-email button: send only to the dedicated staging inbox; verify clear success/failure feedback and no secret leakage in browser console or network responses.
+   - Staff invitation: create a staff invite, open its link, request OTP, verify OTP, set a password, and confirm the account is active with the expected role.
+   - Negative flows: expired invitation, expired OTP, wrong OTP, exhausted attempts, reused invitation link, and SMTP/outbox failure.
+   - Run direct URL load, hard reload, and browser Back/Forward navigation for Notification Hub and staff-invitation routes. Check browser console and network requests for uncaught errors.
+   - Capture results as passed/failed/not run. Do not mark browser smoke tests passed until they are run in a real browser against staging.
+
+## Phase 3 verification status
+
+The checklist above is a staging test plan, not evidence that staging tests have been run. This branch must pass the required CI workflows and a real-browser staging smoke test before it is considered ready for merge. No production migration, merge, or deployment is part of this phase.
