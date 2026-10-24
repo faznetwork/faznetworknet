@@ -53,7 +53,7 @@ async function runBillingExpiration(){
     // Expiration dates are Bangladesh calendar dates. An explicit migration
     // override allows billing to be marked expired without changing live service.
     const q=await db.query(
-      "SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
+      "SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date <= (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
       [EXPIRED_PROFILE,graceDays]
     );
     if(!q.rows.length){
@@ -79,11 +79,15 @@ async function runBillingExpiration(){
             await mikrotikService.toggleSecret(customer.username,false);
             await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
           }
-          try{
-            const result=await mikrotikService.kickActiveUser(customer.username);
-            disconnected=Boolean(result?.kicked);
-          }catch(kickError){
-            console.warn("[BILLING EXPIRATION] Session reset warning for "+customer.username+":",kickError.message);
+          // Do not mark billing expiry complete when RouterOS session removal fails.
+          // A confirmed empty active-session list is also a successful disconnect outcome.
+          const result=await mikrotikService.kickActiveUser(customer.username);
+          if(result?.kicked===true){
+            disconnected=true;
+          }else if(result?.count===0 && /already offline|no active pppoe session/i.test(String(result?.message||""))){
+            disconnected=false;
+          }else{
+            throw new Error("RouterOS did not confirm active PPPoE session removal.");
           }
         }
 
