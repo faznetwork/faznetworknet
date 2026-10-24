@@ -38,7 +38,7 @@ test("PPPoE history view includes legacy rows without customer classification",a
  try{
   await controller.list({query:{userType:"pppoe"}},res);
   assert.equal(res.statusCode,200);
-  assert.match(calls[0].sql,/user_type=\\$1 OR user_type IS NULL/);
+  assert.ok(calls[0].sql.includes("user_type=$1 OR user_type IS NULL"));
   assert.equal(res.body.total,2);
   assert.equal(res.body.logs[0].user_type,"unclassified");
  }finally{db.query=original;}
