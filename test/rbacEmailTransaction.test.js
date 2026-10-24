@@ -52,6 +52,9 @@ test("staff invitation and encrypted email job use the same transaction client",
     const client = {
       query: async (sql, args) => {
         statements.push({ sql, args });
+        if (sql.includes("SELECT id FROM admin_users")) return { rows: [] };
+        if (sql.includes("SELECT id FROM admin_invitations WHERE status='pending'")) return { rows: [] };
+        if (sql.includes("SELECT id FROM admin_invitations WHERE status='failed'")) return { rows: [] };
         if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
         if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
         if (sql.includes("INSERT INTO email_outbox")) return { rows: [{ id: 77, status: "pending" }], rowCount: 1 };
@@ -71,13 +74,16 @@ test("staff invitation and encrypted email job use the same transaction client",
   }, res);
   assert.equal(res.statusCode, 201);
   assert.equal(committed, true);
-  assert.equal(statements.length, 3);
-  assert.match(statements[0].sql, /INSERT INTO admin_invitations/);
-  assert.match(statements[0].sql, /VALUES \(NULL,\$1,\$2,\$3/);
-  assert.match(statements[1].sql, /app_settings/);
-  assert.match(statements[2].sql, /INSERT INTO email_outbox/);
-  assert.equal(statements[2].args[0], "admin-invitation:501");
-  assert.doesNotMatch(statements[2].args[3], /phase3.staff/);
+  assert.equal(statements.length, 6);
+  assert.match(statements[0].sql, /SELECT id FROM admin_users/);
+  assert.match(statements[1].sql, /status='pending'/);
+  assert.match(statements[2].sql, /status='failed'/);
+  assert.match(statements[3].sql, /INSERT INTO admin_invitations/);
+  assert.match(statements[3].sql, /VALUES \(NULL,\$1,\$2,\$3/);
+  assert.match(statements[4].sql, /app_settings/);
+  assert.match(statements[5].sql, /INSERT INTO email_outbox/);
+  assert.equal(statements[5].args[0], "admin-invitation:501");
+  assert.doesNotMatch(statements[5].args[3], /phase3.staff/);
 });
 
 test("invitation is not committed when its transactional outbox insert fails", async () => {
@@ -95,6 +101,9 @@ test("invitation is not committed when its transactional outbox insert fails", a
     try {
       return await callback({
         query: async sql => {
+          if (sql.includes("SELECT id FROM admin_users")) return { rows: [] };
+          if (sql.includes("SELECT id FROM admin_invitations WHERE status='pending'")) return { rows: [] };
+          if (sql.includes("SELECT id FROM admin_invitations WHERE status='failed'")) return { rows: [] };
           if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
           if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
           if (sql.includes("INSERT INTO email_outbox")) throw new Error("email outbox insert failure");
@@ -115,7 +124,7 @@ test("invitation is not committed when its transactional outbox insert fails", a
   }, res);
   assert.equal(transactionRolledBack, true);
   assert.equal(res.statusCode, 503);
-  assert.match(res.body.message, /Invitation was not created because its email could not be queued/);
+  assert.match(res.body.message, /Invitation could not be queued/);
 });
 
 test("invitation acceptance requires the invitee-selected username", async () => {
