@@ -119,11 +119,11 @@ function extractSenderPhone(text) {
   return normalized[0] || "";
 }
 function extractReference(text) {
-  const source = String(text || "").replace(/[\\u200b\\u200c\\u200d]/g, "");
+  const source = String(text || "").replace(/[\u200b\u200c\u200d]/g, "");
   const patterns = [
-    /\\bReference\\s*:\\s*([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i,
-    /\\bRef\\s+([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i,
-    /\\bRef\\s*[:#=]\\s*([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i
+    /\bReference\s*:\s*([A-Za-z0-9_-]{1,50})(?=\s|[.,;]|$)/i,
+    /\bRef\s+([A-Za-z0-9_-]{1,50})(?=\s|[.,;]|$)/i,
+    /\bRef\s*[:#=]\s*([A-Za-z0-9_-]{1,50})(?=\s|[.,;]|$)/i
   ];
   for (const pattern of patterns) {
     const match = source.match(pattern);
