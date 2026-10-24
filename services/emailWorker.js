@@ -5,8 +5,11 @@ const crypto = require("./emailPayloadCrypto");
 const emailService = require("./emailService");
 
 const POLL_INTERVAL_MS = Math.max(1000, Math.min(30000, Number(process.env.EMAIL_WORKER_POLL_MS) || 5000));
-const BATCH_SIZE = Math.max(1, Math.min(50, Number(process.env.EMAIL_WORKER_BATCH_SIZE) || 10));
 const LEASE_SECONDS = Math.max(30, Math.min(600, Number(process.env.EMAIL_WORKER_LEASE_SECONDS) || 90));
+const WORKER_CONCURRENCY = Math.max(1, Math.min(10, Number(process.env.EMAIL_WORKER_CONCURRENCY) || 3));
+const REQUESTED_BATCH_SIZE = Math.max(1, Math.min(50, Number(process.env.EMAIL_WORKER_BATCH_SIZE) || 10));
+const SAFE_BATCH_SIZE = Math.max(1, Math.floor((LEASE_SECONDS * 1000 - 15000) / 15000) * WORKER_CONCURRENCY);
+const BATCH_SIZE = Math.min(REQUESTED_BATCH_SIZE, SAFE_BATCH_SIZE);
 const MAX_ATTEMPTS = Math.max(1, Math.min(20, Number(process.env.EMAIL_WORKER_MAX_ATTEMPTS) || 8));
 
 let stopped = true;
@@ -82,16 +85,22 @@ async function runLoop() {
       console.error("[EmailWorker] Could not claim outbox jobs.", { error: String(error.message || error) });
     }
     if (jobs.length) {
-      // A batch is processed sequentially to bound SMTP concurrency and protect shared DB/SMTP resources.
-      for (const job of jobs) {
-        if (stopped) break;
-        try {
-          await processJob(job);
-        } catch (error) {
-          // Failure to persist a job state is operationally significant; log it and allow the lease to recover.
-          console.error("[EmailWorker] Job state update failed; lease recovery will be required.", { jobId: job.id, error: String(error.message || error) });
+      // Bounded parallelism keeps throughput predictable while the claim batch is sized to its lease.
+      let nextIndex = 0;
+      const workerCount = Math.min(WORKER_CONCURRENCY, jobs.length);
+      await Promise.all(Array.from({ length: workerCount }, async () => {
+        while (!stopped) {
+          const index = nextIndex++;
+          if (index >= jobs.length) return;
+          const job = jobs[index];
+          try {
+            await processJob(job);
+          } catch (error) {
+            // Failure to persist a job state is operationally significant; log it and allow the lease to recover.
+            console.error("[EmailWorker] Job state update failed; lease recovery will be required.", { jobId: job.id, error: String(error.message || error) });
+          }
         }
-      }
+      }));
       continue;
     }
     await new Promise(resolve => {
@@ -120,7 +129,7 @@ function startEmailWorker() {
     loopPromise = null;
     stopped = true;
   });
-  console.info("[EmailWorker] Started.", { pollMs: POLL_INTERVAL_MS, batchSize: BATCH_SIZE, leaseSeconds: LEASE_SECONDS });
+  console.info("[EmailWorker] Started.", { pollMs: POLL_INTERVAL_MS, batchSize: BATCH_SIZE, concurrency: WORKER_CONCURRENCY, leaseSeconds: LEASE_SECONDS });
   return { enabled: true, stop: stopEmailWorker };
 }
 
