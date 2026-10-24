@@ -119,8 +119,17 @@ function extractSenderPhone(text) {
   return normalized[0] || "";
 }
 function extractReference(text) {
-  const m = String(text || "").match(/\b(?:ref|reference)\s*[:#=-]?\s*([A-Za-z0-9_-]{1,50})/i);
-  return m ? m[1].trim() : "";
+  const source = String(text || "").replace(/[\\u200b\\u200c\\u200d]/g, "");
+  const patterns = [
+    /\\bReference\\s*:\\s*([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i,
+    /\\bRef\\s+([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i,
+    /\\bRef\\s*[:#=]\\s*([A-Za-z0-9_-]{1,50})(?=\\s|[.,;]|$)/i
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return "";
 }
 function parseSms(body, query = {}, headers = {}, options = {}) {
   const payload = extractWebhookPayload(body, query, headers);
@@ -143,6 +152,6 @@ function parseSms(body, query = {}, headers = {}, options = {}) {
       error.code = "INVALID_RECIPIENT"; error.statusCode = 403; throw error;
     }
   }
-  return { channel, trxId: normalizeTrxId(trxId), amount, senderPhone: extractSenderPhone(payload.text), recipientPhone: recipient, customerRef: extractReference(payload.text), rawSms: payload.text, sourceSender: payload.sender };
+  return { channel, trxId: normalizeTrxId(trxId), amount, senderPhone: extractSenderPhone(payload.text), recipientPhone: recipient, customerRef: extractReference(payload.text), referenceUser: extractReference(payload.text), matchedUsername: extractReference(payload.text), rawSms: payload.text, sourceSender: payload.sender };
 }
-module.exports = { extractWebhookPayload, extractTransactionId, extractAmount, parseSms, normalizePhone, normalizeTrxId, channelFrom, extractRecipientPhone, OFFICIAL_SENDERS };
+module.exports = { extractWebhookPayload, extractTransactionId, extractAmount, parseSms, normalizePhone, normalizeTrxId, channelFrom, extractRecipientPhone, extractReference, OFFICIAL_SENDERS };
