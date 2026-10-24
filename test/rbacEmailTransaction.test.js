@@ -72,7 +72,7 @@ test("staff invitation and encrypted email job use the same transaction client",
   assert.equal(res.statusCode, 201);
   assert.equal(committed, true);
   assert.equal(statements.length, 3);
-  assert.match(statements[0].sql, /notification_channel_email_enabled/);
+  assert.match(statements[0].sql, /app_settings/);
   assert.match(statements[1].sql, /INSERT INTO admin_invitations/);
   assert.match(statements[2].sql, /INSERT INTO email_outbox/);
   assert.equal(statements[2].args[0], "admin-invitation:501");
