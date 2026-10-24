@@ -23,7 +23,7 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
   return crypto.randomUUID();
 }
 
-async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), sensitive = false } = {}) {
+async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false } = {}) {
   const recipient = normalizeEmail(to);
   const title = String(subject || "").trim();
   const htmlBody = String(html || "");
@@ -33,7 +33,8 @@ async function enqueueEmail({ event = "manual", to, subject, html, text, idempot
   if (!Number.isFinite(new Date(availableAt).getTime())) throw new Error("Email outbox availableAt must be a valid date.");
 
   const normalizedEvent = String(event || "manual").trim().slice(0, MAX_EVENT_LENGTH) || "manual";
-  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, sensitive: Boolean(sensitive) };
+  if (expiresAt !== null && !Number.isFinite(new Date(expiresAt).getTime())) throw new Error("Email outbox expiresAt must be a valid date.");
+  const payload = { to: recipient, subject: title, html: htmlBody, text: textBody, event: normalizedEvent, sensitive: Boolean(sensitive), expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString() };
   const encryptedPayload = encryptPayload(payload);
   const key = makeIdempotencyKey({ idempotencyKey, event: normalizedEvent, recipient, payload });
   const result = await db.query(
