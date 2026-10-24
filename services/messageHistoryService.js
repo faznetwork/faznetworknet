@@ -19,7 +19,7 @@ async function recordMessage({ channel, to, message, event = "manual", status, e
     );
   } catch (error) {
     // Audit failures must be visible, but never block billing, payment or notification flows.
-    console.error("[MessageHistory] Delivery log insert failed:", String(error?.message || error).replace(/[\\r\\n\\t]+/g, " ").slice(0, 300));
+    console.error("[MessageHistory] Delivery log insert failed:", String(error?.message || error).replace(/[\r\n\t]+/g, " ").slice(0, 300));
   }
 }
 
