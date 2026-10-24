@@ -225,8 +225,9 @@ async function testNotification(req,res){
  }catch(error){return errorResponse(res,error,502);}
 }
 async function testEmail(req,res){
- const deadlineMs=6_500;
+ const deadlineMs=12_000;
  let timeout;
+ const abortController=new AbortController();
  try{
   const to=String(req.body?.to||req.body?.recipientEmail||"").trim();
   const subject=String(req.body?.subject||"").trim();
@@ -234,10 +235,10 @@ async function testEmail(req,res){
   if(!subject)throw new Error("Test email subject is required.");
   if(subject.length>200)throw new Error("Test email subject must be 200 characters or fewer.");
   const emailService=require("../services/emailService");
-  const timeoutPromise=new Promise((_,reject)=>{timeout=setTimeout(()=>{const error=new Error("Email provider did not respond within 6.5 seconds. Check SMTP connectivity or configure RESEND_API_KEY for HTTP API fallback.");error.code="ETIMEDOUT";reject(error);},deadlineMs);});
+  const timeoutPromise=new Promise((_,reject)=>{timeout=setTimeout(()=>{abortController.abort();const error=new Error("Email provider did not respond within 12 seconds. The active transport was aborted; check provider connectivity and configuration.");error.code="ETIMEDOUT";reject(error);},deadlineMs);});
   // A successful test send proves SMTP connectivity and delivery. Avoid a separate verify()
   // handshake, which doubles the network wait and can stall the interactive request.
-  const result=await Promise.race([emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding."}),timeoutPromise]);
+  const result=await Promise.race([emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding.",signal:abortController.signal}),timeoutPromise]);
   if(!result.success){
    const code=String(result.code||"");
    const status=code==="ETIMEDOUT"||["ECONNECTION","ECONNREFUSED","ENETUNREACH","EHOSTUNREACH","ESOCKET","ECONNRESET","EAI_AGAIN"].includes(code)?504:(code==="SMTP_CONFIG_INVALID"||/required|valid recipient|valid from email/i.test(String(result.error||""))?400:502);
