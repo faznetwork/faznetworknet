@@ -111,11 +111,11 @@ const SMTP_NETWORK_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNECTION", "ECONNREFU
 
 async function sendResendEmail({ recipient, title, html, text }, settings, externalSignal) {
   const apiKey = String(process.env.RESEND_API_KEY || "").trim();
-  if (!apiKey) throw new Error("Resend fallback is not configured: RESEND_API_KEY is missing.");
+  if (!apiKey) { const error = new Error("Resend HTTP API is not configured: RESEND_API_KEY is missing from the server environment."); error.code = "ERESEND_NOT_CONFIGURED"; throw error; }
   const fromAddress = String(settings.email_from_address || settings.smtp_username || "").trim();
   const fromName = String(settings.email_from_name || "FAZ NETWORK Billing").trim();
   if (!fromAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress)) {
-    throw new Error("A valid verified sender email is required for Resend fallback.");
+    { const error = new Error("Resend sender is not configured: set email_from_address to an address or domain verified in Resend."); error.code = "ERESEND_SENDER_NOT_VERIFIED"; throw error; }
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
@@ -164,21 +164,26 @@ async function sendEmail({ to, subject, html, text, event = "manual", sensitive 
   try {
     const { recipient: validatedRecipient, title } = validateEmailRequest({ to, subject, html, text });
     const settings = await settingsService.getAllSettings();
+    const resendConfigured = Boolean(String(process.env.RESEND_API_KEY || "").trim());
+    if (resendConfigured) {
+      provider = "resend";
+      console.info("[EmailService] Using Resend HTTP API as the primary email transport.");
+      result = await sendResendEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
+      return result;
+    }
     try {
       result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
       return result;
     } catch (smtpError) {
       const smtpCode = String(smtpError && smtpError.code || "");
-      const canFallback = SMTP_NETWORK_ERROR_CODES.has(smtpCode) &&
-        Boolean(String(process.env.RESEND_API_KEY || "").trim()) &&
-        !(signal && signal.aborted);
-      if (!canFallback) throw smtpError;
-      console.warn("[EmailService] SMTP transport failed; attempting configured Resend HTTP fallback.", {
-        code: smtpCode || "SMTP_NETWORK_ERROR"
-      });
-      provider = "resend";
-      result = await sendResendEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
-      return result;
+      if (SMTP_NETWORK_ERROR_CODES.has(smtpCode)) {
+        const error = new Error("SMTP delivery failed (" + safeError(smtpError) +
+          "). Resend HTTP API is not configured because RESEND_API_KEY is missing. Add RESEND_API_KEY to the Render service environment and redeploy.");
+        error.code = "ERESEND_NOT_CONFIGURED";
+        error.cause = smtpError;
+        throw error;
+      }
+      throw smtpError;
     }
   } catch (error) {
     result = {
