@@ -6,7 +6,7 @@ async function calculateExpiry({durationMonths,query,currentExpiryDate,now=new D
  const policy=String(result.rows?.[0]?.value||"");
  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(now);
  const current=String(currentExpiryDate||"").trim().slice(0,10);
- const base=/^\\d{4}-\\d{2}-\\d{2}$/.test(current)&&current>today?current:today;
+const base=/^\d{4}-\d{2}-\d{2}$/.test(current)&&current>today?current:today;
  const months=Math.max(1,Number(durationMonths)||1);
  if(policy==="rolling_30")return addDays(base,30*months);
  return addCalendarMonths(base,months);
