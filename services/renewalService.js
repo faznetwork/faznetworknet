@@ -1,7 +1,7 @@
 "use strict";
 
 const TIME_ZONE = "Asia/Dhaka";
-const DATE_ONLY = /^\\d{4}-\\d{2}-\\d{2}$/;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 function dhakaDate(value = new Date()) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
