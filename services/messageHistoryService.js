@@ -17,8 +17,9 @@ async function recordMessage({ channel, to, message, event = "manual", status, e
        Number.isInteger(httpStatus) ? httpStatus : null, error ? String(error).replace(/[\r\n\t]+/g," ").slice(0,1000) : null,
        providerMessageId ? String(providerMessageId).slice(0,255) : null]
     );
-  } catch (_) {
-    // Message audit must never block billing, payment or notification flows.
+  } catch (error) {
+    // Audit failures must be visible, but never block billing, payment or notification flows.
+    console.error("[MessageHistory] Delivery log insert failed:", String(error?.message || error).replace(/[\\r\\n\\t]+/g, " ").slice(0, 300));
   }
 }
 
