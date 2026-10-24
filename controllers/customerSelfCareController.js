@@ -84,48 +84,39 @@ async function profile(req,res){
 }
 async function renew(req,res){
  res.set("Cache-Control","no-store, private");
- const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in first."});
+ const s=readToken(req);
+ if(!s)return res.status(401).json({success:false,message:"Please sign in first."});
  if(s.type!=="pppoe")return res.status(400).json({success:false,message:"This renewal form is for PPPoE subscribers."});
- const trx=clean(req.body?.trxId||req.body?.trx_id,100).toUpperCase();if(!trx)return res.status(400).json({success:false,message:"TrxID is required."});
- let claimed=null,routerSucceeded=false;
+ const trx=clean(req.body?.trxId||req.body?.trx_id,100).toUpperCase();
+ if(!trx)return res.status(400).json({success:false,message:"TrxID is required."});
  try{
   const cResult=await db.query("SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name,p.price AS linked_price,p.duration_months FROM customers c LEFT JOIN packages p ON (LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name)) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[s.sub]);
-  const c=cResult.rows[0]||null,uResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[s.sub]),u=uResult.rows[0]||null;
+  const c=cResult.rows[0]||null;
+  const uResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[s.sub]);
+  const u=uResult.rows[0]||null;
   if(!c&&!u)return res.status(404).json({success:false,message:"Customer account not found."});
-  let packageFallback=null;if(!c&&u?.profile){const pr=await db.query("SELECT price,duration_months,plan_name,profile_name FROM packages WHERE LOWER(profile_name)=LOWER($1) OR LOWER(plan_name)=LOWER($1) ORDER BY id ASC LIMIT 1",[u.profile]);packageFallback=pr.rows[0]||null;}const expected=Number(c?.monthly_bill??c?.linked_price??packageFallback?.price??0);if(!(expected>0))return res.status(400).json({success:false,message:"Your billing amount is not configured. Contact support."});
-  const txResult=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trx]);const tx=txResult.rows[0];
+  const expected=Number(c?.monthly_bill??c?.linked_price??0);
+  if(!(expected>0))return res.status(400).json({success:false,message:"Your billing amount is not configured. Contact support."});
+  const txResult=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trx]);
+  const tx=txResult.rows[0];
   if(!tx)return res.status(404).json({success:false,message:"Transaction not found. Please wait for payment SMS verification."});
   if(tx.used||String(tx.status||"").trim().toLowerCase()!=="unmatched")return res.status(409).json({success:false,message:"This transaction has already been used or cannot be verified."});
-  const registeredPhone=phone(c?.phone||u?.phone||s.phone);const transactionUsername=String(tx.matched_username||"").trim().toLowerCase();if(transactionUsername&&transactionUsername!==s.sub.toLowerCase()&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This TrxID is linked to another account."});if(!transactionUsername&&(!registeredPhone||phone(tx.sender_phone)!==registeredPhone))return res.status(403).json({success:false,message:"This payment could not be linked to your registered account. Contact support for manual verification."});
+  if(tx.service_type&&String(tx.service_type).toLowerCase()!=="pppoe")return res.status(409).json({success:false,message:"This TrxID belongs to a different service type."});
+  const registeredPhone=phone(c?.phone||u?.phone||s.phone);
+  const transactionUsername=String(tx.matched_username||"").trim().toLowerCase();
+  const reference=String(tx.reference_user||"").trim().toLowerCase();
+  const referenceMatches=Boolean(reference)&&[s.sub,c?.id,u?.id].filter(value=>value!==undefined&&value!==null&&String(value)!=="").some(value=>String(value).trim().toLowerCase()===reference);
+  const senderMatches=Boolean(registeredPhone)&&phone(tx.sender_phone)===registeredPhone;
+  if(transactionUsername&&transactionUsername!==s.sub.toLowerCase()&&!senderMatches&&!referenceMatches)return res.status(403).json({success:false,message:"This TrxID is linked to another account."});
+  if(!transactionUsername&&!senderMatches&&!referenceMatches)return res.status(403).json({success:false,message:"This payment could not be linked to your registered account. Contact support for manual verification."});
   if(Math.round(Number(tx.amount)*100)!==Math.round(expected*100))return res.status(400).json({success:false,message:"Payment amount does not match your bill of ৳"+expected.toFixed(2)+".",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1,service_type='pppoe' WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[s.sub,tx.id]);
-  if(!claim.rows.length)return res.status(409).json({success:false,message:"This transaction has already been claimed."});claimed=tx.id;
-  const expiry=await renewalService.calculateExpiry({durationMonths:Math.max(1,Number(c?.duration_months||1)),query:db.query,currentExpiryDate:c?.expiration_date||u?.expiry_date});
-  const profile=clean(c?.linked_profile_name||c?.profile||packageFallback?.profile_name||packageFallback?.plan_name||u?.profile,100),password=String(c?.password||u?.password||"");
-  const comment="Customer: "+String(c?.full_name||s.name||s.sub)+" | Phone: "+String(c?.phone||u?.phone||s.phone||"")+" | EXP: "+expiry+" | TrxID: "+trx;
-  await renewalService.applyRouterRenewal(mikrotikService,s.sub,{password,profile,comment,disabled:false,onMutation:()=>{routerSucceeded=true;}});
-  // RouterOS has changed the secret; preserve the durable processing claim on any later failure.
-  // The shared renewal service marks RouterOS mutation success before kicking the session.
-  await db.withTransaction(async client=>{
-   if(c)await client.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',paid_until=$1,monthly_bill=$2,updated_at=NOW() WHERE id=$3",[expiry,expected,c.id]);
-   await client.query("UPDATE pppoe_users SET profile=$1,disabled=false,status='active',expiry_date=$2,billing_status='paid',paid_until=$2,comment=$3,updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[profile,expiry,comment,s.sub]);
-   const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,service_type='pppoe',needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[s.sub,claimed]);
-   if(!finalized.rows.length)throw new Error("PPPoE renewal completed but payment finalization did not update the claimed transaction.");
-  });
-  claimed=null;
-  return res.json({success:true,message:"Payment verified and PPPoE service renewed.",username:s.sub,expiration:expiry});
- }catch(e){
-  console.error("[Customer self-care renewal]",e?.message||e);
-  if(claimed!==null&&!routerSucceeded){
-   try{
-    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimed]);
-    if(!rollback.rows.length)console.error("[Customer self-care renewal] Claim rollback found no processing row for transaction",claimed);
-   }catch(rollbackError){console.error("[Customer self-care renewal] Failed to rollback transaction claim",claimed,rollbackError?.message||rollbackError);}
-  }else if(claimed!==null&&routerSucceeded){
-   try{await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimed]);await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimed,s.sub,JSON.stringify({reason:"ROUTEROS_SUCCEEDED_DB_FINALIZATION_FAILED",username:s.sub,error:e?.message||String(e),recordedAt:new Date().toISOString()})]);}catch(auditError){console.error("[CRITICAL] Customer self-care reconciliation audit write failed",{transactionId:claimed,error:auditError?.message||String(auditError)});}console.error("[CRITICAL_PARTIAL_PROVISION] PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimed,username:s.sub,error:e?.message||String(e)});
-  }
-  return res.status(500).json({success:false,message:routerSucceeded?"Renewal reached MikroTik but database finalization needs administrator review. Do not retry this TrxID; contact support.":"Payment verification or renewal failed; the transaction claim was released when possible."});
+  // Use the same atomic claim, package-price validation, RouterOS renewal, DB finalization,
+  // and reconciliation path as admin/public PPPoE payment matching.
+  req.body={...req.body,trxId:trx,service_type:"pppoe",username:s.sub};
+  return require("./paymentController").manualMatch(req,res);
+ }catch(error){
+  console.error("[Customer self-care renewal]",error?.message||error);
+  return res.status(503).json({success:false,message:"Payment verification or renewal could not be completed. Please retry with your transaction ID."});
  }
 }
-
 module.exports={login,logout,profile,renew,readToken,issueToken};
