@@ -125,8 +125,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  };
  const recordSkipped=async(channel,recipient,reason)=>{
   skippedResults.push({channel,status:"skipped",reason});
-  console.info("[Notification Hub] Channel skipped:",JSON.stringify({channel,event:rawEvent||eventName,username:customerUsername,reason}));
-  await history.recordMessage({channel,to:recipient||customer?.email||customerUsername,message:String(message||("FAZ NETWORK notification: "+eventName)),event:rawEvent||eventName,status:"skipped",error:"Notification skipped: "+reason,gateway:channel==="whatsapp"?"baileys":channel==="email"?(settings.email_provider_mode||"outbox"):(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")});
+  console.info("[Notification Hub] Channel not attempted:",JSON.stringify({channel,event:rawEvent||eventName,username:customerUsername,userType:type,reason}));
  };
  let recipientEmail=String(customer?.email||"").trim();
  if(!recipientEmail&&customerUsername!=="unknown"){
@@ -142,8 +141,8 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   if(!ruleEnabled(channel)){await recordSkipped(channel,recipient,"event_rule_disabled");continue;}
   if(!validRecipient){if(channel==="email")console.info("[Email] Skipped: No email address found for customer: "+customerUsername);await recordSkipped(channel,recipient,channel==="email"?"missing_email":"invalid_phone");continue;}
   jobs.push([channel,async()=>{
-   if(channel==="sms")return smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true});
-   if(channel==="whatsapp")return whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName});
+   if(channel==="sms")return smsService.sendNotification({to:smsPhone,message:await textFor("sms"),event:smsEvent(eventName),variables:context,settings,useMessageDirectly:true,userType:type});
+   if(channel==="whatsapp")return whatsappService.sendMessage({to:recipientPhone,message:await textFor("whatsapp"),event:rawEvent||eventName,userType:type});
    const custom=await getCustomTemplate(type,rawEvent,eventName,"email");
    const defaults=defaultEmailTemplate(eventName,context);
    const subjectSource=custom&&custom.email_subject?custom.email_subject:defaults.subject;
@@ -151,12 +150,12 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
    const subject=renderEmailTemplate(subjectSource,context,false).replace(/[\r\n]+/g," ").trim().slice(0,200);
    const html=renderEmailTemplate(bodySource,context,true);
    const text=html.replace(/<\s*br\s*\/?>/gi,"\n").replace(/<\/(p|div|li|h[1-6])>/gi,"\n").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/[ \t]+\n/g,"\n").trim();
-   return emailOutboxService.enqueueEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName,idempotencyKey:variables.email_idempotency_key||undefined,client:emailClient});
+   return emailOutboxService.enqueueEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName,idempotencyKey:variables.email_idempotency_key||undefined,client:emailClient,userType:type});
   }]);
  }
  const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));
  const channelResults=settled.map((r,i)=>{const value=r.status==="fulfilled"?r.value:null;const status=r.status!=="fulfilled"?"failed":value?.skipped?"skipped":value?.success===false?"failed":jobs[i][0]==="email"&&value?.accepted?"queued":"sent";return {channel:jobs[i][0],status,...(r.status==="fulfilled"?{result:value}:{error:String(r.reason?.message||r.reason).slice(0,300)})};});
- for(let i=0;i<settled.length;i++){const item=settled[i],channel=jobs[i][0];if(channel==="email"&&(item.status==="rejected"||(item.status==="fulfilled"&&item.value?.success===false)))await history.recordMessage({channel:"email",to:recipientEmail,message:String(message||("FAZ NETWORK notification: "+eventName)),event:rawEvent||eventName,status:"failed",error:String(item.status==="rejected"?(item.reason?.message||item.reason):(item.value?.error||"Email enqueue failed")).slice(0,1000),gateway:settings.email_provider_mode||"outbox"});}
+ for(let i=0;i<settled.length;i++){const item=settled[i],channel=jobs[i][0];if(channel==="email"&&(item.status==="rejected"||(item.status==="fulfilled"&&item.value?.success===false)))await history.recordMessage({channel:"email",to:recipientEmail,message:String(message||("FAZ NETWORK notification: "+eventName)),event:rawEvent||eventName,status:"failed",error:String(item.status==="rejected"?(item.reason?.message||item.reason):(item.value?.error||"Email enqueue failed")).slice(0,1000),gateway:settings.email_provider_mode||"outbox",userType:type});}
  if(type==="hotspot"&&eventName==="renewal"){
   console.log("[Hotspot Notification Alert] Status:",channelResults.filter(result=>["sms","whatsapp","email"].includes(result.channel)));
  }
