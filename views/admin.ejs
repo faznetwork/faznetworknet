@@ -1264,6 +1264,16 @@
                 background: #fee2e2 !important;
                 border: 1px solid #fecaca !important;
             }
+            #customerBillingTabs .customer-filter-count-online {
+                color: #047857 !important;
+                background: #d1fae5 !important;
+                border: 1px solid #a7f3d0 !important;
+            }
+            #customerBillingTabs .customer-online-filter.active {
+                color: #065f46 !important;
+                background: #ecfdf5 !important;
+                border-color: #6ee7b7 !important;
+            }
             #customerBillingTabs .customer-offline-filter.active {
                 color: #991b1b !important;
                 background: #fef2f2 !important;
@@ -6728,7 +6738,8 @@ async function deletePlan(id,name){
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
                 const rowStatus = String(row.getAttribute('data-billing-status') || 'unpaid').toLowerCase();
                 const isOnline = String(row.getAttribute('data-online') || 'false') === 'true';
-                const matchesStatus = wanted === 'all' || (wanted === 'offline' ? !isOnline : rowStatus === wanted);
+                const matchesStatus = wanted === 'all' ||
+                    (wanted === 'online' ? isOnline : wanted === 'offline' ? !isOnline : rowStatus === wanted);
                 const searchIndex = String(row.dataset.search || row.innerText || '').toLowerCase();
                 const matchesSearch = !q || searchIndex.includes(q);
                 row.style.display = matchesStatus && matchesSearch ? '' : 'none';
@@ -6987,9 +6998,9 @@ async function deletePlan(id,name){
             return (users || []).reduce(function(counts, user) {
                 const status = String(user?.billing_status || 'unpaid').toLowerCase();
                 if (status === 'paid') counts.paid++; else if (status === 'due') counts.due++; else counts.unpaid++;
-                if (!customerStatus(user).online) counts.offline++;
+                if (customerStatus(user).online) counts.online++; else counts.offline++;
                 counts.all++; return counts;
-            }, {all:0,paid:0,due:0,unpaid:0,offline:0});
+            }, {all:0,paid:0,due:0,unpaid:0,offline:0,online:0});
         }
 
         function setCustomerBillingFilter(status, button) {
@@ -7089,6 +7100,7 @@ async function deletePlan(id,name){
                             <button type="button" class="btn btn-sm btn-outline-warning" data-billing-filter="due" aria-pressed="false" onclick="setCustomerBillingFilter('due',this)">Due Soon (<span>${counts.due}</span>)</button>
                             <button type="button" class="btn btn-sm btn-outline-danger" data-billing-filter="unpaid" aria-pressed="false" onclick="setCustomerBillingFilter('unpaid',this)">Unpaid / Expired (<span>${counts.unpaid}</span>)</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary customer-offline-filter" data-billing-filter="offline" aria-pressed="false" onclick="setCustomerBillingFilter('offline',this)">Offline <span class="customer-filter-count customer-filter-count-offline">${counts.offline}</span></button>
+                            <button type="button" class="btn btn-sm btn-outline-success customer-online-filter" data-billing-filter="online" aria-pressed="false" onclick="setCustomerBillingFilter('online',this)">Online <span class="customer-filter-count customer-filter-count-online">${counts.online}</span></button>
                         </div>
                         <div class="card-body p-0 mt-2 table-responsive">
                             <table class="table table-hover mb-0 customer-live-table">
@@ -8424,7 +8436,7 @@ function bindDashboardKpiEvents(){
 renderDashboardKpiCards();
 bindDashboardKpiEvents();
 
-async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};safeSetText('nocSubscriberValue',Number(s.online||0)+' / '+Number(s.total||0)+' Online');safeSetText('nocAvailability',Number(s.availability||0).toFixed(1)+'% Network Availability');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge bg-secondary';ob.textContent='Not configured';}safeSetText('nocOltName','OLT inventory');safeSetText('nocOltAddress','Direct OLT polling not configured');safeSetText('nocOnuTotal','—');safeSetText('nocPonActive','—');safeSetText('nocOltSeen','Live OLT telemetry is disabled pending direct polling integration');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
+async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};const subscriberMetricsAvailable=s.available!==false;safeSetText('nocSubscriberValue',subscriberMetricsAvailable?Number(s.online||0)+' / '+Number(s.total||0)+' Online':'Subscriber status unavailable');safeSetText('nocAvailability',subscriberMetricsAvailable&&Number(s.total)>0?Number(s.availability||0).toFixed(1)+'% Network Availability':'Network Availability unavailable');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge bg-secondary';ob.textContent='Not configured';}safeSetText('nocOltName','OLT inventory');safeSetText('nocOltAddress','Direct OLT polling not configured');safeSetText('nocOnuTotal','—');safeSetText('nocPonActive','—');safeSetText('nocOltSeen','Live OLT telemetry is disabled pending direct polling integration');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
 function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStatsTimer);if(window.hotspotOverviewTimer)clearInterval(window.hotspotOverviewTimer);void pollNocStats();void pollHotspotOverview();window.nocStatsTimer=setInterval(()=>void pollNocStats(),5000);window.hotspotOverviewTimer=setInterval(()=>void pollHotspotOverview(),30000);}document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollNocStats();});
 
         async function safeAdminBootStep(label, task) {
