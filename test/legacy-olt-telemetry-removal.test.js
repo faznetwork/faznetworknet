@@ -16,16 +16,20 @@ test("legacy OLT telemetry routes, cache reads, and collector execution are disa
   const adminView = read("views/admin.ejs");
   const customerProfileView = read("views/customer-profile.ejs");
   const collector = read("local-olt-collector/collector.py");
+  const nodeCollector = read("scripts/olt-collector.js");
 
   assert.doesNotMatch(server, /\/api\/olt\/(?:telemetry|sync-telemetry)|oltTelemetryController/);
-  assert.doesNotMatch(schema, /CREATE TABLE IF NOT EXISTS olt_telemetry|ALTER TABLE olt_telemetry/i);
+  assert.doesNotMatch(schema, /CREATE TABLE IF NOT EXISTS olt_telemetry|ALTER TABLE olt_telemetry|onu_rx_power_(?:dbm|observed_at|source_device_id)/i);
   assert.doesNotMatch(customerController, /FROM\s+olt_telemetry/i);
   assert.doesNotMatch(networkMapController, /onu_rx_power|rxPower|rx_power_source|getRxPowerStatus|LEFT JOIN network_devices d ON d.id=c\.onu_rx_power_source_device_id/i);
   assert.doesNotMatch(adminView, /\/api\/olt\/(?:telemetry|sync-telemetry)/);
-  assert.doesNotMatch(customerProfileView, /\/api\/olt\/(?:telemetry|sync-telemetry)/);
+  assert.doesNotMatch(customerProfileView, /\/api\/olt\/(?:telemetry|sync-telemetry)|Network Topology Bridge|ONU RX Power|onuRxPowerValue|topoPon/i);
+  assert.doesNotMatch(adminView, /cpOpticalTelemetryCards|cpOpticalHealthBadge|cpOpticalRx|cpOpticalTx/);
 
   assert.doesNotMatch(collector, /pysnmp|urllib\.request|def collect\(|def push\(|while\s+True|RENDER_INGEST_URL/);
   assert.match(collector, /OLT telemetry collector is disabled/);
+  assert.match(nodeCollector, /OLT telemetry collector is disabled/);
+  assert.doesNotMatch(nodeCollector, /net-snmp|createSession|sync-telemetry|setInterval/);
 });
 
 test("cleanup migration only clears OLT telemetry cache and telemetry records", () => {
@@ -39,6 +43,10 @@ test("cleanup migration only clears OLT telemetry cache and telemetry records", 
   assert.doesNotMatch(customerUpdate, /router_mac|onu_mac|username|password|balance|package|billing|transaction/i);
   assert.doesNotMatch(migration, /DELETE FROM\s+customers/i);
   assert.match(migration, /to_regclass/i);
+  assert.match(migration, /DROP TABLE olt_telemetry/i);
+  assert.match(migration, /DROP COLUMN IF EXISTS onu_rx_power_source_device_id/i);
+  assert.match(migration, /DROP COLUMN IF EXISTS onu_rx_power_observed_at/i);
+  assert.match(migration, /DROP COLUMN IF EXISTS onu_rx_power_dbm/i);
 });
 
 test("customer, billing, and MikroTik network-discovery structures remain intact", () => {
