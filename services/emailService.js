@@ -50,24 +50,58 @@ function validateEmailRequest({ to, subject, html, text } = {}) {
   return { recipient, title };
 }
 
-async function sendSmtpEmail({ recipient, title, html, text }, settings) {
+async function sendSmtpEmail({ recipient, title, html, text }, settings, signal) {
   const config = normalizeSmtpConfig(settings);
   const from = '"' + config.from.name.replace(/["\\]/g, "") + '" <' + config.from.address + '>';
   const transporter = nodemailer.createTransport({ ...config, from });
+  let abortHandler;
+  let attemptTimeout;
   try {
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from, to: recipient, subject: title,
       ...(html ? { html: String(html) } : {}),
       ...(text ? { text: String(text) } : {})
     });
+    const timeoutPromise = new Promise((_, reject) => {
+      attemptTimeout = setTimeout(() => {
+        try { transporter.close(); }
+        catch (error) { console.error("[EmailService] Failed to close timed-out SMTP transport:", safeError(error)); }
+        const error = new Error("SMTP transport exceeded the 6.5-second attempt deadline.");
+        error.code = "ETIMEDOUT";
+        reject(error);
+      }, 6500);
+    });
+    let abortPromise = new Promise(() => {});
+    if (signal) {
+      if (signal.aborted) {
+        const error = new Error("SMTP send was aborted because the request deadline expired.");
+        error.code = "ETIMEDOUT";
+        throw error;
+      }
+      abortPromise = new Promise((_, reject) => {
+        abortHandler = () => {
+          try { transporter.close(); }
+          catch (error) { console.error("[EmailService] Failed to close aborted SMTP transport:", safeError(error)); }
+          const timeoutError = new Error("SMTP send was aborted because the request deadline expired.");
+          timeoutError.code = "ETIMEDOUT";
+          reject(timeoutError);
+        };
+        signal.addEventListener("abort", abortHandler, { once: true });
+      });
+    }
+    const info = await Promise.race([sendPromise, timeoutPromise, abortPromise]);
     const accepted = Array.isArray(info.accepted) ? info.accepted : [];
     const rejected = Array.isArray(info.rejected) ? info.rejected : [];
     if (rejected.some(address => String(address).toLowerCase() === recipient.toLowerCase()) &&
         !accepted.some(address => String(address).toLowerCase() === recipient.toLowerCase())) {
-      return { success: false, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected, error: "SMTP server rejected the recipient address.", code: "EENVELOPE" };
+      const error = new Error("SMTP server rejected the recipient address.");
+      error.code = "EENVELOPE";
+      throw error;
     }
     return { success: true, provider: SMTP_MODE, messageId: info.messageId || null, accepted, rejected };
   } finally {
+    if (attemptTimeout) clearTimeout(attemptTimeout);
+    if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
     try { transporter.close(); }
     catch (error) { console.error("[EmailService] Failed to close SMTP transport cleanly:", safeError(error)); }
   }
@@ -75,7 +109,7 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings) {
 
 const SMTP_NETWORK_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "ESOCKET", "ECONNRESET", "EAI_AGAIN"]);
 
-async function sendResendEmail({ recipient, title, html, text }, settings) {
+async function sendResendEmail({ recipient, title, html, text }, settings, externalSignal) {
   const apiKey = String(process.env.RESEND_API_KEY || "").trim();
   if (!apiKey) throw new Error("Resend fallback is not configured: RESEND_API_KEY is missing.");
   const fromAddress = String(settings.email_from_address || settings.smtp_username || "").trim();
@@ -85,6 +119,11 @@ async function sendResendEmail({ recipient, title, html, text }, settings) {
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
+  const abortFromCaller = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", abortFromCaller, { once: true });
+  }
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -113,24 +152,40 @@ async function sendResendEmail({ recipient, title, html, text }, settings) {
     throw error;
   } finally {
     clearTimeout(timeout);
+    if (externalSignal) externalSignal.removeEventListener("abort", abortFromCaller);
   }
 }
 
-async function sendEmail({ to, subject, html, text, event = "manual", sensitive = false } = {}) {
+async function sendEmail({ to, subject, html, text, event = "manual", sensitive = false, signal } = {}) {
   const recipient = String(to || "").trim();
   const body = String(text || html || "").slice(0, 4000);
   let result;
+  let provider = SMTP_MODE;
   try {
     const { recipient: validatedRecipient, title } = validateEmailRequest({ to, subject, html, text });
     const settings = await settingsService.getAllSettings();
-    result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings);
-    return result;
+    try {
+      result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
+      return result;
+    } catch (smtpError) {
+      const smtpCode = String(smtpError && smtpError.code || "");
+      const canFallback = SMTP_NETWORK_ERROR_CODES.has(smtpCode) &&
+        Boolean(String(process.env.RESEND_API_KEY || "").trim()) &&
+        !(signal && signal.aborted);
+      if (!canFallback) throw smtpError;
+      console.warn("[EmailService] SMTP transport failed; attempting configured Resend HTTP fallback.", {
+        code: smtpCode || "SMTP_NETWORK_ERROR"
+      });
+      provider = "resend";
+      result = await sendResendEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
+      return result;
+    }
   } catch (error) {
     result = {
       success: false,
       error: safeError(error),
       code: error && error.code ? String(error.code).slice(0, 80) : (error?.message?.startsWith("SMTP ") ? "SMTP_CONFIG_INVALID" : undefined),
-      provider: SMTP_MODE
+      provider
     };
     return result;
   } finally {
@@ -143,7 +198,7 @@ async function sendEmail({ to, subject, html, text, event = "manual", sensitive 
         event,
         status: result?.success ? "sent" : "failed",
         error: result?.success ? null : result?.error,
-        gateway: SMTP_MODE,
+        gateway: provider,
         providerMessageId: result?.messageId || null
       });
     } catch (error) {

@@ -140,6 +140,53 @@ test("sensitive email history never includes the OTP or invitation body", async 
   }
 });
 
+test("SMTP network timeout falls back to Resend HTTP API", async () => {
+  settingsService.getAllSettings = async () => validSettings();
+  const previousKey = process.env.RESEND_API_KEY;
+  process.env.RESEND_API_KEY = "unit-test-key";
+  let closed = false;
+  nodemailer.createTransport = () => ({
+    sendMail: async () => { const error = new Error("connect timed out"); error.code = "ETIMEDOUT"; throw error; },
+    close() { closed = true; }
+  });
+  global.fetch = async (url, options) => {
+    assert.equal(url, "https://api.resend.com/emails");
+    assert.equal(options.headers.Authorization, "Bearer unit-test-key");
+    return { ok: true, status: 200, json: async () => ({ id: "resend-test-id" }) };
+  };
+  try {
+    const result = await emailService.sendEmail({ to: "customer@example.com", subject: "Fallback", text: "Hello" });
+    assert.equal(result.success, true);
+    assert.equal(result.provider, "resend");
+    assert.equal(result.messageId, "resend-test-id");
+    assert.equal(closed, true);
+  } finally {
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+  }
+});
+
+test("SMTP authentication failures do not trigger Resend fallback", async () => {
+  settingsService.getAllSettings = async () => validSettings();
+  const previousKey = process.env.RESEND_API_KEY;
+  process.env.RESEND_API_KEY = "unit-test-key";
+  let fetched = false;
+  nodemailer.createTransport = () => ({
+    sendMail: async () => { const error = new Error("Invalid login"); error.code = "EAUTH"; throw error; },
+    close() {}
+  });
+  global.fetch = async () => { fetched = true; throw new Error("Unexpected HTTP fallback"); };
+  try {
+    const result = await emailService.sendEmail({ to: "customer@example.com", subject: "Auth failure", text: "Hello" });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "EAUTH");
+    assert.equal(fetched, false);
+  } finally {
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+  }
+});
+
 test("email test endpoint verifies and sends through SMTP", async () => {
   const settingsController = require("../controllers/settingsController");
   settingsService.getAllSettings = async () => validSettings();
