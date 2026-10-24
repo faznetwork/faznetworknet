@@ -79,7 +79,7 @@ test("staff invitation and encrypted email job use the same transaction client",
   assert.match(statements[1].sql, /status='pending'/);
   assert.match(statements[2].sql, /status='failed'/);
   assert.match(statements[3].sql, /INSERT INTO admin_invitations/);
-  assert.match(statements[3].sql, /VALUES \(NULL,\$1,\$2,\$3/);
+  assert.match(statements[3].sql, /INSERT INTO admin_invitations \\(email,role,token_hash,status,created_by,expires_at\\) VALUES \\(\\$1,\\$2,\\$3/);
   assert.match(statements[4].sql, /app_settings/);
   assert.match(statements[5].sql, /INSERT INTO email_outbox/);
   assert.equal(statements[5].args[0], "admin-invitation:501");
