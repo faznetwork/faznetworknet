@@ -25,7 +25,7 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
 }
 
 async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false, client = null } = {}) {
-  if (!(await emailNotificationState.isEnabled())) {
+  if (!(await emailNotificationState.isEnabled(client))) {
     throw new Error("Email notifications are disabled in Notification Hub; email was not queued.");
   }
   const recipient = normalizeEmail(to);
