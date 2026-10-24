@@ -20,6 +20,7 @@ test("legacy OLT telemetry routes, cache reads, and collector execution are disa
   const nodeCollector = read("scripts/olt-collector.js");
 
   assert.doesNotMatch(server, /\/api\/olt\/(?:telemetry|sync-telemetry)|oltTelemetryController/);
+  assert.doesNotMatch(dashboardController, /olt_telemetry|rx_power_dbm|fiber:/i);
   assert.doesNotMatch(schema, /CREATE TABLE IF NOT EXISTS olt_telemetry|ALTER TABLE olt_telemetry|onu_rx_power_(?:dbm|observed_at|source_device_id)/i);
   assert.doesNotMatch(customerController, /FROM\s+olt_telemetry/i);
   assert.doesNotMatch(networkMapController, /onu_rx_power|rxPower|rx_power_source|getRxPowerStatus|LEFT JOIN network_devices d ON d.id=c\.onu_rx_power_source_device_id/i);
@@ -33,7 +34,7 @@ test("legacy OLT telemetry routes, cache reads, and collector execution are disa
   assert.doesNotMatch(nodeCollector, /net-snmp|createSession|sync-telemetry|setInterval/);
 });
 
-test("cleanup migration only clears OLT telemetry cache and telemetry records", () => {
+test("cleanup migration retires OLT telemetry storage without changing customer or business records", () => {
   const migration = read("migrations/20261025_disable_olt_telemetry.sql");
 
   assert.match(migration, /UPDATE\s+customers\s+SET[\s\S]*onu_rx_power_dbm\s*=\s*NULL/i);
@@ -58,6 +59,9 @@ test("customer, billing, and MikroTik network-discovery structures remain intact
   const networkDiscovery = read("jobs/networkDiscovery.js");
 
   assert.match(schema, /CREATE TABLE IF NOT EXISTS customers/i);
+  assert.match(schema, /onu_mac/i);
+  assert.match(schema, /router_mac/i);
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS transactions/i);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS network_devices/i);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS network_observations/i);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS network_discovery_runs/i);
