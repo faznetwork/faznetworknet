@@ -24,6 +24,9 @@ function makeIdempotencyKey({ idempotencyKey, event, recipient, payload }) {
 }
 
 async function enqueueEmail({ event = "manual", to, subject, html, text, idempotencyKey, availableAt = new Date(), expiresAt = null, sensitive = false } = {}) {
+  if (String(process.env.EMAIL_WORKER_ENABLED || "").toLowerCase() !== "true") {
+    throw new Error("Native email worker is disabled; email was not queued. Configure EMAIL_WORKER_ENABLED=true before enabling queued email flows.");
+  }
   const recipient = normalizeEmail(to);
   const title = String(subject || "").trim();
   const htmlBody = String(html || "");
