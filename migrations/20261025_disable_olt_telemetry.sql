@@ -15,7 +15,7 @@ BEGIN
   IF to_regclass('olt_telemetry') IS NOT NULL THEN
     EXECUTE 'DELETE FROM olt_telemetry';
   END IF;
-END
+END;
 $retire_olt_telemetry$;
 
 COMMIT;
