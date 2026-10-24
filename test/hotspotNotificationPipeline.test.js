@@ -22,7 +22,7 @@ test("Hotspot pre-expiry event dispatches the same direct message to SMS and Wha
   const oldSettings=settingsService.getAllSettings,oldSms=smsService.sendNotification,oldWa=whatsappService.sendMessage;
   const calls=[];
   try{
-    settingsService.getAllSettings=async()=>({company_name:"FAZ NETWORK",notification_channel_sms_enabled:false,notification_channel_whatsapp_enabled:false});
+    settingsService.getAllSettings=async()=>({company_name:"FAZ NETWORK",notification_channel_sms_enabled:true,notification_channel_whatsapp_enabled:true,notification_rule_hotspot_expiry_warning_sms_enabled:true,notification_rule_hotspot_expiry_warning_whatsapp_enabled:true});
     smsService.sendNotification=async payload=>{calls.push({channel:"sms",...payload});return {success:true};};
     whatsappService.sendMessage=async payload=>{calls.push({channel:"whatsapp",...payload});return {success:true};};
     const result=await dispatcher.dispatchNow({userType:"hotspot",event:"hotspot_expiring_soon",recipient:"01712345678",customerName:"রহিম",message:"পরীক্ষামূলক মেয়াদ সতর্কতা",useMessageDirectly:true,channels:["sms","whatsapp"]});

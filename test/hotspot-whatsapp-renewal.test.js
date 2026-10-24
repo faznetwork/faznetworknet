@@ -11,7 +11,7 @@ test("Hotspot Quick Renew sends WhatsApp with normalized Bangladesh number and s
   const oldQuery = db.query;
   const oldSend = whatsapp.sendMessage;
   const sent = [];
-  appSettings.getAllSettings = async () => ({ notification_channel_whatsapp_enabled: false });
+  appSettings.getAllSettings = async () => ({ notification_channel_whatsapp_enabled: true, notification_rule_hotspot_renewal_whatsapp_enabled: true });
   db.query = async sql => {
     if (String(sql).includes("FROM notification_templates")) return { rows: [] };
     throw new Error("Unexpected database query in dispatcher test: " + sql);

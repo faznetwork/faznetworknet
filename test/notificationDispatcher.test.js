@@ -97,7 +97,7 @@ test("Hotspot direct-message hooks prefer active Notification Hub templates and 
   {event:"hotspot_renewal",templateKey:"hotspot_renewal"},
   {event:"hotspot_expiring_soon",templateKey:"hotspot_expiry_warning"}
  ];
- settingsService.getAllSettings=async()=>({company_name:"FAZ NETWORK",notification_channel_sms_enabled:"false",notification_channel_whatsapp_enabled:"false"});
+ settingsService.getAllSettings=async()=>({company_name:"FAZ NETWORK",notification_channel_sms_enabled:"true",notification_channel_whatsapp_enabled:"true",notification_rule_hotspot_welcome_sms_enabled:"true",notification_rule_hotspot_welcome_whatsapp_enabled:"true",notification_rule_hotspot_renewal_sms_enabled:"true",notification_rule_hotspot_renewal_whatsapp_enabled:"true",notification_rule_hotspot_expiry_warning_sms_enabled:"true",notification_rule_hotspot_expiry_warning_whatsapp_enabled:"true"});
  db.query=async(sql,params=[])=>{
   if(sql.includes("FROM notification_templates")){
    const candidates=params[0]||[];
@@ -229,7 +229,7 @@ test("WhatsApp renewal defaults are enabled when database settings are absent",(
  assert.equal(settingsService.DEFAULTS.notification_rule_pppoe_renewal_whatsapp_enabled,"true");
 });
 
-test("explicit manual PPPoE renewal dispatch bypasses global channel and renewal-rule toggles",async()=>{
+test("manual PPPoE renewal respects global channel and renewal-rule toggles",async()=>{
  const originalGetAllSettings=settingsService.getAllSettings;
  const originalSendMessage=whatsappService.sendMessage;
  const originalDbQuery=db.query;
@@ -252,7 +252,9 @@ test("explicit manual PPPoE renewal dispatch bypasses global channel and renewal
   assert.equal(result.success,true);
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].channel,"whatsapp");
-  assert.deepEqual(sent,[{to:"8801812345678",message:"Manual renewal confirmed",event:"renewal"}]);
+  assert.equal(result.results[0].status,"skipped");
+  assert.equal(result.results[0].reason,"channel_disabled");
+  assert.deepEqual(sent,[]);
  }finally{
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
@@ -266,7 +268,7 @@ test("explicit manual renewal records a skipped history entry when recipient num
  const history=require("../services/messageHistoryService");
  const originalRecordMessage=history.recordMessage;
  const recorded=[];
- settingsService.getAllSettings=async()=>({notification_channel_whatsapp_enabled:"false",notification_channel_sms_enabled:"false",notification_rule_pppoe_renewal_whatsapp_enabled:"false"});
+ settingsService.getAllSettings=async()=>({notification_channel_whatsapp_enabled:"true",notification_channel_sms_enabled:"false",notification_rule_pppoe_renewal_whatsapp_enabled:"true"});
  db.query=async()=>({rows:[]});
  history.recordMessage=async payload=>{recorded.push(payload);};
  try{
@@ -274,7 +276,7 @@ test("explicit manual renewal records a skipped history entry when recipient num
    userType:"pppoe",event:"renewal",channels:["whatsapp"],
    customer:{username:"alice",whatsapp_phone:"not-a-phone"},username:"alice",message:"Renewal message"
   });
-  assert.equal(result.success,false);
+  assert.equal(result.success,true);
   assert.deepEqual(result.results,[{channel:"whatsapp",status:"skipped",reason:"invalid_phone"}]);
   assert.equal(recorded.length,1);
   assert.equal(recorded[0].channel,"whatsapp");
@@ -304,5 +306,38 @@ test("manual renewal dispatcher reports WhatsApp transport failures without thro
   settingsService.getAllSettings=originalGetAllSettings;
   whatsappService.sendMessage=originalSendMessage;
   db.query=originalDbQuery;
+ }
+});
+
+
+test("manual renewal dispatches every enabled channel and normalizes recipients per gateway",async()=>{
+ const originalGet=settingsService.getAllSettings,originalDb=db.query;
+ const originalSms=smsService.sendNotification,originalWhatsapp=whatsappService.sendMessage;
+ const email=require("../services/emailOutboxService"),originalEmail=email.enqueueEmail;
+ const history=require("../services/messageHistoryService"),originalHistory=history.recordMessage;
+ const sent=[];
+ settingsService.getAllSettings=async()=>({
+  company_name:"FAZ NETWORK",
+  notification_channel_sms_enabled:"true",notification_channel_whatsapp_enabled:"true",notification_channel_email_enabled:"true",
+  notification_rule_pppoe_renewal_sms_enabled:"true",notification_rule_pppoe_renewal_whatsapp_enabled:"true",notification_rule_pppoe_renewal_email_enabled:"true",
+  sms_provider_mode:"custom",sms_gateway_mode:"custom",email_provider_mode:"smtp"
+ });
+ db.query=async sql=>sql.includes("FROM notification_templates")?{rows:[]}:{rows:[]};
+ smsService.sendNotification=async payload=>{sent.push({channel:"sms",...payload});return {success:true};};
+ whatsappService.sendMessage=async payload=>{sent.push({channel:"whatsapp",...payload});return {success:true};};
+ email.enqueueEmail=async payload=>{sent.push({channel:"email",...payload});return {accepted:true,jobId:23,status:"pending"};};
+ history.recordMessage=async()=>{};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"renewal",username:"alice",customer:{username:"alice",full_name:"Alice",phone:"01712345678",email:"alice@example.com"},message:"Renewed",variables:{new_expiry_date:"2026-11-30"}});
+  assert.equal(result.success,true);
+  assert.deepEqual(sent.map(item=>item.channel).sort(),["email","sms","whatsapp"]);
+  assert.equal(sent.find(item=>item.channel==="sms").to,"01712345678");
+  assert.equal(sent.find(item=>item.channel==="whatsapp").to,"8801712345678");
+  assert.equal(sent.find(item=>item.channel==="email").to,"alice@example.com");
+  assert.equal(result.results.find(item=>item.channel==="email").status,"queued");
+ }finally{
+  settingsService.getAllSettings=originalGet;db.query=originalDb;
+  smsService.sendNotification=originalSms;whatsappService.sendMessage=originalWhatsapp;
+  email.enqueueEmail=originalEmail;history.recordMessage=originalHistory;
  }
 });
