@@ -71,7 +71,7 @@ test("updateCustomer rejects invalid calendar dates and invalid custom durations
 });
 
 test("billing cron marks a past-due migration override expired without changing router profile or kicking session",async()=>{
-  const originalQuery=db.query,originalChange=mikrotik.changeSecretProfile,originalKick=mikrotik.kickActiveUser;
+  const originalQuery=db.query,originalTransaction=db.withTransaction,originalChange=mikrotik.changeSecretProfile,originalKick=mikrotik.kickActiveUser;
   const calls=[];
   try{
     db.query=async(sql,params=[])=>{
@@ -79,6 +79,7 @@ test("billing cron marks a past-due migration override expired without changing 
       if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:42,username:"01712345678",full_name:"Migration Customer",package_name:"Home 30",phone:"01712345678",expiration_date:"2020-02-29",status:"active",billing_expiry_override:true}]};
       return {rows:[]};
     };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{calls.push({sql,params});return {rows:[],rowCount:1};}});
     mikrotik.changeSecretProfile=async(...args)=>{throw new Error("must not change the live profile");};
     mikrotik.kickActiveUser=async(...args)=>{throw new Error("must not kick an overridden customer");};
     const {runBillingExpiration}=require("../jobs/billingCron");
@@ -89,6 +90,7 @@ test("billing cron marks a past-due migration override expired without changing 
     assert.equal(calls.some(x=>x.sql.includes("UPDATE pppoe_users SET status='expired'")),true);
   }finally{
     db.query=originalQuery;
+    db.withTransaction=originalTransaction;
     mikrotik.changeSecretProfile=originalChange;
     mikrotik.kickActiveUser=originalKick;
   }

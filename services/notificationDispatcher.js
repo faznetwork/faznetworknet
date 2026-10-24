@@ -3,7 +3,7 @@ const settingsService=require("./appSettings");
 const db=require("../db");
 const smsService=require("./smsService");
 const whatsappService=require("./whatsappService");
-const emailService=require("./emailService");
+const emailOutboxService=require("./emailOutboxService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
 function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
@@ -77,7 +77,7 @@ function defaultEmailTemplate(event,context){
  return map[event]||{subject:"Notification from {company_name}",body:"<p>Dear {name},</p><p>This is a notification about your FAZ NETWORK service.</p><p>{company_name}</p>"};
 }
 
-async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,useMessageDirectly=false}={}){
+async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,excludeChannels=[],useMessageDirectly=false,emailClient=null}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
  const rawPhone=extractCustomerPhone(customer)||phone||to||recipient;
  const recipientPhone=normalizePhone(rawPhone);
@@ -110,8 +110,13 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
   return formatMessage(settings,eventName,context,message,custom);
  };
  const selected=Array.isArray(channels)?new Set(channels):null;
+ const excluded=new Set(Array.isArray(excludeChannels)?excludeChannels:[]);
  const jobs=[];
- const channelEnabled=(name)=>selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
+ const channelEnabled=(name)=>{
+  if(excluded.has(name))return false;
+  if(emailClient&&name==="email")return bool(settings,"notification_channel_email_enabled",false)&&(!selected||selected.has(name));
+  return selected?selected.has(name):bool(settings,"notification_channel_"+name+"_enabled",name==="sms"&&String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled")!=="disabled");
+ };
  const ruleEvents=renewalRuleEvents(type,eventName);
  const ruleEnabled=(name)=>{
   const keys=ruleEvents.map(ruleEvent=>"notification_rule_"+type+"_"+ruleEvent+"_"+name+"_enabled");
@@ -142,7 +147,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
    const subject=renderEmailTemplate(subjectSource,context,false).replace(/[\r\n]+/g," ").trim().slice(0,200);
    const html=renderEmailTemplate(bodySource,context,true);
    const text=html.replace(/<\s*br\s*\/?>/gi,"\n").replace(/<\/(p|div|li|h[1-6])>/gi,"\n").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/[ \t]+\n/g,"\n").trim();
-   return emailService.sendEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName});
+   return emailOutboxService.enqueueEmail({to:recipientEmail,subject,html,text,event:rawEvent||eventName,idempotencyKey:variables.email_idempotency_key||undefined,client:emailClient});
   }]);
  }
  const settled=await Promise.allSettled(jobs.map(([,run])=>Promise.resolve().then(run)));

@@ -87,31 +87,39 @@ async function runBillingExpiration(){
           }
         }
 
-        await db.query(
-          "UPDATE customers SET status='expired',billing_status='unpaid',updated_at=NOW() WHERE id=$1",
-          [customer.id]
-        );
-        if(overridden){
-          // Persist the billing state only; preserve profile, disabled flag and
-          // active session for an explicitly overridden migration customer.
-          await db.query(
-            "UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
-            [customer.username]
+        const notificationDispatcher=require("../services/notificationDispatcher");
+        const expiryDate=String(customer.expiration_date||"").slice(0,10);
+        const notificationPayload={userType:"pppoe",event:"pppoe_expired",customer,to:customer.phone,username:customer.username,message:"প্রিয় {name}, আপনার FAZ NETWORK সংযোগের মেয়াদ আজ শেষ হয়েছে এবং সংযোগটি সাময়িকভাবে বন্ধ রয়েছে। সংযোগটি পুনরায় চালু করতে রিচার্জ করুন। ধন্যবাদ।",variables:{name:customer.full_name||customer.username,username:customer.username,package:customer.package_name||"",expiry_date:expiryDate,email_idempotency_key:"pppoe-expired:"+String(customer.id)+":"+expiryDate}};
+        await db.withTransaction(async client=>{
+          await client.query(
+            "UPDATE customers SET status='expired',billing_status='unpaid',updated_at=NOW() WHERE id=$1",
+            [customer.id]
           );
-        }else if(expiryAction==="disable_secret"){
-          await db.query(
-            "UPDATE pppoe_users SET status='expired',disabled=TRUE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
-            [customer.username]
-          );
-        }else{
-          await db.query(
-            "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
-            [EXPIRED_PROFILE,customer.username]
-          );
-        }
-
+          if(overridden){
+            // Persist the billing state only; preserve profile, disabled flag and
+            // active session for an explicitly overridden migration customer.
+            await client.query(
+              "UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
+              [customer.username]
+            );
+          }else if(expiryAction==="disable_secret"){
+            await client.query(
+              "UPDATE pppoe_users SET status='expired',disabled=TRUE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
+              [customer.username]
+            );
+          }else{
+            await client.query(
+              "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
+              [EXPIRED_PROFILE,customer.username]
+            );
+          }
+          if(!overridden&&customer.phone){
+            const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+            if(!emailResult.success)throw new Error("Billing expiration was not committed because transactional email enqueue failed: "+JSON.stringify(emailResult.results||[]));
+          }
+        });
         if(!overridden&&customer.phone){
-          require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"pppoe_expired",to:customer.phone,username:customer.username,message:"প্রিয় {name}, আপনার FAZ NETWORK সংযোগের মেয়াদ আজ শেষ হয়েছে এবং সংযোগটি সাময়িকভাবে বন্ধ রয়েছে। সংযোগটি পুনরায় চালু করতে রিচার্জ করুন। ধন্যবাদ।",variables:{name:customer.full_name||customer.username,username:customer.username,package:customer.package_name||"",expiry_date:String(customer.expiration_date||"").slice(0,10)}});
+          notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
         }
 
         await logAuditAction({

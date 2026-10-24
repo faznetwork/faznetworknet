@@ -2,7 +2,6 @@
 
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
 const db = require('../db');
 const { getAdminCredentials } = require('../middleware/adminAuth');
 const { normalizeRole } = require('../middleware/rbac');
@@ -21,122 +20,39 @@ function safeEqualHex(left, right) {
   return crypto.timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
 }
 
-function createMailer() {
-  const host = String(process.env.SMTP_HOST || '').trim();
-  const user = String(process.env.SMTP_USER || '').trim();
-  const pass = String(process.env.SMTP_PASS || '');
-  if (!host || !user || !pass) throw new Error('Email OTP is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASS in Render.');
-  const port = Number(process.env.SMTP_PORT || 587);
-  return nodemailer.createTransport({
-    host, port, secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465,
-    auth: { user, pass }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000
-  });
-}
-
 async function sendLoginNotification(user, loginType, req) {
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
   const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || 'faznetwork.com@gmail.com').trim();
-  if (!mailerUrl || !mailerToken) {
-    throw new Error('Apps Script mailer is not configured for login notifications.');
-  }
-
-  const endpoint = new URL(mailerUrl);
-  if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-      !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-    throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-  }
-  if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-
-  const payload = {
-    type: 'login_alert',
-    token: mailerToken,
-    to: recipient,
-    username: String(user.username || 'unknown').slice(0, 60),
-    role: String(user.role || 'staff').slice(0, 30),
-    loginType: loginType === 'first_login' ? 'first_login' : 'login',
-    loginAt: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false }),
-    timeZone: 'Asia/Dhaka',
-    ipAddress: String(req?.ip || '').slice(0, 64) || 'Unavailable',
-    userAgent: String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable'
-  };
-
-  const response = await fetch(endpoint.toString(), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(20000),
-    redirect: 'follow'
+  if (!recipient) throw new Error('ADMIN_LOGIN_NOTIFICATION_EMAIL must be configured for login alerts.');
+  const loginAt = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false });
+  const username = String(user.username || 'unknown').slice(0, 60);
+  const role = String(user.role || 'staff').slice(0, 30);
+  const ipAddress = String(req?.ip || '').slice(0, 64) || 'Unavailable';
+  const userAgent = String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable';
+  const normalizedLoginType = loginType === 'first_login' ? 'first_login' : 'login';
+  const title = normalizedLoginType === 'first_login' ? 'FAZ NETWORK first login alert' : 'FAZ NETWORK login alert';
+  const text = 'Account: ' + username + '\nRole: ' + role + '\nLogin type: ' + normalizedLoginType + '\nTime (Asia/Dhaka): ' + loginAt + '\nIP: ' + ipAddress + '\nUser agent: ' + userAgent;
+  const html = '<h2>FAZ NETWORK login alert</h2><p><b>Account:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Login type:</b> ' + escapeHtml(normalizedLoginType) + '</p><p><b>Time (Asia/Dhaka):</b> ' + escapeHtml(loginAt) + '</p><p><b>IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User agent:</b> ' + escapeHtml(userAgent) + '</p>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: recipient, subject: title, text, html, event: 'admin_login_alert', sensitive: true,
+    idempotencyKey: 'admin-login-alert:' + String(user.id || username) + ':' + Date.now()
   });
-  const responseText = await response.text();
-  let result;
-  try { result = JSON.parse(responseText); }
-  catch { throw new Error('Apps Script login notification returned an invalid response.'); }
-  if (!response.ok || result.success !== true) {
-    throw new Error('Apps Script login notification failed: ' + String(result.error || 'request rejected').slice(0, 120));
-  }
 }
 
-async function sendOtpEmail(user, code) {
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
-
-  // Prefer the HTTPS Apps Script mailer when configured. SMTP remains available
-  // as a backwards-compatible fallback for paid/other hosting environments.
-  if (mailerUrl || mailerToken) {
-    if (!mailerUrl || !mailerToken) {
-      throw new Error('Apps Script OTP mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
-    }
-
-    let endpoint;
-    try {
-      endpoint = new URL(mailerUrl);
-    } catch {
-      throw new Error('OTP_MAILER_URL is invalid.');
-    }
-    if (endpoint.protocol !== 'https:' ||
-        endpoint.hostname !== 'script.google.com' ||
-        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-    }
-    if (mailerToken.length < 32) {
-      throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-    }
-
-    let response;
-    try {
-      response = await fetch(endpoint.toString(), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token: mailerToken, to: user.email, code }),
-        signal: AbortSignal.timeout(20000),
-        redirect: 'follow'
-      });
-    } catch (error) {
-      throw new Error('Apps Script OTP mailer request failed: ' + String(error.name || 'network error'));
-    }
-
-    const responseText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      throw new Error('Apps Script OTP mailer returned an invalid response.');
-    }
-    if (!response.ok || result.success !== true) {
-      const safeError = String(result.error || 'request rejected').slice(0, 120);
-      throw new Error('Apps Script OTP mailer failed: ' + safeError);
-    }
-    return;
-  }
-
-  const transporter = createMailer();
-  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
-  await transporter.sendMail({
-    from, to: user.email,
-    subject: 'FAZ NETWORK sign-in verification code',
-    text: 'Hello ' + user.username + ',\n\nYour FAZ NETWORK first-login verification code is ' + code + '. It expires in 5 minutes. If you did not request this, contact your system administrator.\n\nDo not share this code.',
-    html: '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(user.username) + ',</p><p>Your first-login verification code is:</p><div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px;background:#f0fdf4;border-radius:10px;text-align:center">' + code + '</div><p>This code expires in <b>5 minutes</b>. Do not share it.</p><p>If you did not request this code, contact your system administrator.</p></div>'
+async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp', client = null) {
+  const recipient = String(user.email || '').trim();
+  if (!recipient) throw new Error('A verified email address is required to deliver the OTP.');
+  const expiry = new Date(expiresAt || Date.now() + OTP_TTL_MS);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now()) throw new Error('OTP has expired and will not be queued.');
+  const invitationOtp = purpose === 'invitation_otp';
+  const title = invitationOtp ? 'FAZ NETWORK invitation verification code' : 'FAZ NETWORK sign-in verification code';
+  const label = invitationOtp ? 'invitation verification code' : 'first-login verification code';
+  const username = String(user.username || 'user').slice(0, 60);
+  const text = 'Hello ' + username + ',\n\nYour FAZ NETWORK ' + label + ' is ' + code + '. It expires in 5 minutes. Do not share this code.';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(username) + ',</p><p>Your ' + escapeHtml(label) + ' is:</p><div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px;background:#f0fdf4;border-radius:10px;text-align:center">' + escapeHtml(code) + '</div><p>This code expires in <b>5 minutes</b>. Do not share it.</p></div>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: recipient, subject: title, text, html, event: invitationOtp ? 'admin_invitation_otp' : 'admin_login_otp',
+    sensitive: true, expiresAt: expiry,
+    idempotencyKey: 'admin-otp:' + String(user.id || user.username || recipient) + ':' + expiry.getTime(), client
   });
 }
 
@@ -220,14 +136,11 @@ async function login(req, res) {
         const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
         const expiresAt = new Date(Date.now() + OTP_TTL_MS);
         const codeHash = hashOtp(user.id, code);
-        await db.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3', [codeHash, expiresAt, user.id]);
-        try {
-          await sendOtpEmail(user, code);
-        } catch (mailError) {
-          await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [user.id]).catch(() => {});
-          console.error('[RBAC OTP] Email delivery failed:', mailError.message);
-          return res.status(503).render('login', { next: nextTarget, error: 'Verification email could not be sent. Contact the administrator; no session was created.' });
-        }
+        await db.withTransaction(async client => {
+          const updated=await client.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE RETURNING id', [codeHash, expiresAt, user.id]);
+          if(!updated.rows.length)throw new Error('First-login OTP could not be stored because the account state changed.');
+          await sendOtpEmail(user, code, expiresAt, 'admin_otp', client);
+        });
         req.session.pendingOtpUserId = user.id;
         req.session.pendingOtpNext = nextTarget;
         req.session.pendingOtpIssuedAt = Date.now();
@@ -258,39 +171,97 @@ function showOtp(req, res) {
 async function verifyOtp(req, res) {
   const userId = req.session?.pendingOtpUserId;
   if (!userId) return res.redirect('/login');
+
   if (Number(req.session.pendingOtpAttempts || 0) >= MAX_OTP_ATTEMPTS) {
-    await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [userId]).catch(() => {});
-    return req.session.destroy(() => res.redirect('/login'));
+    try {
+      await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [userId]);
+    } catch (error) {
+      console.error('[RBAC OTP] Failed to invalidate OTP after session attempt limit:', error.message);
+      return res.status(503).render('verify-otp', {
+        error: 'Verification could not be safely reset. Please try signing in again later.'
+      });
+    }
+    return req.session.destroy(error => {
+      if (error) {
+        console.error('[RBAC OTP] Failed to destroy session after attempt limit:', error.message);
+        return res.status(503).render('verify-otp', {
+          error: 'Too many attempts. Your session could not be closed safely; please retry signing in.'
+        });
+      }
+      return res.redirect('/login');
+    });
   }
+
   const code = String(req.body?.otp || '').trim();
   if (!/^\d{6}$/.test(code)) {
     req.session.pendingOtpAttempts = Number(req.session.pendingOtpAttempts || 0) + 1;
-    return req.session.save(() => res.status(400).render('verify-otp', { error: 'Enter the 6-digit code sent to your email.' }));
+    return req.session.save(error => {
+      if (error) {
+        console.error('[RBAC OTP] Failed to persist malformed-code attempt:', error.message);
+        return res.status(503).render('verify-otp', {
+          error: 'Verification state could not be saved. Please try again.'
+        });
+      }
+      return res.status(400).render('verify-otp', {
+        error: 'Enter the 6-digit code queued for delivery to your email.'
+      });
+    });
   }
+
   try {
-    const result = await db.query('SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, otp_attempts, status FROM admin_users WHERE id=$1 LIMIT 1', [userId]);
+    const result = await db.query(
+      'SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, otp_attempts, status FROM admin_users WHERE id=$1 LIMIT 1',
+      [userId]
+    );
     const user = result.rows?.[0];
+
     if (user && Number(user.otp_attempts || 0) >= MAX_OTP_ATTEMPTS) {
-      await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [userId]);
-      return req.session.destroy(() => res.redirect('/login'));
+      await db.query(
+        'UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1',
+        [userId]
+      );
+      return req.session.destroy(error => {
+        if (error) {
+          console.error('[RBAC OTP] Failed to destroy session after database attempt limit:', error.message);
+          return res.status(503).render('verify-otp', {
+            error: 'Too many attempts. Your session could not be closed safely; please retry signing in.'
+          });
+        }
+        return res.redirect('/login');
+      });
     }
+
     const valid = user && user.status === 'active' && user.is_first_login === true &&
       user.otp_code_hash && user.otp_expires_at && new Date(user.otp_expires_at).getTime() > Date.now() &&
       safeEqualHex(user.otp_code_hash, hashOtp(userId, code));
+
     if (!valid) {
       req.session.pendingOtpAttempts = Number(req.session.pendingOtpAttempts || 0) + 1;
-      await db.query('UPDATE admin_users SET otp_attempts=otp_attempts+1, otp_code_hash=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_code_hash END, otp_expires_at=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_expires_at END WHERE id=$1', [userId, MAX_OTP_ATTEMPTS]).catch(() => {});
-      await req.session.save(() => {});
-      return res.status(400).render('verify-otp', { error: 'Invalid or expired code. Check the email and try again.' });
+      await db.query(
+        'UPDATE admin_users SET otp_attempts=otp_attempts+1, otp_code_hash=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_code_hash END, otp_expires_at=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_expires_at END WHERE id=$1',
+        [userId, MAX_OTP_ATTEMPTS]
+      );
+      await new Promise((resolve, reject) => {
+        req.session.save(error => error ? reject(error) : resolve());
+      });
+      return res.status(400).render('verify-otp', {
+        error: 'Invalid or expired code. Check the email and try again.'
+      });
     }
+
     const nextTarget = safeNext(req.session.pendingOtpNext);
     // Consume the OTP but keep first-login status pending until the user sets
     // a personal password. Do not grant an admin session at this stage.
-    await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, updated_at=NOW() WHERE id=$1 AND is_first_login=TRUE', [user.id]);
+    await db.query(
+      'UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, updated_at=NOW() WHERE id=$1 AND is_first_login=TRUE',
+      [user.id]
+    );
     return req.session.regenerate(err => {
       if (err) {
         console.error('[RBAC] Password-setup session regeneration failed:', err.message);
-        return res.status(500).render('verify-otp', { error: 'Verification succeeded, but secure setup could not start. Please sign in again.' });
+        return res.status(500).render('verify-otp', {
+          error: 'Verification succeeded, but secure setup could not start. Please sign in again.'
+        });
       }
       req.session.pendingPasswordUserId = user.id;
       req.session.pendingPasswordNext = nextTarget;
@@ -298,14 +269,18 @@ async function verifyOtp(req, res) {
       return req.session.save(saveErr => {
         if (saveErr) {
           console.error('[RBAC] Password-setup session save failed:', saveErr.message);
-          return res.status(500).render('verify-otp', { error: 'Could not start password setup. Please sign in again.' });
+          return res.status(500).render('verify-otp', {
+            error: 'Could not start password setup. Please sign in again.'
+          });
         }
         return res.redirect('/login/set-password');
       });
     });
   } catch (error) {
     console.error('[RBAC OTP] Verification failed:', error.message);
-    return res.status(503).render('verify-otp', { error: 'Verification service is unavailable. Please retry.' });
+    return res.status(503).render('verify-otp', {
+      error: 'Verification service is unavailable. Please retry.'
+    });
   }
 }
 
@@ -377,59 +352,21 @@ async function listUsers(req, res) {
   }
 }
 
-async function sendInvitationEmail(invitation, rawToken) {
+async function sendInvitationEmail(invitation, rawToken, client = null) {
   const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
   let base;
   try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
   const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
-
-  // Prefer the existing Google Apps Script mailer for invitation links. SMTP is
-  // retained as a fallback when the Apps Script mailer is not configured.
-  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
-  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
-  if (mailerUrl || mailerToken) {
-    if (!mailerUrl || !mailerToken) throw new Error('Apps Script mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
-    let endpoint;
-    try { endpoint = new URL(mailerUrl); } catch { throw new Error('OTP_MAILER_URL is invalid.'); }
-    if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
-      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
-    }
-    if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
-    let response;
-    try {
-      response = await fetch(endpoint.toString(), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'invitation', token: mailerToken, to: invitation.email,
-          username: String(invitation.username || '').slice(0, 60),
-          role: roleLabel, link
-        }),
-        signal: AbortSignal.timeout(20000),
-        redirect: 'follow'
-      });
-    } catch (error) {
-      throw new Error('Apps Script invitation mailer request failed: ' + String(error.name || 'network error'));
-    }
-    let result;
-    try { result = JSON.parse(await response.text()); }
-    catch { throw new Error('Apps Script invitation mailer returned an invalid response.'); }
-    if (!response.ok || result.success !== true) {
-      throw new Error('Apps Script invitation mailer failed: ' + String(result.error || 'request rejected').slice(0, 120));
-    }
-    return;
-  }
-
-  const transporter = createMailer();
-  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
-  await transporter.sendMail({
-    from, to: invitation.email,
-    subject: 'FAZ NETWORK — invitation to join as ' + roleLabel,
-    text: 'Hello ' + invitation.username + ',\\n\\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\\n\\n' + link + '\\n\\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
-    html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>Hello ' + escapeHtml(invitation.username) + ',</p><p>You have been invited to join FAZ NETWORK as <b>' + escapeHtml(roleLabel) + '</b>.</p><p>Open the secure invitation link below. We will send a one-time verification code to this email before you can set your password.</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in <b>24 hours</b> and can be cancelled by the administrator. If you were not expecting this, ignore this email.</p></div>'
+  const username = String(invitation.username || '').slice(0, 60);
+  const title = 'Invitation to FAZ NETWORK';
+  const text = 'Hello ' + username + ',\n\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and verify your email here: ' + link + '\n\nThis invitation expires in 24 hours.';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(username) + ',</p><p>You have been invited to join as <b>' + escapeHtml(roleLabel) + '</b>.</p><p><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in 24 hours.</p></div>';
+  return require('../services/emailOutboxService').enqueueEmail({
+    to: invitation.email, subject: title, text, html, event: 'admin_invitation',
+    sensitive: true, expiresAt: invitation.expires_at,
+    idempotencyKey: 'admin-invitation:' + String(invitation.id), client
   });
 }
 
@@ -451,22 +388,23 @@ async function createUser(req, res) {
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const created = await db.query(
-      "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
-      [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
-    );
-    try {
-      await sendInvitationEmail(created.rows[0], rawToken);
-    } catch (mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(()=>{});
-      console.error('[RBAC invitation] Email delivery failed:', mailError.message);
-      return res.status(503).json({ success: false, message: 'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render, then create the invitation again.' });
-    }
+    const created = await db.withTransaction(async client => {
+      const inserted = await client.query(
+        "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
+        [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
+      );
+      if (!inserted.rows.length) throw new Error('Invitation row was not created.');
+      await sendInvitationEmail(inserted.rows[0], rawToken, client);
+      return inserted;
+    });
     await writeAudit(req, 'admin_invitation_created', null, { username, email, role, invitationId: created.rows[0].id });
-    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation link sent to ' + email + '. The account will be created only after email OTP verification and password setup.' });
+    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] Invitation creation failed:', error.message);
+    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient/i.test(String(error.message||''))) {
+      return res.status(503).json({ success:false, message:'Invitation was not created because its email could not be queued. Check the email worker, outbox schema, and payload encryption key.' });
+    }
     return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
   }
 }
@@ -481,21 +419,23 @@ async function resendInvitation(req,res) {
     if(user.is_first_login!==true)return res.status(409).json({success:false,message:'This account has already completed verification.'});
     if(req.auth?.role==='admin'&&user.role!=='staff')return res.status(403).json({success:false,message:'Admins may invite Staff accounts only.'});
     if(req.auth?.role!=='admin'&&req.auth?.role!=='super_admin')return res.status(403).json({success:false,message:'Not authorized.'});
-    await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
     const rawToken=crypto.randomBytes(32).toString('base64url');
     const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt=new Date(Date.now()+24*60*60*1000);
-    const invite=await db.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
-    try { await sendInvitationEmail(invite.rows[0],rawToken); }
-    catch(mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(()=>{});
-      console.error('[RBAC invitation] Resend failed:',mailError.message);
-      return res.status(503).json({success:false,message:'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render.'});
-    }
+    const invite=await db.withTransaction(async client=>{
+      await client.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
+      const inserted=await client.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
+      if(!inserted.rows.length)throw new Error('Replacement invitation was not created.');
+      await sendInvitationEmail(inserted.rows[0],rawToken,client);
+      return inserted;
+    });
     await writeAudit(req,'admin_invitation_resent',id,{invitationId:invite.rows[0].id,email:user.email,role:user.role});
-    return res.json({success:true,message:'Invitation link sent to '+user.email+'.'});
+    return res.json({success:true,message:'Invitation email queued for '+user.email+'.'});
   } catch(error) {
     console.error('[RBAC invitation] Resend failed:',error.message);
+    if (/email outbox|email worker|EMAIL_PAYLOAD_ENCRYPTION_KEY|email recipient/i.test(String(error.message||''))) {
+      return res.status(503).json({success:false,message:'Replacement invitation was not committed because its email could not be queued. Check the email worker, outbox schema, and payload encryption key.'});
+    }
     return res.status(500).json({success:false,message:'Unable to resend invitation.'});
   }
 }
@@ -554,14 +494,12 @@ async function sendInvitationOtp(req, res) {
     const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
     const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
     const otpExpires=new Date(Date.now()+OTP_TTL_MS);
-    await db.query('UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status=\'pending\'',[otpHash,otpExpires,invite.id]);
-    try { await sendOtpEmail(invite,code); }
-    catch(mailError) {
-      await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(()=>{});
-      console.error('[RBAC invitation] OTP delivery failed:',mailError.message);
-      return res.status(503).json({success:false,message:'Could not send OTP to the invited email. Please retry later.'});
-    }
-    return res.json({success:true,message:'OTP sent to the invited email. It expires in 5 minutes.'});
+    await db.withTransaction(async client=>{
+      const updated=await client.query("UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status='pending' AND expires_at>NOW() RETURNING id",[otpHash,otpExpires,invite.id]);
+      if(!updated.rows.length)throw new Error('Invitation is no longer pending or has expired.');
+      await sendOtpEmail(invite,code,otpExpires,'invitation_otp',client);
+    });
+    return res.json({success:true,message:'OTP queued for delivery to the invited email. It expires in 5 minutes.'});
   } catch(error) {
     console.error('[RBAC invitation] OTP request failed:',error.message);
     return res.status(503).json({success:false,message:'Unable to send verification code.'});
@@ -579,32 +517,39 @@ async function acceptInvitation(req, res) {
   if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Passwords do not match.'});
   try {
     const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-    const found=await db.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
-    const invite=found.rows[0];
-    if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
-    if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'OTP expired or locked. Request a new code.'});
-    const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
-    const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
-    if(!safeEqualHex(invite.otp_code_hash,otpHash)) {
-      await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
-      return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
-    }
-    const passwordHash=await bcrypt.hash(password,12);
-    let created;
-    if(invite.target_user_id) {
-      created=await db.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
-      if(!created.rows.length)return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
-    } else {
-      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
-      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
-      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
-    }
-    const consumed=await db.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
-    if(!consumed.rows.length) {
-      return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
-    }
-    await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:invite.username,role:invite.role});
-    return res.render('accept-invitation-success',{username:invite.username});
+    const outcome=await db.withTransaction(async client=>{
+      const found=await client.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' FOR UPDATE",[tokenHash]);
+      const invite=found.rows[0];
+      if(!invite||new Date(invite.expires_at).getTime()<=Date.now())return {kind:'expired'};
+      if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS)return {kind:'otp_expired',invite};
+      const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
+      if(!secret)throw new Error('OTP hash secret is not configured.');
+      const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
+      if(!safeEqualHex(invite.otp_code_hash,otpHash)){
+        await client.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
+        return {kind:'invalid_otp',invite};
+      }
+      const passwordHash=await bcrypt.hash(password,12);
+      let created;
+      if(invite.target_user_id) {
+        created=await client.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
+        if(!created.rows.length)return {kind:'account_not_pending'};
+      } else {
+        const exists=await client.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
+        if(exists.rows.length)return {kind:'already_registered',invite};
+        created=await client.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+      }
+      const consumed=await client.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
+      if(!consumed.rows.length)throw new Error('Invitation could not be atomically consumed.');
+      return {kind:'accepted',invite,user:created.rows[0]};
+    });
+    if(outcome.kind==='expired')return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
+    if(outcome.kind==='otp_expired')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'OTP expired or locked. Request a new code.'});
+    if(outcome.kind==='invalid_otp')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'Invalid OTP. Please check the code and retry.'});
+    if(outcome.kind==='account_not_pending')return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
+    if(outcome.kind==='already_registered')return res.status(409).render('accept-invitation',{invitation:outcome.invite,token,error:'This username or email has already been registered. Contact the administrator.'});
+    await writeAudit(req,'admin_invitation_accepted',outcome.user.id,{invitationId:outcome.invite.id,username:outcome.invite.username,role:outcome.invite.role});
+    return res.render('accept-invitation-success',{username:outcome.invite.username});
   } catch(error) {
     if(error.code==='23505') return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'Username or email has already been registered.'});
     console.error('[RBAC invitation] Acceptance failed:',error.message);

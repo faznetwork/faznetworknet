@@ -209,13 +209,17 @@ async function webhook(req,res){
     if(!claim.rows.length)throw new Error("Could not persist the payment claim.");
     claimedTransactionId=claim.rows[0].id;
     const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
+    const notificationDispatcher=require("../services/notificationDispatcher");
+    const notificationPayload={userType:"pppoe",event:"payment",customer,to:customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.fullName||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration,email_idempotency_key:"pppoe-payment:"+String(claimedTransactionId)+":paid"}};
     await db.withTransaction(async client=>{
      await persistCustomerRenewal(client.query.bind(client),customer,renewal);
      const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+     const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+     if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
     });
     claimedTransactionId=null;
-    require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"payment",customer,to:customer.phone||customer.mobile||customer.account_phone||customer.mobile_number||customer.contact_no,username:customer.username,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",variables:{name:customer.full_name||customer.fullName||customer.name||customer.username,username:customer.username,amount:payment.amount,gateway:payment.channel,trx_id:payment.trxId,new_expiry_date:renewal.expiration}});
+    notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
@@ -324,10 +328,21 @@ async function manualMatchHotspot(req,res,tx,trxId){
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount) VALUES($1,$2,$3,$4) ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount",[claimedTransactionId,voucher.id,phone,amount]);
    const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,claimedTransactionId]);
    if(!finalized.rows?.length)throw new Error("Voucher was staged but the claimed transaction could not be finalized.");
+   const notificationDispatcher=require("../services/notificationDispatcher");
+   const event=wasRecharge?"recharge":"payment";
+   const notificationPayload={userType:"hotspot",event,customer:{username:phone,name:phone,phone,profile:profile.name},to:phone,username:phone,message:"Your FAZ NETWORK Hotspot payment has been manually assigned. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id,email_idempotency_key:"hotspot-payment:"+String(claimedTransactionId)+":"+event}};
+   const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+   if(!emailResult.success)throw new Error("Hotspot payment was not committed because transactional email enqueue failed: "+JSON.stringify(emailResult.results||[]));
+   if(!wasRecharge){
+    const welcomePayload={userType:"hotspot",event:"welcome",customer:{username:phone,name:phone,phone,profile:profile.name},to:phone,username:phone,message:"Welcome to FAZ NETWORK. Your Hotspot package "+profile.name+" is ready to activate on first Wi-Fi login.",variables:{name:phone,username:phone,amount,profile:profile.name,expiry_date:"",email_idempotency_key:"hotspot-welcome:"+String(claimedTransactionId)}};
+    const welcomeEmailResult=await notificationDispatcher.dispatchNow({...welcomePayload,channels:["email"],emailClient:client});
+    if(!welcomeEmailResult.success)throw new Error("Hotspot welcome email enqueue failed: "+JSON.stringify(welcomeEmailResult.results||[]));
+   }
   });
   claimedTransactionId=null;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:wasRecharge?"recharge":"payment",to:phone,username:phone,message:"Your FAZ NETWORK Hotspot payment has been manually assigned. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id}});
-  if(!wasRecharge)require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"welcome",to:phone,username:phone,message:"Welcome to FAZ NETWORK. Your Hotspot package "+profile.name+" is ready to activate on first Wi-Fi login.",variables:{name:phone,username:phone,amount,profile:profile.name,expiry_date:""}});
+  const notificationDispatcher=require("../services/notificationDispatcher");
+  notificationDispatcher.dispatchNotification({userType:"hotspot",event:wasRecharge?"recharge":"payment",customer:{username:phone,name:phone,phone,profile:profile.name},to:phone,username:phone,message:"Your FAZ NETWORK Hotspot payment has been manually assigned. Package: "+profile.name+". Amount: Tk "+amount+".",excludeChannels:["email"],variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id,email_idempotency_key:"hotspot-payment:"+String(tx.id)+":"+(wasRecharge?"recharge":"payment")}});
+  if(!wasRecharge)notificationDispatcher.dispatchNotification({userType:"hotspot",event:"welcome",customer:{username:phone,name:phone,phone,profile:profile.name},to:phone,username:phone,message:"Welcome to FAZ NETWORK. Your Hotspot package "+profile.name+" is ready to activate on first Wi-Fi login.",excludeChannels:["email"],variables:{name:phone,username:phone,amount,profile:profile.name,expiry_date:"",email_idempotency_key:"hotspot-welcome:"+String(tx.id)}});
   return res.json({success:true,service_type:"hotspot",trxId:tx.trx_id,phone,package:profile.name,voucher,pending_activation:true,message:"Transaction assigned. Hotspot package is staged in PostgreSQL and will activate on the customer's first Wi-Fi login."});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[Manual Hotspot Match] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
@@ -359,13 +374,17 @@ async function manualMatch(req,res){
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
+  const notificationDispatcher=require("../services/notificationDispatcher");
+  const notificationPayload={userType:"pppoe",event:"renewal",to:customer.phone,customer,username:user.rows[0].username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+String(renewal.expiration||"")+".",variables:{name:customer.full_name||customer.name||user.rows[0].username,username:user.rows[0].username,amount:tx.amount,gateway:tx.channel,trx_id:tx.trx_id,new_expiry_date:renewal.expiration,email_idempotency_key:"pppoe-payment:"+String(tx.id)+":paid"}};
   await db.withTransaction(async client=>{
    await persistCustomerRenewal(client.query.bind(client),customer,renewal);
    const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
    if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+   const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
+   if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
   });
   claimedTransactionId=null;
-  require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"renewal",to:customer.phone,username:user.rows[0].username,message:"Your FAZ NETWORK service renewal is complete. New expiry: "+String(renewal.expiration||"")+".",variables:{name:customer.full_name||customer.name||user.rows[0].username,username:user.rows[0].username,amount:tx.amount,gateway:tx.channel,trx_id:tx.trx_id,new_expiry_date:renewal.expiration}});
+  notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
@@ -575,6 +594,7 @@ async function verifyTrx(req,res){
   claimedTransactionId=claim.rows[0].id??tx.id;
   const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
   const pendingComment="FAZ|PENDING|PROFILE="+profile.name;
+  const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
   let wasRecharge=false,provisioningVoucher=null;
   await db.withTransaction(async client=>{
    if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
@@ -607,6 +627,10 @@ async function verifyTrx(req,res){
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[claimedTransactionId,row.id,String(phone||''),amount,row.profile]);
    const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[username,claimedTransactionId]);
    if(!finalized.rows?.length)throw new Error("The package was staged but the payment transaction could not be finalized.");
+   const notificationDispatcher=require("../services/notificationDispatcher");
+   const emailPayload={userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username,customer:{username,name:customerName,phone,profile:profile.name},customerName,message:"FAZ NETWORK payment received for Tk "+amount+". TrxID "+(tx.trx_id||cleanTrx)+".",variables:{name:customerName,username,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx,email_idempotency_key:"hotspot-payment:"+String(claimedTransactionId)+":paid"}};
+   const emailResult=await notificationDispatcher.dispatchNow({...emailPayload,channels:["email"],emailClient:client});
+   if(!emailResult.success)throw new Error("Hotspot payment was not committed because transactional email enqueue failed: "+JSON.stringify(emailResult.results||[]));
    provisioningVoucher={...row,username,phone,mac_address:boundMac||null,expires_at:nextExpiry,first_login_at:firstLoginAt,comment:stagedComment,profile:profile.name,server:row.server||"all",id:row.id};
   });
   claimedTransactionId=null;
@@ -622,10 +646,9 @@ async function verifyTrx(req,res){
     console.error("[VERIFY-TRX] Payment recorded; MAC-bound RouterOS activation needs retry:",{mac,error:routerError?.message||String(routerError)});
    }
   }else activationPending=true;
-  const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
   if(phone){
    const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
-   require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
+   require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,excludeChannels:["email"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx,email_idempotency_key:"hotspot-payment:"+String(claimedTransactionId||tx.id)+":paid"}});
   }
   return res.json({success:true,pending_activation:!activated,activation_pending:activationPending,message:activated?"Payment verified and the existing MAC-bound Hotspot account has been recharged.":activationPending?"Payment verified and saved; RouterOS activation is pending. Reconnect or contact support if it does not activate automatically.":"Payment verified.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:expiration?new Date(expiration).toISOString():null,username:mac||null,password:mac||null,mac:mac||null});
  }catch(e){
