@@ -154,7 +154,7 @@ async function login(req, res) {
         } catch (mailError) {
           await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [user.id]).catch(() => {});
           console.error('[RBAC OTP] Email delivery failed:', mailError.message);
-          return res.status(503).render('login', { next: nextTarget, error: 'Verification email could not be sent. Contact the administrator; no session was created.' });
+          return res.status(503).render('login', { next: nextTarget, error: 'Verification email could not be queued. Contact the administrator; no session was created.' });
         }
         req.session.pendingOtpUserId = user.id;
         req.session.pendingOtpNext = nextTarget;
@@ -348,12 +348,12 @@ async function createUser(req, res) {
     try {
       await sendInvitationEmail(created.rows[0], rawToken);
     } catch (mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(()=>{});
+      await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
       console.error('[RBAC invitation] Email delivery failed:', mailError.message);
-      return res.status(503).json({ success: false, message: 'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render, then create the invitation again.' });
+      return res.status(503).json({ success: false, message: 'Invitation email could not be queued. Check SMTP settings and EMAIL_PAYLOAD_ENCRYPTION_KEY, then retry.' });
     }
     await writeAudit(req, 'admin_invitation_created', null, { username, email, role, invitationId: created.rows[0].id });
-    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation link sent to ' + email + '. The account will be created only after email OTP verification and password setup.' });
+    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] Invitation creation failed:', error.message);
@@ -378,12 +378,12 @@ async function resendInvitation(req,res) {
     const invite=await db.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
     try { await sendInvitationEmail(invite.rows[0],rawToken); }
     catch(mailError) {
-      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(()=>{});
+      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
       console.error('[RBAC invitation] Resend failed:',mailError.message);
-      return res.status(503).json({success:false,message:'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render.'});
+      return res.status(503).json({success:false,message:'Invitation email could not be queued. Check SMTP settings and EMAIL_PAYLOAD_ENCRYPTION_KEY, then retry.'});
     }
     await writeAudit(req,'admin_invitation_resent',id,{invitationId:invite.rows[0].id,email:user.email,role:user.role});
-    return res.json({success:true,message:'Invitation link sent to '+user.email+'.'});
+    return res.json({success:true,message:'Invitation email queued for '+user.email+'.'});
   } catch(error) {
     console.error('[RBAC invitation] Resend failed:',error.message);
     return res.status(500).json({success:false,message:'Unable to resend invitation.'});
@@ -447,11 +447,11 @@ async function sendInvitationOtp(req, res) {
     await db.query('UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status=\'pending\'',[otpHash,otpExpires,invite.id]);
     try { await sendOtpEmail(invite,code,otpExpires,'invitation_otp'); }
     catch(mailError) {
-      await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(()=>{});
+      await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(cleanupError=>console.error("[RBAC cleanup] Failed to update pending credential state:",cleanupError.message));
       console.error('[RBAC invitation] OTP delivery failed:',mailError.message);
       return res.status(503).json({success:false,message:'Could not send OTP to the invited email. Please retry later.'});
     }
-    return res.json({success:true,message:'OTP sent to the invited email. It expires in 5 minutes.'});
+    return res.json({success:true,message:'OTP queued for delivery to the invited email. It expires in 5 minutes.'});
   } catch(error) {
     console.error('[RBAC invitation] OTP request failed:',error.message);
     return res.status(503).json({success:false,message:'Unable to send verification code.'});
