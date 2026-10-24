@@ -453,32 +453,39 @@ async function acceptInvitation(req, res) {
   if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Passwords do not match.'});
   try {
     const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-    const found=await db.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
-    const invite=found.rows[0];
-    if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
-    if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'OTP expired or locked. Request a new code.'});
-    const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
-    const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
-    if(!safeEqualHex(invite.otp_code_hash,otpHash)) {
-      await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
-      return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
-    }
-    const passwordHash=await bcrypt.hash(password,12);
-    let created;
-    if(invite.target_user_id) {
-      created=await db.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
-      if(!created.rows.length)return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
-    } else {
-      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
-      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
-      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
-    }
-    const consumed=await db.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
-    if(!consumed.rows.length) {
-      return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
-    }
-    await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:invite.username,role:invite.role});
-    return res.render('accept-invitation-success',{username:invite.username});
+    const outcome=await db.withTransaction(async client=>{
+      const found=await client.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' FOR UPDATE",[tokenHash]);
+      const invite=found.rows[0];
+      if(!invite||new Date(invite.expires_at).getTime()<=Date.now())return {kind:'expired'};
+      if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS)return {kind:'otp_expired',invite};
+      const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
+      if(!secret)throw new Error('OTP hash secret is not configured.');
+      const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
+      if(!safeEqualHex(invite.otp_code_hash,otpHash)){
+        await client.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
+        return {kind:'invalid_otp',invite};
+      }
+      const passwordHash=await bcrypt.hash(password,12);
+      let created;
+      if(invite.target_user_id) {
+        created=await client.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
+        if(!created.rows.length)return {kind:'account_not_pending'};
+      } else {
+        const exists=await client.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
+        if(exists.rows.length)return {kind:'already_registered',invite};
+        created=await client.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+      }
+      const consumed=await client.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
+      if(!consumed.rows.length)throw new Error('Invitation could not be atomically consumed.');
+      return {kind:'accepted',invite,user:created.rows[0]};
+    });
+    if(outcome.kind==='expired')return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
+    if(outcome.kind==='otp_expired')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'OTP expired or locked. Request a new code.'});
+    if(outcome.kind==='invalid_otp')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'Invalid OTP. Please check the code and retry.'});
+    if(outcome.kind==='account_not_pending')return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
+    if(outcome.kind==='already_registered')return res.status(409).render('accept-invitation',{invitation:outcome.invite,token,error:'This username or email has already been registered. Contact the administrator.'});
+    await writeAudit(req,'admin_invitation_accepted',outcome.user.id,{invitationId:outcome.invite.id,username:outcome.invite.username,role:outcome.invite.role});
+    return res.render('accept-invitation-success',{username:outcome.invite.username});
   } catch(error) {
     if(error.code==='23505') return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'Username or email has already been registered.'});
     console.error('[RBAC invitation] Acceptance failed:',error.message);
