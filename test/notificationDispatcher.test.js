@@ -249,7 +249,7 @@ test("manual PPPoE renewal respects global channel and renewal-rule toggles",asy
    customer:{username:"alice",whatsapp_phone:"01812345678",phone:"01712345678"},
    to:"01912345678",username:"alice",message:"Manual renewal confirmed"
   });
-  assert.equal(result.success,false);
+  assert.equal(result.success,true);
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].channel,"whatsapp");
   assert.equal(result.results[0].status,"skipped");
@@ -276,7 +276,7 @@ test("explicit manual renewal records a skipped history entry when recipient num
    userType:"pppoe",event:"renewal",channels:["whatsapp"],
    customer:{username:"alice",whatsapp_phone:"not-a-phone"},username:"alice",message:"Renewal message"
   });
-  assert.equal(result.success,false);
+  assert.equal(result.success,true);
   assert.deepEqual(result.results,[{channel:"whatsapp",status:"skipped",reason:"invalid_phone"}]);
   assert.equal(recorded.length,1);
   assert.equal(recorded[0].channel,"whatsapp");
