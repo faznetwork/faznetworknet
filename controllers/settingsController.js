@@ -234,10 +234,9 @@ async function testEmail(req,res){
   const emailService=require("../services/emailService");
   const verification=await emailService.verifyConnection();
   if(!verification.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:verification.error||"Email provider configuration verification failed.",details:verification});
-  const isAppsScript=verification.provider==="apps_script";
   const result=await emailService.sendEmail({to,subject,html:"<p>This is a test email from <strong>FAZ NETWORK Notification Hub</strong>.</p><p>Your active email provider is configured and responding.</p>",text:"This is a test email from FAZ NETWORK Notification Hub. Your active email provider is configured and responding."});
   if(!result.success)return res.status(502).set("Cache-Control","no-store").json({success:false,message:result.error||"Test email delivery failed.",details:result,verification});
-  return res.set("Cache-Control","no-store").json({success:true,message:isAppsScript?"Google Apps Script confirmed the test email request successfully.":"SMTP connection verified and test email sent successfully.",verification,result});
+  return res.set("Cache-Control","no-store").json({success:true,message:"SMTP connection verified and test email sent successfully.",verification,result});
  }catch(error){return errorResponse(res,error,502);}
 }
 async function whatsappStatus(req,res){try{return res.set("Cache-Control","no-store").json({success:true,status:await require("../services/whatsappService").getStatusSnapshot()});}catch(error){return errorResponse(res,error,503);}}
