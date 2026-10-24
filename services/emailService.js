@@ -50,9 +50,11 @@ function validateEmailRequest({ to, subject, html, text } = {}) {
   return { recipient, title };
 }
 
-async function sendSmtpEmail({ recipient, title, html, text }, settings, signal) {
+async function sendSmtpEmail({ recipient, title, html, text, event }, settings, signal) {
   const config = normalizeSmtpConfig(settings);
-  const from = '"' + config.from.name.replace(/["\\]/g, "") + '" <' + config.from.address + '>';
+  const securityAlert = event === "admin_login_alert" || event === "admin_logout_alert";
+  const fromAddress = securityAlert ? "billing@faznetwork.com" : config.from.address;
+  const from = '"' + config.from.name.replace(/["\\]/g, "") + '" <' + fromAddress + '>';
   const transporter = nodemailer.createTransport({ ...config, from });
   let abortHandler;
   let attemptTimeout;
@@ -109,10 +111,11 @@ async function sendSmtpEmail({ recipient, title, html, text }, settings, signal)
 
 const SMTP_NETWORK_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNECTION", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "ESOCKET", "ECONNRESET", "EAI_AGAIN"]);
 
-async function sendResendEmail({ recipient, title, html, text }, settings, externalSignal) {
+async function sendResendEmail({ recipient, title, html, text, event }, settings, externalSignal) {
   const apiKey = String(process.env.RESEND_API_KEY || "").trim();
   if (!apiKey) { const error = new Error("Resend HTTP API is not configured: RESEND_API_KEY is missing from the server environment."); error.code = "ERESEND_NOT_CONFIGURED"; throw error; }
-  const fromAddress = String(settings.email_from_address || settings.smtp_username || "").trim();
+  const securityAlert = event === "admin_login_alert" || event === "admin_logout_alert";
+  const fromAddress = securityAlert ? "billing@faznetwork.com" : String(settings.email_from_address || settings.smtp_username || "").trim();
   const fromName = String(settings.email_from_name || "FAZ NETWORK Billing").trim();
   if (!fromAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromAddress)) {
     { const error = new Error("Resend sender is not configured: set email_from_address to an address or domain verified in Resend."); error.code = "ERESEND_SENDER_NOT_VERIFIED"; throw error; }
@@ -168,11 +171,11 @@ async function sendEmail({ to, subject, html, text, event = "manual", sensitive 
     if (resendConfigured) {
       provider = "resend";
       console.info("[EmailService] Using Resend HTTP API as the primary email transport.");
-      result = await sendResendEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
+      result = await sendResendEmail({ recipient: validatedRecipient, title, html, text, event }, settings, signal);
       return result;
     }
     try {
-      result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text }, settings, signal);
+      result = await sendSmtpEmail({ recipient: validatedRecipient, title, html, text, event }, settings, signal);
       return result;
     } catch (smtpError) {
       const smtpCode = String(smtpError && smtpError.code || "");

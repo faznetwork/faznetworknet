@@ -135,7 +135,7 @@ test("invitation acceptance requires the invitee-selected username", async () =>
   assert.match(res.locals.error, /Username must be 3/);
 });
 
-test("invitation acceptance rejects an expired OTP under a row lock", async () => {
+test("invitation acceptance does not require an email OTP", async () => {
   const token = "A".repeat(40);
   const invite = {
     id: 503, username: "phase3.expired", email: "phase3.expired@example.test", role: "staff",
@@ -145,15 +145,16 @@ test("invitation acceptance rejects an expired OTP under a row lock", async () =
   let selectSql = "";
   db.withTransaction = async callback => callback({
     query: async sql => {
-      selectSql = sql;
+      if (sql.includes("FOR UPDATE")) selectSql = sql;
+      if (sql.includes("SELECT 1 FROM admin_users")) return { rows: [{ id: 1 }], rowCount: 1 };
       return { rows: [invite], rowCount: 1 };
     }
   });
   const res = responseRecorder();
-  await controller.acceptInvitation({ params: { token }, body: { username: "phase3.expired", otp: "123456", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
+  await controller.acceptInvitation({ params: { token }, body: { username: "phase3.expired", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
   assert.match(selectSql, /FOR UPDATE/);
-  assert.equal(res.statusCode, 400);
-  assert.match(res.locals.error, /OTP expired or locked/);
+  assert.equal(res.statusCode, 409);
+  assert.doesNotMatch(res.locals.error, /OTP/i);
 });
 
 

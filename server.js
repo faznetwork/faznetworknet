@@ -57,10 +57,14 @@ app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
 app.post("/login/set-password",rbacAuthController.setFirstPassword);
 app.get("/invite/:token",rbacAuthController.showInvitation);
-app.post("/invite/:token/send-otp",rbacAuthController.sendInvitationOtp);
 app.post("/invite/:token/accept",rbacAuthController.acceptInvitation);
-app.post("/logout",(req,res)=>{
+app.post("/logout",async(req,res)=>{
   if(!req.session)return res.redirect("/");
+  const staffUser={id:req.session.userId||null,username:req.session.adminUser||"unknown",role:req.session.role||(req.session.legacySuperAdmin?"super_admin":"staff")};
+  if(staffUser.id&&["staff","admin","super_admin"].includes(String(staffUser.role).toLowerCase())){
+    try{await rbacAuthController.sendSecurityNotification(staffUser,"logout",req);}
+    catch(error){console.error("[RBAC logout alert] Email enqueue failed:",error.message);}
+  }
   req.session.destroy(err=>{
     if(err)console.error("[Session Destroy Error]:",err);
     res.clearCookie("connect.sid",{path:"/"});

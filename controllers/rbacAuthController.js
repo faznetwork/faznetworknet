@@ -20,22 +20,20 @@ function safeEqualHex(left, right) {
   return crypto.timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
 }
 
-async function sendLoginNotification(user, loginType, req) {
-  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || 'faznetwork.com@gmail.com').trim();
-  if (!recipient) throw new Error('ADMIN_LOGIN_NOTIFICATION_EMAIL must be configured for login alerts.');
-  const loginAt = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false });
-  const username = String(user.username || 'unknown').slice(0, 60);
+async function sendSecurityNotification(user, action, req) {
+  const recipient = String(process.env.ADMIN_ALERT_EMAIL || 'faznetwork.com@gmail.com').trim();
+  if (!recipient) throw new Error('ADMIN_ALERT_EMAIL must be configured for security alerts.');
+  const occurredAt = new Date();
+  const timestamp = occurredAt.toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' });
+  const username = String(user.username || user.name || 'unknown').slice(0, 100);
   const role = String(user.role || 'staff').slice(0, 30);
-  const ipAddress = String(req?.ip || '').slice(0, 64) || 'Unavailable';
-  const userAgent = String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable';
-  const normalizedLoginType = loginType === 'first_login' ? 'first_login' : 'login';
-  const title = normalizedLoginType === 'first_login' ? 'FAZ NETWORK first login alert' : 'FAZ NETWORK login alert';
-  const text = 'Account: ' + username + '\nRole: ' + role + '\nLogin type: ' + normalizedLoginType + '\nTime (Asia/Dhaka): ' + loginAt + '\nIP: ' + ipAddress + '\nUser agent: ' + userAgent;
-  const html = '<h2>FAZ NETWORK login alert</h2><p><b>Account:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Login type:</b> ' + escapeHtml(normalizedLoginType) + '</p><p><b>Time (Asia/Dhaka):</b> ' + escapeHtml(loginAt) + '</p><p><b>IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User agent:</b> ' + escapeHtml(userAgent) + '</p>';
-  return require('../services/emailOutboxService').enqueueEmail({
-    to: recipient, subject: title, text, html, event: 'admin_login_alert', sensitive: true,
-    idempotencyKey: 'admin-login-alert:' + String(user.id || username) + ':' + Date.now()
-  });
+  const ipAddress = String(req?.ip || '').split(',')[0].trim().slice(0, 64) || 'Unavailable';
+  const userAgent = String(req?.get?.('user-agent') || req?.headers?.['user-agent'] || '').slice(0, 500) || 'Unavailable';
+  const normalizedAction = action === 'logout' ? 'logout' : 'login';
+  const title = 'FAZ NETWORK staff ' + normalizedAction + ' security alert';
+  const text = 'Security event: ' + normalizedAction.toUpperCase() + '\nStaff: ' + username + '\nRole: ' + role + '\nTime (Asia/Dhaka, UTC+06:00): ' + timestamp + '\nISO timestamp: ' + occurredAt.toISOString() + '\nPublic client IP: ' + ipAddress + '\nUser-Agent: ' + userAgent;
+  const html = '<h2>FAZ NETWORK staff security alert</h2><p><b>Event:</b> ' + escapeHtml(normalizedAction.toUpperCase()) + '</p><p><b>Staff:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Time (Asia/Dhaka, UTC+06:00):</b> ' + escapeHtml(timestamp) + '</p><p><b>ISO timestamp:</b> ' + escapeHtml(occurredAt.toISOString()) + '</p><p><b>Public client IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User-Agent:</b> ' + escapeHtml(userAgent) + '</p>';
+  return require('../services/emailOutboxService').enqueueEmail({ to: recipient, subject: title, text, html, event: 'admin_' + normalizedAction + '_alert', sensitive: true, idempotencyKey: 'admin-' + normalizedAction + '-alert:' + String(user.id || username) + ':' + occurredAt.getTime() });
 }
 
 async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp', client = null) {
@@ -99,7 +97,7 @@ function establishSession(req, res, user, nextTarget, loginType = 'login') {
         db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]).catch(() => {});
       }
       if (user.id && user.legacy !== true) {
-        sendLoginNotification(user, loginType, req).catch(error => {
+        sendSecurityNotification(user, 'login', req).catch(error => {
           console.error('[RBAC login alert] Email delivery failed:', error.message);
         });
       }
@@ -360,7 +358,7 @@ async function sendInvitationEmail(invitation, rawToken, client = null) {
   const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
   const title = 'Invitation to FAZ NETWORK';
-  const text = 'Hello,\n\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and verify your email here: ' + link + '\n\nThis invitation expires in 24 hours.';
+  const text = 'Hello,\n\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and activate your account here: ' + link + '\n\nThis invitation expires in 24 hours.';
   const html = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello,</p><p>You have been invited to join as <b>' + escapeHtml(roleLabel) + '</b>.</p><p><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in 24 hours.</p></div>';
   return require('../services/emailOutboxService').enqueueEmail({
     to: invitation.email, subject: title, text, html, event: 'admin_invitation',
@@ -447,7 +445,7 @@ async function createUser(req, res) {
     return res.status(201).json({
       success: true,
       invitation: created.rows[0],
-      message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created only after email OTP verification and password setup.'
+      message: 'Invitation email queued for ' + email + '. Delivery is asynchronous; the account will be created when the invitation link is accepted and a password is set.'
     });
   } catch (error) {
     const message = String(error?.message || error || 'Unknown invitation creation error');
@@ -563,38 +561,13 @@ async function showInvitation(req, res) {
   }
 }
 
-async function sendInvitationOtp(req, res) {
-  const token=String(req.params.token||'');
-  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).json({success:false,message:'Invalid invitation link.'});
-  try {
-    const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-    const result=await db.query("SELECT id,email,role,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
-    const invite=result.rows[0];
-    if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).json({success:false,message:'Invitation expired or cancelled.'});
-    const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
-    const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
-    const otpExpires=new Date(Date.now()+OTP_TTL_MS);
-    await db.withTransaction(async client=>{
-      const updated=await client.query("UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status='pending' AND expires_at>NOW() RETURNING id",[otpHash,otpExpires,invite.id]);
-      if(!updated.rows.length)throw new Error('Invitation is no longer pending or has expired.');
-      await sendOtpEmail(invite,code,otpExpires,'invitation_otp',client);
-    });
-    return res.json({success:true,message:'OTP queued for delivery to the invited email. It expires in 5 minutes.'});
-  } catch(error) {
-    console.error('[RBAC invitation] OTP request failed:',error.message);
-    return res.status(503).json({success:false,message:'Unable to send verification code.'});
-  }
-}
-
 async function acceptInvitation(req, res) {
   const token=String(req.params.token||'');
-  const code=String(req.body?.otp||'').trim();
   const username=String(req.body?.username||'').trim();
   const password=String(req.body?.password||'');
   const confirmPassword=String(req.body?.confirmPassword||'');
   if(!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).render('accept-invitation',{invitation:null,token:'',error:'Invalid invitation link.'});
   if(!/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).render('accept-invitation',{invitation:{email:'',role:''},token,error:'Username must be 3–60 characters (letters, numbers, dot, underscore or hyphen).'});
-  if(!/^\d{6}$/.test(code)) return res.status(400).render('accept-invitation',{invitation:{username,email:'',role:''},token,error:'Enter the 6-digit OTP sent to your email.'});
   if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Password must be 12–128 characters.'});
   if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Passwords do not match.'});
   try {
@@ -603,14 +576,6 @@ async function acceptInvitation(req, res) {
       const found=await client.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' FOR UPDATE",[tokenHash]);
       const invite=found.rows[0];
       if(!invite||new Date(invite.expires_at).getTime()<=Date.now())return {kind:'expired'};
-      if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS)return {kind:'otp_expired',invite};
-      const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
-      if(!secret)throw new Error('OTP hash secret is not configured.');
-      const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
-      if(!safeEqualHex(invite.otp_code_hash,otpHash)){
-        await client.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
-        return {kind:'invalid_otp',invite};
-      }
       const passwordHash=await bcrypt.hash(password,12);
       let created;
       if(invite.target_user_id) {
@@ -626,12 +591,10 @@ async function acceptInvitation(req, res) {
       return {kind:'accepted',invite,user:created.rows[0]};
     });
     if(outcome.kind==='expired')return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
-    if(outcome.kind==='otp_expired')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'OTP expired or locked. Request a new code.'});
-    if(outcome.kind==='invalid_otp')return res.status(400).render('accept-invitation',{invitation:outcome.invite,token,error:'Invalid OTP. Please check the code and retry.'});
     if(outcome.kind==='account_not_pending')return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
     if(outcome.kind==='already_registered')return res.status(409).render('accept-invitation',{invitation:outcome.invite,token,error:'This username or email has already been registered. Contact the administrator.'});
     await writeAudit(req,'admin_invitation_accepted',outcome.user.id,{invitationId:outcome.invite.id,username:outcome.user.username,role:outcome.invite.role});
-    return res.render('accept-invitation-success',{username:outcome.user.username});
+    return establishSession(req, res, { id: outcome.user.id, username: outcome.user.username, role: normalizeRole(outcome.user.role) }, '/admin/dashboard', 'login');
   } catch(error) {
     if(error.code==='23505') return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'Username or email has already been registered.'});
     console.error('[RBAC invitation] Acceptance failed:',error.message);
@@ -700,4 +663,4 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, sendInvitationEmail, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, sendInvitationEmail, listInvitations, cancelInvitation, resendInvitation, showInvitation, acceptInvitation, updateUserStatus, deleteUser, sendSecurityNotification };
