@@ -2264,6 +2264,7 @@
             <div class="d-flex gap-2"><button type="button" id="smsHistoryExportBtn" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</button><button type="button" id="smsHistoryRefreshBtn" class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
           </div>
           <div class="row g-2 mb-3">
+            <div class="col-6 col-md-2"><label class="form-label small" for="smsHistoryUserType">Customer Type</label><select id="smsHistoryUserType" class="form-select"><option value="pppoe" selected>PPPoE</option><option value="hotspot">Hotspot</option></select></div>
             <div class="col-12 col-md-3"><label class="form-label small" for="smsHistorySearch">Search recipient / message / error</label><input type="search" id="smsHistorySearch" class="form-control" maxlength="120" placeholder="Phone, message text, event…"></div>
             <div class="col-6 col-md-2"><label class="form-label small" for="smsHistoryChannel">Channel</label><select id="smsHistoryChannel" class="form-select"><option value="">All channels</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option></select></div>
             <div class="col-6 col-md-2"><label class="form-label small" for="smsHistoryStatus">Status</label><select id="smsHistoryStatus" class="form-select"><option value="">All statuses</option><option value="sent">Provider accepted</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select></div>
@@ -5165,7 +5166,7 @@ async function deletePlan(id,name){
         }
         let smsHistoryPage=0,smsHistoryPageSize=25,smsHistoryRowsCache=[],smsHistoryTotalRows=0,smsHistoryDebounce=null;
         function smsHistoryEscape(value){const node=document.createElement('span');node.textContent=value==null?'':String(value);return node.innerHTML;}
-        function smsHistoryFilters(){return {search:document.getElementById('smsHistorySearch')?.value.trim()||'',channel:document.getElementById('smsHistoryChannel')?.value||'',status:document.getElementById('smsHistoryStatus')?.value||'',event:document.getElementById('smsHistoryEvent')?.value||'',from:document.getElementById('smsHistoryFrom')?.value||'',to:document.getElementById('smsHistoryTo')?.value||'',limit:smsHistoryPageSize,offset:smsHistoryPage*smsHistoryPageSize};}
+        function smsHistoryFilters(){return {userType:document.getElementById('smsHistoryUserType')?.value||'pppoe',search:document.getElementById('smsHistorySearch')?.value.trim()||'',channel:document.getElementById('smsHistoryChannel')?.value||'',status:document.getElementById('smsHistoryStatus')?.value||'',event:document.getElementById('smsHistoryEvent')?.value||'',from:document.getElementById('smsHistoryFrom')?.value||'',to:document.getElementById('smsHistoryTo')?.value||'',limit:smsHistoryPageSize,offset:smsHistoryPage*smsHistoryPageSize};}
         function smsHistoryQueryString(filters){return new URLSearchParams(Object.entries(filters).filter(([,v])=>v!==''&&v!==null&&v!==undefined)).toString();}
         function smsHistoryDate(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();}
         function renderSmsHistory(data){
@@ -5201,7 +5202,7 @@ async function deletePlan(id,name){
         }
         document.getElementById('smsHistoryRefreshBtn')?.addEventListener('click',()=>{smsHistoryPage=0;loadSmsHistory();});
         document.getElementById('smsHistoryExportBtn')?.addEventListener('click',exportSmsHistoryCsv);
-        ['smsHistoryChannel','smsHistoryStatus','smsHistoryEvent','smsHistoryFrom','smsHistoryTo'].forEach(id=>document.getElementById(id)?.addEventListener('change',()=>{smsHistoryPage=0;loadSmsHistory();}));
+        ['smsHistoryUserType','smsHistoryChannel','smsHistoryStatus','smsHistoryEvent','smsHistoryFrom','smsHistoryTo'].forEach(id=>document.getElementById(id)?.addEventListener('change',()=>{smsHistoryPage=0;loadSmsHistory();}));
         document.getElementById('smsHistorySearch')?.addEventListener('input',()=>{if(smsHistoryDebounce)window.clearTimeout(smsHistoryDebounce);smsHistoryDebounce=window.setTimeout(()=>{smsHistoryPage=0;loadSmsHistory();},300);});
         document.getElementById('smsHistoryPrev')?.addEventListener('click',()=>{if(smsHistoryPage>0){smsHistoryPage--;loadSmsHistory();}});
         document.getElementById('smsHistoryNext')?.addEventListener('click',()=>{if((smsHistoryPage+1)*smsHistoryPageSize<smsHistoryTotalRows){smsHistoryPage++;loadSmsHistory();}});
