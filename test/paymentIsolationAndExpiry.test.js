@@ -57,7 +57,7 @@ test("PPPoE rolling-30 renewal stacks on an existing future expiry", async () =>
 
 test("PPPoE rolling-30 renewal starts today when the previous expiry is in the past", async () => {
   const query = async () => ({ rows: [{ value: "rolling_30" }] });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const expected = new Date(today + "T00:00:00Z");
   expected.setUTCDate(expected.getUTCDate() + 30);
   const result = await paymentController.renewalExpirationDate(1, query, "2000-01-01");
