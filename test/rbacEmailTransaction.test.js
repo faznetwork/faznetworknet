@@ -52,7 +52,7 @@ test("staff invitation and encrypted email job use the same transaction client",
     const client = {
       query: async (sql, args) => {
         statements.push({ sql, args });
-        if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+        if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
         if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
         if (sql.includes("INSERT INTO email_outbox")) return { rows: [{ id: 77, status: "pending" }], rowCount: 1 };
         throw new Error("Unexpected query in invitation transaction: " + sql);
@@ -94,7 +94,7 @@ test("invitation is not committed when its transactional outbox insert fails", a
     try {
       return await callback({
         query: async sql => {
-          if (sql.includes("notification_channel_email_enabled")) return { rows: [{ value: "true" }] };
+          if (sql.includes("app_settings")) return { rows: [{ value: "true" }] };
           if (sql.includes("INSERT INTO admin_invitations")) return { rows: [invitation], rowCount: 1 };
           if (sql.includes("INSERT INTO email_outbox")) throw new Error("email outbox insert failure");
           throw new Error("Unexpected query in invitation transaction: " + sql);
