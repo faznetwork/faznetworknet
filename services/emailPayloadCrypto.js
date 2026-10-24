@@ -60,4 +60,6 @@ function decryptPayload(envelope) {
   return payload;
 }
 
-module.exports = { encryptPayload, decryptPayload };
+function validateKey() { getKey(); return true; }
+
+module.exports = { encryptPayload, decryptPayload, validateKey };
