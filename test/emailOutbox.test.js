@@ -17,6 +17,7 @@ const originalScheduleRetry = outbox.scheduleRetry;
 
 function setTestKey() {
   process.env.EMAIL_PAYLOAD_ENCRYPTION_KEY = Buffer.alloc(32, 23).toString("base64");
+  process.env.EMAIL_WORKER_ENABLED = "true";
 }
 
 test.afterEach(() => {
