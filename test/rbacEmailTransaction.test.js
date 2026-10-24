@@ -118,6 +118,14 @@ test("invitation is not committed when its transactional outbox insert fails", a
   assert.match(res.body.message, /Invitation was not created because its email could not be queued/);
 });
 
+test("invitation acceptance requires the invitee-selected username", async () => {
+  const token = "A".repeat(40);
+  const res = responseRecorder();
+  await controller.acceptInvitation({ params: { token }, body: { otp: "123456", password: "A-strong-password-123", confirmPassword: "A-strong-password-123" } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.locals.error, /Username must be 3/);
+});
+
 test("invitation acceptance rejects an expired OTP under a row lock", async () => {
   const token = "A".repeat(40);
   const invite = {
