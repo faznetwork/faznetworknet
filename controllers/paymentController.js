@@ -219,7 +219,7 @@ async function webhook(req,res){
      if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
     });
     claimedTransactionId=null;
-    notificationDispatcher.dispatchNotification({...notificationPayload,channels:["sms","whatsapp"]});
+    notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
@@ -373,7 +373,7 @@ async function manualMatch(req,res){
    if(!emailResult.success)throw new Error("Payment was not finalized because its transactional email outbox enqueue failed: "+JSON.stringify(emailResult.results||[]));
   });
   claimedTransactionId=null;
-  notificationDispatcher.dispatchNotification({...notificationPayload,channels:["sms","whatsapp"]});
+  notificationDispatcher.dispatchNotification({...notificationPayload,excludeChannels:["email"]});
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
   if(claimedTransactionId!==null&&!routerSucceeded){
@@ -633,7 +633,7 @@ async function verifyTrx(req,res){
   const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
   if(phone){
    const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
-   require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
+   require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,excludeChannels:["email"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx}});
   }
   return res.json({success:true,pending_activation:!activated,activation_pending:activationPending,message:activated?"Payment verified and the existing MAC-bound Hotspot account has been recharged.":activationPending?"Payment verified and saved; RouterOS activation is pending. Reconnect or contact support if it does not activate automatically.":"Payment verified.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:expiration?new Date(expiration).toISOString():null,username:mac||null,password:mac||null,mac:mac||null});
  }catch(e){
