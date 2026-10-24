@@ -255,7 +255,9 @@ test("invitation email uses BASE_URL before APP_URL and puts the same custom-dom
     const expectedLink = "https://primary.example.test/invite/test-token";
     assert.match(payload.html, new RegExp(expectedLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.ok(payload.text.includes(expectedLink));
-    assert.doesNotMatch(payload.html + payload.text, /onrender\\.com|secondary\\.example\\.test|legacy-render\\.example\\.test/);
+    assert.equal((payload.html + payload.text).includes("onrender.com"), false);
+    assert.equal((payload.html + payload.text).includes("secondary.example.test"), false);
+    assert.equal((payload.html + payload.text).includes("legacy-render.example.test"), false);
   } finally {
     outbox.enqueueEmail = originalEnqueue;
     for (const [key, value] of [["BASE_URL", originalBaseUrl], ["APP_URL", originalAppUrl], ["PUBLIC_BASE_URL", originalPublicBaseUrl]]) {
@@ -281,7 +283,8 @@ test("invitation email falls back to faznetwork.com when BASE_URL and APP_URL ar
     assert.ok(payload.html.includes('href="' + expectedLink + '"'));
     assert.ok(payload.html.includes(">" + expectedLink + "</p>"));
     assert.ok(payload.text.includes(expectedLink));
-    assert.doesNotMatch(payload.html + payload.text, /onrender\\.com|legacy-render\\.example\\.test/);
+    assert.equal((payload.html + payload.text).includes("onrender.com"), false);
+    assert.equal((payload.html + payload.text).includes("legacy-render.example.test"), false);
   } finally {
     outbox.enqueueEmail = originalEnqueue;
     for (const [key, value] of [["BASE_URL", originalBaseUrl], ["APP_URL", originalAppUrl], ["PUBLIC_BASE_URL", originalPublicBaseUrl]]) {
