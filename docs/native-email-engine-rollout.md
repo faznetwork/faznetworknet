@@ -96,3 +96,17 @@ Use an isolated staging PostgreSQL database and a dedicated test inbox. Do not p
 ## Phase 3 verification status
 
 The checklist above is a staging test plan, not evidence that staging tests have been run. This branch must pass the required CI workflows and a real-browser staging smoke test before it is considered ready for merge. No production migration, merge, or deployment is part of this phase.
+
+
+6. **OTP persistence-failure fault injection (staging only)**
+   - Use an isolated staging database and a dedicated test account. Never run these injections against production or real staff accounts.
+   - With the application pointed only at staging, temporarily inject a database failure for the `UPDATE admin_users SET otp_attempts=otp_attempts+1 ...` statement. Submit an incorrect six-digit OTP. Expected: HTTP 503 with a clear verification-service error, a structured `[RBAC OTP] Verification failed` log entry, and no success redirect/session. Remove the injection immediately after the test.
+   - Temporarily inject a failure for the OTP invalidation statement (`UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL ...`). Submit after the attempt limit. Expected: HTTP 503 and an explicit `[RBAC OTP] Failed to invalidate OTP...` log entry; the handler must not silently destroy the session and pretend the database cleanup succeeded. Restore the database behavior after the test.
+   - Simulate session-store `save` failure while submitting malformed OTP input. Expected: HTTP 503 and `[RBAC OTP] Failed to persist malformed-code attempt` in application logs. The handler must not return the ordinary validation response as though persistence succeeded.
+   - For every injected failure, record the test account ID, UTC timestamp, injected fault, HTTP status, and matching log marker without recording the OTP, OTP hash, session cookie, invitation token, or message payload.
+   - Remove all test-only triggers/proxies/fault rules after testing and verify a normal invalid-code request increments the attempt counter. Confirm no test account or test-only database object remains unless explicitly retained for staging regression use.
+
+7. **Rollback and recovery**
+   - Do not roll back or edit production data to recover from a staging test. Remove only the staging fault-injection mechanism, then rerun the same flow without injection.
+   - If a transaction-boundary test fails, preserve the test output and staging database evidence before cleanup. Revert only the test fixture/fault injection; do not manually compensate customer, payment, or transaction rows.
+   - Before any later production rollout, take and verify a restorable backup, document the exact additive migration, and rehearse the rollback against a disposable database snapshot. Since schema changes may not be safely reversible after application code writes outbox rows, use a forward-fix or a reviewed recovery procedure rather than deleting the outbox table blindly.
