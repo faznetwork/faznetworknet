@@ -152,7 +152,7 @@ async function sendSms(args={}){
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
  const settings=await settingsService.getAllSettings();const config=EVENT_CONFIG[event];
- if(config&&!settingsService.bool(settings[config.enabled])){await recordSmsDelivery({to:phone||to,phone:phone||to,message,event,status:"skipped",error:"Notification event is disabled in settings.",mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",userType:extra.userType});return {success:true,skipped:true,reason:"event_disabled"};}
+ if(config&&!settingsService.bool(settings[config.enabled])){return {success:true,skipped:true,reason:"event_disabled"};}
  const resolved={company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...extra,...variables};
  const rendered=useMessageDirectly?renderTemplate(message,resolved):eventTemplate(settings,event,resolved,message);
  return sendSms({to,phone,message:rendered,event,variables:resolved,settings,userType:extra.userType});
