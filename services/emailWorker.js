@@ -12,6 +12,7 @@ const MAX_ATTEMPTS = Math.max(1, Math.min(20, Number(process.env.EMAIL_WORKER_MA
 let stopped = true;
 let loopPromise = null;
 let wakeTimer = null;
+let wakeResolve = null;
 
 function classifyFailure(result) {
   const code = String(result?.code || "").toUpperCase();
@@ -94,7 +95,8 @@ async function runLoop() {
       continue;
     }
     await new Promise(resolve => {
-      wakeTimer = setTimeout(resolve, POLL_INTERVAL_MS);
+      wakeResolve = resolve;
+      wakeTimer = setTimeout(() => { wakeTimer = null; wakeResolve = null; resolve(); }, POLL_INTERVAL_MS);
       if (typeof wakeTimer.unref === "function") wakeTimer.unref();
     });
     wakeTimer = null;
@@ -121,6 +123,8 @@ async function stopEmailWorker() {
   stopped = true;
   if (wakeTimer) clearTimeout(wakeTimer);
   wakeTimer = null;
+  if (wakeResolve) wakeResolve();
+  wakeResolve = null;
   if (loopPromise) {
     await loopPromise;
     loopPromise = null;
