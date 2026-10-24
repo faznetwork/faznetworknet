@@ -30,3 +30,21 @@ test("SMS history rejects unsupported filters without querying database",async()
  try{await controller.list({query:{status:"sent; DROP TABLE sms_delivery_logs"}},res);assert.equal(res.statusCode,400);assert.equal(queried,false);}
  finally{db.query=original;}
 });
+
+test("history delete filter requires explicit customer type and uses parameterized filters",()=>{
+ assert.throws(()=>controller.historyDeleteFilters({}),/Choose Hotspot or PPPoE/);
+ const built=controller.historyDeleteFilters({userType:"hotspot",channel:"email",search:"a%b",from:"2026-09-01"});
+ assert.match(built.where,/user_type=\$1/);assert.match(built.where,/channel=\$3/);assert.equal(built.params[0],"hotspot");assert.equal(built.params[1],"%a%b%");assert.equal(built.params[2],"email");assert.equal(built.params[3],"2026-09-01");
+});
+test("selected history deletion validates IDs and deletes only delivery history",async()=>{
+ const original=db.query,calls=[];db.query=async(sql,params)=>{calls.push({sql,params});return {rowCount:2};};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},set(){return this;},json(body){this.body=body;return this;}};
+ try{await controller.deleteSelected({body:{ids:[2,3]}},res);assert.equal(res.body.deleted,2);assert.match(calls[0].sql,/DELETE FROM sms_delivery_logs WHERE id = ANY/);assert.deepEqual(calls[0].params,[[2,3]]);}
+ finally{db.query=original;}
+});
+test("selected history deletion rejects invalid IDs without database access",async()=>{
+ const original=db.query;let called=false;db.query=async()=>{called=true;return {rowCount:0};};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},set(){return this;},json(body){this.body=body;return this;}};
+ try{await controller.deleteSelected({body:{ids:[0]}},res);assert.equal(res.statusCode,400);assert.equal(called,false);}
+ finally{db.query=original;}
+});
