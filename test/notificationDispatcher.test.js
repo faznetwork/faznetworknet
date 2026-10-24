@@ -217,3 +217,92 @@ test("SMS history instrumentation is shared by automatic notifications and live 
  assert.match(source,/finally\{[\s\S]*await recordSmsDelivery/);
  assert.match(historySource,/INSERT INTO sms_delivery_logs/);
 });
+
+
+test("WhatsApp-specific recipient fields take precedence over generic phone fields",()=>{
+ assert.equal(extractCustomerPhone({whatsapp_phone:"01812345678",whatsapp:"01912345678",phone:"01712345678"}),"01812345678");
+ assert.equal(extractCustomerPhone({whatsapp:"01912345678",phone:"01712345678"}),"01912345678");
+});
+
+test("WhatsApp renewal defaults are enabled when database settings are absent",()=>{
+ assert.equal(settingsService.DEFAULTS.notification_channel_whatsapp_enabled,"true");
+ assert.equal(settingsService.DEFAULTS.notification_rule_pppoe_renewal_whatsapp_enabled,"true");
+});
+
+test("explicit manual PPPoE renewal dispatch bypasses global channel and renewal-rule toggles",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings;
+ const originalSendMessage=whatsappService.sendMessage;
+ const originalDbQuery=db.query;
+ const sent=[];
+ settingsService.getAllSettings=async()=>({
+  notification_channel_whatsapp_enabled:"false",
+  notification_channel_sms_enabled:"false",
+  notification_rule_pppoe_renewal_whatsapp_enabled:"false",
+  notification_rule_pppoe_payment_whatsapp_enabled:"false",
+  notification_rule_pppoe_recharge_whatsapp_enabled:"false"
+ });
+ whatsappService.sendMessage=async payload=>{sent.push(payload);return {success:true};};
+ db.query=async()=>({rows:[]});
+ try{
+  const result=await dispatchNow({
+   userType:"pppoe",event:"renewal",channels:["whatsapp"],
+   customer:{username:"alice",whatsapp_phone:"01812345678",phone:"01712345678"},
+   to:"01912345678",username:"alice",message:"Manual renewal confirmed"
+  });
+  assert.equal(result.success,true);
+  assert.equal(result.results.length,1);
+  assert.equal(result.results[0].channel,"whatsapp");
+  assert.deepEqual(sent,[{to:"8801812345678",message:"Manual renewal confirmed",event:"renewal"}]);
+ }finally{
+  settingsService.getAllSettings=originalGetAllSettings;
+  whatsappService.sendMessage=originalSendMessage;
+  db.query=originalDbQuery;
+ }
+});
+
+test("explicit manual renewal records a skipped history entry when recipient number is invalid",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings;
+ const originalDbQuery=db.query;
+ const history=require("../services/messageHistoryService");
+ const originalRecordMessage=history.recordMessage;
+ const recorded=[];
+ settingsService.getAllSettings=async()=>({notification_channel_whatsapp_enabled:"false",notification_channel_sms_enabled:"false",notification_rule_pppoe_renewal_whatsapp_enabled:"false"});
+ db.query=async()=>({rows:[]});
+ history.recordMessage=async payload=>{recorded.push(payload);};
+ try{
+  const result=await dispatchNow({
+   userType:"pppoe",event:"renewal",channels:["whatsapp"],
+   customer:{username:"alice",whatsapp_phone:"not-a-phone"},username:"alice",message:"Renewal message"
+  });
+  assert.equal(result.success,false);
+  assert.deepEqual(result.results,[{channel:"whatsapp",status:"skipped",reason:"invalid_phone"}]);
+  assert.equal(recorded.length,1);
+  assert.equal(recorded[0].channel,"whatsapp");
+  assert.equal(recorded[0].status,"skipped");
+  assert.equal(recorded[0].event,"renewal");
+ }finally{
+  settingsService.getAllSettings=originalGetAllSettings;
+  db.query=originalDbQuery;
+  history.recordMessage=originalRecordMessage;
+ }
+});
+
+test("manual renewal dispatcher reports WhatsApp transport failures without throwing into billing flow",async()=>{
+ const originalGetAllSettings=settingsService.getAllSettings;
+ const originalSendMessage=whatsappService.sendMessage;
+ const originalDbQuery=db.query;
+ settingsService.getAllSettings=async()=>({notification_channel_whatsapp_enabled:"true",notification_channel_sms_enabled:"false",notification_rule_pppoe_renewal_whatsapp_enabled:"true"});
+ db.query=async()=>({rows:[]});
+ whatsappService.sendMessage=async()=>{throw new Error("linked session unavailable");};
+ try{
+  const result=await dispatchNow({userType:"pppoe",event:"renewal",channels:["whatsapp"],customer:{username:"alice",phone:"01712345678"},message:"Renewed"});
+  assert.equal(result.success,false);
+  assert.equal(result.results.length,1);
+  assert.equal(result.results[0].channel,"whatsapp");
+  assert.match(result.results[0].error,/linked session unavailable/);
+ }finally{
+  settingsService.getAllSettings=originalGetAllSettings;
+  whatsappService.sendMessage=originalSendMessage;
+  db.query=originalDbQuery;
+ }
+});
