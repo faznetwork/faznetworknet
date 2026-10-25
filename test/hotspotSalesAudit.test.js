@@ -31,6 +31,7 @@ test("Scratch card redemption records a durable scratch_card sale",()=>{
  assert.match(source,/const saleType=claimed\.subscriberType==="admin_voucher"\?"manual":"scratch_card"/);
  assert.match(source,/saleType\+":"\+claimed\.id/);
  assert.match(source,/claimed\.profile,saleType\]\);/);
+ assert.match(source,/claimed\.firstUse&&claimed\.subscriberType!=="admin_voucher"/);
  assert.match(source,/claimed\.subscriberType/);
 });
 

@@ -536,7 +536,48 @@ async function createUser(req, res) {
       if (!updated.rows || updated.rows.length !== 1) {
         throw new Error("Generated voucher package metadata could not be persisted.");
       }
-      return updated.rows[0];
+
+      // A voucher created at the ISP counter is a cash sale immediately, not a sale
+      // deferred until the customer first logs in. Keep all ledger links atomic.
+      const trxId = "ADM-MANUAL-" + voucher.id;
+      const sale = await client.query(
+        "INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) " +
+        "VALUES('cash',$1::text,NULLIF($2::text,''),$3::numeric,'processed',$4::text,$5::text,TRUE,'manual_hotspot','manual',NOW(),$6::text) " +
+        "RETURNING id,trx_id",
+        [
+          trxId,
+          phone,
+          Number(updated.rows[0].price || 0),
+          updated.rows[0].username,
+          "Admin manual counter cash sale for voucher " + voucher.id,
+          "admin_manual:" + voucher.id
+        ]
+      );
+      if (!sale.rows || sale.rows.length !== 1 || !sale.rows[0].id) {
+        throw new Error("Admin manual cash sale transaction could not be persisted.");
+      }
+
+      const payment = await client.query(
+        "INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) " +
+        "VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'manual') " +
+        "RETURNING transaction_id",
+        [sale.rows[0].id, voucher.id, phone, Number(updated.rows[0].price || 0), updated.rows[0].profile]
+      );
+      if (!payment.rows || payment.rows.length !== 1) {
+        throw new Error("Admin manual cash sale payment ledger could not be persisted.");
+      }
+
+      const linked = await client.query(
+        "UPDATE hotspot_vouchers SET transaction_id=$1::bigint,updated_at=NOW() " +
+        "WHERE id=$2::bigint AND subscriber_type='admin_voucher' AND transaction_id IS NULL " +
+        "RETURNING id,transaction_id",
+        [sale.rows[0].id, voucher.id]
+      );
+      if (!linked.rows || linked.rows.length !== 1) {
+        throw new Error("Admin manual cash sale could not be linked to its voucher.");
+      }
+
+      return { ...updated.rows[0], transaction_id: sale.rows[0].id, trx_id: sale.rows[0].trx_id };
     });
 
     hotspotListCache.expiresAt = 0;
@@ -612,6 +653,8 @@ async function createUser(req, res) {
         customer_name: stored.customer_name || "",
         phone: stored.phone || "",
         expires_at: stored.expires_at ? new Date(stored.expires_at).toISOString() : null,
+        transaction_id: stored.transaction_id,
+        trx_id: stored.trx_id,
         batch_id: stored.batch_id
       },
       sms

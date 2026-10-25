@@ -27,7 +27,7 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
   const oldQuery=db.query,oldTransaction=db.withTransaction;
   const oldProfiles=mikrotik.getHotspotProfiles,oldDispatch=require("../services/notificationDispatcher").dispatchNotification;
   const dispatcher=require("../services/notificationDispatcher");
-  let insertSql="",insertParams=[],updateSql="",updateParams=[],routerWrites=0,smsPayload=null;
+  let insertSql="",insertParams=[],updateSql="",updateParams=[],saleSql="",saleParams=[],paymentSql="",paymentParams=[],linkSql="",routerWrites=0,smsPayload=null;
   const generatedAt=new Date();
   try{
     db.query=async(sql)=>{
@@ -38,6 +38,18 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
       if(sql.startsWith("INSERT INTO hotspot_vouchers")) {
         insertSql=sql;insertParams=params;
         return {rows:[{id:501,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:generatedAt,batch_id:params[7]}]};
+      }
+      if(sql.startsWith("INSERT INTO transactions")) {
+        saleSql=sql;saleParams=params;
+        return {rows:[{id:901,trx_id:params[0]}]};
+      }
+      if(sql.startsWith("INSERT INTO hotspot_voucher_payments")) {
+        paymentSql=sql;paymentParams=params;
+        return {rows:[{transaction_id:params[0]}]};
+      }
+      if(sql.includes("SET transaction_id=")) {
+        linkSql=sql;
+        return {rows:[{id:501,transaction_id:params[0]}]};
       }
       if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'admin_voucher'")) {
         updateSql=sql;updateParams=params;
@@ -67,6 +79,18 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
     assert.equal(updateSql.includes("mac_lock = FALSE"),true);
     assert.equal(updateParams[1],"01712345678");
     assert.equal(updateParams[2],"New Customer");
+    assert.match(saleSql,/INSERT INTO transactions\(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by\)/);
+    assert.match(saleSql,/VALUES\('cash'.*'processed'.*'manual_hotspot'.*'manual'/);
+    assert.equal(saleParams[0],"ADM-MANUAL-501");
+    assert.equal(saleParams[2],10);
+    assert.match(paymentSql,/INSERT INTO hotspot_voucher_payments/);
+    assert.match(paymentSql,/sale_type\) VALUES/);
+    assert.equal(paymentParams[0],901);
+    assert.equal(paymentParams[1],501);
+    assert.equal(paymentSql.includes("'manual'"),true);
+    assert.match(linkSql,/SET transaction_id=\$1::bigint/);
+    assert.equal(res.body.voucher.transaction_id,901);
+    assert.equal(res.body.voucher.trx_id,"ADM-MANUAL-501");
     assert.equal(routerWrites,0);
     assert.equal(smsPayload.event,"hotspot_voucher_created");
     assert.equal(Object.hasOwn(smsPayload,"channels"),false);
@@ -90,6 +114,9 @@ test("Admin voucher creation skips SMS when no phone is supplied",async()=>{
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:502,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:new Date(),batch_id:params[7]}]};
+      if(sql.startsWith("INSERT INTO transactions"))return {rows:[{id:902,trx_id:params[0]}]};
+      if(sql.startsWith("INSERT INTO hotspot_voucher_payments"))return {rows:[{transaction_id:params[0]}]};
+      if(sql.includes("SET transaction_id="))return {rows:[{id:502,transaction_id:params[0]}]};
       if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'admin_voucher'"))return {rows:[{id:502,username:"PIN12345",password:"PASS12345",profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:null,customer_name:null,server:params[8],time_limit:params[5],data_limit:null,expires_at:null,batch_id:"batch-test",created_at:new Date()}]};
       throw new Error("Unexpected transactional query: "+sql);
     }});
