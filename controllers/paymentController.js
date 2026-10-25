@@ -255,24 +255,26 @@ async function dynamicWebhook(req,res,next){
 async function list(req,res){
  try{
   const gateway=String(req.query.gateway||req.query.channel||"all").trim().toLowerCase();
-  const allowed=["all","bkash","nagad","rocket","upay","pending","requests"];
-  if(!allowed.includes(gateway)) return res.status(400).json({success:false,error:"Invalid payment gateway filter."});
+  const allowedGateways=["all","bkash","nagad","rocket","upay","pending","requests"];
+  if(!allowedGateways.includes(gateway))return res.status(400).json({success:false,error:"Invalid payment gateway filter."});
+  const serviceType=String(req.query.service_type||"all").trim().toLowerCase();
+  if(!["all","pppoe","hotspot"].includes(serviceType))return res.status(400).json({success:false,error:"Invalid payment service_type filter."});
   const page=Math.max(1,Number.parseInt(req.query.page||"1",10)||1);
   const limit=Math.min(200,Math.max(1,Number.parseInt(req.query.limit||"50",10)||50));
   const offset=(page-1)*limit;
-  const params=[];
-  let where="";
-  if(["bkash","nagad","rocket","upay"].includes(gateway)){params.push(gateway);where="WHERE channel=$1";}
-  else if(gateway==="pending"){where="WHERE status='unmatched' OR (status IN ('processed','PAID') AND used=false)";}
-  else if(gateway==="requests"){where="WHERE status='unmatched' AND used=false";}
-  const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions "+where,params);
+  const conditions=[],filterParams=[];
+  if(["bkash","nagad","rocket","upay"].includes(gateway)){filterParams.push(gateway);conditions.push("t.channel=$"+filterParams.length);}
+  else if(gateway==="pending")conditions.push("(t.status='unmatched' OR (t.status IN ('processed','PAID') AND t.used=false))");
+  else if(gateway==="requests")conditions.push("(t.status='unmatched' AND t.used=false)");
+  if(serviceType!=="all"){filterParams.push(serviceType);conditions.push("LOWER(TRIM(COALESCE(t.service_type,'')))=$"+filterParams.length);}
+  const where=conditions.length?" WHERE "+conditions.join(" AND "):"";
+  const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions t"+where,filterParams);
   const total=Number(countQuery.rows[0]?.count||0);
-  params.push(limit,offset);
-  const querySql="SELECT t.*, CASE WHEN NULLIF(BTRIM(t.matched_username), '') IS NULL THEN 'unassigned' WHEN EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))) THEN 'pppoe' WHEN BTRIM(t.matched_username) ~ '^01[0-9]{9}$' THEN 'hotspot' ELSE 'unknown' END AS customer_type FROM transactions t "+where.replace("channel", "t.channel").replace("status", "t.status")+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(params.length-1)+" OFFSET $"+params.length;
-  const r=await db.query(querySql,params);
-  const summaryParams=where ? params.slice(0,-2) : [];
-  const summary=await db.query("SELECT COALESCE(SUM(amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE status='unmatched')::int AS unmatched_count FROM transactions "+where,summaryParams);
-  return res.json({success:true,gateway,page,limit,total,total_pages:Math.max(1,Math.ceil(total/limit)),transactions:r.rows,summary:summary.rows[0]});
+  const pageParams=filterParams.concat([limit,offset]);
+  const querySql="SELECT t.*, CASE WHEN NULLIF(BTRIM(t.matched_username), '') IS NULL THEN 'unassigned' WHEN EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))) THEN 'pppoe' WHEN BTRIM(t.matched_username) ~ '^01[0-9]{9}$' THEN 'hotspot' ELSE 'unknown' END AS customer_type FROM transactions t"+where+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(filterParams.length+1)+" OFFSET $"+(filterParams.length+2);
+  const r=await db.query(querySql,pageParams);
+  const summary=await db.query("SELECT COALESCE(SUM(t.amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE t.status='unmatched')::int AS unmatched_count FROM transactions t"+where,filterParams);
+  return res.json({success:true,gateway,service_type:serviceType,page,limit,total,total_pages:Math.max(1,Math.ceil(total/limit)),transactions:r.rows,summary:summary.rows[0]});
  }catch(e){return errorResponse(res,e,503);}
 }
 async function manualMatchHotspot(req,res,tx,trxId){
