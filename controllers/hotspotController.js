@@ -293,13 +293,21 @@ async function createUser(req,res){
     const note=clean(body.note,1000);
     const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
     const requestedPin=String(body.voucher_pin||body.pin||body.password||"").trim();
-    if(!/^01\\d{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX)."});
+    if(!/^01[0-9]{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX)."});
     if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",message:"Select a Hotspot package/profile."});
     if(requestedPin&&!/^\d{6,8}$/.test(requestedPin))return res.status(400).json({success:false,code:"INVALID_VOUCHER_PIN",message:"Voucher PIN must contain 6 to 8 digits."});
     const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
-    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
+    const availableProfiles=Array.isArray(routerProfiles)?routerProfiles.filter(item=>item&&String(item.name||"").trim()):[];
+    const metadataIdentifierMatches=availableProfiles.filter(item=>{
+      const details=meta[String(item.name)]||{};
+      const identifiers=[details.id,details.profileId,details.profile_id,details.packageId,details.package_id];
+      return identifiers.some(identifier=>identifier!==undefined&&identifier!==null&&String(identifier).trim()===requestedProfile);
+    });
+    let candidates=metadataIdentifierMatches;
+    if(!candidates.length)candidates=availableProfiles.filter(item=>String(item.name).trim()===requestedProfile);
+    if(!candidates.length)candidates=availableProfiles.filter(item=>profileIdentifierMatches(item.name,meta[String(item.name)]||{},requestedProfile));
     if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
-    if(candidates.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:"The selected package/profile could not be mapped to exactly one saved Hotspot profile."});
+    if(candidates.length!==1)return res.status(400).json({success:false,code:candidates.length?"PROFILE_NOT_FOUND_OR_AMBIGUOUS":"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:candidates.length?"The selected package/profile identifier matches multiple saved Hotspot profiles. Please refresh packages and select one profile.":"The selected package/profile could not be mapped to a saved MikroTik Hotspot profile."});
     const profileRow=candidates[0],profile=String(profileRow.name||"").trim(),profileMeta=meta[profile]||{};
     const profileValidity=profileMeta.validityValue?normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit):parseStoredValidity(profileRow);
     const validity=String(profileValidity.validity||"").trim(),quota=Number(profileMeta.limitBytesTotal||profileValidity.limitBytesTotal||0);
