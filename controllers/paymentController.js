@@ -447,7 +447,7 @@ async function issueHotspotVoucherForPayment(req,res,body){
    if(current.service_type&&String(current.service_type).trim().toLowerCase()!=="hotspot")throw Object.assign(new Error("This transaction is not classified as a Hotspot payment."),{statusCode:409,code:"SERVICE_TYPE_MISMATCH"});
    const existing=await client.query("SELECT voucher_id FROM hotspot_voucher_payments WHERE transaction_id=$1::bigint LIMIT 1",[current.id]);
    if(existing.rows?.length)throw Object.assign(new Error("This payment is already associated with a voucher."),{statusCode:409,code:"VOUCHER_ALREADY_ISSUED"});
-   const generated=await hotspotVoucherGenerator.generateVoucherBatch({client,profileName:String(profile.name),validity,price:amount,server:"all",quantity:1,charLength:8,transactionId:current.id,comment:"FAZ NETWORK online payment voucher; profile validity applies on first successful login."});
+   const generated=await hotspotVoucherGenerator.generateVoucherBatch({client,profileName:String(profile.name),validity,price:amount,server:"all",quantity:1,charLength:8,passwordEqualsUsername:true,transactionId:current.id,comment:"FAZ NETWORK online payment voucher; profile validity applies on first successful login."});
    const voucher=generated.vouchers[0];
    if(!voucher?.username)throw new Error("Branded voucher generator did not return a Voucher PIN.");
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs')",[current.id,voucher.id,normalizePhone(current.sender_phone)||"",amount,String(profile.name)]);
