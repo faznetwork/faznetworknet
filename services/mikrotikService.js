@@ -1218,7 +1218,7 @@ class MikroTikService {
     const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address);
     const profile=this._str(data.profile).trim();
     const limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
-    if(!/^\\d{6,8}$/.test(username)||password!==username)throw new Error("Voucher Hotspot provisioning requires a 6 to 8 digit PIN as both username and password.");
+    if(!/^\d{6,8}$/.test(username)||password!==username)throw new Error("Voucher Hotspot provisioning requires a 6 to 8 digit PIN as both username and password.");
     if(!macAddress||!profile||(!this._str(data.validity).trim()&&!limitBytesTotal))throw new Error("Voucher provisioning requires a valid device MAC, profile, and time validity or data quota.");
     const comment=this._hotspotExpiryComment(data);
     return this._withConnection("Voucher Hotspot user creation",async connection=>{
