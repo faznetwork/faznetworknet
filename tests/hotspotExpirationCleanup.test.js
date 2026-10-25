@@ -258,19 +258,19 @@ test("recognizes UNIX epoch expiry metadata and ignores initial zero marker", ()
   assert.equal(routerUserExpired({username:"DHAKA-EXP",disabled:false,comment:"FAZ|EXP: "+dhakaExpiry+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
 });
 
-test("retention purges RouterOS first, archives sales, then deletes only 395-day expired rows", async () => {
+test("retention purges RouterOS first, archives sales, then soft-archives 395-day expired vouchers", async () => {
   const calls=[],routerCalls=[];
   const database={async query(sql,params){
     calls.push({sql,params});
     if(sql.startsWith("SELECT id,username,mac_address")) return {rows:[{id:9,username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF"}]};
     if(sql.startsWith("INSERT INTO hotspot_voucher_sales_archive")) return {rows:[{transaction_id:1}]};
-    if(sql.startsWith("DELETE FROM hotspot_vouchers")) return {rows:[{id:9}]};
+    if(sql.startsWith("UPDATE hotspot_vouchers AS v SET status='archived'")) return {rows:[{id:9}]};
     return {rows:[]};
   }};
-  const router={async cleanupExpiredHotspotUser(username){routerCalls.push(username);return {usersRemoved:1};}};
+  const router={async cleanupExpiredHotspotUser(username){routerCalls.push(username);return {verified:true,usersRemoved:1};}};
   const result=await runHotspotRetentionCleanup({db:database,mikrotikService:router,logger:quietLogger()});
   assert.equal(result.archivedTransactions,1);
-  assert.equal(result.deletedVouchers,1);
+  assert.equal(result.archivedVouchers,1);
   assert.deepEqual(routerCalls,["AA:BB:CC:DD:EE:FF"]);
   assert.ok(calls[1].sql.includes("ON CONFLICT(transaction_id) DO NOTHING"));
   assert.ok(calls[2].sql.includes("expires_at < NOW() - INTERVAL '395 days'"));

@@ -79,17 +79,24 @@ test("Quick Renew stacks expiry from the future expiry rather than from NOW", as
   });
 });
 
-test("Archive changes only the PostgreSQL voucher status and never deletes the live MikroTik user", async () => {
-  await withMocks(async getRouterWrites => {
+test("Archive delegates to verified canonical deletion and retains financial history", async () => {
+  const oldPurge = mikrotik.cleanupExpiredHotspotUser;
+  await withMocks(async () => {
+    mikrotik.cleanupExpiredHotspotUser = async () => ({verified:true,sessionsRemoved:1,cookiesRemoved:1,hostsRemoved:1,usersRemoved:1});
     const res = response();
     await controller.archive({ params: { id: "63" } }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.success, true);
-    assert.match(res.body.message, /PostgreSQL only/);
-    assert.equal(getRouterWrites(), 0);
+    assert.match(res.body.message, /payment ledger/i);
+    assert.equal(res.body.voucher.status, "deleted");
   }, async sql => {
-    if (sql.startsWith("SELECT id FROM hotspot_vouchers")) return { rows: [{ id: 63 }] };
-    if (sql.startsWith("UPDATE hotspot_vouchers SET status='archived'")) return { rows: [{ id: 63, username: "AA:BB:CC:DD:EE:FF", status: "archived" }] };
+    if (sql.startsWith("SELECT id,username,mac_address,last_known_mac,status FROM hotspot_vouchers")) {
+      return { rows: [{ id: 63, username: "AA:BB:CC:DD:EE:FF", mac_address: "AA:BB:CC:DD:EE:FF", last_known_mac: null, status: "active" }] };
+    }
+    if (sql.startsWith("UPDATE hotspot_vouchers AS v SET status='deleted'")) {
+      return { rows: [{ id: 63, username: "AA:BB:CC:DD:EE:FF", status: "deleted", last_known_mac: "AA:BB:CC:DD:EE:FF" }] };
+    }
     throw new Error("Unexpected SQL: " + sql);
   });
+  mikrotik.cleanupExpiredHotspotUser = oldPurge;
 });

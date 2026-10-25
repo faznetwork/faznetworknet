@@ -3,6 +3,7 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 const notificationDispatcher = require("../services/notificationDispatcher");
+const { deleteHotspotSubscriber } = require("../services/hotspotDeletionService");
 
 const clean = (value, max = 255) => String(value ?? "").trim().slice(0, max);
 const lower = value => clean(value, 255).toLowerCase();
@@ -55,7 +56,7 @@ async function list(req, res) {
         console.warn("[Hotspot Subscriber 360] Active-session lookup unavailable; showing DB subscribers offline:", error?.message || error);
         return [];
       }),
-      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,first_login_at,validity,status,server,mac_lock,price,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC")
+      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,first_login_at,validity,status,server,mac_lock,price,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted') ORDER BY id DESC")
     ]);
     const ledger = ledgerResult.rows || [];
     const sessions = (Array.isArray(sessionsResult) ? sessionsResult : []).map(session => ({
@@ -238,22 +239,25 @@ async function renew(req, res) {
   }
 }
 
-// Safety-preserving archive: deliberately does not remove RouterOS users, sessions,
-// cookies, hosts, or change any RouterOS configuration.
+// Canonical deletion: RouterOS purge + fresh verification precede a financial-safe soft delete.
 async function archive(req, res) {
-  const identifier = clean(req.params.id, 255);
-  if (!identifier) return error(res, 400, "A voucher ID, username, or MAC address is required.");
+  const identifier = clean(req.params.id, 160);
   try {
-    const found = await db.query(
-      "SELECT id FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR LOWER(mac_address)=LOWER($2) ORDER BY CASE WHEN ($1::bigint IS NOT NULL AND id=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1",
-      [/^\d+$/.test(identifier) && Number.isSafeInteger(Number(identifier)) ? Number(identifier) : null, identifier]
-    );
-    if (!found.rows?.length) return error(res, 404, "No PostgreSQL voucher matches this subscriber.");
-    const saved = await db.query("UPDATE hotspot_vouchers SET status='archived',updated_at=NOW() WHERE id=$1 RETURNING id,username,status", [found.rows[0].id]);
-    return res.json({ success: true, message: "Voucher archived in PostgreSQL only. The MikroTik user and sessions remain untouched.", subscriber: saved.rows[0] });
+    const result = await deleteHotspotSubscriber({ identifier });
+    return res.json({
+      success: true,
+      message: "Network access purged and subscriber soft-deleted. Voucher sales, payment ledger, transactions, and MAC audit history were retained.",
+      ...result
+    });
   } catch (e) {
-    console.error("[Hotspot Subscriber 360] Archive failed:", e?.message || e);
-    return error(res, 503, "Unable to archive the PostgreSQL voucher.");
+    console.error("[Hotspot Subscriber Deletion] Failed:", {
+      code: e?.code || null, statusCode: e?.statusCode || null, message: e?.message || String(e)
+    });
+    return res.status(Number.isInteger(e?.statusCode) ? e.statusCode : 503).json({
+      success: false, code: e?.code || "HOTSPOT_DELETION_FAILED",
+      message: e?.message || "Hotspot deletion failed. No database status was changed unless the RouterOS purge was verified.",
+      retryable: e?.statusCode === 502 || e?.statusCode === 503
+    });
   }
 }
 

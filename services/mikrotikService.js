@@ -901,6 +901,12 @@ class MikroTikService {
         console.warn("[Hotspot expiry] Could not resolve MAC binding:", error.message);
       }
     }
+    if (!validMac(mac)) {
+      const error = new Error("A verified MAC address is required to purge and verify all Hotspot host resources.");
+      error.code = "HOTSPOT_MAC_IDENTITY_MISSING";
+      error.statusCode = 409;
+      throw error;
+    }
     return this._withConnection("Hotspot hard expiry purge", async connection => {
       const [userRows, activeRows, cookieRows, hostRows, schedulerRows] = await Promise.all([
         connection.write("/ip/hotspot/user/print"),
@@ -944,7 +950,38 @@ class MikroTikService {
       for (const item of hostMatches) if (await remove("/ip/hotspot/host/remove", item)) hostsRemoved++;
       for (const item of schedulerMatches) if (await remove("/system/scheduler/remove", item)) schedulersRemoved++;
       for (const item of userMatches) if (await remove("/ip/hotspot/user/remove", item)) usersRemoved++;
-      return { username, sessionsRemoved, cookiesRemoved, hostsRemoved, schedulersRemoved, usersRemoved, userPreserved: false, alreadyAbsent: userMatches.length === 0 };
+
+      // Fresh reads are the completion contract: successful remove responses alone
+      // do not prove that all four RouterOS resource layers are absent.
+      const [remainingUsers, remainingActive, remainingCookies, remainingHosts] = await Promise.all([
+        connection.write("/ip/hotspot/user/print"),
+        connection.write("/ip/hotspot/active/print"),
+        connection.write("/ip/hotspot/cookie/print"),
+        connection.write("/ip/hotspot/host/print")
+      ]);
+      const freshUsers = Array.isArray(remainingUsers) ? remainingUsers : [];
+      const freshActive = Array.isArray(remainingActive) ? remainingActive : [];
+      const freshCookies = Array.isArray(remainingCookies) ? remainingCookies : [];
+      const freshHosts = Array.isArray(remainingHosts) ? remainingHosts : [];
+      const remaining = {
+        users: freshUsers.filter(item => lower(item.name) === target || lower(item.name) === lower(mac)),
+        active: freshActive.filter(item => lower(item.user) === target || macs.has(lower(item["mac-address"]))),
+        cookies: freshCookies.filter(item => lower(item.user) === target || macs.has(lower(item["mac-address"]))),
+        hosts: freshHosts.filter(item => macs.has(lower(item["mac-address"])) || Boolean(item.address && ips.has(lower(item.address))))
+      };
+      const remainingCounts = Object.fromEntries(Object.entries(remaining).map(([key, rows]) => [key, rows.length]));
+      if (Object.values(remainingCounts).some(count => count > 0)) {
+        const error = new Error("RouterOS Hotspot purge verification failed: one or more target resources remain.");
+        error.code = "HOTSPOT_PURGE_VERIFICATION_FAILED";
+        error.statusCode = 502;
+        error.remaining = remainingCounts;
+        throw error;
+      }
+      return {
+        username, macAddress: mac, sessionsRemoved, cookiesRemoved, hostsRemoved,
+        schedulersRemoved, usersRemoved, userPreserved: false,
+        alreadyAbsent: userMatches.length === 0, verified: true, remaining: remainingCounts
+      };
     });
   }
 

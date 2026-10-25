@@ -132,12 +132,25 @@
     finally { button.disabled = false; }
   }
   async function archiveUser() {
-    if (!selected || !window.confirm("Archive this voucher in the panel database only? The MikroTik user and sessions will remain untouched.")) return;
+    if (!selected || !window.confirm("Permanently revoke this subscriber's network access? The RouterOS active session, cookie, host and user will be purged. Financial history and the previous MAC audit trail will be retained.")) return;
+    const runDeletion = () => request(endpoint(selected.id), {method:"DELETE"});
     try {
-      await request(endpoint(selected.id), {method:"DELETE"});
-      toast("Voucher archived in PostgreSQL. MikroTik user remains intact.");
+      await runDeletion();
+      toast("Network access purged. Voucher, payment ledger, transactions and MAC audit history were retained.");
       await loadUsers(null);
-    } catch (error) { toast(error.message || "Archive failed.", false); }
+    } catch (error) {
+      const message = error.message || "Hotspot deletion failed. Database status was not changed.";
+      toast(message + " You can retry after checking the router connection.", false);
+      if (window.confirm(message + "\\n\\nRetry the verified RouterOS purge now? No financial records will be deleted.")) {
+        try {
+          await runDeletion();
+          toast("Network access purged and voucher soft-deleted. Financial history retained.");
+          await loadUsers(null);
+        } catch (retryError) {
+          toast((retryError.message || "Retry failed.") + " Subscriber and financial records remain available for another retry.", false);
+        }
+      }
+    }
   }
   async function loadUsers(keepId) {
     if (loading) return; loading = true;

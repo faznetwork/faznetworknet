@@ -272,16 +272,20 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
       [purgeIds]
     );
-    const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days' RETURNING id",
+    const archivedVouchers = await database.query(
+      "UPDATE hotspot_vouchers AS v SET status='archived', " +
+      "mac_audit_history=COALESCE(v.mac_audit_history,'[]'::jsonb) || COALESCE((SELECT jsonb_agg(mac_value ORDER BY ordinal) FROM (SELECT DISTINCT ON (mac_value) mac_value,ordinal FROM (VALUES (1,NULLIF(v.last_known_mac,'')),(2,NULLIF(v.mac_address,''))) AS candidates(ordinal,mac_value) WHERE mac_value IS NOT NULL AND mac_value<>'' ORDER BY mac_value,ordinal) AS unique_macs),'[]'::jsonb), " +
+      "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,'')), mac_address=NULL, " +
+      "updated_at=NOW() WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' " +
+      "AND v.expires_at < NOW() - INTERVAL '395 days' RETURNING v.id",
       [purgeIds]
     );
     const result = {
       archivedTransactions: (archived.rows || []).length,
-      deletedVouchers: (deleted.rows || []).length,
+      archivedVouchers: (archivedVouchers.rows || []).length,
       routerPurgeFailed: (candidates.rows || []).length - purgeIds.length
     };
-    if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
+    if (result.archivedTransactions || result.archivedVouchers) logger.log("[HOTSPOT RETENTION] Completed without deleting voucher or financial rows.", result);
     return result;
   } catch (error) {
     logger.error("[HOTSPOT RETENTION] Failed; voucher rows were retained:", error.message);

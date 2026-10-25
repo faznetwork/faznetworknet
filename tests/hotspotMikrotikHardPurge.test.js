@@ -1,6 +1,6 @@
 "use strict";
 const test=require("node:test");const assert=require("node:assert/strict");const mikrotikService=require("../services/mikrotikService");
-function mockService(rowsByCommand){const service=Object.create(Object.getPrototypeOf(mikrotikService));service._str=value=>String(value??"");const calls=[];service._withConnection=async(_label,callback)=>callback({async write(command,args=[]){calls.push({command,args});if(command.endsWith("/print"))return rowsByCommand[command]||[];return [];}});return {service,calls};}
+function mockService(rowsByCommand){const service=Object.create(Object.getPrototypeOf(mikrotikService));service._str=value=>String(value??"");const calls=[];let removalStarted=false;service._withConnection=async(_label,callback)=>callback({async write(command,args=[]){calls.push({command,args});if(command.endsWith("/remove")){removalStarted=true;return [];}if(command.endsWith("/print"))return removalStarted?[]:(rowsByCommand[command]||[]);return [];}});return {service,calls};}
 test("expiry hard-purges credentials and access artifacts, removing only matching schedulers",async()=>{
  const mac="AA:BB:CC:DD:EE:FF";const {service,calls}=mockService({
  "/ip/hotspot/user/print":[{".id":"*u1",name:mac}],

@@ -411,7 +411,7 @@ test("All Hotspot Users is PostgreSQL-first and preserves offline and expired vo
     mikrotik.getHotspotUsers=async()=>{routerUserReads++;throw new Error("The subscriber list must not depend on RouterOS user inventory");};
     hotspotController.invalidateListCache();
     const result=await hotspotController.refreshHotspotListCache();
-    assert.match(ledgerSql,/FROM hotspot_vouchers WHERE LOWER\(COALESCE\(status,''\)\) <> 'archived'/);
+    assert.ok(ledgerSql.includes("FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted')"));
     assert.equal(routerUserReads,0);
     assert.equal(result.users.length,3);
     assert.equal(result.users.find(row=>row.id===1).is_online,true);
