@@ -340,14 +340,7 @@ async function createUser(req,res){
         initialUsername="HN-"+crypto.randomBytes(6).toString("hex").toUpperCase();
       }
       if(existingUsername.rows?.length)throw hotspotError("USERNAME_GENERATION_FAILED",503,"Could not generate a unique username. Please retry.");
-      const reusable=phoneRows.find(row=>["expired","unused","pending_claim"].includes(String(row.status||"").toLowerCase())||Boolean(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
       const params=[initialUsername,initialPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,null,customerName,note,null,null,true];
-      if(reusable){
-        previousRecord=reusable;
-        const result=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status=$18,comment=$6,phone=$7,server=$8,time_limit=$9,data_limit=$10,profile_id=$11,mac_address=$12,customer_name=$13,note=$14,first_login_at=$15,expires_at=$16,mac_lock=$17,subscriber_type='direct_subscriber',activation_type=$19,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$20 RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at,first_login_at",[...params,"pending_claim",mode,reusable.id]);
-        if(!result.rows?.length)throw new Error("Direct subscriber could not be saved in PostgreSQL.");
-        return result.rows[0];
-      }
       const result=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,first_login_at,expires_at,mac_lock,subscriber_type,activation_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'not_required',$16,$17,$18,'direct_subscriber',$19) RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at,first_login_at",[initialUsername,initialPassword,profile,validity,price,"pending_claim",comment,phone,server,validity||null,quota?String(quota):null,profileId,null,customerName,note,null,null,true,mode]);
       if(!result.rows?.length)throw new Error("Direct subscriber could not be saved in PostgreSQL.");
       createdNewRecord=true;
