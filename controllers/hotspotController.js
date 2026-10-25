@@ -653,6 +653,8 @@ async function createUser(req, res) {
         customer_name: stored.customer_name || "",
         phone: stored.phone || "",
         expires_at: stored.expires_at ? new Date(stored.expires_at).toISOString() : null,
+        transaction_id: stored.transaction_id,
+        trx_id: stored.trx_id,
         batch_id: stored.batch_id
       },
       sms
