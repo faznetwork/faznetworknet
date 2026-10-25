@@ -38,7 +38,7 @@ async function ensureCalendarProfile(profile, routerProfile, profileValidity) {
 }
 async function writeProfileMetadata(v){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_profile_metadata',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(v)]);}
 async function servers(req,res){try{const data=await mikrotikService.getHotspotServers();return res.json({success:true,servers:data.map(s=>({name:s.name,interface:s.interface,profile:s.profile}))});}catch(e){return errorResponse(res,e);}}
-async function profiles(req,res){try{const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);const data=Array.isArray(routerProfiles)&&routerProfiles.length?routerProfiles:Object.entries(meta).map(([name,m])=>({name,rateLimit:String(m?.rateLimit||""),sharedUsers:"1",sessionTimeout:"",raw:{}}));return res.json({success:true,profiles:data.filter(p=>p.name&&String(p.name).toLowerCase()!=="default").map(p=>{const m=meta[p.name]||{};let v;try{v=m.validityValue?normalizeProfileValidity(m.validityValue,m.validityUnit):parseStoredValidity(p);}catch(_){v=parseStoredValidity(p);}return {...p,profile_id:String(m.id||m.profileId||m.profile_id||m.packageId||m.package_id||m.packageName||m.package_name||m.alias||p.name),price:Number(m.price||0),validityValue:v.value,validityUnit:v.unit,validityLabel:m.validityLabel||v.validityLabel,limitBytesTotal:Number(m.limitBytesTotal||v.limitBytesTotal||0)};})});}catch(e){return errorResponse(res,e);}}
+async function profiles(req,res){try{const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);if(!Array.isArray(routerProfiles))throw new Error("MikroTik returned an invalid Hotspot profile list.");return res.set("Cache-Control","no-store").json({success:true,profiles:routerProfiles.filter(p=>p.name&&String(p.name).toLowerCase()!=="default").map(p=>{const m=meta[p.name]||{};let v;try{v=m.validityValue?normalizeProfileValidity(m.validityValue,m.validityUnit):parseStoredValidity(p);}catch(_){v=parseStoredValidity(p);}return {...p,profile_id:String(m.id||m.profileId||m.profile_id||m.packageId||m.package_id||m.packageName||m.package_name||m.alias||p.name),price:Number(m.price||0),validityValue:v.value,validityUnit:v.unit,validityLabel:m.validityLabel||v.validityLabel,limitBytesTotal:Number(m.limitBytesTotal||v.limitBytesTotal||0)};})});}catch(e){return errorResponse(res,e);}}
 function previewProfileScript(req,res){
  try{
   const body=req.body||{};
@@ -91,8 +91,11 @@ async function deleteProfile(req,res){
   if(name.toLowerCase()==="default")return res.status(400).json({success:false,code:"HOTSPOT_PROFILE_PROTECTED",message:"The built-in default Hotspot profile cannot be deleted."});
   const result=await mikrotikService.deleteHotspotProfile(name);
   const meta=await readProfileMetadata();
-  if(Object.prototype.hasOwnProperty.call(meta,name)){delete meta[name];await writeProfileMetadata(meta);}
-  return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});
+  // Always persist the canonical metadata object after RouterOS confirms deletion.
+  // The upsert is awaited, so a PostgreSQL failure cannot be reported as success.
+  delete meta[name];
+  await writeProfileMetadata(meta);
+  return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik and metadata was updated.",profile:result});
  }catch(e){
   console.error("[Hotspot profile deletion]",{code:e?.code||null,message:e?.message||String(e)});
   const status=Number.isInteger(e?.statusCode)?e.statusCode:503;
