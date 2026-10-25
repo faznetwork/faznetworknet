@@ -3332,10 +3332,15 @@
             let profileRecords = [];
             let profileReady = false;
 
-            const asciiDigits = value => String(value || '')
-                .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
-                .replace(/[^0-9]/g, '')
-                .slice(0, 11);
+            const asciiDigits = value => {
+                const raw = String(value ?? '').trim()
+                    .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
+                    .replace(/[^0-9]/g, '');
+                const normalized = raw.startsWith('880') && raw.length === 13
+                    ? '0' + raw.slice(3)
+                    : raw;
+                return normalized.slice(0, 11);
+            };
 
             const validityText = p => {
                 if (!p) return 'Select a profile';
