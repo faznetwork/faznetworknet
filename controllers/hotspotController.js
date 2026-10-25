@@ -298,7 +298,7 @@ async function createUser(req,res){
     const requestedPin=String(body.voucher_pin||body.pin||body.password||"").trim();
     if(!/^01\\d{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX)."});
     if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",message:"Select a Hotspot package/profile."});
-    if(requestedPin&&!/^\\d{6,8}$/.test(requestedPin))return res.status(400).json({success:false,code:"INVALID_VOUCHER_PIN",message:"Voucher PIN must contain 6 to 8 digits."});
+    if(requestedPin&&!/^\d{6,8}$/.test(requestedPin))return res.status(400).json({success:false,code:"INVALID_VOUCHER_PIN",message:"Voucher PIN must contain 6 to 8 digits."});
     const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
     let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
     if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
