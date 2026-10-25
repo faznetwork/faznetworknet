@@ -262,8 +262,20 @@ async function activateCredentials(req,res){
     }
     const existing=await mikrotikService.getHotspotUser(row.username);
     if(!existing){
-      await mikrotikService.rechargeHotspotUser({username:row.username,password:row.password,profile,validity:row.validity,limitBytesTotal:Number(row.data_limit||0),comment:row.comment||"",server:row.server||"all",macAddress:mac,previousUsername:null});
-      routerProvisioned=true;
+      // An active subscriber must never be recharged during recovery: rechargeHotspotUser
+      // resets RouterOS counters and re-applies the original quota, which can grant
+      // extra usage. The database stores expiry and configured quota, but does not
+      // authoritatively store RouterOS bytes already consumed. Fail closed rather
+      // than recreating a user with an unverifiable remaining quota.
+      console.error("[Hotspot credential activation] Active RouterOS user is missing; safe restore requires quota reconciliation",{
+        event:"active_hotspot_user_missing",
+        code:"ACTIVE_ROUTEROS_USER_MISSING",
+        voucherId:row.id,
+        username:row.username,
+        expiresAt:reserved.expiresAt?.toISOString?.()||row.expires_at||null,
+        dataLimit:Number(row.data_limit||0)
+      });
+      throw makeError("ACTIVE_ROUTEROS_USER_MISSING",503,"Your account is active, but its RouterOS user is missing. To protect your existing expiry and remaining quota, automatic re-provisioning was stopped. Please contact the administrator to restore the account safely.");
     }else{
       const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
       if(actualMac&&actualMac!==mac)throw makeError("MAC_ALREADY_BOUND",403,"RouterOS reports a different MAC lock for this account.");
