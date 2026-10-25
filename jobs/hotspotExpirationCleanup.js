@@ -274,7 +274,8 @@ async function runHotspotRetentionCleanup(deps = {}) {
     );
     const archivedVouchers = await database.query(
       "UPDATE hotspot_vouchers SET status='archived', " +
-      "last_known_mac=COALESCE(NULLIF(last_known_mac,''),NULLIF(mac_address,'')), mac_address=NULL, " +
+      "mac_audit_history=(SELECT COALESCE(jsonb_agg(DISTINCT known_mac), '[]'::jsonb) FROM jsonb_array_elements_text(COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array(NULLIF(v.last_known_mac,''),NULLIF(v.mac_address,''))) AS macs(known_mac) WHERE known_mac<>''), " +
+      "last_known_mac=COALESCE(NULLIF(mac_address,''),NULLIF(last_known_mac,'')), mac_address=NULL, " +
       "updated_at=NOW() WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' " +
       "AND expires_at < NOW() - INTERVAL '395 days' RETURNING id",
       [purgeIds]
