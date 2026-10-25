@@ -17,7 +17,7 @@ test("Admin Add Hotspot User creates simple voucher PINs without activation mode
  assert.match(source,/'scratch_voucher','first_login'/);
  assert.match(source,/notificationDispatcher\.dispatchNotification/);
  assert.match(source,/await dispatch\.task/);
- assert.match(generator,/crypto\.randomInt\(0,\s*10\)/);
+ assert.ok(generator.includes("crypto.randomInt(0, 10)"));
  assert.match(form,/name="phone"/);
  assert.match(form,/name="voucher_pin"/);
  assert.match(ui,/hotspotVoucherSuccessModal/);
