@@ -253,12 +253,9 @@ async function generate(req,res){
  const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
  const price=Number(body.price??0);
  const server=clean(body.server||"all",100)||"all";
- const userPrefix=clean(body.userPrefix??body.user_prefix??"",20).replace(/[^a-zA-Z0-9_-]/g,"").toUpperCase();
- const charLength=Number(body.charLength??body.char_length??6);
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>500)return res.status(400).json({success:false,code:"INVALID_QUANTITY",error:"Quantity must be a whole number from 1 to 500."});
  if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",error:"Select an existing Hotspot profile."});
  if(!Number.isFinite(price)||price<0||price>1000000)return res.status(400).json({success:false,code:"INVALID_PRICE",error:"Enter a valid non-negative price."});
- if(!Number.isSafeInteger(charLength)||charLength<4||charLength>16)return res.status(400).json({success:false,code:"INVALID_PIN_LENGTH",error:"Voucher PIN length must be between 4 and 16 characters."});
  try{
   const routerProfiles=await mikrotikService.getHotspotProfiles();
   const meta=await readProfileMetadata();
@@ -280,7 +277,7 @@ async function generate(req,res){
   const normalizedValidity=String(profileValidity.validity||"").trim()||(quota?"0m":"");
   const batchId=crypto.randomUUID();
   const generated=await db.withTransaction(client=>hotspotVoucherGenerator.generateVoucherBatch({
-   client,profileName,validity:normalizedValidity,price,server,quantity,userPrefix,charLength,batchId,
+   client,profileName,validity:normalizedValidity,price,server,quantity,batchId,
    comment:"Scratch voucher; profile validity applies on first successful login."
   }));
   const created=generated.vouchers;
