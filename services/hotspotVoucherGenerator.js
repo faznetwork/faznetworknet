@@ -1,7 +1,7 @@
 "use strict";
 const crypto = require("crypto");
 function randomPin(length = 8) {
-  return crypto.randomBytes(Math.ceil(length * 1.5)).toString("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, length).toUpperCase();
+  let pin=""; for(let i=0;i<length;i++) pin+=String(crypto.randomInt(0,10)); return pin;
 }
 async function generateVoucherBatch({ client, profileName, validity, price, server = "all", quantity = 1, userPrefix = "", charLength = 6, passwordEqualsUsername = false, batchId = crypto.randomUUID(), transactionId = null, comment = "Scratch voucher; profile validity applies on first successful login." }) {
   if (!client || typeof client.query !== "function") throw new TypeError("A transactional database client is required.");
