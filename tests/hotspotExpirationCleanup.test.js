@@ -258,7 +258,7 @@ test("recognizes UNIX epoch expiry metadata and ignores initial zero marker", ()
   assert.equal(routerUserExpired({username:"DHAKA-EXP",disabled:false,comment:"FAZ|EXP: "+dhakaExpiry+"|PROF=Gold|INIT=1|PROFILE=Gold"},new Set()),true);
 });
 
-test("retention purges RouterOS first, archives sales, then deletes only 30-day expired rows", async () => {
+test("retention purges RouterOS first, archives sales, then deletes only 395-day expired rows", async () => {
   const calls=[],routerCalls=[];
   const database={async query(sql,params){
     calls.push({sql,params});
@@ -273,7 +273,7 @@ test("retention purges RouterOS first, archives sales, then deletes only 30-day 
   assert.equal(result.deletedVouchers,1);
   assert.deepEqual(routerCalls,["AA:BB:CC:DD:EE:FF"]);
   assert.ok(calls[1].sql.includes("ON CONFLICT(transaction_id) DO NOTHING"));
-  assert.ok(calls[2].sql.includes("expires_at < NOW() - INTERVAL '30 days'"));
+  assert.ok(calls[2].sql.includes("expires_at < NOW() - INTERVAL '395 days'"));
   assert.deepEqual(calls[1].params,[[9]]);
   assert.deepEqual(calls[2].params,[[9]]);
 });
@@ -284,7 +284,25 @@ test("does not let a legacy RouterOS scheduler suppress centralized expiry", () 
   assert.equal(routerUserExpired({ username: "OLD-SCHEDULER-USER", comment: expiredComment, disabled: false }, new Set(["faz-exp-OLD-SCHEDULER-USER"])), true);
 });
 
-test("expired Hotspot profile has strict rate and session limits",()=>{const {EXPIRED_HOTSPOT_PROFILE}=require("../services/hotspotProfileConfig");assert.deepEqual(EXPIRED_HOTSPOT_PROFILE,{name:"expired_profile",rateLimit:"1k/1k",sessionTimeout:"1m",sharedUsers:1});});
+test("expired profile config is permanently absent",()=>{const config=require("../services/hotspotProfileConfig");assert.equal("EXPIRED_HOTSPOT_PROFILE" in config,false);});
+
+test("expiry worker uses scheduled execution rather than a fixed one-minute interval",()=>{
+  const fs=require("node:fs");
+  const source=fs.readFileSync(require.resolve("../jobs/hotspotExpirationCleanup"),"utf8");
+  assert.doesNotMatch(source,/MINUTE_MS|setInterval\(\(\) => runHotspotExpirationCleanup/);
+  assert.match(source,/expires_at - INTERVAL '5 minutes'/);
+  assert.match(source,/Startup recovery sweep failed/);
+});
+
+test("voucher sales API supports validated inclusive custom date ranges",()=>{
+  const fs=require("node:fs");
+  const source=fs.readFileSync(require.resolve("../controllers/hotspotController"),"utf8");
+  assert.match(source,/req\.query\?\.startDate/);
+  assert.match(source,/req\.query\?\.endDate/);
+  assert.match(source,/Dates must use YYYY-MM-DD format/);
+  assert.match(source,/AT TIME ZONE 'Asia\/Dhaka'/);
+  assert.match(source,/ORDER BY created_at DESC,transaction_id DESC LIMIT 500/);
+});
 
 test("expired cleanup delegates to hard purge and preserves transaction audit history", async () => {
   const rows = [{ id: 99, username: "AA:BB:CC:DD:EE:FF", mac_address: "AA:BB:CC:DD:EE:FF", status: "active", expires_at: new Date("2026-10-10T00:00:00Z"), cleanup_status: "not_required" }];

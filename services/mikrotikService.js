@@ -870,17 +870,19 @@ class MikroTikService {
     const validMac=v=>/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(v).trim().toUpperCase());
     if(!validMac(mac))throw new Error("A valid bound MAC address is required for direct-subscriber expiry.");
     return this._withConnection("Disable expired direct Hotspot subscriber",async connection=>{
-      const [userRows,activeRows,cookieRows]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/active/print"),connection.write("/ip/hotspot/cookie/print")]);
+      const [userRows,activeRows,cookieRows,hostRows]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/active/print"),connection.write("/ip/hotspot/cookie/print"),connection.write("/ip/hotspot/host/print")]);
       const low=v=>this._str(v).trim().toLowerCase(),un=low(username),macKey=low(mac);
       const users=(Array.isArray(userRows)?userRows:[]).filter(x=>x?.[".id"]&&(low(x.name)===un||low(x.name)===macKey));
       const sessions=(Array.isArray(activeRows)?activeRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||low(x["mac-address"])===macKey));
       const cookies=(Array.isArray(cookieRows)?cookieRows:[]).filter(x=>x?.[".id"]&&(low(x.user)===un||low(x["mac-address"])===macKey));
+      const hosts=(Array.isArray(hostRows)?hostRows:[]).filter(x=>x?.[".id"]&&(low(x["mac-address"])===macKey||low(x.address)===macKey));
       const remove=async(path,item)=>{try{await connection.write(path,["=.id="+item[".id"]]);return true;}catch(e){if(/no such item|not found|does not exist|no item/i.test(String(e?.message||e)))return false;throw e;}};
-      let usersDisabled=0,sessionsRemoved=0,cookiesRemoved=0;
+      let usersRemoved=0,sessionsRemoved=0,cookiesRemoved=0,hostsRemoved=0;
       for(const item of sessions)if(await remove("/ip/hotspot/active/remove",item))sessionsRemoved++;
+      for(const item of hosts)if(await remove("/ip/hotspot/host/remove",item))hostsRemoved++;
       for(const item of cookies)if(await remove("/ip/hotspot/cookie/remove",item))cookiesRemoved++;
-      for(const item of users){await connection.write("/ip/hotspot/user/set",["=.id="+item[".id"],"=disabled=yes","=profile=expired_profile","=comment=FAZ|EXPIRED|DIRECT_SUBSCRIBER"]);usersDisabled++;}
-      return {username,macAddress:mac,directSubscriber:true,usersDisabled,sessionsRemoved,cookiesRemoved,userPreserved:true};
+      for(const item of users){await connection.write("/ip/hotspot/user/remove",["=.id="+item[".id"]]);usersRemoved++;}
+      return {username,macAddress:mac,directSubscriber:true,usersRemoved,sessionsRemoved,cookiesRemoved,hostsRemoved,userPreserved:false};
     });
   }
   async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
@@ -1549,14 +1551,6 @@ class MikroTikService {
     return {name,rateLimit:"1k/1k",created:false};
   }
 
-  async ensureExpiredHotspotProfile(){
-    const config=require("./hotspotProfileConfig").EXPIRED_HOTSPOT_PROFILE;
-    const existing=await this.getHotspotProfiles();
-    const profile=(Array.isArray(existing)?existing:[]).find(item=>String(item.name||"").toLowerCase()===config.name.toLowerCase());
-    if(!profile){await this.createHotspotProfile(config);return {...config,created:true};}
-    if(String(profile.rateLimit||"").trim()!==config.rateLimit||String(profile.sessionTimeout||"").trim().toLowerCase()!==config.sessionTimeout)await this.updateHotspotProfile({...config,sharedUsers:profile.sharedUsers||1});
-    return {...config,created:false};
-  }
 
   async changeSecretProfile(username,profileName){
     const name=this._str(username).trim();

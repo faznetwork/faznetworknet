@@ -15,10 +15,10 @@ test("Hotspot sales origin migration preserves independent transaction history",
  assert.doesNotMatch(sql,/DELETE\s+FROM\s+transactions/i);
 });
 
-test("Hotspot expiry retains purchase audit rows for 30 days and purges only after RouterOS hard cleanup",()=>{
+test("Hotspot expiry retains purchase audit rows for 395 days and purges only after RouterOS hard cleanup",()=>{
  const source=read("jobs/hotspotExpirationCleanup.js");
  assert.doesNotMatch(source,/profile='expired_profile'/);
- assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '30 days'/);
+ assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '395 days'/);
  assert.match(source,/DELETE FROM hotspot_vouchers WHERE id = ANY\(\$1::bigint\[\]\) AND status='expired' AND cleanup_status='completed'/);
  assert.doesNotMatch(source,/DELETE\s+FROM\s+transactions/i);
 });
@@ -40,4 +40,22 @@ test("Hotspot sales report supports date and sale-type filtering",()=>{
  assert.match(view,/type="date" id="salesFrom"/);
  assert.match(view,/type="date" id="salesTo"/);
  assert.match(view,/value="scratch_card"/);
+});
+
+test("Voucher sales archive stores verified voucher counts and leaves legacy counts unknown",()=>{
+ const schema=read("db/schema.sql");
+ const migration=read("db/migrations/20261025_hotspot_sales_archive_voucher_count.sql");
+ const job=read("jobs/hotspotExpirationCleanup.js");
+ const controller=read("controllers/hotspotController.js");
+ assert.match(schema,/voucher_count INTEGER CHECK \(voucher_count IS NULL OR voucher_count >= 0\)/);
+ assert.match(migration,/ADD COLUMN IF NOT EXISTS voucher_count INTEGER/);
+ assert.match(job,/created_at,voucher_count/);
+ assert.match(job,/COUNT\(DISTINCT v\.id\)::integer/);
+ assert.match(controller,/AS total_vouchers_sold/);
+ assert.match(controller,/AS matched_transactions/);
+ assert.match(controller,/AS total_amount/);
+ assert.match(controller,/a\.voucher_count IS NOT NULL/);
+ assert.match(controller,/totalVouchersSold:/);
+ assert.match(controller,/matchedTransactions:/);
+ assert.match(controller,/voucherCountComplete:/);
 });

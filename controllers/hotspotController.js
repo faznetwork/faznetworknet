@@ -107,18 +107,19 @@ async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
  hotspotListRefresh=(async()=>{
   // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
-  await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
+  await db.query("UPDATE hotspot_vouchers SET status='expired',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
   // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
   const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,subscriber_type,activation_type,profile_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
   const [ledger,sessionRows]=await Promise.all([ledgerPromise,sessionsPromise]);
-  const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(row=>String(row?.username||"").trim()&&String(row.username).toLowerCase()!=="default-trial").map(row=>({id:row.id||"",sessionId:row.id||"",user:row.username,username:row.username,address:row.address||"",macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||""),uptime:row.uptime||"",sessionTimeLeft:row.sessionTimeLeft||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),server:row.server||"",profile:row.profile||""}));
   const now=Date.now();
+  const expiredUsers=new Set((ledger.rows||[]).filter(row=>String(row.status||"").toLowerCase()==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=now)).flatMap(row=>[String(row.username||"").trim().toLowerCase(),normalizeHotspotMac(row.mac_address||row.username).toLowerCase()].filter(Boolean)));
+  const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(row=>String(row?.username||"").trim()&&String(row.username).toLowerCase()!=="default-trial"&&!expiredUsers.has(String(row.username||"").trim().toLowerCase())&&!expiredUsers.has(normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||"").toLowerCase())).map(row=>({id:row.id||"",sessionId:row.id||"",user:row.username,username:row.username,address:row.address||"",macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||""),uptime:row.uptime||"",sessionTimeLeft:row.sessionTimeLeft||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),server:row.server||"",profile:row.profile||""}));
   const users=(ledger.rows||[]).map(row=>{
    const mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username);
    const session=activeUsers.find(item=>(mac&&normalizeHotspotMac(item.macAddress)===mac)||String(item.username||"").trim().toLowerCase()===String(row.username||"").trim().toLowerCase())||null;
    const expiry=row.expires_at?new Date(row.expires_at):null;
-   const isExpired=Boolean((expiry&&!Number.isNaN(expiry.getTime())&&expiry.getTime()<=now)||String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile");
+   const isExpired=Boolean((expiry&&!Number.isNaN(expiry.getTime())&&expiry.getTime()<=now)||String(row.status||"").toLowerCase()==="expired");
    const status=isExpired?"expired":String(row.status||"").toLowerCase();
    return {id:row.id,voucherId:row.id,username:row.username||mac||"",password:row.password||"",name:row.customer_name||"",customer_name:row.customer_name||"",phone:row.phone||"",macAddress:mac||row.mac_address||"",mac_address:mac||row.mac_address||"",transaction_id:row.transaction_id||null,price:Number(row.price||0),profile:row.profile||"",profile_id:row.profile_id||null,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",uptime:session?.uptime||"",limitUptime:"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),ip:session?.address||"",address:session?.address||"",sessionId:session?.sessionId||session?.id||"",comment:row.comment||"",disabled:status==="expired"||status==="archived",status,expires_at:row.expires_at||null,first_login_at:row.first_login_at||null,validity:row.validity||"",server:row.server||"all",macLock:row.mac_lock!==false,is_online:Boolean(session&&String(session.address||"").trim()),online:Boolean(session&&String(session.address||"").trim()),created_at:row.created_at||null,updated_at:row.updated_at||null};
   });
@@ -452,7 +453,7 @@ async function voucherRecords(req,res){
    const username=String(row.username||"").trim(),mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(username);
    const session=byUsername.get(username.toLowerCase())||(mac?byMac.get(mac):null)||null;
    const expiry=row.expires_at?new Date(row.expires_at):null;
-   const expired=String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
+   const expired=String(row.status||"").toLowerCase()==="expired"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
    const online=Boolean(session&&String(session.address||session.ip||"").trim())&&!expired;
    const status=expired?"expired":online?"online":String(row.status||"").toLowerCase()==="pending_claim"?"pending_claim":String(row.status||"").toLowerCase()==="unused"?"unused":"offline";
    const scratchUnused=String(row.subscriber_type||"").toLowerCase()==="scratch_voucher"&&String(row.status||"").toLowerCase()==="unused";
@@ -470,13 +471,21 @@ async function voucherRecords(req,res){
 }
 async function voucherSales(req,res){
  try{
-  const salesCte="WITH sales AS (SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at FROM transactions t WHERE t.status='processed' AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) UNION SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at FROM hotspot_voucher_sales_archive a WHERE a.status='processed')";
+  const startDate=String(req.query?.startDate||"").trim();
+  const endDate=String(req.query?.endDate||"").trim();
+  const isDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T00:00:00Z"))&&new Date(value+"T00:00:00Z").toISOString().slice(0,10)===value;
+  if((startDate&&!isDate(startDate))||(endDate&&!isDate(endDate)))return res.status(400).json({success:false,message:"Dates must use YYYY-MM-DD format."});
+  if(startDate&&endDate&&startDate>endDate)return res.status(400).json({success:false,message:"Start date must be on or before end date."});
+  const params=[];let dateFilter="";
+  if(startDate){params.push(startDate);dateFilter+=" AND created_at >= ($"+params.length+"::date AT TIME ZONE 'Asia/Dhaka')";}
+  if(endDate){params.push(endDate);dateFilter+=" AND created_at < (($"+params.length+"::date + INTERVAL '1 day') AT TIME ZONE 'Asia/Dhaka')";}
+  const salesCte="WITH sales AS (SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,COALESCE((SELECT COUNT(DISTINCT COALESCE(hp.voucher_id,v.id))::int FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.transaction_id=t.id OR v.id=hp.voucher_id WHERE hp.transaction_id=t.id OR v.transaction_id=t.id),0)::int AS voucher_count,true AS voucher_count_known FROM transactions t WHERE t.status='processed' AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) UNION SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at,COALESCE(a.voucher_count,0)::int AS voucher_count,(a.voucher_count IS NOT NULL) AS voucher_count_known FROM hotspot_voucher_sales_archive a WHERE a.status='processed')";
   const [summary,rows]=await Promise.all([
-   db.query(salesCte+" SELECT COUNT(*)::int AS count,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount FROM sales"),
-   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales ORDER BY created_at DESC,transaction_id DESC LIMIT 500")
+   db.query(salesCte+" SELECT COALESCE(SUM(voucher_count),0)::int AS total_vouchers_sold,COUNT(*)::int AS matched_transactions,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount,BOOL_AND(voucher_count_known) AS voucher_count_complete FROM sales WHERE TRUE"+dateFilter,params),
+   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales WHERE TRUE"+dateFilter+" ORDER BY created_at DESC,transaction_id DESC LIMIT 500",params)
   ]);
-  const s=summary.rows?.[0]||{};
-  return res.json({success:true,count:Number(s.count||0),totalAmount:Number(s.total_amount||0),transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
+  const summaryRow=summary.rows?.[0]||{};
+  return res.json({success:true,totalVouchersSold:Number(summaryRow.total_vouchers_sold||0),matchedTransactions:Number(summaryRow.matched_transactions||0),voucherCountComplete:summaryRow.voucher_count_complete===true,totalAmount:Number(summaryRow.total_amount||0),startDate:startDate||null,endDate:endDate||null,transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
  }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
