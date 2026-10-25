@@ -2952,6 +2952,11 @@
             document.getElementById('hsSalesCategory')?.addEventListener('change',function(){
                 window.loadHotspotVoucherSales(document.getElementById('hsSalesStartDate')?.value||'',document.getElementById('hsSalesEndDate')?.value||'');
             });
+            if(window.hotspotVoucherSalesRefreshTimer)window.clearTimeout(window.hotspotVoucherSalesRefreshTimer);
+            window.hotspotVoucherSalesRefreshTimer=window.setTimeout(function(){
+                window.hotspotVoucherSalesRefreshTimer=null;
+                if(document.getElementById('hsSalesCategory'))window.loadHotspotVoucherSales();
+            },10000);
             return false;
         };
 
