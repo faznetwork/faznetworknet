@@ -84,7 +84,21 @@ async function syncProfiles(req,res){
   return res.status(success?200:502).json({success,message:success?"Hotspot profile sync completed.":"Hotspot profile sync completed with errors; review the per-profile results.",sync});
  }catch(e){return errorResponse(res,e);}
 }
-async function deleteProfile(req,res){try{const name=clean(req.body.name,100);if(!name||name.toLowerCase()==="default")return res.status(400).json({success:false,message:"The default profile cannot be deleted here."});const result=await mikrotikService.deleteHotspotProfile(name);const meta=await readProfileMetadata();delete meta[name];await writeProfileMetadata(meta);return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
+async function deleteProfile(req,res){
+ try{
+  const name=clean(req.body?.name,100);
+  if(!name)return res.status(400).json({success:false,code:"HOTSPOT_PROFILE_NAME_REQUIRED",message:"Hotspot profile name is required."});
+  if(name.toLowerCase()==="default")return res.status(400).json({success:false,code:"HOTSPOT_PROFILE_PROTECTED",message:"The built-in default Hotspot profile cannot be deleted."});
+  const result=await mikrotikService.deleteHotspotProfile(name);
+  const meta=await readProfileMetadata();
+  if(Object.prototype.hasOwnProperty.call(meta,name)){delete meta[name];await writeProfileMetadata(meta);}
+  return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});
+ }catch(e){
+  console.error("[Hotspot profile deletion]",{code:e?.code||null,message:e?.message||String(e)});
+  const status=Number.isInteger(e?.statusCode)?e.statusCode:503;
+  return res.status(status).json({success:false,code:e?.code||"HOTSPOT_PROFILE_DELETE_FAILED",message:e?.message||"Hotspot profile deletion failed."});
+ }
+}
 let hotspotListCache={expiresAt:0,users:null,activeUsers:[]},hotspotListRefresh=null;
 async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
