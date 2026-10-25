@@ -3,6 +3,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const db=require("../db");
 const mikrotik=require("../services/mikrotikService");
+const notificationDispatcher=require("../services/notificationDispatcher");
 const hotspotController=require("../controllers/hotspotController");
 const paymentController=require("../controllers/paymentController");
 const hotspotAuthController=require("../controllers/hotspotAuthController");
