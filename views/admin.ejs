@@ -3183,11 +3183,11 @@
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
                             <label class="hs-create-label" for="hsCustomerName">Customer Name <span class="text-muted fw-normal">(Optional)</span></label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Customer name">
-                            <label class="hs-create-label" for="customer_phone_input">Customer Phone Number <span class="text-danger">*</span></label>
+                            <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
                             <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
                               <i class="bi bi-telephone hs-create-input-icon" aria-hidden="true"></i>
-                              <input id="customer_phone_input" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[3-9][0-9]{8}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
+                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
                               <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
                             </div>
                             <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div>
@@ -3303,7 +3303,7 @@
             </section>`);
 
             const form = document.getElementById('addHotspotUserForm');
-            const phone = document.getElementById('customer_phone_input');
+            const phone = document.getElementById('hsUsername');
             const phoneValidMark = document.getElementById('hsPhoneValid');
             const phoneFeedback = document.getElementById('hsPhoneFeedback');
             const profile = document.getElementById('hsProfile');
@@ -3311,6 +3311,8 @@
             const macInput = null;
             const passwordInput = document.getElementById('hsPassword');
             const expiryInput = null;
+            const activationInputs = [...form.querySelectorAll('input[name="activation_type"]')];
+            const activationMode = () => activationInputs.find(input => input.checked)?.value || 'first_login';
             if (expiryInput) expiryInput.disabled = true;
             const button = document.getElementById('hsSaveButton');
             const result = document.getElementById('hotspotCreateResult');
@@ -3320,10 +3322,10 @@
             let profileRecords = [];
             let profileReady = false;
 
-            const normalizePhoneDigits = value => String(value || '')
+            const asciiDigits = value => String(value || '')
                 .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
-                .replace(/\D/g, '');
-            const isValidBangladeshiPhone = value => /^01[3-9]\d{8}$/.test(normalizePhoneDigits(value));
+                .replace(/[^0-9]/g, '')
+                .slice(0, 11);
 
             const validityText = p => {
                 if (!p) return 'Select a profile';
@@ -3355,9 +3357,9 @@
             };
 
             const updatePhoneFeedback = () => {
-                const normalized = normalizePhoneDigits(phone.value);
+                const normalized = asciiDigits(phone.value);
                 if (phone.value !== normalized) phone.value = normalized;
-                const valid = isValidBangladeshiPhone(normalized);
+                const valid = /^01[0-9]{9}$/.test(normalized);
                 phone.classList.toggle('hs-phone-valid', valid);
                 phone.classList.toggle('hs-phone-invalid', normalized.length > 0 && !valid);
                 if (phoneValidMark) phoneValidMark.classList.toggle('is-visible', valid);
@@ -3488,23 +3490,13 @@
 
             form.addEventListener('submit', async event => {
                 event.preventDefault();
-                const phoneInput = document.getElementById('customer_phone_input');
-                const rawVal = phoneInput?.value;
-                console.log('Entered Phone:', rawVal);
-                const cleanPhone = String(rawVal || '')
-                    .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
-                    .replace(/\D/g, '');
-                if (!isValidBangladeshiPhone(cleanPhone)) {
-                    phone.value = cleanPhone;
-                    updatePhoneFeedback();
-                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX).</div>';
+                if (!updatePhoneFeedback()) {
                     phone.focus();
                     updateButton();
                     return;
                 }
-                phone.value = cleanPhone;
                 if (!form.reportValidity()) return;
-                const value = cleanPhone;
+                const value = phone.value.trim();
                 const chosen = selectedProfile();
                 if (!chosen) {
                     if (result) result.innerHTML = '<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';
