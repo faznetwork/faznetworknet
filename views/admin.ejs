@@ -3519,7 +3519,11 @@
                             server: server.value || 'all'
                         })
                     });
-                    if (!response || response.success !== true) throw new Error(response?.message || 'The pending account was not saved.');
+                    if (!response || response.success !== true) {
+                        const apiError = new Error(response?.message || 'The pending account was not saved.');
+                        apiError.code = response?.code || response?.error?.code || null;
+                        throw apiError;
+                    }
                     const successMessage = response.sms?.success ? 'Voucher created and SMS sent to ' + value + '.' : 'Voucher created for ' + value + '; SMS status: ' + (response.sms?.status || 'unknown') + '. Check SMS Alerts if needed.';
                     toast(successMessage);
                     if (result) result.innerHTML = '<div class="alert alert-success mb-0">' + escapeHtml(successMessage) + '</div>';
@@ -3534,7 +3538,12 @@
                         Promise.resolve(window.refreshHotspotVoucherStats()).catch(() => {});
                     }
                 } catch (error) {
-                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error?.message || 'Unable to save pending account.') + '</div>';
+                    console.error('[Hotspot user creation] API request failed', {
+                        code: error?.code || null,
+                        message: error?.message || String(error)
+                    });
+                    const codePrefix = error?.code ? '[' + String(error.code) + '] ' : '';
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(codePrefix + (error?.message || 'Unable to save pending account.')) + '</div>';
                 } finally {
                     button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Voucher';
                     updateButton();
