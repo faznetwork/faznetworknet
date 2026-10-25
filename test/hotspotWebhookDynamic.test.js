@@ -60,7 +60,7 @@ test("Admin creates a pending credential subscriber without overwriting expired 
     assert.equal(insertedParams[0],"rahim.home");
     assert.equal(insertedParams[1],"024681");
     assert.equal(insertedParams[5],"pending_claim");
-    assert.equal(insertedParams[12],"New Customer");
+    assert.equal(insertedParams[13],"New Customer");
     assert.equal(routerWrites,0,"RouterOS user is created only at first successful captive login");
     assert.equal(smsPayload.channels[0],"sms");
     assert.match(smsPayload.message,/Username: rahim\.home/);
