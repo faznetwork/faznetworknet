@@ -323,7 +323,7 @@ async function createUser(req,res){
     const priceResult=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1",[profile]).catch(()=>({rows:[]}));
     const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0);
     const profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||requestedProfile);
-    const initialUsername=generatedUsername;
+    let initialUsername=generatedUsername;
     const initialPassword=generatedPassword;
     const stored=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-phone:"+phone]);
@@ -331,9 +331,15 @@ async function createUser(req,res){
       const existingPhone=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY id DESC FOR UPDATE",[phone]);
       const phoneRows=existingPhone.rows||[];
       if(phoneRows.some(row=>String(row.status||"").toLowerCase()==="active"&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now())))throw hotspotError("ACTIVE_PACKAGE_EXISTS",409,"This phone already has an active direct Hotspot subscriber/package.");
-      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-username:"+initialUsername.toLowerCase()]);
-      const existingUsername=await client.query("SELECT id FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1 FOR UPDATE",[initialUsername]);
-      if(existingUsername.rows?.length)throw hotspotError("USERNAME_TAKEN",409,"That username is already in use. Choose another username.");
+      let existingUsername={rows:[]};
+      for(let attempt=0;attempt<5;attempt++){
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-username:"+initialUsername.toLowerCase()]);
+        existingUsername=await client.query("SELECT id FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1 FOR UPDATE",[initialUsername]);
+        if(!existingUsername.rows?.length)break;
+        if(requestedUsername)throw hotspotError("USERNAME_TAKEN",409,"That username is already in use. Choose another username.");
+        initialUsername="HN-"+crypto.randomBytes(6).toString("hex").toUpperCase();
+      }
+      if(existingUsername.rows?.length)throw hotspotError("USERNAME_GENERATION_FAILED",503,"Could not generate a unique username. Please retry.");
       const reusable=phoneRows.find(row=>["expired","unused","pending_claim"].includes(String(row.status||"").toLowerCase())||Boolean(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
       const params=[initialUsername,initialPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,null,customerName,note,null,null,true];
       if(reusable){
