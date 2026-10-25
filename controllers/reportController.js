@@ -1,19 +1,26 @@
 const db = require("../db");
+const {ALLOWED_CATEGORIES,normalizeSalesCategory,transactionCategorySql}=require("../services/hotspotSalesCategory");
 const METHODS = new Set(["all","cash","bkash","nagad","rocket","upay"]);
 const clean=(v,max=200)=>String(v??"").trim().slice(0,max);
 const dateOrNull=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||""))?String(v):null;
 const money=v=>Number(v||0);
 async function collection(req,res){try{
- const from=dateOrNull(req.query.from),to=dateOrNull(req.query.to),method=METHODS.has(clean(req.query.method).toLowerCase())?clean(req.query.method).toLowerCase():"all";
+ const from=dateOrNull(req.query.from),to=dateOrNull(req.query.to);
+ const method=METHODS.has(clean(req.query.method).toLowerCase())?clean(req.query.method).toLowerCase():"all";
+ const category=normalizeSalesCategory(req.query.category||"all");
+ if(!ALLOWED_CATEGORIES.includes(category))return res.status(400).json({success:false,message:"Invalid sales category."});
+ const categorySql=transactionCategorySql("t");
  const params=[],where=["t.status IN ('processed','PAID')","(t.claim_flow IN ('hotspot','manual_hotspot') OR EXISTS (SELECT 1 FROM hotspot_voucher_payments hp0 WHERE hp0.transaction_id=t.id))"];
- if(from){params.push(from);where.push(`t.created_at >= $${params.length}::date`)}
- if(to){params.push(to);where.push(`t.created_at < ($${params.length}::date + INTERVAL '1 day')`)}
- if(method!=="all"){params.push(method);where.push(`LOWER(t.channel) = $${params.length}`)}
+ if(from){params.push(from);where.push("t.created_at >= $"+params.length+"::date");}
+ if(to){params.push(to);where.push("t.created_at < ($"+params.length+"::date + INTERVAL '1 day')");}
+ if(method!=="all"){params.push(method);where.push("LOWER(t.channel) = $"+params.length);}
+ if(category!=="all"){params.push(category);where.push("("+categorySql+") = $"+params.length);}
  const filter=where.join(" AND ");
  const [rows,summary]=await Promise.all([
- db.query(`SELECT t.created_at,t.matched_username,t.sender_phone,t.amount,t.channel,t.trx_id,COALESCE(c.full_name,t.matched_username,t.sender_phone,'Hotspot / walk-in') customer_name,COALESCE(c.package_name,CASE WHEN v.profile IS NOT NULL THEN 'Hotspot: '||v.profile ELSE 'Payment' END) purpose FROM transactions t LEFT JOIN customers c ON LOWER(c.username)=LOWER(t.matched_username) LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE ${filter} ORDER BY t.created_at DESC,t.id DESC LIMIT 2000`,params),
- db.query(`SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) total,COALESCE(SUM(t.amount) FILTER(WHERE LOWER(t.channel)='cash'),0)::numeric(14,2) cash,COALESCE(SUM(t.amount) FILTER(WHERE LOWER(t.channel)<>'cash'),0)::numeric(14,2) mfs,COUNT(*)::int count FROM transactions t WHERE ${filter}`,params)]);
- res.json({success:true,filters:{from,to,method},summary:summary.rows[0],rows:rows.rows});
+  db.query("SELECT t.created_at,t.matched_username,t.sender_phone,t.amount,t.channel,t.trx_id,("+categorySql+") AS subscriber_type,COALESCE(c.full_name,t.matched_username,t.sender_phone,'Hotspot / walk-in') customer_name,COALESCE(c.package_name,CASE WHEN v.profile IS NOT NULL THEN 'Hotspot: '||v.profile ELSE 'Payment' END) purpose FROM transactions t LEFT JOIN customers c ON LOWER(c.username)=LOWER(t.matched_username) LEFT JOIN hotspot_vouchers v ON LOWER(v.username)=LOWER(t.matched_username) WHERE "+filter+" ORDER BY t.created_at DESC,t.id DESC LIMIT 2000",params),
+  db.query("SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) total,COALESCE(SUM(t.amount) FILTER(WHERE LOWER(t.channel)='cash'),0)::numeric(14,2) cash,COALESCE(SUM(t.amount) FILTER(WHERE LOWER(t.channel)<>'cash'),0)::numeric(14,2) mfs,COUNT(*)::int count FROM transactions t WHERE "+filter,params)
+ ]);
+ res.json({success:true,filters:{from,to,method,category},summary:summary.rows[0],rows:rows.rows});
  }catch(e){console.error("[Reports:collection]",e);res.status(500).json({success:false,message:"Unable to load collection report."})}}
 async function due(req,res){try{
  const status=["overdue","expired","all"].includes(clean(req.query.status).toLowerCase())?clean(req.query.status).toLowerCase():"all",params=[];
@@ -29,19 +36,20 @@ async function due(req,res){try{
  }catch(e){console.error("[Reports:due]",e);res.status(500).json({success:false,message:"Unable to load due summary."})}}
 async function hotspot(req,res){try{
  const from=dateOrNull(req.query.from),to=dateOrNull(req.query.to);
- const allowedSaleTypes=new Set(["all","online_mfs","scratch_card","manual","other"]);
- const saleType=allowedSaleTypes.has(clean(req.query.sale_type,24).toLowerCase())?clean(req.query.sale_type,24).toLowerCase():"all";
+ const category=normalizeSalesCategory(req.query.category||req.query.sale_type||"all");
+ if(!ALLOWED_CATEGORIES.includes(category))return res.status(400).json({success:false,message:"Invalid Hotspot sales category."});
+ const categorySql=transactionCategorySql("t");
  const params=[],where=["t.status IN ('processed','PAID')"];
- if(from){params.push(from);where.push(`t.created_at >= $${params.length}::date`)}
- if(to){params.push(to);where.push(`t.created_at < ($${params.length}::date + INTERVAL '1 day')`)}
- if(saleType!=="all"){params.push(saleType);where.push(`COALESCE(t.sale_type,'other') = $${params.length}`)}
+ if(from){params.push(from);where.push("t.created_at >= $"+params.length+"::date");}
+ if(to){params.push(to);where.push("t.created_at < ($"+params.length+"::date + INTERVAL '1 day')");}
+ if(category!=="all"){params.push(category);where.push("("+categorySql+") = $"+params.length);}
  const filter=where.join(" AND ");
  const [profiles,transactions,summary]=await Promise.all([
-  db.query(`SELECT COALESCE(hp.profile,v.profile,'Unknown package') profile_name,COALESCE(SUM(hp.amount),0)::numeric(14,2) price,COUNT(*)::int quantity,COALESCE(SUM(hp.amount),0)::numeric(14,2) revenue FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE ${filter} AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) GROUP BY COALESCE(hp.profile,v.profile,'Unknown package') ORDER BY revenue DESC,quantity DESC`,params),
-  db.query(`SELECT t.sender_phone,COALESCE(hp.profile,v.profile,'Hotspot') profile,t.trx_id,t.created_at,t.amount,COALESCE(t.sale_type,'other') sale_type,t.channel FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE ${filter} AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) ORDER BY t.created_at DESC,t.id DESC LIMIT 1000`,params),
-  db.query(`SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) earnings,COUNT(*)::int sales,COUNT(DISTINCT t.matched_username) FILTER(WHERE t.matched_username IS NOT NULL)::int users,COUNT(*) FILTER(WHERE COALESCE(t.sale_type,'other')='online_mfs')::int online_mfs_sales,COUNT(*) FILTER(WHERE COALESCE(t.sale_type,'other')='scratch_card')::int scratch_card_sales FROM transactions t WHERE ${filter}`,params)
+  db.query("SELECT COALESCE(hp.profile,v.profile,'Unknown package') profile_name,COALESCE(SUM(hp.amount),0)::numeric(14,2) price,COUNT(*)::int quantity,COALESCE(SUM(hp.amount),0)::numeric(14,2) revenue FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE "+filter+" AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) GROUP BY COALESCE(hp.profile,v.profile,'Unknown package') ORDER BY revenue DESC,quantity DESC",params),
+  db.query("SELECT t.sender_phone,COALESCE(hp.profile,v.profile,'Hotspot') profile,t.trx_id,t.created_at,t.amount,"+categorySql+" AS subscriber_type,COALESCE(t.sale_type,'other') sale_type,t.channel FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE "+filter+" AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) ORDER BY t.created_at DESC,t.id DESC LIMIT 1000",params),
+  db.query("SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) earnings,COUNT(*)::int sales,COUNT(DISTINCT t.matched_username) FILTER(WHERE t.matched_username IS NOT NULL)::int users,COUNT(*) FILTER(WHERE ("+categorySql+")='mfs')::int online_mfs_sales,COUNT(*) FILTER(WHERE ("+categorySql+")='scratch_voucher')::int scratch_card_sales,COUNT(*) FILTER(WHERE ("+categorySql+")='admin_voucher')::int admin_manual_sales FROM transactions t WHERE "+filter,params)
  ]);
- res.json({success:true,filters:{from,to,sale_type:saleType},summary:summary.rows[0],profiles:profiles.rows,transactions:transactions.rows});
+ res.json({success:true,filters:{from,to,category,sale_type:category},summary:summary.rows[0],profiles:profiles.rows,transactions:transactions.rows});
  }catch(e){console.error("[Reports:hotspot]",e);res.status(500).json({success:false,message:"Unable to load hotspot revenue."})}}
 async function expenses(req,res){try{
  const [rows,summary,collection]=await Promise.all([
