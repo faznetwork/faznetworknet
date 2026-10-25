@@ -3187,7 +3187,7 @@
                             <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
                               <i class="bi bi-telephone hs-create-input-icon" aria-hidden="true"></i>
-                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[3-9][0-9]{8}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
+                              <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
                               <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
                             </div>
                             <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div>
@@ -3359,7 +3359,7 @@
             const updatePhoneFeedback = () => {
                 const normalized = asciiDigits(phone.value);
                 if (phone.value !== normalized) phone.value = normalized;
-                const valid = /^01[3-9]\d{8}$/.test(normalized);
+                const valid = /^01[0-9]{9}$/.test(normalized);
                 phone.classList.toggle('hs-phone-valid', valid);
                 phone.classList.toggle('hs-phone-invalid', normalized.length > 0 && !valid);
                 if (phoneValidMark) phoneValidMark.classList.toggle('is-visible', valid);
@@ -3490,16 +3490,13 @@
 
             form.addEventListener('submit', async event => {
                 event.preventDefault();
-                const value = String(phone.value || '').trim().replace(/[^0-9]/g, '');
-                phone.value = value;
-                const validPhone = /^01[3-9]\d{8}$/.test(value);
-                if (!validPhone) {
-                    updatePhoneFeedback();
+                if (!updatePhoneFeedback()) {
                     phone.focus();
                     updateButton();
                     return;
                 }
                 if (!form.reportValidity()) return;
+                const value = phone.value.trim();
                 const chosen = selectedProfile();
                 if (!chosen) {
                     if (result) result.innerHTML = '<div class="alert alert-danger mb-0">Choose a valid package / profile.</div>';
