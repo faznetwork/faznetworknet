@@ -135,6 +135,20 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  assert.match(auth,/redirect_url:redirectUrl/);
 });
 
+test("captive portal exposes one numeric Voucher PIN field and maps PIN to both credentials while preserving QR/camera flow",()=>{
+ const portal=read("public/login.html");
+ assert.match(portal,/label for="voucher_pin">ভাউচার পিন \/ Voucher PIN/);
+ assert.match(portal,/id="voucher_pin"[^>]*pattern="\[0-9\]\{6,8\}"/);
+ assert.doesNotMatch(portal,/id="voucher_password"/);
+ assert.match(portal,/voucher_password:pin/);
+ assert.match(portal,/password:pin/);
+ assert.match(portal,/id="qr-scan-button"/);
+ assert.match(portal,/function openQrScanner\(\)/);
+ assert.match(portal,/function triggerNativeCameraCapture\(\)/);
+ assert.match(portal,/id="qr-file-input"/);
+ assert.match(portal,/function applyScannedCredentials\(raw\)/);
+});
+
 test("voucher claims accept a PIN alone and retain voucher PIN as RouterOS username",()=>{
  const auth=read("controllers/hotspotAuthController.js");
  assert.match(auth,/voucher_password\|\|req\.body\?\.password\|\|pin/);
