@@ -43,7 +43,7 @@ test("PPPoE manual match renews RouterOS, persists expiry, and finalizes only th
   assert.equal(res.statusCode,200);
   assert.equal(res.body.success,true);
   assert.equal(res.body.username,"customer-10006");
-  assert.match(res.body.expiration,/^\\d{4}-\\d{2}-\\d{2}$/);
+  assert.match(res.body.expiration,/^\d{4}-\d{2}-\d{2}$/);
   assert.ok(calls.some(call=>call.router==="updateSecret"&&call.options.profile==="HOME-500"));
   assert.ok(calls.some(call=>call.router==="kickActiveUser"&&call.username==="customer-10006"));
   assert.ok(calls.some(call=>call.transactional&&call.sql.startsWith("UPDATE customers SET package_name=")));
