@@ -83,12 +83,15 @@ test("generated scratch vouchers persist batch IDs and can be retrieved for repr
  const schema=read("db/schema.sql");
  const migration=read("db/migrations/20261018_hotspot_voucher_batch_persistence.sql");
  const controller=read("controllers/hotspotController.js");
+ const generator=read("services/hotspotVoucherGenerator.js");
  const routes=read("routes/hotspotRoutes.js");
  const ui=read("views/admin.ejs");
  assert.match(schema,/ADD COLUMN IF NOT EXISTS batch_id VARCHAR\(36\)/);
  assert.match(migration,/ADD COLUMN IF NOT EXISTS batch_id VARCHAR\(36\)/);
  assert.match(controller,/const batchId=crypto\.randomUUID\(\)/);
- assert.match(controller,/subscriber_type,activation_type,server,mac_lock,batch_id\)/);
+ assert.match(controller,/hotspotVoucherGenerator\.generateVoucherBatch/);
+ assert.match(generator,/subscriber_type,activation_type,server,mac_lock,batch_id,transaction_id/);
+ assert.match(generator,/ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at,batch_id,transaction_id/);
  assert.match(controller,/async function voucherBatches\(req,res\)/);
  assert.match(controller,/async function voucherBatch\(req,res\)/);
  assert.match(routes,/router\.get\("\/vouchers\/batches",controller\.voucherBatches\)/);
