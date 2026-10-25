@@ -9,6 +9,7 @@ const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 test("Admin Add Hotspot User creates simple voucher PINs without activation mode or MAC input",()=>{
  const source=read("controllers/hotspotController.js");
  const ui=read("views/admin.ejs");
+ const form=ui.slice(ui.indexOf('id="addHotspotUserForm"'),ui.indexOf("</form>",ui.indexOf('id="addHotspotUserForm"')));
  const generator=read("services/hotspotVoucherGenerator.js");
  assert.match(source,/requestedPin/);
  assert.match(source,/VOUCHER_PIN_EXISTS/);
@@ -17,13 +18,15 @@ test("Admin Add Hotspot User creates simple voucher PINs without activation mode
  assert.match(source,/notificationDispatcher\.dispatchNotification/);
  assert.match(source,/await dispatch\.task/);
  assert.match(generator,/crypto\.randomInt\(0,10\)/);
- assert.match(ui,/name="phone"/);
- assert.match(ui,/name="voucher_pin"/);
+ assert.match(form,/name="phone"/);
+ assert.match(form,/name="voucher_pin"/);
  assert.match(ui,/hotspotVoucherSuccessModal/);
  assert.match(ui,/hotspotVoucherCopyPin/);
- assert.doesNotMatch(ui,/name="activation_type"/);
- assert.doesNotMatch(ui,/id="hsDeviceMac"/);
- assert.doesNotMatch(ui,/id="hsCustomExpiry"/);
+ assert.doesNotMatch(form,/name="activation_type"/);
+ assert.doesNotMatch(form,/id="hsDeviceMac"/);
+ assert.doesNotMatch(form,/id="hsCustomExpiry"/);
+ assert.match(source,/Voucher created, but SMS was not confirmed/);
+ assert.match(source,/sms:\{status:sms\.status,success:sms\.success,reason:sms\.reason\}/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
