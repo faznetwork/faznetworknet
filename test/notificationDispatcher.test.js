@@ -93,6 +93,7 @@ test("Hotspot direct-message hooks prefer active Notification Hub templates and 
  const sent=[],queries=[],logs=[];
  const scenarios=[
   {event:"hotspot_account_created",templateKey:"welcome_message"},
+  {event:"hotspot_voucher_created",templateKey:"welcome_message"},
   {event:"hotspot_first_login",templateKey:"welcome_message"},
   {event:"hotspot_renewal",templateKey:"hotspot_renewal"},
   {event:"hotspot_expiring_soon",templateKey:"hotspot_expiry_warning"}

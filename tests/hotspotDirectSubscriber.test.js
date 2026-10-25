@@ -14,7 +14,7 @@ test("Admin Add Hotspot User is voucher-first and excludes direct-subscriber pro
  assert.match(createUser,/hotspotVoucherGenerator\.generateVoucherBatch/);
  assert.match(createUser,/quantity:\s*1/);
  assert.match(createUser,/status = 'unused'/);
- assert.match(createUser,/subscriber_type = 'scratch_voucher'/);
+ assert.match(createUser,/subscriber_type = 'admin_voucher'/);
  assert.match(createUser,/activation_type = 'first_login'/);
  assert.doesNotMatch(createUser,/direct_subscriber/);
  assert.doesNotMatch(createUser,/rechargeHotspotUser/);
@@ -22,8 +22,8 @@ test("Admin Add Hotspot User is voucher-first and excludes direct-subscriber pro
  assert.match(createUser,/data_limit = NULLIF\(\$7::text, ''\)/);
  assert.match(createUser,/expires_at = \$8::timestamptz/);
  assert.match(createUser,/timeZone: "Asia\/Dhaka"/);
- assert.match(createUser,/event: "hotspot_account_created"/);
- assert.match(createUser,/channels: \["sms"\]/);
+ assert.match(createUser,/event: "hotspot_voucher_created"/);
+ assert.doesNotMatch(createUser,/channels: \["sms"\]/);
  assert.match(createUser,/if \(phone\)/);
 });
 

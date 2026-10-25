@@ -6,7 +6,7 @@ const whatsappService=require("./whatsappService");
 const messageHistoryService=require("./messageHistoryService");
 const emailOutboxService=require("./emailOutboxService");
 function bool(settings,key,fallback=false){return Object.prototype.hasOwnProperty.call(settings,key)?settingsService.bool(settings[key]):fallback;}
-function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expiry:"expired",suspended:"suspension",manual_suspension:"suspension",expired:"expired"};return map[raw]||raw;}
+function eventKey(event){const raw=String(event||"").trim().toLowerCase();const map={payment:"payment",payment_receipt:"payment",recharge:"recharge",renewal:"renewal",pppoe_renewal:"renewal",pppoe_payment:"payment",hotspot_purchase:"payment",hotspot_payment_received:"payment",hotspot_account_created:"welcome",hotspot_voucher_created:"welcome",hotspot_first_login:"welcome",hotspot_expiring_soon:"expiry_warning",hotspot_renewal:"renewal",pppoe_expiry_warning:"expiry_warning",hotspot_expiry_warning:"expiry_warning",pppoe_expired:"expired",hotspot_expired:"expired",welcome:"welcome",welcome_message:"welcome",expiry_warning:"expiry_warning",line_expiry:"expired",expiry:"expired",suspended:"suspension",manual_suspension:"suspension",expired:"expired"};return map[raw]||raw;}
 function customTemplateEvents(type,rawEvent,eventName){
  const raw=String(rawEvent||"").toLowerCase();
  if(raw==="welcome"||raw==="welcome_message"||eventName==="welcome")return ["welcome_message"];
@@ -85,7 +85,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
  const recipientPhone=normalizePhone(rawPhone);
  const smsPhone=normalizeSmsPhone(rawPhone);
  const validWhatsAppPhone=isValidBdWhatsAppPhone(recipientPhone);
- const explicitHotspotPipeline=type==="hotspot"&&["hotspot_payment_received","hotspot_account_created","hotspot_first_login","hotspot_renewal","hotspot_expiring_soon"].includes(rawEvent);
+ const explicitHotspotPipeline=type==="hotspot"&&["hotspot_payment_received","hotspot_account_created","hotspot_voucher_created","hotspot_first_login","hotspot_renewal","hotspot_expiring_soon"].includes(rawEvent);
  const customerUsername=String(customer?.username||username||"unknown").trim()||"unknown";
  const isPppoeRenewal=type==="pppoe"&&["payment","renewal","recharge"].includes(eventName);
  if(isPppoeRenewal){
@@ -164,7 +164,7 @@ async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,
 function dispatchNotification(payload={}){
  // Intentionally detached from request lifecycles: delivery cannot delay or roll back billing.
  const task=Promise.resolve().then(()=>dispatchNow(payload)).catch(error=>({success:false,error:String(error?.message||error)}));
- task.then(result=>{if(!result.success)console.warn("[Notification Hub] One or more channel deliveries failed:",JSON.stringify({event:payload.event,userType:payload.userType,results:result.results||[],error:result.error}));});
+ task.then(result=>{const failed=(result.results||[]).filter(item=>item.status==="failed");if(!result.success||failed.length)console.error("[Notification Hub] Channel delivery failure:",JSON.stringify({event:payload.event,userType:payload.userType,recipient:payload.to||payload.phone||payload.recipient||null,success:result.success===true,failedChannels:failed.map(item=>({channel:item.channel,error:item.error||item.message||null})),results:result.results||[],error:result.error||null}));});
  return {accepted:true,task};
 }
 async function testChannel(channel,{to,message="FAZ NETWORK test notification"}={}){
