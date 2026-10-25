@@ -450,6 +450,8 @@ async function issueHotspotVoucherForPayment(req,res,body){
    const generated=await hotspotVoucherGenerator.generateVoucherBatch({client,profileName:String(profile.name),validity,price:amount,server:"all",quantity:1,charLength:8,passwordEqualsUsername:true,transactionId:current.id,comment:"FAZ NETWORK online payment voucher; profile validity applies on first successful login."});
    const voucher=generated.vouchers[0];
    if(!voucher?.username)throw new Error("Branded voucher generator did not return a Voucher PIN.");
+   const classified=await client.query("UPDATE hotspot_vouchers SET subscriber_type=\'mfs\',updated_at=NOW() WHERE id=$1::bigint AND subscriber_type=\'scratch_voucher\' RETURNING id",[voucher.id]);
+   if(!classified.rows?.length)throw new Error("Online MFS voucher source classification could not be persisted.");
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs')",[current.id,voucher.id,normalizePhone(current.sender_phone)||"",amount,String(profile.name)]);
    const updated=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1::text,needs_reconciliation=false,claim_flow='force_hotspot',claimed_at=NULL,claimed_by=NULL WHERE id=$2::bigint AND LOWER(TRIM(status))='unmatched' AND (used=false OR used IS NULL) RETURNING id,status,matched_username",[voucher.username,current.id]);
    if(!updated.rows?.length)throw Object.assign(new Error("Payment transaction could not be finalized; voucher issuance was rolled back."),{statusCode:409,code:"CLAIM_CONFLICT"});
