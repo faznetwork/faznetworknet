@@ -272,16 +272,19 @@ async function runHotspotRetentionCleanup(deps = {}) {
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
       [purgeIds]
     );
-    const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days' RETURNING id",
+    const archivedVouchers = await database.query(
+      "UPDATE hotspot_vouchers SET status='archived', " +
+      "last_known_mac=COALESCE(NULLIF(last_known_mac,''),NULLIF(mac_address,'')), mac_address=NULL, " +
+      "updated_at=NOW() WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' " +
+      "AND expires_at < NOW() - INTERVAL '395 days' RETURNING id",
       [purgeIds]
     );
     const result = {
       archivedTransactions: (archived.rows || []).length,
-      deletedVouchers: (deleted.rows || []).length,
+      archivedVouchers: (archivedVouchers.rows || []).length,
       routerPurgeFailed: (candidates.rows || []).length - purgeIds.length
     };
-    if (result.archivedTransactions || result.deletedVouchers) logger.log("[HOTSPOT RETENTION] Completed.", result);
+    if (result.archivedTransactions || result.archivedVouchers) logger.log("[HOTSPOT RETENTION] Completed without deleting voucher or financial rows.", result);
     return result;
   } catch (error) {
     logger.error("[HOTSPOT RETENTION] Failed; voucher rows were retained:", error.message);
