@@ -252,7 +252,7 @@ async function claimVoucher(req,res){
     const responseProxy={
       status(code){statusCode=code;return this;},
       async json(body){
-        if(body?.success&&statusCode<400&&claimed.firstUse){
+        if(body?.success&&statusCode<400&&claimed.firstUse&&claimed.subscriberType!=="admin_voucher"){
           try{
             const saleType=claimed.subscriberType==="admin_voucher"?"manual":"scratch_card";
             const auditLabel=saleType==="manual"?"Admin manual voucher redemption":"Scratch-card redemption";
