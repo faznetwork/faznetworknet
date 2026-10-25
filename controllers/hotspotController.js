@@ -1,5 +1,6 @@
 const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
 const notificationDispatcher=require("../services/notificationDispatcher");
+const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function normalizeHotspotMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
@@ -7,7 +8,6 @@ function normalizeProfileIdentifier(value){return String(value??"").normalize("N
 function profileIdentifierMatches(profileName,metadata,requested){if(!requested)return false;const aliases=[profileName,metadata?.id,metadata?.profileId,metadata?.profile_id,metadata?.packageId,metadata?.package_id,metadata?.packageName,metadata?.package_name,metadata?.alias,metadata?.aliases];const target=normalizeProfileIdentifier(requested);return Boolean(target)&&aliases.flatMap(value=>Array.isArray(value)?value:[value]).filter(value=>value!==undefined&&value!==null&&String(value).trim()!=="").some(value=>normalizeProfileIdentifier(value)===target);}
 function hotspotError(code,statusCode,message){const error=new Error(message);error.code=code;error.statusCode=statusCode;return error;}
 function errorResponse(res,e){console.error("[Hotspot API]",e);const message=e?.message||"Hotspot operation failed.";return res.status(e?.statusCode||503).json({success:false,users:[],profiles:[],message,error:message});}
-function randomPin(length=8){return crypto.randomBytes(Math.ceil(length*1.5)).toString("base64url").replace(/[^A-Za-z0-9]/g,"").slice(0,length).toUpperCase();}
 function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","online","active","offline","expired"].includes(filter)?filter:"all";}
 function validityMs(value){const m=String(value||"").trim().match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!m)return 0;const n=Number(m[1]),u=m[2].toLowerCase();const unit=u.startsWith("s")?1000:u.startsWith("m")?60000:u.startsWith("h")?3600000:u.startsWith("w")?604800000:86400000;return n*unit;}
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
@@ -261,24 +261,11 @@ async function generate(req,res){
   if(!hasRouterTimeout&&!hasConfiguredMetadata&&!quota)return res.status(400).json({success:false,code:"PROFILE_VALIDITY_MISSING",error:"The selected profile has no saved time validity or data quota. Configure validity in Hotspot Profile settings first."});
   const normalizedValidity=String(profileValidity.validity||"").trim()||(quota?"0m":"");
   const batchId=crypto.randomUUID();
-  const created=await db.withTransaction(async client=>{
-   const vouchers=[];
-   for(let i=0;i<quantity;i++){
-    let username,password,inserted=null;
-    for(let attempt=0;attempt<8&&!inserted;attempt++){
-     username=(userPrefix||"")+randomPin(charLength);
-     password=randomPin(8);
-     const result=await client.query(
-      "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock,batch_id) VALUES ($1,$2,$3,$4,$5,'unused',$6,'scratch_voucher','first_login',$7,false,$8) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at,batch_id",
-      [username,password,profileName,normalizedValidity,price,"Scratch voucher; profile validity applies on first successful login.",server,batchId]
-     );
-     inserted=result.rows[0]||null;
-    }
-    if(!inserted)throw new Error("Could not allocate a unique voucher PIN. Change the prefix or retry.");
-    vouchers.push(inserted);
-   }
-   return vouchers;
-  });
+  const generated=await db.withTransaction(client=>hotspotVoucherGenerator.generateVoucherBatch({
+   client,profileName,validity:normalizedValidity,price,server,quantity,userPrefix,charLength,batchId,
+   comment:"Scratch voucher; profile validity applies on first successful login."
+  }));
+  const created=generated.vouchers;
   hotspotListCache.expiresAt=0;
   return res.status(201).json({success:true,batchId,count:created.length,profile:profileName,validity:normalizedValidity,vouchers:created,message:"Voucher PINs generated successfully using the selected Hotspot profile validity."});
  }catch(error){return errorResponse(res,error);}
