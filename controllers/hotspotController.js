@@ -356,15 +356,25 @@ async function createUser(req,res){
       routerProvisioned=true;
       await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,first_login_at=COALESCE(first_login_at,$3),expires_at=$4,comment=$5,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1",[stored.id,mac,now,expiresAt,comment]);
     }
-    if(phone){
-      const customerLabel=String(stored.customer_name||customerName||"গ্রাহক").trim()||"গ্রাহক";
-      if(preassigned){
-        const expiryStr=expiresAt?new Date(expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
-        notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_account_created",to:phone,recipient:phone,phone,username:preassigned?mac:stagedUsername,customer:{username:preassigned?mac:stagedUsername,name:customerLabel,phone,profile},customerName:customerLabel,message:"আসসালামু আলাইকুম "+customerLabel+", FAZ NETWORK-এ আপনার হটস্পট অ্যাকাউন্ট "+(preassigned?"সফলভাবে চালু করা হয়েছে।":"তৈরি করা হয়েছে; প্রথম লগইনে সক্রিয় হবে।")+"\nপ্যাকেজ: "+profile+"\nমেয়াদ: "+expiryStr+" পর্যন্ত।\nধন্যবাদ!",useMessageDirectly:true,channels:["whatsapp"],variables:{name:customerLabel,username:preassigned?mac:stagedUsername,profile,package:profile,expiry_date:expiryStr}});
+    const customerLabel=String(stored.customer_name||customerName||"গ্রাহক").trim()||"গ্রাহক";
+    const voucherUsername=preassigned?mac:stagedUsername;
+    const voucherPassword=preassigned?mac:initialPassword;
+    const expiryStr=expiresAt
+      ?new Date(expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"})
+      :(profileValidity.validityLabel||validity||(quota?("ডেটা কোটা "+quota+" bytes"):"প্রথম লগইনে মেয়াদ শুরু হবে"));
+    const voucherMessage="FAZ NETWORK Hotspot Voucher\nগ্রাহক: "+customerLabel+"\nপ্যাকেজ: "+profile+"\nVoucher Username: "+voucherUsername+"\nVoucher Password: "+voucherPassword+"\nমেয়াদ: "+expiryStr+(preassigned?" পর্যন্ত।":" (প্রথম লগইনে মেয়াদ শুরু হবে।)");
+    const notification=notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_account_created",to:phone,recipient:phone,phone,username:voucherUsername,customer:{username:voucherUsername,name:customerLabel,phone,profile},customerName:customerLabel,message:voucherMessage,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerLabel,username:voucherUsername,password:voucherPassword,profile,package:profile,expiry_date:expiryStr}});
+    const sms={accepted:true,status:"pending"};
+    notification.task.then(result=>{
+      const smsResult=(result.results||[]).find(item=>item.channel==="sms");
+      if(!smsResult||!["sent","success","delivered"].includes(String(smsResult.status||"").toLowerCase())){
+        console.error("[Hotspot createUser] Voucher saved but SMS was not confirmed.",{voucherId:stored.id,phone,status:smsResult?.status||"missing",reason:smsResult?.reason||smsResult?.error||result.error||"No SMS result"});
       }
-    }
+    }).catch(error=>{
+      console.error("[Hotspot createUser] Voucher saved but notification dispatch rejected.",{voucherId:stored.id,phone,error:error?.message||String(error)});
+    });
     hotspotListCache.expiresAt=0;
-    return res.status(201).json({success:true,subscriber_type:"direct_subscriber",activation_type:mode,pending_activation:!preassigned,instant_provisioned:preassigned,message:preassigned?"Direct subscriber created and provisioned on MikroTik immediately.":"Direct subscriber staged in PostgreSQL; MAC binding and validity countdown begin on first captive-portal authentication.",user:{id:stored.id,username:preassigned?mac:null,phone,customer_name:customerName,profile:stored.profile,profile_id:stored.profile_id,status:stored.status,mac_address:preassigned?mac:null,first_login_at:stored.first_login_at||null,expires_at:expiresAt?expiresAt.toISOString():null}});
+    return res.status(201).json({success:true,subscriber_type:"direct_subscriber",activation_type:mode,pending_activation:!preassigned,instant_provisioned:preassigned,message:preassigned?"Direct subscriber created and provisioned on MikroTik immediately.":"Direct subscriber staged in PostgreSQL; MAC binding and validity countdown begin on first captive-portal authentication.",sms,user:{id:stored.id,username:preassigned?mac:null,phone,customer_name:customerName,profile:stored.profile,profile_id:stored.profile_id,status:stored.status,mac_address:preassigned?mac:null,first_login_at:stored.first_login_at||null,expires_at:expiresAt?expiresAt.toISOString():null}});
   }catch(e){
     if(savedId&&!routerProvisioned){
       if(previousRecord){
