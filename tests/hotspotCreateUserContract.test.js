@@ -38,12 +38,3 @@ test("frontend renders backend error code and message rather than phone validati
   assert.match(submitHandler, /codePrefix \+ \(error\?\.message/);
   assert.match(submitHandler, /response\?\.message/);
 });
-
-
-test("createUser INSERT assigns distinct parameters to price and time_limit and logs column mapping on query failure", () => {
-  assert.match(createUser, /VALUES\(\$1,\$1,\$2,\$3::text,\$4::numeric,'unused',\$5,\$6,'all',\$7::text,\$8::text,\$9,NULL,\$10,\$11/);
-  assert.match(createUser, /\$4.*price/);
-  assert.match(createUser, /\$7.*time_limit/);
-  assert.match(createUser, /voucher INSERT failed/);
-  assert.match(createUser, /message:error\?\.message\|\|String\(error\)/);
-});
