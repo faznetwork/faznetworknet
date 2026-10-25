@@ -93,7 +93,7 @@ test("Customer type resolution never emits Unknown and prioritizes Hotspot evide
  assert.ok(sql.includes("hotspot_vouchers hv WHERE"));
  assert.ok(sql.includes("hv.mac_address"));
  assert.ok(sql.includes("hv.password"));
- assert.ok(sql.includes("THEN 'unassigned' END AS customer_type"));
+ assert.ok(sql.includes("ELSE 'unassigned' END AS customer_type"));
  assert.ok(!sql.includes("THEN 'unknown'"));
 });
 
