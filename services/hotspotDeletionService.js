@@ -62,12 +62,12 @@ async function deleteHotspotSubscriber({
   }
 
   const saved = await database.query(
-    "UPDATE hotspot_vouchers SET status='deleted', " +
-    "mac_audit_history=(SELECT COALESCE(jsonb_agg(DISTINCT known_mac), '[]'::jsonb) FROM jsonb_array_elements_text(COALESCE(mac_audit_history,'[]'::jsonb) || jsonb_build_array(NULLIF(last_known_mac,''),NULLIF(mac_address,''),$2)) AS macs(known_mac) WHERE known_mac<>''), " +
-    "last_known_mac=COALESCE(NULLIF(mac_address,''),NULLIF(last_known_mac,''),$2), " +
+    "UPDATE hotspot_vouchers AS v SET status='deleted', " +
+    "mac_audit_history=(SELECT COALESCE(jsonb_agg(DISTINCT known_mac), '[]'::jsonb) FROM jsonb_array_elements_text(COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array(NULLIF(v.last_known_mac,''),NULLIF(v.mac_address,''),$2)) AS macs(known_mac) WHERE known_mac<>''), " +
+    "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''),$2), " +
     "mac_address=NULL, cleanup_status='completed', cleanup_error=NULL, " +
-    "cleanup_attempts=COALESCE(cleanup_attempts,0)+1, router_removed_at=NOW(), updated_at=NOW() " +
-    "WHERE id=$1 RETURNING id,username,status,last_known_mac,mac_audit_history,mac_address,transaction_id,price,created_at",
+    "cleanup_attempts=COALESCE(v.cleanup_attempts,0)+1, router_removed_at=NOW(), updated_at=NOW() " +
+    "WHERE v.id=$1 RETURNING v.id,v.username,v.status,v.last_known_mac,v.mac_audit_history,v.mac_address,v.transaction_id,v.price,v.created_at",
     [voucher.id, macAddress]
   );
   if (!saved.rows?.length) {
