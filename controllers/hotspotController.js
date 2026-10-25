@@ -108,9 +108,9 @@ async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
  hotspotListRefresh=(async()=>{
   // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
-  await db.query("UPDATE hotspot_vouchers SET status='expired',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
+  await db.query("UPDATE hotspot_vouchers SET status='expired',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired','deleted')");
   // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
-  const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,subscriber_type,activation_type,profile_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
+  const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,subscriber_type,activation_type,profile_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted') ORDER BY id DESC");
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
   const [ledger,sessionRows]=await Promise.all([ledgerPromise,sessionsPromise]);
   const now=Date.now();
@@ -686,7 +686,7 @@ async function voucherRecords(req,res){
   const filter=String(req.query.status||"all").trim().toLowerCase();
   if(!allowed.has(filter))return res.status(400).json({success:false,message:"Invalid Hotspot user status filter."});
   const [result,sessionRows]=await Promise.all([
-   db.query("SELECT id,username,password,profile,profile_id,validity,price,status,phone,customer_name,mac_address,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,subscriber_type,activation_type,batch_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY created_at DESC,id DESC LIMIT 2000"),
+   db.query("SELECT id,username,password,profile,profile_id,validity,price,status,phone,customer_name,mac_address,server,time_limit,data_limit,first_login_at,expires_at,expired_at,cleanup_status,cleanup_attempts,cleanup_error,router_removed_at,subscriber_type,activation_type,batch_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted') ORDER BY created_at DESC,id DESC LIMIT 2000"),
    mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot users] Live-session enrichment unavailable:",error.message);return [];})
   ]);
   const sessions=(Array.isArray(sessionRows)?sessionRows:[]).map(row=>({...row,username:String(row.user||row.username||"").trim(),macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||"")}));
