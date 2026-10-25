@@ -827,7 +827,7 @@ async function handleCredentialLogin(event){
  if(!device.mac){showStatus('RouterOS থেকে ডিভাইস MAC পাওয়া যায়নি। Wi-Fi-তে পুনরায় সংযোগ করুন।',true);return;}
  button.disabled=true;button.textContent='যাচাই ও সংযোগ হচ্ছে…';
  try{
-   const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot/auth/activate-credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,mac:device.mac,login_url:device.login,link_login_only:device.login})});
+   const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/activate-credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,mac:device.mac,login_url:device.login,link_login_only:device.login})});
    showStatus('লগইন সফল। সংযোগ করা হচ্ছে…');
    submitMikrotikLogin(result.username,result.password,result.redirect_url||device.original);
  }catch(error){showStatus(error.message||'Hotspot login ব্যর্থ হয়েছে।',true);}
