@@ -11,7 +11,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
 test("Hotspot schema permits the archived lifecycle state", () => {
   const schema = read("db/schema.sql");
-  assert.match(schema, /hotspot_vouchers_status_check CHECK \(status IN \([^;]*'archived'[^;]*'deleted'[^;]*\)\)/);\n  assert.match(schema, /ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR\\(32\\)/);
+  assert.match(schema, /hotspot_vouchers_status_check CHECK \(status IN \([^;]*'archived'[^;]*'deleted'[^;]*\)\)/);\n  assert.ok(schema.includes("ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32)"));
 });
 
 test("forward migration adds archived without validating unrelated legacy rows", () => {
