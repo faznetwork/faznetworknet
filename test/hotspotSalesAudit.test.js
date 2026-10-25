@@ -18,7 +18,7 @@ test("Hotspot sales origin migration preserves independent transaction history",
 test("Hotspot retention archives vouchers after verified RouterOS cleanup and never deletes financial or voucher rows",()=>{
  const source=read("jobs/hotspotExpirationCleanup.js");
  assert.doesNotMatch(source,/profile='expired_profile'/);
- assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\\(\\) - INTERVAL '395 days'/);
+ assert.ok(source.includes("SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days'"));
  assert.match(source,/UPDATE hotspot_vouchers SET status='archived'/);
  assert.ok(source.includes("last_known_mac=COALESCE(NULLIF(last_known_mac,''),NULLIF(mac_address,''))"));
  assert.doesNotMatch(source,/DELETE\\s+FROM\\s+(?:hotspot_vouchers|hotspot_voucher_payments|transactions)/i);
