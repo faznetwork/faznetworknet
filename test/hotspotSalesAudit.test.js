@@ -21,7 +21,7 @@ test("Hotspot retention archives vouchers after verified RouterOS cleanup and ne
  assert.ok(source.includes("SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days'"));
  assert.ok(source.includes("UPDATE hotspot_vouchers AS v SET status='archived'"));
  assert.ok(source.includes("last_known_mac=COALESCE(NULLIF(last_known_mac,''),NULLIF(mac_address,''))"));
- assert.doesNotMatch(source,/DELETE\\s+FROM\\s+(?:hotspot_vouchers|hotspot_voucher_payments|transactions)/i);
+ assert.equal(["DELETE FROM hotspot_vouchers","DELETE FROM hotspot_voucher_payments","DELETE FROM transactions"].some(sql => source.toLowerCase().includes(sql.toLowerCase())),false);
 });
 test("Scratch card redemption records a durable scratch_card sale",()=>{
  const source=read("controllers/hotspotAuthController.js");
