@@ -83,7 +83,8 @@ test("Hotspot revenue report supports canonical category filtering and Admin Man
  const controller=read("controllers/reportController.js");
  const view=read("views/reports.ejs");
  assert.match(controller,/req\.query\.category\|\|req\.query\.sale_type/);
- assert.match(controller,/admin_voucher/);
+ const resolver=read("services/hotspotSalesCategory.js");
+ assert.match(resolver,/admin_voucher/);
  assert.match(controller,/admin_manual_sales/);
  assert.match(view,/value="mfs"/);
  assert.match(view,/value="scratch_voucher"/);
@@ -98,4 +99,15 @@ test("Hotspot sales archive persists explicit origin for new archives and leaves
  assert.match(job,/voucher_count,sale_type,subscriber_type/);
  assert.match(job,/MAX\(v\.subscriber_type\)/);
  assert.doesNotMatch(migration,/UPDATE hotspot_voucher_sales_archive/i);
+});
+
+test("Collection Report separates payment method from sales origin",()=>{
+ const controller=read("controllers/reportController.js");
+ const view=read("views/reports.ejs");
+ assert.match(controller,/normalizeSalesCategory\(req\.query\.category/);
+ assert.match(controller,/transactionCategorySql\("t"\)/);
+ assert.match(view,/id="method"/);
+ assert.match(view,/id="category"/);
+ assert.match(view,/Payment method/);
+ assert.match(view,/Sales origin/);
 });
