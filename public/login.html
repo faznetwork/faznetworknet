@@ -648,6 +648,18 @@
         <div id="portal-banner" class="portal-banner" hidden><img id="portal-banner-image" alt="Hotspot promotional banner"></div>
         <div id="status-box" class="alert-box" role="status" aria-live="polite"></div>
 
+        <section id="credential-login-panel" style="max-width:520px;margin:18px auto;padding:20px;border-radius:18px;background:#111827;border:1px solid rgba(255,255,255,.16);color:#f9fafb;text-align:left;">
+          <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Hotspot Username Login</h3>
+          <p style="font-size:13px;color:#cbd5e1;margin-bottom:16px;">SMS-এ পাওয়া Username ও Password/PIN দিয়ে লগইন করুন। প্রথম সফল লগইনে ডিভাইস bind হবে এবং প্যাকেজের মেয়াদ শুরু হবে।</p>
+          <form id="credential-login-form" autocomplete="on">
+            <label for="credential-username" style="display:block;font-size:13px;font-weight:700;margin-bottom:5px;">Username</label>
+            <input id="credential-username" name="username" required maxlength="100" autocomplete="username" style="display:block;width:100%;padding:12px;border:1px solid #475569;border-radius:10px;margin-bottom:12px;background:#fff;color:#111827;">
+            <label for="credential-password" style="display:block;font-size:13px;font-weight:700;margin-bottom:5px;">Password / PIN</label>
+            <input id="credential-password" name="password" type="password" required maxlength="100" autocomplete="current-password" style="display:block;width:100%;padding:12px;border:1px solid #475569;border-radius:10px;margin-bottom:14px;background:#fff;color:#111827;">
+            <button id="credential-login-submit" type="submit" style="display:block;width:100%;padding:12px;border:0;border-radius:10px;background:#10b981;color:#052e24;font-weight:800;">Login &amp; Connect</button>
+          </form>
+        </section>
+
         <!-- Tab Switcher -->
         <div class="tab-switcher">
             <button type="button" id="tab-recharge-btn" class="tab-btn active" onclick="switchPortalTab('recharge')">অনলাইন পেমেন্ট (MFS)</button>
@@ -807,6 +819,20 @@ function showStatus(message,isError=false){const el=byId('status-box');if(!el)re
 function absoluteAssetUrl(value){if(!value)return '';try{return new URL(value,BACKEND_BASE_URL).toString();}catch(error){return '';}}
 async function requestJson(url,options={}){const response=await fetch(url,{cache:'no-store',...options});let data;try{data=await response.json();}catch(error){throw new Error('সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।');}if(!response.ok||data?.success===false)throw new Error(data?.error||data?.message||'অনুরোধ সম্পন্ন হয়নি।');return data;}
 function submitMikrotikLogin(username,password,redirectUrl){const form=byId('mikrotik-auto-login');if(!form)throw new Error('MikroTik login form পাওয়া যায়নি।');form.action=device.login;form.querySelector('[name="username"]').value=String(username||device.mac);const rawPassword=String(password??device.mac);form.querySelector('[name="password"]').value=device.chapChallenge?md5Hex(String.fromCharCode(chapIdentifierByte(device.chapId))+rawPassword+decodeChapChallenge(device.chapChallenge)):rawPassword;const dst=form.querySelector('[name="dst"]');if(dst)dst.value=redirectUrl||device.original;form.submit();}
+async function handleCredentialLogin(event){
+ event.preventDefault();
+ const button=byId('credential-login-submit');
+ const username=String(byId('credential-username')?.value||'').trim(),password=String(byId('credential-password')?.value||'');
+ if(!username||!password){showStatus('Username ও Password/PIN দিন।',true);return;}
+ if(!device.mac){showStatus('RouterOS থেকে ডিভাইস MAC পাওয়া যায়নি। Wi-Fi-তে পুনরায় সংযোগ করুন।',true);return;}
+ button.disabled=true;button.textContent='যাচাই ও সংযোগ হচ্ছে…';
+ try{
+   const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/activate-credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,mac:device.mac,login_url:device.login,link_login_only:device.login})});
+   showStatus('লগইন সফল। সংযোগ করা হচ্ছে…');
+   submitMikrotikLogin(result.username,result.password,result.redirect_url||device.original);
+ }catch(error){showStatus(error.message||'Hotspot login ব্যর্থ হয়েছে।',true);}
+ finally{button.disabled=false;button.textContent='Login & Connect';}
+}
 function switchPortalTab(tab){const recharge=byId('section-recharge'),voucher=byId('section-voucher'),rechargeBtn=byId('tab-recharge-btn'),voucherBtn=byId('tab-voucher-btn');const isRecharge=tab==='recharge';recharge.style.display=isRecharge?'block':'none';voucher.style.display=isRecharge?'none':'block';rechargeBtn.classList.toggle('active',isRecharge);voucherBtn.classList.toggle('active',!isRecharge);}
 function formatTaka(value){const amount=Number(value);return Number.isFinite(amount)?'৳ '+amount.toLocaleString('en-BD'):'৳ —';}
 function renderPackages(packages){const grid=byId('packages-grid'),summary=byId('selected-package');grid.replaceChildren();selectedPackage=null;summary.textContent='চালিয়ে যেতে একটি প্যাকেজ নির্বাচন করুন।';const valid=(Array.isArray(packages)?packages:[]).map(p=>({...p,profile:String(p.profile||p.profileId||p.profile_id||p.name||'').trim(),price:Number(p.price),validity:String(p.validity||p.validityLabel||p.validity_label||'').trim()})).filter(p=>p.profile&&Number.isFinite(p.price)&&p.price>0);if(!valid.length){const empty=document.createElement('div');empty.style.gridColumn='1/-1';empty.style.fontSize='11px';empty.style.color='var(--text-muted)';empty.textContent='এই মুহূর্তে পোর্টালে কোনো সক্রিয় প্যাকেজ প্রকাশ করা নেই।';grid.appendChild(empty);return;}valid.forEach((pkg,index)=>{const card=document.createElement('button');card.type='button';card.className='pkg-card';const validity=document.createElement('div');validity.className='pkg-time';validity.textContent=pkg.validity||pkg.profile;const price=document.createElement('div');price.className='pkg-price';price.textContent=formatTaka(pkg.price);card.append(validity,price);const select=()=>{selectedPackage={profile:pkg.profile,price:pkg.price,validity:pkg.validity||pkg.profile};grid.querySelectorAll('.pkg-card').forEach(node=>node.classList.toggle('selected',node===card));summary.textContent='নির্বাচিত প্যাকেজ: '+selectedPackage.validity+' — '+formatTaka(selectedPackage.price);};card.addEventListener('click',select);grid.appendChild(card);if(index===0)select();});}
@@ -981,6 +1007,7 @@ async function openQrScanner(){
 function applyScannedCredentials(raw){const credentials=parseQrCredentials(raw);if(!credentials?.username){showStatus('QR কোডে ভাউচার ইউজারনেম পাওয়া যায়নি।',true);return;}byId('voucher_pin').value=credentials.username.toUpperCase();if(credentials.password)byId('voucher_password').value=credentials.password;showStatus(credentials.password?'QR থেকে ভাউচার তথ্য পড়া হয়েছে।':'QR থেকে ইউজারনেম পড়া হয়েছে; পাসওয়ার্ড লিখুন।');}
 async function handleVoucherLogin(){const username=byId('voucher_pin').value.trim().toUpperCase(),password=byId('voucher_password').value,button=byId('voucher-login-button');if(!username||!password){showStatus('ভাউচার ইউজারনেম এবং পাসওয়ার্ড—দুটিই লিখুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}button.disabled=true;button.textContent='ভাউচার যাচাই হচ্ছে…';try{const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:username,voucher_password:password,mac:device.mac,ip:device.ip,login_url:device.login})});if(!result.username||!result.password)throw new Error('ভাউচার যাচাই হয়েছে, কিন্তু লগইন তথ্য ফেরত আসেনি। সাপোর্টে যোগাযোগ করুন।');showStatus('ভাউচার যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username,result.password,result.redirect_url);}catch(error){showStatus(error.message||'ভাউচার যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='ভেরিফাই করে সংযোগ করুন';}}
 
+byId('credential-login-form')?.addEventListener('submit',handleCredentialLogin);
 document.addEventListener('DOMContentLoaded',()=>{
     updateDeviceBadge();
     const mac=byId('router-mac'),ip=byId('router-ip');

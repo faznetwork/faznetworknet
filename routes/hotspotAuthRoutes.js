@@ -10,4 +10,6 @@ router.options("/activate",openCors);
 router.options("/claim-voucher",openCors);
 router.post("/claim-voucher",openCors,controller.claimVoucher);
 router.post("/activate",openCors,controller.activate);
+router.options("/activate-credentials",openCors);
+router.post("/activate-credentials",openCors,controller.activateCredentials);
 module.exports=router;

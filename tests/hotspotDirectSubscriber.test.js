@@ -6,16 +6,31 @@ const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("Add User implements distinct direct-subscriber creation modes",()=>{
+test("Hotspot User creation uses optional custom credentials and pending first-login records",()=>{
  const source=read("controllers/hotspotController.js");
- assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
- assert.match(source,/activation_type/);
+ const form=read("views/admin.ejs");
+ assert.match(source,/requestedUsername\|\|\("HN-"\+crypto\.randomBytes/);
+ assert.match(source,/requestedPassword\|\|String\(crypto\.randomInt\(0,1000000\)\)\.padStart\(6,"0"\)/);
  assert.match(source,/subscriber_type='direct_subscriber'/);
- assert.match(source,/preassigned\?"active":"pending_claim"/);
- assert.match(source,/preassigned\?mac:null/);
- assert.match(source,/first_login_at/);
+ assert.match(source,/\"pending_claim\"/);
+ assert.match(source,/username:initialUsername,password:initialPassword/);
+ assert.doesNotMatch(form,/id="hsDeviceMac"/);
+ assert.doesNotMatch(form,/name="activation_type"/);
+ assert.match(form,/name="username"/);
+ assert.match(form,/data-copy-target/);
  assert.match(source,/db\.withTransaction\(async client=>/);
- assert.match(source,/rechargeHotspotUser\(\{username:mac,password:mac,profile/);
+});
+test("captive portal first login validates credentials and reserves the MAC before RouterOS provisioning",()=>{
+ const auth=read("controllers/hotspotAuthController.js");
+ const routes=read("routes/hotspotAuthRoutes.js");
+ const portal=read("public/login.html");
+ assert.match(auth,/async function activateCredentials/);
+ assert.match(auth,/LOWER\(username\)=LOWER\(\$1::text\) AND password=\$2::text/);
+ assert.match(auth,/faz-hotspot-credential:/);
+ assert.match(auth,/SET mac_address=\$2::text,cleanup_error='activation_in_progress',updated_at=NOW\(\) WHERE id=\$1::bigint AND \(mac_address IS NULL OR LOWER\(mac_address\)=LOWER\(\$2::text\)\)/);
+ assert.match(routes,/controller\.activateCredentials/);
+ assert.match(portal,/activate-credentials/);
+ assert.match(portal,/submitMikrotikLogin\(result\.username,result\.password/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
@@ -122,4 +137,23 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  assert.match(auth,/const requestedLoginUrl=String\(req\.body\?\.login_url\|\|req\.body\?\.link_login_only\|\|""\)\.trim\(\)/);
  assert.match(auth,/success:true,message:"Hotspot account activated for this device\."/);
  assert.match(auth,/redirect_url:redirectUrl/);
+});
+
+
+test("Hotspot profile lookup failures are logged and shown as a specific admin-facing error",()=>{
+ const controller=read("controllers/hotspotController.js");
+ assert.doesNotMatch(controller,/getHotspotProfiles\(\)\.catch\(\(\)=>\[\]\)/);
+ assert.match(controller,/event:"hotspot_profile_lookup_failed"/);
+ assert.match(controller,/code:"MIKROTIK_PROFILE_LOOKUP_FAILED"/);
+ assert.match(controller,/Cannot load Hotspot profiles because the MikroTik router is unreachable/);
+});
+
+test("active credential recovery never recharges a missing RouterOS user or resets validity/quota",()=>{
+ const source=read("controllers/hotspotAuthController.js");
+ const activePath=source.slice(source.indexOf('const existing=await mikrotikService.getHotspotUser(row.username);'));
+ assert.match(activePath,/event:"active_hotspot_user_missing"/);
+ assert.match(activePath,/code:"ACTIVE_ROUTEROS_USER_MISSING"/);
+ assert.match(activePath,/protect your existing expiry and remaining quota/i);
+ assert.doesNotMatch(activePath.slice(0,activePath.indexOf("}else{")),/rechargeHotspotUser\(/);
+ assert.doesNotMatch(activePath.slice(0,activePath.indexOf("}else{")),/reset-counters/);
 });
