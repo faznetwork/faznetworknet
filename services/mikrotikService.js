@@ -879,8 +879,8 @@ class MikroTikService {
       let usersDisabled=0,sessionsRemoved=0,cookiesRemoved=0;
       for(const item of sessions)if(await remove("/ip/hotspot/active/remove",item))sessionsRemoved++;
       for(const item of cookies)if(await remove("/ip/hotspot/cookie/remove",item))cookiesRemoved++;
-      for(const item of users){await connection.write("/ip/hotspot/user/set",["=.id="+item[".id"],"=disabled=yes","=profile=expired_profile","=comment=FAZ|EXPIRED|DIRECT_SUBSCRIBER"]);usersDisabled++;}
-      return {username,macAddress:mac,directSubscriber:true,usersDisabled,sessionsRemoved,cookiesRemoved,userPreserved:true};
+      for(const item of users){await connection.write("/ip/hotspot/user/remove",["=.id="+item[".id"]]);usersDisabled++;}
+      return {username,macAddress:mac,directSubscriber:true,usersRemoved:usersDisabled,sessionsRemoved,cookiesRemoved,userPreserved:false};
     });
   }
   async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
@@ -1549,14 +1549,6 @@ class MikroTikService {
     return {name,rateLimit:"1k/1k",created:false};
   }
 
-  async ensureExpiredHotspotProfile(){
-    const config=require("./hotspotProfileConfig").EXPIRED_HOTSPOT_PROFILE;
-    const existing=await this.getHotspotProfiles();
-    const profile=(Array.isArray(existing)?existing:[]).find(item=>String(item.name||"").toLowerCase()===config.name.toLowerCase());
-    if(!profile){await this.createHotspotProfile(config);return {...config,created:true};}
-    if(String(profile.rateLimit||"").trim()!==config.rateLimit||String(profile.sessionTimeout||"").trim().toLowerCase()!==config.sessionTimeout)await this.updateHotspotProfile({...config,sharedUsers:profile.sharedUsers||1});
-    return {...config,created:false};
-  }
 
   async changeSecretProfile(username,profileName){
     const name=this._str(username).trim();
