@@ -505,7 +505,7 @@ async function createUser(req, res) {
             mac_address = NULL,
             mac_lock = FALSE,
             status = 'unused',
-            subscriber_type = 'scratch_voucher',
+            subscriber_type = 'admin_voucher',
             activation_type = 'first_login',
             server = $9::text,
             comment = $10::text,
@@ -563,7 +563,7 @@ async function createUser(req, res) {
 
       const dispatch = notificationDispatcher.dispatchNotification({
         userType: "hotspot",
-        event: "hotspot_account_created",
+        event: "hotspot_voucher_created",
         to: phone,
         recipient: phone,
         phone,
@@ -572,7 +572,6 @@ async function createUser(req, res) {
         customerName: customerLabel,
         message,
         useMessageDirectly: true,
-        channels: ["sms"],
         variables: {
           name: customerLabel,
           customer_name: customerLabel,
@@ -593,7 +592,7 @@ async function createUser(req, res) {
       message: phone
         ? "Hotspot voucher created successfully. SMS dispatch was requested."
         : "Hotspot voucher created successfully. SMS skipped because no phone number was provided.",
-      subscriber_type: stored.subscriber_type || "scratch_voucher",
+      subscriber_type: stored.subscriber_type || "admin_voucher",
       activation_type: stored.activation_type || "first_login",
       voucher: {
         id: stored.id,
