@@ -9,6 +9,14 @@ test("uses the Dhaka calendar date at the UTC/Dhaka midnight boundary",()=>{
   assert.equal(service.calculateSameDateExpiry(1,null,instant),"2026-03-01");
 });
 
+test("normalizes Date objects and ISO timestamps to the Dhaka calendar date",()=>{
+  const instant=new Date("2026-01-31T18:30:00.000Z");
+  assert.equal(service.normalizeDate(instant),"2026-02-01");
+  assert.equal(service.normalizeDate("2026-01-31T18:30:00.000Z"),"2026-02-01");
+  assert.equal(service.normalizeDate("2026-01-31"),"2026-01-31");
+  assert.equal(service.calculateSameDateExpiry(1,service.normalizeDate("2026-01-31T18:30:00.000Z"),new Date("2026-01-01T00:00:00.000Z")),"2026-03-01");
+});
+
 test("same-date monthly expiry clamps the 29th, 30th and 31st to target month end",()=>{
   assert.equal(service.calculateSameDateExpiry(1,"2026-01-31",new Date("2026-01-01T00:00:00.000Z")),"2026-02-28");
   assert.equal(service.calculateSameDateExpiry(1,"2026-03-30",new Date("2026-01-01T00:00:00.000Z")),"2026-04-30");

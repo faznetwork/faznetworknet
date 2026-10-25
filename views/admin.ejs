@@ -1899,7 +1899,9 @@
                 </button>
                 <ul class="submenu">
                     <li><a href="/admin/payments/pending"><span data-key="pending_invoice">Pending Invoice</span></a></li>
-                    <li><a href="/admin/payments/all"><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="/admin/payments/all"><i class="bi bi-list-ul me-2"></i><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="/admin/payments/pppoe"><i class="bi bi-person-check me-2"></i><span>PPPoE Payments</span></a></li>
+                    <li><a href="/admin/payments/hotspot"><i class="bi bi-wifi me-2"></i><span>Hotspot Payments</span></a></li>
                     <li><a href="/admin/payments/requests"><span data-key="payment_request">Payment Request</span></a></li>
                     <li><a href="/admin/payments/bkash"><span data-key="bkash_payments">bKash Payments</span></a></li>
                     <li><a href="/admin/payments/nagad"><span data-key="nagad_payments">Nagad Payments</span></a></li>
@@ -4956,6 +4958,7 @@ async function deletePlan(id,name){
 
         let currentPaymentChannel = '';
         let currentPaymentGateway = 'all';
+        let currentPaymentServiceType = '';
         let currentPaymentTitleKey = '';
         let currentPaymentPage = 1;
         let currentPaymentUsers = [];
@@ -6355,9 +6358,10 @@ async function deletePlan(id,name){
                 '</tr>';
         }
 
-        async function loadPaymentsSection(gatewayType, titleKey) {
+        async function loadPaymentsSection(gatewayType, titleKey, serviceType = '') {
             purgeStuckBackdrops();
             currentPaymentGateway = gatewayType;
+            currentPaymentServiceType = ['pppoe', 'hotspot'].includes(String(serviceType || '').toLowerCase()) ? String(serviceType).toLowerCase() : '';
             currentPaymentTitleKey = titleKey;
             currentPaymentPage = 1;
             currentCustomerTitleKey = '';
@@ -6370,7 +6374,8 @@ async function deletePlan(id,name){
 
         async function fetchPaymentsSection() {
             try {
-                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(currentPaymentGateway) + '&page=' + currentPaymentPage + '&limit=50');
+                const serviceQuery = currentPaymentServiceType ? '&service_type=' + encodeURIComponent(currentPaymentServiceType) : '';
+                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(currentPaymentGateway) + serviceQuery + '&page=' + currentPaymentPage + '&limit=50');
                 renderPaymentLedger(data);
             } catch (error) {
                 document.getElementById('dynamicPageContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error.message) + '</div>';
@@ -8748,7 +8753,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 customerFilters: ['all', 'online', 'offline', 'active', 'expire', 'expire_today_yesterday', 'expire_7_days', 'new', 'due'],
                 customerTitles: ['all_customer', 'online_customer', 'offline_customer', 'active_customer', 'expire_customer', 'expire_today_yesterday', 'expire_7_days', 'new_customer', 'due_collection'],
                 paymentFilters: ['pending', 'all', 'requests', 'bkash', 'nagad', 'rocket'],
-                paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments'],
+                paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments', 'PPPoE Payments', 'Hotspot Payments'],
+                paymentServiceTypes: ['pppoe', 'hotspot'],
                 hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales'],
                 hotspotFilters: ['all', 'active', 'offline'],
                 hotspotTitles: ['all_user', 'active_user', 'offline_user'],
@@ -8794,7 +8800,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (route.view === 'payments') {
                     const filter = has(allowed.paymentFilters, route.filter) ? route.filter : 'all';
                     const title = has(allowed.paymentTitles, route.title) ? route.title : paymentTitleByFilter[filter];
-                    return { view: 'payments', filter, title };
+                    const serviceType = has(allowed.paymentServiceTypes, route.serviceType) ? route.serviceType : '';
+                    return { view: 'payments', filter, title, serviceType };
                 }
                 if (route.view === 'hotspot') {
                     const section = has(allowed.hotspotSections, route.section) ? route.section : 'dashboard';
@@ -8842,6 +8849,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/customers/due': { view: 'customers', filter: 'due', title: 'due_collection' },
                     '/admin/payments/pending': { view: 'payments', filter: 'pending', title: 'pending_invoice' },
                     '/admin/payments/all': { view: 'payments', filter: 'all', title: 'all_payments' },
+                    '/admin/payments/pppoe': { view: 'payments', filter: 'all', title: 'PPPoE Payments', serviceType: 'pppoe' },
+                    '/admin/payments/hotspot': { view: 'payments', filter: 'all', title: 'Hotspot Payments', serviceType: 'hotspot' },
                     '/admin/payments/requests': { view: 'payments', filter: 'requests', title: 'payment_request' },
                     '/admin/payments/bkash': { view: 'payments', filter: 'bkash', title: 'bkash_payments' },
                     '/admin/payments/nagad': { view: 'payments', filter: 'nagad', title: 'nagad_payments' },
@@ -8938,7 +8947,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     };
                     return '/admin/customers/' + (paths[normalized.filter] || 'all');
                 }
-                if (normalized.view === 'payments') return '/admin/payments/' + (normalized.filter || 'all');
+                if (normalized.view === 'payments') {
+                    if (normalized.serviceType === 'pppoe') return '/admin/payments/pppoe';
+                    if (normalized.serviceType === 'hotspot') return '/admin/payments/hotspot';
+                    return '/admin/payments/' + (normalized.filter || 'all');
+                }
                 if (normalized.view === 'hotspot') {
                     if (normalized.section === 'dashboard') return '/admin/hotspot/dashboard';
                     if (normalized.section === 'add-user') return '/admin/hotspot/add-user';
@@ -9020,7 +9033,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'customers':
                         return callIfAvailable('loadCustomerSection', [r.filter, r.title]);
                     case 'payments':
-                        return callIfAvailable('loadPaymentsSection', [r.filter, r.title]);
+                        return callIfAvailable('loadPaymentsSection', [r.filter, r.title, r.serviceType || '']);
                     case 'hotspot':
                         if (r.section === 'dashboard') return callIfAvailable('loadHotspotDashboard');
                         if (r.section === 'users') return callIfAvailable('loadHotspotSection', [r.filter, r.title]);
@@ -9136,7 +9149,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     }
                     case 'loadPaymentsSection': {
                         const filter = has(allowed.paymentFilters, args[0]) ? args[0] : 'all';
-                        return { view: 'payments', filter, title: has(allowed.paymentTitles, args[1]) ? args[1] : paymentTitleByFilter[filter] };
+                        const serviceType = has(allowed.paymentServiceTypes, args[2]) ? args[2] : '';
+                        const title = has(allowed.paymentTitles, args[1]) ? args[1] : paymentTitleByFilter[filter];
+                        return { view: 'payments', filter, title, serviceType };
                     }
                     case 'loadHotspotDashboard': return { view: 'hotspot', section: 'dashboard' };
                     case 'loadHotspotSection': {
