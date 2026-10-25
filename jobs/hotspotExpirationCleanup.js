@@ -3,8 +3,6 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
-const MINUTE_MS = 60 * 1000;
-
 function parseRouterOsDuration(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return 0;
@@ -116,7 +114,6 @@ function createHotspotExpirationCleanup(deps = {}) {
       // Database expiry must continue even during a temporary RouterOS outage.
       // In that case, persist expired/pending state and let the targeted router
       // cleanup fail safely so the next hourly run can retry it.
-      if (typeof router.ensureExpiredHotspotProfile === "function") { try { await router.ensureExpiredHotspotProfile(); } catch (error) { logger.warn("[HOTSPOT EXPIRY] Could not ensure expired_profile:", error.message); } }
       let snapshot = { users: [], schedulerNames: [] };
       let snapshotAvailable = true;
       try {
@@ -254,10 +251,9 @@ async function runHotspotRetentionCleanup(deps = {}) {
   const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
   try {
-    // Keep expired subscribers visible for 30 days. Only purge a row after the
-    // expired profile was applied successfully and the final RouterOS removal succeeds.
+    // Retain voucher sales/reporting rows for 395 days. Financial transactions are never deleted here.
     const candidates = await database.query(
-      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' ORDER BY id ASC"
+      "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days' ORDER BY id ASC"
     );
     const purgeIds = [];
     for (const row of candidates.rows || []) {
@@ -296,9 +292,36 @@ async function runHotspotRetentionCleanup(deps = {}) {
 }
 const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
 
-function startHotspotExpirationCleanup() {
-  runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Initial run failed:", error.message));
-  return setInterval(() => runHotspotExpirationCleanup().catch(error => console.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message)), MINUTE_MS);
+function startHotspotExpirationCleanup(deps = {}) {
+  const database = deps.db || db;
+  const logger = deps.logger || console;
+  let timer = null;
+  let stopped = false;
+  const scheduleNext = async () => {
+    if (stopped) return;
+    if (timer) clearTimeout(timer);
+    try {
+      const next = await database.query("SELECT MIN(CASE WHEN status='active' AND pre_expiry_notified IS NOT TRUE AND expires_at > NOW() THEN expires_at - INTERVAL '5 minutes' ELSE expires_at END) AS next_at, BOOL_OR(status='expired' AND cleanup_status IN ('pending','not_required','failed')) AS retry_due FROM hotspot_vouchers WHERE ((status IN ('unused','active','pending_claim') AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')))");
+      const row = next.rows?.[0] || {};
+      const nextAt = row.next_at ? new Date(row.next_at).getTime() : Infinity;
+      const delay = row.retry_due ? 30000 : Math.max(1000, Math.min(2147483647, Number.isFinite(nextAt) ? nextAt - Date.now() : 2147483647));
+      timer = setTimeout(async () => {
+        try { await runHotspotExpirationCleanup(); }
+        catch (error) { logger.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message); }
+        await scheduleNext();
+      }, delay);
+      if (typeof timer.unref === "function") timer.unref();
+    } catch (error) {
+      logger.error("[HOTSPOT EXPIRY] Could not schedule next expiry; retrying scheduler setup:", error.message);
+      timer = setTimeout(() => scheduleNext().catch(err => logger.error("[HOTSPOT EXPIRY] Scheduler recovery failed:", err.message)), 30000);
+      if (typeof timer.unref === "function") timer.unref();
+    }
+  };
+  runHotspotExpirationCleanup().then(scheduleNext).catch(error => {
+    logger.error("[HOTSPOT EXPIRY] Startup recovery sweep failed:", error.message);
+    scheduleNext().catch(err => logger.error("[HOTSPOT EXPIRY] Scheduler setup failed:", err.message));
+  });
+  return () => { stopped = true; if (timer) clearTimeout(timer); };
 }
 
 function startHotspotRetentionCleanup() {
