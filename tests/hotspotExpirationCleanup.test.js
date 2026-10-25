@@ -286,6 +286,24 @@ test("does not let a legacy RouterOS scheduler suppress centralized expiry", () 
 
 test("expired profile config is permanently absent",()=>{const config=require("../services/hotspotProfileConfig");assert.equal("EXPIRED_HOTSPOT_PROFILE" in config,false);});
 
+test("expiry worker uses scheduled execution rather than a fixed one-minute interval",()=>{
+  const fs=require("node:fs");
+  const source=fs.readFileSync(require.resolve("../jobs/hotspotExpirationCleanup"),"utf8");
+  assert.doesNotMatch(source,/MINUTE_MS|setInterval\(\(\) => runHotspotExpirationCleanup/);
+  assert.match(source,/expires_at - INTERVAL '5 minutes'/);
+  assert.match(source,/Startup recovery sweep failed/);
+});
+
+test("voucher sales API supports validated inclusive custom date ranges",()=>{
+  const fs=require("node:fs");
+  const source=fs.readFileSync(require.resolve("../controllers/hotspotController"),"utf8");
+  assert.match(source,/req\.query\?\.startDate/);
+  assert.match(source,/req\.query\?\.endDate/);
+  assert.match(source,/Dates must use YYYY-MM-DD format/);
+  assert.match(source,/AT TIME ZONE 'Asia\/Dhaka'/);
+  assert.match(source,/ORDER BY created_at DESC,transaction_id DESC LIMIT 500/);
+});
+
 test("expired cleanup delegates to hard purge and preserves transaction audit history", async () => {
   const rows = [{ id: 99, username: "AA:BB:CC:DD:EE:FF", mac_address: "AA:BB:CC:DD:EE:FF", status: "active", expires_at: new Date("2026-10-10T00:00:00Z"), cleanup_status: "not_required" }];
   const database = mockDb(rows);
