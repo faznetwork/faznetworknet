@@ -38,6 +38,7 @@ test("unmatched Hotspot payment issues a branded voucher PIN and atomically asso
   assert.equal(res.body.profile,"1-Hour");
   assert.match(res.body.voucherPin,/^[A-Z0-9]{8}$/);
   assert.equal(res.body.voucher.username,res.body.voucherPin);
+  assert.equal(res.body.voucher.password,res.body.voucherPin,"single-PIN voucher must use the PIN as the login password too");
   assert.equal(seen.voucherInsert.params[2],"1-Hour");
   assert.equal(Number(seen.voucherInsert.params[4]),10);
   assert.equal(Number(seen.voucherInsert.params[8]),901);
