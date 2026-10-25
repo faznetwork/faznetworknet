@@ -3918,7 +3918,7 @@ window.editHotspotUser=function(username,event){
                         '</div>' +
                         '<div class="hp-profile-card-actions">' +
                             '<button type="button" class="hp-action-btn hp-action-edit" data-profile-name="' + p.safeName + '" onclick="editHotspotProfile(this.dataset.profileName)"><i class="bi bi-pencil-square" aria-hidden="true"></i><span>Edit Profile</span></button>' +
-                            '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span></button>' +
+                            (p.name.trim().toLowerCase() === 'default' ? '<button type="button" class="hp-action-btn hp-action-delete" disabled aria-disabled="true" title="The built-in default profile is protected"><i class="bi bi-shield-lock" aria-hidden="true"></i><span>Protected</span></button>' : '<button type="button" class="hp-action-btn hp-action-delete" data-profile-name="' + p.safeName + '" onclick="deleteHotspotProfile(this.dataset.profileName)"><i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span></button>') +
                         '</div>' +
                     '</article>';
                 }).join('');
@@ -4089,9 +4089,19 @@ window.editHotspotUser=function(username,event){
         window.loadHotspotProfiles = loadHotspotProfiles;
         function editHotspotProfile(name){ if(!name)return; openHotspotProfileModal(name); }
         async function deleteHotspotProfile(name){
-            if(!name)return; if(!confirm('Delete Hotspot profile "'+name+'" from MikroTik?'))return;
-            try{await jsonFetch('/api/hotspot/profiles/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})});await loadHotspotProfiles('hotspot_profile');}
-            catch(error){alert(error.message);}
+            const profileName=String(name||'').trim();
+            if(!profileName)return;
+            if(profileName.toLowerCase()==='default'){alert('The built-in default Hotspot profile cannot be deleted.');return;}
+            if(!confirm('Delete Hotspot profile "'+profileName+'" from MikroTik?'))return;
+            try{
+                const result=await jsonFetch('/api/hotspot/profiles/delete',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({name:profileName})});
+                if(!result||result.success!==true)throw new Error(result?.message||'Hotspot profile deletion was not confirmed by the server.');
+                await loadHotspotProfiles('hotspot_profile');
+            }catch(error){
+                alert(error.message||'Could not delete Hotspot profile.');
+                try{await loadHotspotProfiles('hotspot_profile');}
+                catch(refreshError){console.error('[Hotspot profiles] Failed to refresh after deletion error:',refreshError);alert('The profile list could not be refreshed. Reload the page to verify the current RouterOS state.');}
+            }
         }
 
         function voucherCardHtml(v) {

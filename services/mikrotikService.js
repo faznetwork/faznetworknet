@@ -1097,13 +1097,29 @@ class MikroTikService {
   }
   async deleteHotspotProfile(nameValue) {
     const name=this._str(nameValue).trim();
-    if(!name) throw new Error("Hotspot profile name is required.");
-    if(this._isSystemProfileName(name)) throw new Error("System/internal MikroTik profiles are protected and cannot be deleted.");
+    if(!name) { const error=new Error("Hotspot profile name is required."); error.code="HOTSPOT_PROFILE_NAME_REQUIRED"; error.statusCode=400; throw error; }
+    if(name.toLowerCase()==="default" || this._isSystemProfileName(name)) {
+      const error=new Error("The built-in default Hotspot profile is protected and cannot be deleted.");
+      error.code="HOTSPOT_PROFILE_PROTECTED"; error.statusCode=400; throw error;
+    }
     return this._withConnection("Hotspot profile deletion",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/profile/print");
       const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
-      if(!item||!item[".id"]) throw new Error("Hotspot profile \""+name+"\" was not found on MikroTik.");
-      await connection.write("/ip/hotspot/user/profile/remove",["=.id="+item[".id"]]); return {name,id:this._str(item[".id"])};
+      if(!item||!item[".id"]) { const error=new Error("Hotspot profile \""+name+"\" was not found on MikroTik."); error.code="HOTSPOT_PROFILE_NOT_FOUND"; error.statusCode=404; throw error; }
+      // Check all configured Hotspot users, including disabled/inactive users.
+      const users=await connection.write("/ip/hotspot/user/print");
+      const assigned=(Array.isArray(users)?users:[]).filter(user=>this._str(user.profile).trim().toLowerCase()===name.toLowerCase());
+      if(assigned.length) {
+        const error=new Error("Cannot delete profile: Profile is currently assigned to users. Delete or reassign those users first.");
+        error.code="HOTSPOT_PROFILE_IN_USE"; error.statusCode=409; error.details={profile:name,assignedUserCount:assigned.length}; throw error;
+      }
+      try { await connection.write("/ip/hotspot/user/profile/remove",["=.id="+item[".id"]]); }
+      catch(cause) {
+        const message=this._str(cause?.message||cause), inUse=/in use|used by|referenced|profile.*user/i.test(message);
+        const error=new Error(inUse?"Cannot delete profile: Profile is currently assigned to users. Delete or reassign those users first.":"MikroTik rejected Hotspot profile deletion: "+message);
+        error.code=inUse?"HOTSPOT_PROFILE_IN_USE":"HOTSPOT_PROFILE_DELETE_FAILED"; error.statusCode=inUse?409:502; error.cause=cause; throw error;
+      }
+      return {name,id:this._str(item[".id"])};
     });
   }
 
