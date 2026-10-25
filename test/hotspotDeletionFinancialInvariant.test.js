@@ -18,7 +18,7 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   assert.ok(service.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
   assert.ok(retention.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
   assert.ok(service.includes("mac_address=NULL"));
-  assert.ok(retention.includes("UPDATE hotspot_vouchers SET status='archived'"));
+  assert.ok(retention.includes("UPDATE hotspot_vouchers AS v SET status='archived'"));
 });
 
 test("RouterOS purge requires fresh reads of all four resource layers before verified success", () => {
