@@ -29,7 +29,8 @@ test("Admin Add Hotspot User now creates an unused voucher without RouterOS prov
   assert.match(source,/subscriber_type,activation_type/);
   assert.match(source,/'scratch_voucher','first_login'/);
   assert.match(source,/status:'unused'|,'unused',/);
-  assert.doesNotMatch(source,/async function createUser\(req,res\)\{[\s\S]*?rechargeHotspotUser/);
+  const create=source.slice(source.indexOf("async function createUser(req,res){"),source.indexOf("async function dashboardMetrics(req,res){"));
+  assert.doesNotMatch(create,/rechargeHotspotUser/);
 });
 
 test("verifyTrx validates payment and stages a pending phone package without RouterOS writes",async()=>{
