@@ -275,7 +275,66 @@ async function list(req,res){
   const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions t"+where,filterParams);
   const total=Number(countQuery.rows[0]?.count||0);
   const pageParams=filterParams.concat([limit,offset]);
-  const querySql="SELECT t.*, CASE WHEN EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))) THEN 'pppoe' WHEN EXISTS (SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers hv ON hv.id=hp.voucher_id WHERE hp.transaction_id=t.id) OR BTRIM(COALESCE(t.matched_username,'')) ~ '^01[0-9]{9}$' THEN 'hotspot' WHEN NULLIF(BTRIM(t.matched_username), '') IS NULL THEN 'unassigned' ELSE 'unknown' END AS customer_type FROM transactions t"+where+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(filterParams.length+1)+" OFFSET $"+(filterParams.length+2);
+  const querySql="SELECT t.*, CASE WHEN "+pppoeTransactionSql+" THEN 'pppoe' WHEN EXISTS (SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers hv ON hv.id=hp.voucher_id WHERE hp.transaction_id=t.id) OR "+hotspotTransactionSql+" THEN 'hotspot' ELSE 'unassigned' END AS customer_type FROM transactions t"+where+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(filterParams.length+1)+" OFFSET $"+(filterParams.length+2);
+  const r=await db.query(querySql,pageParams);
+  const summary=await db.query("SELECT COALESCE(SUM(t.amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE t.status='unmatched')::int AS unmatched_count FROM transactions t"+where,filterParams);
+  return res.json({success:true,gateway,service_type:serviceType,page,limit,total,total_pages:Math.max(1,Math.ceil(total/limit)),transactions:r.rows,summary:summary.rows[0]});
+ }catch(e){return errorResponse(res,e,503);}
+}
+async function manualMatchHotspot(req,res,tx,trxId){
+ let claimedTransactionId=null;
+ try{
+  const phone=normalizePhone(req.body.phone||req.body.customer_phone||tx.sender_phone||"");
+  const requestedProfile=String(req.body.package_id||req.body.profile_id||req.body.packageId||"").trim();
+  if(!/^01[0-9]{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladesh mobile number is required."});
+  if(!requestedProfile)return res.status(400).json({success:false,error:"Select a Hotspot package."});
+  const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  let metadataMap={};try{metadataMap=JSON.parse(metaResult.rows[0]?.value||"{}");}catch(_){}
+  if(!metadataMap||typeof metadataMap!=="object"||Array.isArray(metadataMap))metadataMap={};
+  let routerProfiles=[];try{routerProfiles=await mikrotikService.getHotspotProfiles();}catch(_){}
+  const profiles=routerProfiles.length?routerProfiles:Object.keys(metadataMap).map(name=>({name,sharedUsers:"1",sessionTimeout:"",raw:{}}));
+  const matches=profiles.filter(item=>item.name&&String(item.name).toLowerCase()!=="default"&&profileIdentifierMatches(String(item.name),metadataMap[String(item.name)]||{},requestedProfile));
+  if(matches.length!==1)return res.status(400).json({success:false,error:"The selected Hotspot package is not available or maps to multiple profiles."});
+  const profile=matches[0],metadata=metadataMap[String(profile.name)]||{},amount=Number(tx.amount);
+  if(!Number.isFinite(Number(metadata.price))||moneyCents(metadata.price)!==moneyCents(amount))return res.status(400).json({success:false,error:"The selected Hotspot package price must exactly match the transaction amount.",expectedAmount:Number(metadata.price),paidAmount:amount});
+  const hc=require("../services/hotspotProfileConfig");
+  let validityConfig;
+  try{validityConfig=metadata.validityValue?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}catch(_){validityConfig=hc.parseStoredValidity(profile);}
+  const validity=String(validityConfig.validity||"").trim(),quota=Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0);
+  if(!validity&&!quota)return res.status(400).json({success:false,error:"The selected Hotspot package has no usable validity or data quota."});
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='manual_hotspot',matched_username=$2,service_type='hotspot' WHERE id=$3 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",["manual_hotspot:"+String(req.user?.id||req.session?.userId||"admin"),phone,tx.id]);
+  if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
+  claimedTransactionId=claim.rows[0].id??tx.id;
+  const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
+  const pendingComment="FAZ|PENDING|PROFILE="+profile.name;
+  let voucher=null,wasRecharge=false;
+  await db.withTransaction(async client=>{
+   await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
+   const records=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) ORDER BY id DESC FOR UPDATE",[phone]);
+   const rows=records.rows||[],boundMacs=[...new Set(rows.map(row=>normalizeMac(row.mac_address)||normalizeMac(row.username)).filter(Boolean))];
+   if(boundMacs.length>1)throw Object.assign(new Error("This phone has conflicting MAC bindings; an administrator must reconcile the account."),{statusCode:409,code:"ACCOUNT_MAC_CONFLICT"});
+   const boundMac=boundMacs[0]||null,live=rows.filter(row=>["pending_claim","unused","active"].includes(String(row.status||"").toLowerCase())&&!(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+   if(live.length>1)throw Object.assign(new Error("Multiple live Hotspot packages are linked to this phone. Reconcile the account before assigning payment."),{statusCode:409,code:"MULTIPLE_LIVE_PACKAGES"});
+   const target=(boundMac?rows.find(row=>(normalizeMac(row.mac_address)||normalizeMac(row.username))===boundMac):null)||live[0]||rows[0]||null;
+   wasRecharge=live.length>0;
+   const username=boundMac||(target&&String(target.username||"").trim()&&!String(target.username).startsWith("PENDING-")?String(target.username).trim():"PENDING-"+(phone||("TX-"+tx.id)));
+   const priorExpiry=target?.expires_at?new Date(target.expires_at):null,packageDuration=hotspotDurationMs(validity);
+   const stackedExpiry=Boolean(target&&["active","pending_claim"].includes(String(target.status||"").toLowerCase())&&priorExpiry&&!Number.isNaN(priorExpiry.getTime())&&priorExpiry.getTime()>Date.now()&&packageDuration>0);
+   const nextExpiry=stackedExpiry?new Date(priorExpiry.getTime()+packageDuration):null,stagedComment=nextExpiry?hotspotExpiryComment(nextExpiry):pendingComment;
+   const params=[username,phone,profile.name,validity,amount,stagedComment,phone,validity||null,quota?String(quota):null,profileId,boundMac];
+   if(target){
+    const updated=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status='pending_claim',comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),server=COALESCE(NULLIF(server,''),'all'),time_limit=$8,data_limit=$9,profile_id=$10,mac_address=$11,first_login_at=$12,expires_at=$13,expired_at=NULL,pre_expiry_notified=false,transaction_id=$14,renewal_stacked=$15,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$16 RETURNING id,username,profile,profile_id,validity,price,status,phone,mac_address,transaction_id",[...params,stackedExpiry?target.first_login_at:null,nextExpiry,claimedTransactionId,stackedExpiry,target.id]);
+    voucher=updated.rows?.[0];
+   }else{
+    const inserted=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,cleanup_status,transaction_id,renewal_stacked) VALUES($1,$2,$3,$4,$5,'pending_claim',$6,$7,'all',$8,$9,$10,$11,'not_required',$12,false) RETURNING id,username,profile,profile_id,validity,price,status,phone,mac_address,transaction_id",[...params,claimedTransactionId]);
+    voucher=inserted.rows?.[0];
+   }
+   if(!voucher)throw new Error("Hotspot voucher could not be saved.");
+   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount) VALUES($1,$2,$3,$4) ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount",[claimedTransactionId,voucher.id,phone,amount]);
+   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1,needs_reconciliation=false WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,claimedTransactionId]);
+   if(!finalized.rows?.length)throw new Error("Voucher was staged but the claimed transaction could not be finalized.");
+   const notificationDispatcher=require("../services/notificationDispatcher");
+   const event=wasRecharge?"recharge":"payment";
    const notificationPayload={userType:"hotspot",event,customer:{username:phone,name:phone,phone,profile:profile.name},to:phone,username:phone,message:"Your FAZ NETWORK Hotspot payment has been manually assigned. Package: "+profile.name+". Amount: Tk "+amount+".",variables:{name:phone,username:phone,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id,email_idempotency_key:"hotspot-payment:"+String(claimedTransactionId)+":"+event}};
    const emailResult=await notificationDispatcher.dispatchNow({...notificationPayload,channels:["email"],emailClient:client});
    if(!emailResult.success)throw new Error("Hotspot payment was not committed because transactional email enqueue failed: "+JSON.stringify(emailResult.results||[]));
