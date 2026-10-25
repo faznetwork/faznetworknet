@@ -83,3 +83,43 @@ test("manual match modal exposes PPPoE and Hotspot fields and sends service_type
  assert.match(source,/service_type: serviceType/);
  assert.match(source,/\/api\/hotspot\/profiles/);
 });
+
+test("manual PPPoE match normalizes Date expiry before renewal validation and RouterOS update",async()=>{
+ const oldQuery=db.query,oldTransaction=db.withTransaction,oldUpdate=mikrotik.updateSecret,oldKick=mikrotik.kickActiveUser,oldDispatchNow=notifications.dispatchNow,oldDispatch=notifications.dispatchNotification;
+ const customer={id:9,username:"10006",full_name:"Test Customer",phone:"01712345678",package_name:"Pack 525",plan_name:"Pack 525",price:10,duration_months:1,profile_name:"default",pool_name:"pool1",password:"test-password",expiration_date:new Date("2026-10-25T00:00:00.000Z"),expiry_date:"2026-10-25T00:00:00.000Z"};
+ const seen={updates:[],router:0};
+ try{
+  db.query=async(sql,params=[])=>{
+   if(sql.startsWith("SELECT * FROM transactions"))return {rows:[transaction()]};
+   if(sql.startsWith("SELECT value FROM app_settings WHERE key='billing_cycle_type'"))return {rows:[]};
+   if(sql.startsWith("SELECT username FROM (SELECT username FROM pppoe_users"))return {rows:[{username:"10006"}]};
+   if(sql.startsWith("SELECT c.*,p.plan_name"))return {rows:[customer]};
+   if(sql.startsWith("UPDATE transactions SET status='processing'"))return {rows:[{id:77}]};
+   if(sql.startsWith("UPDATE transactions SET status='unmatched'"))return {rows:[{id:77}]};
+   if(sql.startsWith("UPDATE transactions SET needs_reconciliation=true"))return {rows:[{id:77}]};
+   if(sql.startsWith("INSERT INTO payment_reconciliation_audit"))return {rows:[]};
+   throw new Error("Unexpected database query: "+sql);
+  };
+  db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+   if(sql.startsWith("UPDATE customers SET package_name")){seen.updates.push({sql,params});return {rows:[]};}
+   if(sql.startsWith("UPDATE pppoe_users SET profile")){seen.updates.push({sql,params});return {rows:[]};}
+   if(sql.startsWith("UPDATE transactions SET status='PAID'"))return {rows:[{id:77}]};
+   throw new Error("Unexpected transactional query: "+sql);
+  }});
+  mikrotik.updateSecret=async()=>{seen.router++;};
+  mikrotik.kickActiveUser=async()=>{};
+  notifications.dispatchNow=async()=>({success:true,results:[]});
+  notifications.dispatchNotification=()=>{};
+  const res=responseRecorder();
+  await controller.manualMatch({body:{trxId:"TX-MANUAL-77",service_type:"pppoe",username:"10006"},session:{userId:9}},res);
+  assert.equal(res.statusCode,200,JSON.stringify(res.body));
+  assert.equal(res.body.success,true);
+  assert.match(res.body.expiration,/^2026-11-25$/);
+  assert.equal(seen.router,1,"RouterOS secret should be updated after expiry normalization");
+  assert.equal(seen.updates.length,2);
+  assert.equal(seen.updates[0].params[3],"2026-11-25");
+  assert.equal(seen.updates[1].params[2],"2026-11-25");
+ }finally{
+  db.query=oldQuery;db.withTransaction=oldTransaction;mikrotik.updateSecret=oldUpdate;mikrotik.kickActiveUser=oldKick;notifications.dispatchNow=oldDispatchNow;notifications.dispatchNotification=oldDispatch;
+ }
+});

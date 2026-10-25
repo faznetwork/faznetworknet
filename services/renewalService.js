@@ -17,6 +17,14 @@ function dhakaDate(value = new Date()) {
   return part("year") + "-" + part("month") + "-" + part("day");
 }
 
+function normalizeDate(value, now = new Date()) {
+  if (value instanceof Date) return dhakaDate(value);
+  if (value === null || value === undefined || String(value).trim() === "") return dhakaDate(now);
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw.split("T")[0];
+  return raw;
+}
+
 function parseDateOnly(value, label = "date") {
   const date = String(value ?? "").trim();
   if (!DATE_ONLY.test(date)) throw new TypeError("Invalid " + label + "; expected YYYY-MM-DD.");
@@ -48,7 +56,7 @@ function calculateSameDateExpiry(durationMonths = 1, currentExpiryDate = null, n
     throw new RangeError("Billing duration must be an integer between 1 and 1200 months.");
   }
   const today = dhakaDate(now);
-  const current = String(currentExpiryDate ?? "").trim();
+  const current = normalizeDate(currentExpiryDate, now);
   const baseDate = current && current > today ? (parseDateOnly(current, "current expiry") && current) : today;
   return addCalendarMonths(baseDate, months);
 }
@@ -63,7 +71,7 @@ async function calculateExpiry({ durationMonths, query, currentExpiryDate, now =
   const result = await query("SELECT value FROM app_settings WHERE key='billing_cycle_type' LIMIT 1");
   const policy = String(result.rows?.[0]?.value || "");
   const today = dhakaDate(now);
-  const current = String(currentExpiryDate ?? "").trim();
+  const current = normalizeDate(currentExpiryDate, now);
   const base = current && current > today ? (parseDateOnly(current, "current expiry") && current) : today;
   const months = Math.max(1, Math.trunc(Number(durationMonths) || 1));
   if (policy === "rolling_30") return addDays(base, 30 * months);
@@ -82,6 +90,7 @@ async function applyRouterRenewal(mikrotikService, username, { password, profile
 module.exports = {
   TIME_ZONE,
   dhakaDate,
+  normalizeDate,
   calculateSameDateExpiry,
   formatExpiryCutoff,
   calculateExpiry,
