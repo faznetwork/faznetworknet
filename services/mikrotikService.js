@@ -982,9 +982,8 @@ class MikroTikService {
         schedulersRemoved, usersRemoved, userPreserved: false,
         alreadyAbsent: userMatches.length === 0, verified: true, remaining: remainingCounts
       };
-    });
+    }, undefined, 10000);
   }
-
   async setHotspotUserComment(usernameValue, commentValue) {
     const username = this._str(usernameValue).trim();
     const comment = this._str(commentValue).slice(0, 500);
