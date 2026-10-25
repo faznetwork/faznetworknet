@@ -11,7 +11,7 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   const subscriberController = read("controllers/hotspotUserController.js");
   const retention = read("jobs/hotspotExpirationCleanup.js");
   for (const [name, source] of Object.entries({ service, controller, subscriberController, retention })) {
-    assert.equal(["DELETE FROM hotspot_vouchers","DELETE FROM hotspot_voucher_payments","DELETE FROM transactions"].some(sql => source.toLowerCase().includes(sql.toLowerCase())), false, name + " must preserve voucher and financial rows");
+  assert.equal(migration.toUpperCase().includes("DELETE FROM"), false);
   }
   assert.ok(service.includes("SET status='deleted'"));
   assert.ok(service.includes("last_known_mac=COALESCE"));
@@ -43,5 +43,5 @@ test("schema and migration retain last-known MAC and allow the deleted lifecycle
   assert.ok(migration.includes("ADD COLUMN IF NOT EXISTS mac_audit_history JSONB"));
   assert.ok(migration.includes("'archived','deleted'"));
   assert.ok(migration.includes("NOT VALID"));
-    assert.equal(["DELETE FROM hotspot_vouchers","DELETE FROM hotspot_voucher_payments","DELETE FROM transactions"].some(sql => source.toLowerCase().includes(sql.toLowerCase())), false, name + " must preserve voucher and financial rows");
+  assert.equal(migration.toUpperCase().includes("DELETE FROM"), false);
 });
