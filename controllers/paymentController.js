@@ -1,5 +1,6 @@
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
+const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 
 const {parseSms}=require("../services/paymentWebhookParser");
 const renewalService=require("../services/renewalService");
@@ -408,7 +409,62 @@ async function manualMatch(req,res){
  }
 }
 
+async function issueHotspotVoucherForPayment(req,res,body){
+ try{
+  const trxId=String(body.trxId||body.trx_id||"").trim().toUpperCase();
+  const requestedProfile=String(body.package_id||body.profile_id||body.packageId||"").trim();
+  if(!trxId)return res.status(400).json({success:false,code:"TRXID_REQUIRED",error:"Transaction TrxID is required."});
+  if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",error:"Select a Hotspot package/profile."});
+  const found=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1::text LIMIT 1",[trxId]);
+  if(!found.rows?.length)return res.status(404).json({success:false,code:"TRANSACTION_NOT_FOUND",error:"Payment transaction was not found."});
+  const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  if(status!=="unmatched"||tx.used===true)return res.status(409).json({success:false,code:"TRANSACTION_NOT_ELIGIBLE",error:"Voucher issuance is available only for an unused Unmatched transaction."});
+  if(tx.service_type&&String(tx.service_type).trim().toLowerCase()!=="hotspot")return res.status(409).json({success:false,code:"SERVICE_TYPE_MISMATCH",error:"This transaction is not classified as a Hotspot payment."});
+  const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  let metadataMap={};
+  try{metadataMap=JSON.parse(metaResult.rows?.[0]?.value||"{}");}catch(error){console.error("[Hotspot Voucher Issue] Invalid hotspot_profile_metadata JSON",error?.message||error);}
+  if(!metadataMap||typeof metadataMap!=="object"||Array.isArray(metadataMap))metadataMap={};
+  const routerProfiles=await mikrotikService.getHotspotProfiles();
+  const profiles=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>item?.name&&String(item.name).toLowerCase()!=="default");
+  const matches=profiles.filter(item=>profileIdentifierMatches(String(item.name),metadataMap[String(item.name)]||{},requestedProfile));
+  if(matches.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",error:"Selected Hotspot profile is unavailable or ambiguous."});
+  const profile=matches[0],metadata=metadataMap[String(profile.name)]||{},amount=Number(tx.amount);
+  if(!Number.isFinite(amount)||!Number.isFinite(Number(metadata.price))||moneyCents(metadata.price)!==moneyCents(amount))return res.status(400).json({success:false,code:"AMOUNT_MISMATCH",error:"Selected Hotspot package price must exactly match the transaction amount.",expectedAmount:Number(metadata.price),paidAmount:amount});
+  const hc=require("../services/hotspotProfileConfig");
+  let validityConfig;
+  try{validityConfig=metadata.validityValue!==undefined&&metadata.validityUnit?hc.normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):hc.parseStoredValidity(profile);}
+  catch(error){throw Object.assign(new Error("The selected Hotspot profile has invalid validity settings."),{statusCode:400,code:"PROFILE_INVALID",cause:error});}
+  const validity=String(validityConfig.validity||"").trim(),quota=Math.max(0,Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0));
+  if(!validity&&!quota)return res.status(400).json({success:false,code:"PROFILE_INVALID",error:"Selected Hotspot package has no usable validity or data quota."});
+  const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
+  const issued=await db.withTransaction(async client=>{
+   const locked=await client.query("SELECT * FROM transactions WHERE id=$1::bigint FOR UPDATE",[tx.id]);
+   const current=locked.rows?.[0];
+   if(!current||String(current.status||"").trim().toLowerCase()!=="unmatched"||current.used===true)throw Object.assign(new Error("This transaction has already been processed or claimed. Refresh the ledger before retrying."),{statusCode:409,code:"CLAIM_CONFLICT"});
+   if(current.service_type&&String(current.service_type).trim().toLowerCase()!=="hotspot")throw Object.assign(new Error("This transaction is not classified as a Hotspot payment."),{statusCode:409,code:"SERVICE_TYPE_MISMATCH"});
+   const existing=await client.query("SELECT voucher_id FROM hotspot_voucher_payments WHERE transaction_id=$1::bigint LIMIT 1",[current.id]);
+   if(existing.rows?.length)throw Object.assign(new Error("This payment is already associated with a voucher."),{statusCode:409,code:"VOUCHER_ALREADY_ISSUED"});
+   const generated=await hotspotVoucherGenerator.generateVoucherBatch({
+    client,profileName:String(profile.name),validity,price:amount,server:"all",quantity:1,charLength:8,
+    transactionId:current.id,comment:"FAZ NETWORK online payment voucher; profile validity applies on first successful login."
+   });
+   const voucher=generated.vouchers[0];
+   if(!voucher?.username)throw new Error("Branded voucher generator did not return a Voucher PIN.");
+   await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs')",[current.id,voucher.id,normalizePhone(current.sender_phone)||"",amount,String(profile.name)]);
+   const updated=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1::text,needs_reconciliation=false,claim_flow='force_hotspot',claimed_at=NULL,claimed_by=NULL WHERE id=$2::bigint AND LOWER(TRIM(status))='unmatched' AND (used=false OR used IS NULL) RETURNING id,status,matched_username",[voucher.username,current.id]);
+   if(!updated.rows?.length)throw Object.assign(new Error("Payment transaction could not be finalized; voucher issuance was rolled back."),{statusCode:409,code:"CLAIM_CONFLICT"});
+   return {voucher,transaction:updated.rows[0]};
+  });
+  return res.status(201).json({success:true,mode:"voucher_issued",status:issued.transaction.status,trxId:tx.trx_id,amount,profile:String(profile.name),profile_id:profileId,voucherPin:issued.voucher.username,voucher:{id:issued.voucher.id,username:issued.voucher.username,password:issued.voucher.password,profile:issued.voucher.profile,validity:issued.voucher.validity,price:issued.voucher.price,status:issued.voucher.status},message:"Hotspot voucher generated and linked to the payment successfully."});
+ }catch(error){
+  console.error("[Hotspot Voucher Issue] Failed:",error?.message||error);
+  return res.status(error?.statusCode||500).json({success:false,code:error?.code||"VOUCHER_ISSUE_FAILED",error:error?.message||"Unable to generate and issue the Hotspot voucher."});
+ }
+}
+
 async function forceProvisionHotspot(req,res){
+ const requestBody=req.body&&typeof req.body==="object"?req.body:{};
+ if(String(requestBody.mode||"").trim().toLowerCase()==="issue_voucher")return issueHotspotVoucherForPayment(req,res,requestBody);
  let claimedTransactionId=null,routerSucceeded=false,originalStatus=null,stagedVoucherId=null,transactionId=null;
  try{
   const body=req.body&&typeof req.body==="object"?req.body:{};
