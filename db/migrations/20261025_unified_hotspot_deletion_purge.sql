@@ -6,6 +6,9 @@ ALTER TABLE public.hotspot_vouchers
   ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32);
 
 ALTER TABLE public.hotspot_vouchers
+  ADD COLUMN IF NOT EXISTS mac_audit_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE public.hotspot_vouchers
   DROP CONSTRAINT IF EXISTS hotspot_vouchers_status_check;
 
 ALTER TABLE public.hotspot_vouchers
