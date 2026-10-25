@@ -138,3 +138,12 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  assert.match(auth,/success:true,message:"Hotspot account activated for this device\."/);
  assert.match(auth,/redirect_url:redirectUrl/);
 });
+
+
+test("Hotspot profile lookup failures are logged and shown as a specific admin-facing error",()=>{
+ const controller=read("controllers/hotspotController.js");
+ assert.doesNotMatch(controller,/getHotspotProfiles\(\)\.catch\(\(\)=>\[\]\)/);
+ assert.match(controller,/event:"hotspot_profile_lookup_failed"/);
+ assert.match(controller,/code:"MIKROTIK_PROFILE_LOOKUP_FAILED"/);
+ assert.match(controller,/Cannot load Hotspot profiles because the MikroTik router is unreachable/);
+});
