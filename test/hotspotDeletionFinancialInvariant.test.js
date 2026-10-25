@@ -15,6 +15,8 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   }
   assert.ok(service.includes("SET status='deleted'"));
   assert.ok(service.includes("last_known_mac=COALESCE"));
+  assert.ok(service.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
+  assert.ok(retention.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
   assert.ok(service.includes("mac_address=NULL"));
   assert.ok(retention.includes("UPDATE hotspot_vouchers SET status='archived'"));
 });
@@ -35,8 +37,10 @@ test("schema and migration retain last-known MAC and allow the deleted lifecycle
   const schema = read("db/schema.sql");
   const migration = read("db/migrations/20261025_unified_hotspot_deletion_purge.sql");
   assert.ok(schema.includes("ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32)"));
+  assert.ok(schema.includes("ADD COLUMN IF NOT EXISTS mac_audit_history JSONB"));
   assert.ok(schema.includes("'archived','deleted'"));
   assert.ok(migration.includes("ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32)"));
+  assert.ok(migration.includes("ADD COLUMN IF NOT EXISTS mac_audit_history JSONB"));
   assert.ok(migration.includes("'archived','deleted'"));
   assert.ok(migration.includes("NOT VALID"));
   assert.equal(/DELETE\\s+FROM/i.test(migration), false);
