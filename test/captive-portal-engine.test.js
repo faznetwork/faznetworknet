@@ -38,16 +38,14 @@ test("captive portal consumes public settings and never calls protected admin AP
  assert.doesNotMatch(script,/\/api\/admin\/hotspot-portal-settings/);
 });
 
-test("captive portal exposes credential login alongside voucher and online recharge",()=>{
+test("captive portal exposes only voucher and online recharge choices",()=>{
  assert.equal((html.match(/id="tab-recharge-btn"/g)||[]).length,1);
  assert.equal((html.match(/id="tab-voucher-btn"/g)||[]).length,1);
  assert.match(html,/id="voucher_pin"/);
  assert.match(html,/id="voucher_password"/);
- assert.match(html,/id="credential-login-form"/);
- assert.match(html,/id="credential-username"/);
- assert.match(html,/id="credential-password"/);
- assert.match(script,/\/api\/hotspot-auth\/activate-credentials/);
  assert.doesNotMatch(html,/member_username|member_password|m-btn-member|btn-master-action/);
+ assert.doesNotMatch(script,/\/api\/hotspot-auth\/activate/);
+ assert.doesNotMatch(script,/\/api\/hotspot-auth\/device-lookup/);
 });
 
 test("voucher login sends username, password and router context to the existing claim endpoint",()=>{
