@@ -86,7 +86,7 @@ test("manual match modal exposes PPPoE and Hotspot fields and sends service_type
 
 test("manual PPPoE match normalizes Date expiry before renewal validation and RouterOS update",async()=>{
  const oldQuery=db.query,oldTransaction=db.withTransaction,oldUpdate=mikrotik.updateSecret,oldKick=mikrotik.kickActiveUser,oldDispatchNow=notifications.dispatchNow,oldDispatch=notifications.dispatchNotification;
- const customer={id:9,username:"10006",full_name:"Test Customer",phone:"01712345678",package_name:"Pack 525",plan_name:"Pack 525",price:10,duration_months:1,profile_name:"default",pool_name:"pool1",password:"test-password",expiration_date:new Date("2026-10-25T00:00:00.000Z"),expiry_date:"2026-10-25T00:00:00.000Z"};
+ const customer={id:9,username:"10006",full_name:"Test Customer",phone:"01712345678",package_name:"Pack 525",plan_name:"Pack 525",price:10,duration_months:1,profile_name:"default",pool_name:"pool1",password:"test-password",expiration_date:new Date("2030-10-25T00:00:00.000Z"),expiry_date:"2030-10-25T00:00:00.000Z"};
  const seen={updates:[],router:0};
  try{
   db.query=async(sql,params=[])=>{
@@ -114,11 +114,11 @@ test("manual PPPoE match normalizes Date expiry before renewal validation and Ro
   await controller.manualMatch({body:{trxId:"TX-MANUAL-77",service_type:"pppoe",username:"10006"},session:{userId:9}},res);
   assert.equal(res.statusCode,200,JSON.stringify(res.body));
   assert.equal(res.body.success,true);
-  assert.match(res.body.expiration,/^2026-11-25$/);
+  assert.match(res.body.expiration,/^2030-11-25$/);
   assert.equal(seen.router,1,"RouterOS secret should be updated after expiry normalization");
   assert.equal(seen.updates.length,2);
-  assert.equal(seen.updates[0].params[3],"2026-11-25");
-  assert.equal(seen.updates[1].params[2],"2026-11-25");
+  assert.equal(seen.updates[0].params[3],"2030-11-25");
+  assert.equal(seen.updates[1].params[2],"2030-11-25");
  }finally{
   db.query=oldQuery;db.withTransaction=oldTransaction;mikrotik.updateSecret=oldUpdate;mikrotik.kickActiveUser=oldKick;notifications.dispatchNow=oldDispatchNow;notifications.dispatchNotification=oldDispatch;
  }
