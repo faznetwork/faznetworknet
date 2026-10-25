@@ -182,7 +182,11 @@ async function activate(req,res){
     const account=reservation.account;
     const expiry=account.expires_at?new Date(account.expires_at):null;
     if(reservation.firstActivation){
-      await mikrotikService.rechargeHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
+      if(reservation.voucherPinAccount){
+        await mikrotikService.createVoucherHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac});
+      }else{
+        await mikrotikService.rechargeHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
+      }
       routerSucceeded=true;
     }else{
       const existing=await mikrotikService.getHotspotUser(reservation.routerUsername);
