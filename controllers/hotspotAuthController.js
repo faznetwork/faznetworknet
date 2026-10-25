@@ -171,27 +171,34 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
-      if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
+      const voucherPinAccount=String(row.subscriber_type||"")==="scratch_voucher";
+      const routerUsername=voucherPinAccount?previousUsername:mac;
+      const routerPassword=voucherPinAccount?String(row.password||previousUsername):mac;
+      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[routerUsername,routerPassword,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
+      if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This voucher is already bound to another device.");
       const account=locked.rows[0];
-      return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
+      return {account:{...account,username:routerUsername,password:routerPassword,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,routerUsername,routerPassword,voucherPinAccount,mac,phone};
     });
     const account=reservation.account;
     const expiry=account.expires_at?new Date(account.expires_at):null;
     if(reservation.firstActivation){
-      await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
+      if(reservation.voucherPinAccount){
+        await mikrotikService.createVoucherHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac});
+      }else{
+        await mikrotikService.rechargeHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
+      }
       routerSucceeded=true;
     }else{
-      const existing=await mikrotikService.getHotspotUser(mac);
+      const existing=await mikrotikService.getHotspotUser(reservation.routerUsername);
       if(!existing){
-        if(reservation.quota>0)return fail(503,"ACTIVE_DATA_ACCOUNT_MISSING","The active data-quota user is missing from RouterOS. Support must reconcile usage before re-provisioning to avoid resetting the quota.");
-        await mikrotikService.createHotspotUser({username:mac,password:mac,profile:reservation.profile,server:account.server||"all",validity:reservation.validity,comment:account.comment,macAddress:mac});
+        if(reservation.quota>0)return fail(409,"ACTIVE_DATA_ACCOUNT_MISSING","This active data-quota voucher needs usage reconciliation before safe recovery; no quota or validity was reset.");
+        await mikrotikService.createHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,server:account.server||"all",validity:reservation.validity,comment:account.comment,macAddress:mac});
         routerSucceeded=true;
       }else{
         const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
         if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC lock for this account. Contact support.");
-        if(String(existing.profile||"")!==reservation.profile||String(existing.password||"")!==mac||actualMac!==mac||String(existing.comment||"")!==String(account.comment||"")){
-          await mikrotikService.updateHotspotUser(mac,reservation.profile,account.comment,mac,mac);
+        if(String(existing.profile||"")!==reservation.profile||String(existing.password||"")!==reservation.routerPassword||actualMac!==mac||String(existing.comment||"")!==String(account.comment||"")){
+          await mikrotikService.updateHotspotUser(reservation.routerUsername,reservation.profile,account.comment,reservation.routerPassword,mac);
           routerSucceeded=true;
         }
       }
@@ -201,7 +208,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1::bigint AND mac_address=$2::text",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$2::text,mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$3::text,mac_address=$4::text,phone=COALESCE(NULLIF($6::text,''),NULLIF(phone,''),'Unlinked'),comment=$5,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($4::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,reservation.routerUsername,reservation.routerPassword,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -209,7 +216,7 @@ async function activate(req,res){
       const expiryStr=expiry?new Date(expiry).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
       notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:mac,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
     }
-    return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
+    return res.json({success:true,message:"Hotspot account activated for this device.",username:reservation.routerUsername,password:reservation.routerPassword,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
   }catch(error){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");
@@ -220,16 +227,16 @@ async function claimVoucher(req,res){
   const fail=(status,code,message)=>res.status(status).json({success:false,code,message,error:message});
   if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
   const pin=String(req.body?.voucher_code||req.body?.pin||"").trim().toUpperCase();
-  const password=String(req.body?.voucher_password||req.body?.password||"").trim();
+  const password=String(req.body?.voucher_password||req.body?.password||pin).trim();
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||"");
-  if(!pin||pin.length<4||pin.length>100)return fail(400,"INVALID_VOUCHER_PIN","Enter the voucher PIN printed on your card.");
-  if(!password||password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Enter the voucher card password.");
+  if(!/^\d{6,8}$/.test(pin))return fail(400,"INVALID_VOUCHER_PIN","Enter the 6 to 8 digit voucher PIN.");
+  if(password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Voucher PIN is invalid.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
   try{
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND (password=$2::text OR password=username) AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");

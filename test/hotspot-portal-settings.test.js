@@ -76,7 +76,8 @@ test("hotspot login page uses one script and preserves verified voucher, payment
  assert.equal(scripts.length,1,"legacy competing script flows should be consolidated");
  assert.doesNotThrow(()=>new vm.Script(scripts[0][1],{filename:"public/login.html script"}));
  assert.match(login,/id="voucher_pin"/);
- assert.match(login,/id="voucher_password"/);
+ assert.match(login,/id="voucher_pin"/);
+ assert.doesNotMatch(login,/id="voucher_password"/);
  assert.match(login,/claim-voucher/);
  assert.doesNotMatch(login,/api\/hotspot\/verify-voucher/);
  assert.doesNotMatch(login,/member_username|m-btn-member|btn-master-action/);
