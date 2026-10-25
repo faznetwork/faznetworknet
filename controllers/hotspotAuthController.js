@@ -193,8 +193,8 @@ async function activate(req,res){
       }else{
         const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
         if(actualMac&&actualMac!==mac)return fail(403,"ROUTER_MAC_LOCK_MISMATCH","RouterOS reports a different MAC lock for this account. Contact support.");
-        if(String(existing.profile||"")!==reservation.profile||String(existing.password||"")!==mac||actualMac!==mac||String(existing.comment||"")!==String(account.comment||"")){
-          await mikrotikService.updateHotspotUser(mac,reservation.profile,account.comment,mac,mac);
+        if(String(existing.profile||"")!==reservation.profile||String(existing.password||"")!==reservation.routerPassword||actualMac!==mac||String(existing.comment||"")!==String(account.comment||"")){
+          await mikrotikService.updateHotspotUser(reservation.routerUsername,reservation.profile,account.comment,reservation.routerPassword,mac);
           routerSucceeded=true;
         }
       }
@@ -204,7 +204,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1::bigint AND mac_address=$2::text",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$2::text,mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$3::text,mac_address=$4::text,phone=COALESCE(NULLIF($6::text,''),NULLIF(phone,''),'Unlinked'),comment=$5,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($4::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,reservation.routerUsername,reservation.routerPassword,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -212,7 +212,7 @@ async function activate(req,res){
       const expiryStr=expiry?new Date(expiry).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
       notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:mac,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
     }
-    return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
+    return res.json({success:true,message:"Hotspot account activated for this device.",username:reservation.routerUsername,password:reservation.routerPassword,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
   }catch(error){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");
