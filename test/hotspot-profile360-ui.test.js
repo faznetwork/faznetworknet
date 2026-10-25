@@ -31,18 +31,18 @@ test("Unified routes direct list, edit, renew and archive to the safe controller
   const controller = read("controllers/hotspotUserController.js");
   assert.match(controller, /SELECT id,username,customer_name,phone,mac_address/);
   assert.match(controller, /UPDATE hotspot_vouchers SET customer_name=\$1,phone=\$2/);
-  assert.match(controller, /status='archived'/);
+  assert.match(controller, /deleteHotspotSubscriber/);
 });
 
-test("Subscriber 360 uses guarded session disconnect and keeps archive database-only", () => {
+test("Subscriber 360 uses guarded session disconnect and canonical verified deletion", () => {
   const controller = read("controllers/hotspotUserController.js");
   const ui = read("public/js/hotspot-users-clean.js");
   assert.match(controller, /RouterOS calls are deliberately read-only/);
   assert.doesNotMatch(controller, /mikrotikService\.(?:removeHotspotUser|rechargeHotspotUser|kickHotspotUser|deleteHotspotUser|removeHotspotCookie|removeHotspotHost)\s*\(/);
-  assert.match(controller, /Voucher archived in PostgreSQL only/);
+  assert.match(controller, /Network access purged and subscriber soft-deleted/);
   assert.match(ui, /\/api\/hotspot\/active\/disconnect/);
   assert.match(ui, /user\.sessionId/);
-  assert.match(ui, /The MikroTik user and sessions will remain untouched/);
+  assert.match(ui, /verified RouterOS purge now/);\n  assert.match(ui, /Financial history retained/);
 });
 
 test("Hotspot subscriber UI uses a softened slate header and readable action styles",()=>{const css=read("public/css/hotspot-users-clean.css");assert.match(css,/#1e293b/);assert.match(css,/\.hotspot-table-header th/);assert.match(css,/\.hs-subscriber-name\{[^}]*15px/);assert.match(css,/\.btn-action-renew/);});
