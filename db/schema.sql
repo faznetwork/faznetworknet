@@ -336,8 +336,10 @@ CREATE TABLE IF NOT EXISTS hotspot_voucher_sales_archive (
   amount NUMERIC(12,2) NOT NULL DEFAULT 0,
   status VARCHAR(30) NOT NULL,
   matched_username VARCHAR(100),
-  created_at TIMESTAMPTZ NOT NULL
+  created_at TIMESTAMPTZ NOT NULL,
+  voucher_count INTEGER CHECK (voucher_count IS NULL OR voucher_count >= 0)
 );
+ALTER TABLE hotspot_voucher_sales_archive ADD COLUMN IF NOT EXISTS voucher_count INTEGER CHECK (voucher_count IS NULL OR voucher_count >= 0);
 CREATE INDEX IF NOT EXISTS idx_hotspot_voucher_sales_archive_created_at ON hotspot_voucher_sales_archive(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_hotspot_vouchers_cleanup ON hotspot_vouchers(status,cleanup_status,id);
 
