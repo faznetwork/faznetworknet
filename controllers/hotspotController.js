@@ -2,6 +2,7 @@ const crypto=require("crypto");const db=require("../db");const mikrotikService=r
 const notificationDispatcher=require("../services/notificationDispatcher");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 const {deleteHotspotSubscriber}=require("../services/hotspotDeletionService");
+const {normalizeSalesCategory,transactionCategorySql}=require("../services/hotspotSalesCategory");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function normalizeHotspotMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
@@ -717,7 +718,7 @@ async function voucherSales(req,res){
  try{
   const startDate=String(req.query?.startDate||"").trim();
   const endDate=String(req.query?.endDate||"").trim();
-  const category=String(req.query?.category||"all").trim().toLowerCase();
+  const category=normalizeSalesCategory(req.query?.category||"all");
   const allowedCategories=new Set(["all","mfs","scratch_voucher","admin_voucher"]);
   if(!allowedCategories.has(category))return res.status(400).json({success:false,code:"INVALID_SALES_CATEGORY",message:"Select Online MFS, Scratch Card, Admin Manual, or All categories."});
   const isDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T00:00:00Z"))&&new Date(value+"T00:00:00Z").toISOString().slice(0,10)===value;
@@ -730,10 +731,7 @@ async function voucherSales(req,res){
   const salesCte="WITH sales AS ("+
    "SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,"+
    "COALESCE((SELECT COUNT(DISTINCT COALESCE(hp.voucher_id,v.id))::int FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.transaction_id=t.id OR v.id=hp.voucher_id WHERE hp.transaction_id=t.id OR v.transaction_id=t.id),0)::int AS voucher_count,true AS voucher_count_known,"+
-   "CASE WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='mfs') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='mfs') THEN 'mfs' "+
-   "WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='scratch_voucher') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='scratch_voucher') THEN 'scratch_voucher' "+
-   "WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='admin_voucher') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='admin_voucher') THEN 'admin_voucher' "+
-   "WHEN t.sale_type='online_mfs' THEN 'mfs' WHEN t.sale_type='scratch_card' THEN 'scratch_voucher' WHEN t.sale_type='manual' THEN 'admin_voucher' ELSE 'other' END AS subscriber_type "+
+   transactionCategorySql("t")+" AS subscriber_type "+
    "FROM transactions t WHERE t.status IN ('processed','PAID') AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) "+
    "UNION ALL SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at,COALESCE(a.voucher_count,0)::int AS voucher_count,(a.voucher_count IS NOT NULL) AS voucher_count_known,"+
    "COALESCE(a.subscriber_type,CASE a.sale_type WHEN 'online_mfs' THEN 'mfs' WHEN 'scratch_card' THEN 'scratch_voucher' WHEN 'manual' THEN 'admin_voucher' ELSE 'other' END) AS subscriber_type "+
