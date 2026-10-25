@@ -717,19 +717,33 @@ async function voucherSales(req,res){
  try{
   const startDate=String(req.query?.startDate||"").trim();
   const endDate=String(req.query?.endDate||"").trim();
+  const category=String(req.query?.category||"all").trim().toLowerCase();
+  const allowedCategories=new Set(["all","mfs","scratch_voucher","admin_voucher"]);
+  if(!allowedCategories.has(category))return res.status(400).json({success:false,code:"INVALID_SALES_CATEGORY",message:"Select Online MFS, Scratch Card, Admin Manual, or All categories."});
   const isDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T00:00:00Z"))&&new Date(value+"T00:00:00Z").toISOString().slice(0,10)===value;
   if((startDate&&!isDate(startDate))||(endDate&&!isDate(endDate)))return res.status(400).json({success:false,message:"Dates must use YYYY-MM-DD format."});
   if(startDate&&endDate&&startDate>endDate)return res.status(400).json({success:false,message:"Start date must be on or before end date."});
   const params=[];let dateFilter="";
   if(startDate){params.push(startDate);dateFilter+=" AND created_at >= ($"+params.length+"::date AT TIME ZONE 'Asia/Dhaka')";}
   if(endDate){params.push(endDate);dateFilter+=" AND created_at < (($"+params.length+"::date + INTERVAL '1 day') AT TIME ZONE 'Asia/Dhaka')";}
-  const salesCte="WITH sales AS (SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,COALESCE((SELECT COUNT(DISTINCT COALESCE(hp.voucher_id,v.id))::int FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.transaction_id=t.id OR v.id=hp.voucher_id WHERE hp.transaction_id=t.id OR v.transaction_id=t.id),0)::int AS voucher_count,true AS voucher_count_known FROM transactions t WHERE t.status='processed' AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) UNION SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at,COALESCE(a.voucher_count,0)::int AS voucher_count,(a.voucher_count IS NOT NULL) AS voucher_count_known FROM hotspot_voucher_sales_archive a WHERE a.status='processed')";
+  let categoryFilter="";if(category!=="all"){params.push(category);categoryFilter+=" AND subscriber_type = $"+params.length;}
+  const salesCte="WITH sales AS ("+
+   "SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,"+
+   "COALESCE((SELECT COUNT(DISTINCT COALESCE(hp.voucher_id,v.id))::int FROM hotspot_voucher_payments hp LEFT JOIN hotspot_vouchers v ON v.transaction_id=t.id OR v.id=hp.voucher_id WHERE hp.transaction_id=t.id OR v.transaction_id=t.id),0)::int AS voucher_count,true AS voucher_count_known,"+
+   "CASE WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='mfs') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='mfs') THEN 'mfs' "+
+   "WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='scratch_voucher') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='scratch_voucher') THEN 'scratch_voucher' "+
+   "WHEN EXISTS(SELECT 1 FROM hotspot_voucher_payments hp JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE hp.transaction_id=t.id AND v.subscriber_type='admin_voucher') OR EXISTS(SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id AND v.subscriber_type='admin_voucher') THEN 'admin_voucher' "+
+   "WHEN t.sale_type='online_mfs' THEN 'mfs' WHEN t.sale_type='scratch_card' THEN 'scratch_voucher' WHEN t.sale_type='manual' THEN 'admin_voucher' ELSE 'other' END AS subscriber_type "+
+   "FROM transactions t WHERE t.status IN ('processed','PAID') AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) "+
+   "UNION ALL SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at,COALESCE(a.voucher_count,0)::int AS voucher_count,(a.voucher_count IS NOT NULL) AS voucher_count_known,"+
+   "COALESCE(a.subscriber_type,CASE a.sale_type WHEN 'online_mfs' THEN 'mfs' WHEN 'scratch_card' THEN 'scratch_voucher' WHEN 'manual' THEN 'admin_voucher' ELSE 'other' END) AS subscriber_type "+
+   "FROM hotspot_voucher_sales_archive a WHERE a.status IN ('processed','PAID') AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.id=a.transaction_id))";
   const [summary,rows]=await Promise.all([
-   db.query(salesCte+" SELECT COALESCE(SUM(voucher_count),0)::int AS total_vouchers_sold,COUNT(*)::int AS matched_transactions,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount,BOOL_AND(voucher_count_known) AS voucher_count_complete FROM sales WHERE TRUE"+dateFilter,params),
-   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales WHERE TRUE"+dateFilter+" ORDER BY created_at DESC,transaction_id DESC LIMIT 500",params)
+   db.query(salesCte+" SELECT COALESCE(SUM(voucher_count),0)::int AS total_vouchers_sold,COUNT(*)::int AS matched_transactions,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount,BOOL_AND(voucher_count_known) AS voucher_count_complete FROM sales WHERE TRUE"+dateFilter+categoryFilter,params),
+   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at,subscriber_type FROM sales WHERE TRUE"+dateFilter+categoryFilter+" ORDER BY created_at DESC,transaction_id DESC LIMIT 500",params)
   ]);
   const summaryRow=summary.rows?.[0]||{};
-  return res.json({success:true,totalVouchersSold:Number(summaryRow.total_vouchers_sold||0),matchedTransactions:Number(summaryRow.matched_transactions||0),voucherCountComplete:summaryRow.voucher_count_complete===true,totalAmount:Number(summaryRow.total_amount||0),startDate:startDate||null,endDate:endDate||null,transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
+  return res.json({success:true,category,totalVouchersSold:Number(summaryRow.total_vouchers_sold||0),matchedTransactions:Number(summaryRow.matched_transactions||0),voucherCountComplete:summaryRow.voucher_count_complete===true,totalAmount:Number(summaryRow.total_amount||0),startDate:startDate||null,endDate:endDate||null,transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
  }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
