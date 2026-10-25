@@ -86,25 +86,25 @@ test("Customer type resolution never emits Unknown and prioritizes Hotspot evide
  const {calls}=await runList(undefined);
  const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
  assert.ok(sql.includes("COALESCE(t.service_type,'')='hotspot'"));
- assert.match(sql,/SCRATCH-%/);
+ assert.ok(sql.includes("SCRATCH-%"));
  assert.ok(sql.includes("hotspot_voucher_payments hvp WHERE hvp.transaction_id=t.id"));
- assert.match(sql,/hotspot_vouchers hv WHERE/);
+ assert.ok(sql.includes("hotspot_vouchers hv WHERE"));
  assert.ok(sql.includes("hv.mac_address"));
  assert.ok(sql.includes("hv.password"));
- assert.match(sql,/THEN 'unassigned' END AS customer_type/);
- assert.doesNotMatch(sql,/THEN 'unknown'/);
+ assert.ok(sql.includes("THEN 'unassigned' END AS customer_type"));
+ assert.ok(!sql.includes("THEN 'unknown'"));
 });
 
 test("PPPoE filter includes pppoe_users/customers matches when service_type is absent",async()=>{
  const {calls}=await runList("pppoe");
  const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
- assert.match(sql,/pppoe_users/);
- assert.match(sql,/customers cu/);
+ assert.ok(sql.includes("pppoe_users"));
+ assert.ok(sql.includes("customers cu"));
 });
 
 test("Customer type badge has dedicated Hotspot color and safely falls back to Unassigned",()=>{
  const admin=fs.readFileSync(path.join(__dirname,"../views/admin.ejs"),"utf8");
- assert.match(admin,/requestedType.*includes\\(requestedType\\).*'unassigned'/);
- assert.match(admin,/hotspot: 'bg-success'/);
+ assert.ok(admin.includes("includes(requestedType) ? requestedType : 'unassigned'"));
+ assert.ok(admin.includes("hotspot: 'bg-success'"));
  assert.ok(!admin.includes("classes.unknown"));
 });
