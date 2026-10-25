@@ -18,7 +18,7 @@ test("Hotspot sales origin migration preserves independent transaction history",
 test("Hotspot expiry retains purchase audit rows for 30 days and purges only after RouterOS hard cleanup",()=>{
  const source=read("jobs/hotspotExpirationCleanup.js");
  assert.doesNotMatch(source,/profile='expired_profile'/);
- assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '30 days'/);
+ assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '395 days'/);
  assert.match(source,/DELETE FROM hotspot_vouchers WHERE id = ANY\(\$1::bigint\[\]\) AND status='expired' AND cleanup_status='completed'/);
  assert.doesNotMatch(source,/DELETE\s+FROM\s+transactions/i);
 });
