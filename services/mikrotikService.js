@@ -1224,7 +1224,11 @@ class MikroTikService {
     return this._withConnection("Voucher Hotspot user creation",async connection=>{
       const rows=await connection.write("/ip/hotspot/user/print");
       const existing=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name).trim()===username&&item[".id"]);
-      if(existing.length)throw new Error("Voucher PIN already exists on RouterOS; refusing to overwrite or reset its counters.");
+      if(existing.length){
+        const item=existing[0],actualMac=normalizeHotspotMac(item["mac-address"]);
+        if(actualMac!==macAddress||this._str(item.password)!==password||this._str(item.profile)!==profile)throw new Error("Voucher PIN already exists on RouterOS with a different MAC, password, or profile; refusing to overwrite it.");
+        return {username,password,macAddress,profile,limitBytesTotal,created:false,alreadyProvisioned:true,credentials:"voucher_pin"};
+      }
       await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all","limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress,comment}));
       return {username,password,macAddress,profile,limitBytesTotal,created:true,credentials:"voucher_pin"};
     });
