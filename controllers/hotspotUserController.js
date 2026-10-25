@@ -79,7 +79,7 @@ async function list(req, res) {
       const expired = String(row.status || "").toLowerCase() === "expired" ||
         String(row.profile || "").toLowerCase() === "expired_profile" ||
         Boolean(expiry && Number.isFinite(expiry.getTime()) && expiry.getTime() <= now);
-      const online = Boolean(session && String(session.address || session.ip || "").trim());
+      const online = !expired && Boolean(session && String(session.address || session.ip || "").trim());
       const dbStatus = String(row.status || "").toLowerCase();
       const status = expired ? "expired" : online ? "online" :
         dbStatus === "pending_claim" ? "pending_claim" :

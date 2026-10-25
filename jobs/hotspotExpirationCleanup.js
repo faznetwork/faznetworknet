@@ -73,10 +73,14 @@ function routerUserExpired(user, schedulerNames) {
 }
 
 async function purgeExpiredHotspotUser(router, username, macAddress) {
-  if (typeof router.cleanupExpiredHotspotUser !== "function") {
-    throw new Error("RouterOS does not expose the required hard-purge operation.");
+  if (typeof router.cleanupExpiredHotspotUser !== "function") throw new Error("RouterOS does not expose the required hard-purge operation.");
+  const result = await router.cleanupExpiredHotspotUser(username, macAddress);
+  if (!result?.verified) {
+    const error = new Error("RouterOS four-layer purge was not verified; voucher MAC binding must remain intact.");
+    error.code = "HOTSPOT_PURGE_NOT_VERIFIED";
+    throw error;
   }
-  return await router.cleanupExpiredHotspotUser(username, macAddress);
+  return result;
 }
 
 function createHotspotExpirationCleanup(deps = {}) {
@@ -86,17 +90,24 @@ function createHotspotExpirationCleanup(deps = {}) {
   const notificationDispatcher = deps.notificationDispatcher || require("../services/notificationDispatcher");
   const now = deps.now || (() => new Date());
   let running = false;
+  let scanCursor = 0;
+  let batchContinuation = false;
+  let batchContinuationUrgent = false;
+  const MAX_EXPIRY_BATCH_SIZE = 5;
 
   return async function runHotspotExpirationCleanup() {
     if (running && !deps.allowConcurrent) return { skipped: true, reason: "already_running" };
     running = true;
     const startedAt = Date.now();
     let checked = 0, activated = 0, expired = 0, removed = 0, failed = 0, preExpiryNotified = 0;
+    batchContinuation = false;
+    batchContinuationUrgent = false;
     try {
       // Atomically claim due alerts so multiple application instances cannot send the same voucher alert twice.
       try {
         const dueAlerts = await database.query(
-          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at"
+          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC LIMIT $1 FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at",
+          [MAX_EXPIRY_BATCH_SIZE]
         );
         await Promise.all((dueAlerts.rows||[]).map(async voucher=>{
           const phone=String(voucher.phone||'').trim();
@@ -108,7 +119,11 @@ function createHotspotExpirationCleanup(deps = {}) {
         }));
       } catch (alertError) { logger.error('[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:',alertError.message); }
       const result = await database.query(
-        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address FROM hotspot_vouchers WHERE status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')) ORDER BY id ASC"
+        "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,last_known_mac " +
+        "FROM hotspot_vouchers WHERE (status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed'))) " +
+        "AND (id > $1 OR status='expired' OR expires_at <= NOW()) " +
+        "ORDER BY CASE WHEN status IN ('active','unused','pending_claim') AND expires_at <= NOW() THEN 0 WHEN status='expired' THEN 1 ELSE 2 END, expires_at ASC NULLS LAST, id ASC LIMIT $2",
+        [scanCursor, MAX_EXPIRY_BATCH_SIZE]
       );
 
       // Database expiry must continue even during a temporary RouterOS outage.
@@ -125,17 +140,34 @@ function createHotspotExpirationCleanup(deps = {}) {
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
       const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
 
-      for (const voucher of result.rows || []) {
+      const candidates = Array.isArray(result.rows) ? result.rows : [];
+      const batchRows = candidates.slice(0, MAX_EXPIRY_BATCH_SIZE);
+      batchContinuation = candidates.length >= MAX_EXPIRY_BATCH_SIZE;
+      batchContinuationUrgent = batchRows.some(voucher => voucher.status !== "expired" &&
+        voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime());
+      const rotatingRows = batchRows.filter(voucher => voucher.status !== "expired" &&
+        !(voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime()));
+      if (rotatingRows.length) scanCursor = Math.max(scanCursor, ...rotatingRows.map(voucher => Number(voucher.id) || 0));
+      if (batchRows.length < MAX_EXPIRY_BATCH_SIZE && scanCursor > 0) {
+        scanCursor = 0;
+        batchContinuation = true;
+      } else if (batchRows.length === 0 && scanCursor === 0) batchContinuation = false;
+
+      for (const voucher of batchRows) {
         checked++;
         const username = String(voucher.username || "").trim();
+        const voucherMac = String(voucher.mac_address || voucher.last_known_mac || (/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username) ? username : "")).trim();
         const user = users.get(username.toLowerCase());
         const pendingCleanup = voucher.status === "expired" && ["pending", "not_required", "failed"].includes(voucher.cleanup_status);
         if (pendingCleanup) {
           try {
-            await purgeExpiredHotspotUser(router, username, voucher.mac_address);
+            await purgeExpiredHotspotUser(router, username, voucherMac);
             await database.query(
-              "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
-              [voucher.id]
+              "UPDATE hotspot_vouchers AS v SET status='expired', " +
+              "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE COALESCE(v.mac_audit_history,'[]'::jsonb) END, " +
+              "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''),NULLIF($2::text,'')), mac_address=NULL, " +
+              "cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1 AND status='expired'",
+              [voucher.id, voucherMac]
             );
             removed++;
           } catch (error) {
@@ -216,10 +248,13 @@ function createHotspotExpirationCleanup(deps = {}) {
         const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
         if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
         try {
-          await purgeExpiredHotspotUser(router, username, voucher.mac_address);
+          await purgeExpiredHotspotUser(router, username, voucherMac);
           await database.query(
-            "UPDATE hotspot_vouchers SET cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1",
-            [voucher.id]
+            "UPDATE hotspot_vouchers AS v SET status='expired', " +
+            "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE COALESCE(v.mac_audit_history,'[]'::jsonb) END, " +
+            "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''),NULLIF($2::text,'')), mac_address=NULL, " +
+            "cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1 AND status='expired'",
+            [voucher.id, voucherMac]
           );
           removed++;
         } catch (error) {
@@ -306,7 +341,9 @@ function startHotspotExpirationCleanup(deps = {}) {
       const next = await database.query("SELECT MIN(CASE WHEN status='active' AND pre_expiry_notified IS NOT TRUE AND expires_at > NOW() THEN expires_at - INTERVAL '5 minutes' ELSE expires_at END) AS next_at, BOOL_OR(status='expired' AND cleanup_status IN ('pending','not_required','failed')) AS retry_due FROM hotspot_vouchers WHERE ((status IN ('unused','active','pending_claim') AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')))");
       const row = next.rows?.[0] || {};
       const nextAt = row.next_at ? new Date(row.next_at).getTime() : Infinity;
-      const delay = row.retry_due ? 30000 : Math.max(1000, Math.min(2147483647, Number.isFinite(nextAt) ? nextAt - Date.now() : 2147483647));
+      const delay = batchContinuation
+        ? (batchContinuationUrgent ? 1000 : 30000)
+        : row.retry_due ? 30000 : Math.max(1000, Math.min(2147483647, Number.isFinite(nextAt) ? nextAt - Date.now() : 2147483647));
       timer = setTimeout(async () => {
         try { await runHotspotExpirationCleanup(); }
         catch (error) { logger.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message); }

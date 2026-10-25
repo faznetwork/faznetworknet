@@ -69,7 +69,7 @@ test("expires marked users, hard-purges RouterOS credentials, and retains rows f
     async getHotspotExpirationSnapshot() {
       return { users: [{ username: "VOUCHER2", comment: "FAZ|EXPIRED", disabled: true }], schedulerNames: [] };
     },
-    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { usersRemoved: 1 }; }
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { verified: true, usersRemoved: 1 }; }
   };
   const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger(), now: () => new Date("2026-10-11T12:00:00Z") });
   const result = await run();
@@ -89,7 +89,7 @@ test("reconciles legacy expired vouchers that predate cleanup tracking", async (
   const cleaned = [];
   const router = {
     async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
-    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { alreadyAbsent: true }; }
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { verified: true, alreadyAbsent: true }; }
   };
   const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger() });
   const result = await run();
@@ -109,7 +109,7 @@ test("expires a used voucher from PostgreSQL expiry even if RouterOS user is alr
   const cleaned = [];
   const router = {
     async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
-    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { alreadyAbsent: true }; }
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { verified: true, alreadyAbsent: true }; }
   };
   const run = createHotspotExpirationCleanup({
     db: database, mikrotikService: router, logger: quietLogger(),
@@ -181,7 +181,7 @@ test("reconciles an expired MAC voucher after the RouterOS one-shot scheduler re
   const cleaned = [];
   const router = {
     async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
-    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { alreadyAbsent: true }; }
+    async cleanupExpiredHotspotUser(username) { cleaned.push(username); return { verified: true, alreadyAbsent: true }; }
   };
   const run = createHotspotExpirationCleanup({
     db: database, mikrotikService: router, logger: quietLogger(),
@@ -310,7 +310,7 @@ test("expired cleanup delegates to hard purge and preserves transaction audit hi
   const purges = [];
   const router = {
     async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
-    async cleanupExpiredHotspotUser(username, mac) { purges.push({ username, mac }); return { usersRemoved: 1, sessionsRemoved: 1, cookiesRemoved: 1 }; }
+    async cleanupExpiredHotspotUser(username, mac) { purges.push({ username, mac }); return { verified: true, usersRemoved: 1, sessionsRemoved: 1, cookiesRemoved: 1 }; }
   };
   const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger(), now: () => new Date("2026-10-11T12:00:00Z") });
   const result = await run();
@@ -319,4 +319,31 @@ test("expired cleanup delegates to hard purge and preserves transaction audit hi
   assert.deepEqual(purges, [{ username: "AA:BB:CC:DD:EE:FF", mac: "AA:BB:CC:DD:EE:FF" }]);
   assert.ok(!database.calls.some(call => /DELETE\s+FROM\s+transactions/i.test(call.sql)));
   assert.ok(!database.calls.some(call => call.sql.includes("profile='expired_profile'")));
+});
+
+
+test("expiry cleanup processes no more than five vouchers per RouterOS batch", async () => {
+  const expiredAt = new Date("2026-10-11T10:00:00.000Z");
+  const rows = Array.from({ length: 12 }, (_, index) => ({ id:index+1, username:"BATCH-"+(index+1), status:"active", expires_at:expiredAt, cleanup_status:"not_required", mac_address:"AA:BB:CC:DD:EE:"+String(index+1).padStart(2,"0") }));
+  const database = mockDb(rows), purged = [];
+  const router = { async getHotspotExpirationSnapshot(){return {users:[],schedulerNames:[]};}, async cleanupExpiredHotspotUser(username){purged.push(username);return {verified:true,usersRemoved:1};} };
+  const run = createHotspotExpirationCleanup({db:database,mikrotikService:router,logger:quietLogger(),now:()=>new Date("2026-10-11T12:00:00.000Z")});
+  const result = await run();
+  assert.equal(result.checked,5); assert.equal(result.expired,5); assert.equal(result.removed,5); assert.equal(purged.length,5);
+  const selection=database.calls.find(call=>call.sql.startsWith("SELECT id,username,status"));
+  assert.match(selection.sql,/LIMIT \$2/); assert.equal(selection.params[1],5);
+});
+
+test("manual delete retry confirmation uses actual line-break escapes", () => {
+  const fs=require("node:fs"), source=fs.readFileSync(require.resolve("../public/js/hotspot-users-clean"),"utf8");
+  assert.match(source,/message \+ "\\n\\nRetry the verified RouterOS purge now/);
+  assert.doesNotMatch(source,/message \+ "\\\\n\\\\nRetry the verified RouterOS purge now/);
+});
+
+test("expiry purge requires verified RouterOS result before unbinding the MAC", async () => {
+  const rows=[{id:301,username:"AA:BB:CC:DD:EE:FF",status:"active",expires_at:new Date("2026-10-11T10:00:00.000Z"),cleanup_status:"not_required",mac_address:"AA:BB:CC:DD:EE:FF"}];
+  const database=mockDb(rows), router={async getHotspotExpirationSnapshot(){return {users:[],schedulerNames:[]};},async cleanupExpiredHotspotUser(){return {verified:false};}};
+  const run=createHotspotExpirationCleanup({db:database,mikrotikService:router,logger:quietLogger(),now:()=>new Date("2026-10-11T12:00:00.000Z")});
+  const result=await run(); assert.equal(result.failed,1); assert.equal(result.removed,0);
+  assert.equal(database.calls.some(call=>call.sql.includes("mac_address=NULL")&&call.sql.includes("cleanup_status='completed'")),false);
 });
