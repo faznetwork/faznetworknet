@@ -307,7 +307,23 @@ async function createUser(req,res){
     if(requestedPassword&&(requestedPassword.length<4||requestedPassword.length>100))return res.status(400).json({success:false,code:"INVALID_PASSWORD",message:"Password/PIN must be 4–100 characters when supplied."});
     const generatedUsername=requestedUsername||("HN-"+crypto.randomBytes(6).toString("hex").toUpperCase());
     const generatedPassword=requestedPassword||String(crypto.randomInt(0,1000000)).padStart(6,"0");
-    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);
+    let routerProfiles;
+    try {
+      routerProfiles=await mikrotikService.getHotspotProfiles();
+    } catch (profileError) {
+      console.error("[Hotspot user creation] RouterOS profile lookup failed", {
+        event:"hotspot_profile_lookup_failed",
+        code:"MIKROTIK_PROFILE_LOOKUP_FAILED",
+        operation:"create_direct_subscriber",
+        message:profileError?.message||String(profileError)
+      });
+      return res.status(503).json({
+        success:false,
+        code:"MIKROTIK_PROFILE_LOOKUP_FAILED",
+        message:"Cannot load Hotspot profiles because the MikroTik router is unreachable or its API request failed. Check router connectivity and credentials, then retry."
+      });
+    }
+    const meta=await readProfileMetadata();
     let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
     if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
     if(candidates.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:"The selected package/profile could not be mapped to exactly one saved Hotspot profile."});
