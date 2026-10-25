@@ -470,13 +470,21 @@ async function voucherRecords(req,res){
 }
 async function voucherSales(req,res){
  try{
+  const startDate=String(req.query?.startDate||"").trim();
+  const endDate=String(req.query?.endDate||"").trim();
+  const isDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value+"T00:00:00Z"))&&new Date(value+"T00:00:00Z").toISOString().slice(0,10)===value;
+  if((startDate&&!isDate(startDate))||(endDate&&!isDate(endDate)))return res.status(400).json({success:false,message:"Dates must use YYYY-MM-DD format."});
+  if(startDate&&endDate&&startDate>endDate)return res.status(400).json({success:false,message:"Start date must be on or before end date."});
+  const params=[];let dateFilter="";
+  if(startDate){params.push(startDate);dateFilter+=" AND created_at >= ($"+params.length+"::date AT TIME ZONE 'Asia/Dhaka')";}
+  if(endDate){params.push(endDate);dateFilter+=" AND created_at < (($"+params.length+"::date + INTERVAL '1 day') AT TIME ZONE 'Asia/Dhaka')";}
   const salesCte="WITH sales AS (SELECT t.id AS transaction_id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at FROM transactions t WHERE t.status='processed' AND (EXISTS (SELECT 1 FROM hotspot_voucher_payments hp WHERE hp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers v WHERE v.transaction_id=t.id)) UNION SELECT a.transaction_id,a.channel,a.trx_id,a.sender_phone,a.amount,a.status,a.matched_username,a.created_at FROM hotspot_voucher_sales_archive a WHERE a.status='processed')";
   const [summary,rows]=await Promise.all([
-   db.query(salesCte+" SELECT COUNT(*)::int AS count,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount FROM sales"),
-   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales ORDER BY created_at DESC,transaction_id DESC LIMIT 500")
+   db.query(salesCte+" SELECT COUNT(*)::int AS count,COALESCE(SUM(amount),0)::numeric(12,2) AS total_amount FROM sales WHERE TRUE"+dateFilter,params),
+   db.query(salesCte+" SELECT channel,trx_id,sender_phone,amount,status,matched_username,created_at FROM sales WHERE TRUE"+dateFilter+" ORDER BY created_at DESC,transaction_id DESC LIMIT 500",params)
   ]);
-  const s=summary.rows?.[0]||{};
-  return res.json({success:true,count:Number(s.count||0),totalAmount:Number(s.total_amount||0),transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
+  const summaryRow=summary.rows?.[0]||{};
+  return res.json({success:true,count:Number(summaryRow.count||0),totalAmount:Number(summaryRow.total_amount||0),startDate:startDate||null,endDate:endDate||null,transactions:(rows.rows||[]).map(t=>({...t,amount:Number(t.amount||0)}))});
  }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
