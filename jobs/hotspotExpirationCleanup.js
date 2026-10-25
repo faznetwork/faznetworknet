@@ -178,9 +178,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
             /(?:^|\|)EXP(?::|=)\s*(?:PENDING|0)(?:\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
           const absoluteExpiry = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(expiryAt).replace("T", " ");
-          const absoluteComment = comment.replace(/(?:^|\|)EXP(?::|=)\s*(?:PENDING|0)(?=\||$)/i, function(match) {
-            return match.startsWith("|") ? "|EXP: " + absoluteExpiry : "EXP: " + absoluteExpiry;
-          });
+          const absoluteComment = "Exp: " + absoluteExpiry;
           await router.setHotspotUserComment(username, absoluteComment).catch(error =>
             logger.warn("[HOTSPOT EXPIRY] Could not persist absolute expiry comment for " + username + ": " + error.message));
         }
