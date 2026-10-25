@@ -1,6 +1,7 @@
 const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
 const notificationDispatcher=require("../services/notificationDispatcher");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
+const {deleteHotspotSubscriber}=require("../services/hotspotDeletionService");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function normalizeHotspotMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
@@ -734,22 +735,9 @@ async function voucherSales(req,res){
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function updateUser(req,res){try{const rawUsername=clean(req.body.username,100),username=normalizeHotspotMac(rawUsername),profile=clean(req.body.profile,100),comment=clean(req.body.comment,500);if(!rawUsername)return res.status(400).json({success:false,message:"Username is required."});if(!username)return res.status(400).json({success:false,code:"MAC_REQUIRED",message:"Hotspot credentials are MAC-based; username must be a normalized device MAC address."});if(!profile)return res.status(400).json({success:false,message:"Profile is required."});const result=await mikrotikService.updateHotspotUser(username,profile,comment,username,username);hotspotListCache.expiresAt=0;return res.json({success:true,message:"Hotspot user updated on MikroTik; username and password are the device MAC.",...result});}catch(e){return errorResponse(res,e);}}
 async function deleteHotspotUser({ username: usernameValue, database = db, router = mikrotikService, logger = console } = {}) {
- const requestedUsername=clean(usernameValue,100);
+ const requestedUsername=clean(usernameValue,160);
  if(!requestedUsername)throw hotspotError("HOTSPOT_USERNAME_REQUIRED",400,"Username is required.");
- const identityResult=await database.query("SELECT id,username,mac_address FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) OR LOWER(mac_address)=LOWER($1) ORDER BY id DESC LIMIT 1",[requestedUsername]);
- const identity=identityResult.rows?.[0]||null;
- const username=clean(identity?.username||requestedUsername,100);
- const macAddress=normalizeHotspotMac(identity?.mac_address||requestedUsername);
- let purge;
- try {
-  purge=await router.cleanupExpiredHotspotUser(username,macAddress);
-  if(purge?.alreadyAbsent)logger.info("[Hotspot delete] RouterOS user already absent; finishing PostgreSQL deletion for "+username);
- } catch(error) {
-  logger.error("[Hotspot delete] MikroTik hard purge failed; PostgreSQL record retained for retry for "+username+":",error?.message||error);
-  throw hotspotError("HOTSPOT_ROUTER_PURGE_FAILED",502,"MikroTik cleanup failed; the database record was retained so cleanup can be retried.");
- }
- const deletion=await database.query("DELETE FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1)",[username]);
- return {username,macAddress,deleted:true,deletedRows:deletion.rowCount??null,purge:purge||null};
+ return deleteHotspotSubscriber({identifier:requestedUsername,database,router,logger});
 }
 async function remove(req,res){try{const result=await deleteHotspotUser({username:req.body?.username});hotspotListCache.expiresAt=0;return res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 
