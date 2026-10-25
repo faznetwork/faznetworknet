@@ -11,7 +11,7 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   const subscriberController = read("controllers/hotspotUserController.js");
   const retention = read("jobs/hotspotExpirationCleanup.js");
   for (const [name, source] of Object.entries({ service, controller, subscriberController, retention })) {
-  assert.equal(migration.toUpperCase().includes("DELETE FROM"), false);
+    assert.equal(["DELETE FROM hotspot_vouchers","DELETE FROM hotspot_voucher_payments","DELETE FROM transactions"].some(sql => source.toLowerCase().includes(sql.toLowerCase())), false, name + " must preserve voucher and financial rows");
   }
   assert.ok(service.includes("SET status='deleted'"));
   assert.ok(service.includes("last_known_mac=COALESCE"));
