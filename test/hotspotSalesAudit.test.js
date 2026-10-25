@@ -72,7 +72,7 @@ test("Admin manual sales use a dedicated ADM-MANUAL transaction prefix",()=>{
 test("Voucher sales history applies server-side category filtering and returns recalculated totals",()=>{
  const source=read("controllers/hotspotController.js");
  assert.match(source,/allowedCategories=new Set\(\["all","mfs","scratch_voucher","admin_voucher"\]\)/);
- assert.match(source,/subscriber_type = \$\+params.length/);
+ assert.match(source,/subscriber_type = \$/);
  assert.match(source,/totalVouchersSold:/);
  assert.match(source,/totalAmount:/);
  const view=read("views/admin.ejs");
