@@ -266,7 +266,15 @@ async function list(req,res){
   if(["bkash","nagad","rocket","upay"].includes(gateway)){filterParams.push(gateway);conditions.push("t.channel=$"+filterParams.length);}
   else if(gateway==="pending")conditions.push("(t.status='unmatched' OR (t.status IN ('processed','PAID') AND t.used=false))");
   else if(gateway==="requests")conditions.push("(t.status='unmatched' AND t.used=false)");
-  const hotspotTransactionSql="(LOWER(TRIM(COALESCE(t.service_type,'')))='hotspot' OR UPPER(TRIM(COALESCE(t.trx_id,''))) LIKE 'SCRATCH-%' OR EXISTS (SELECT 1 FROM hotspot_voucher_payments hvp WHERE hvp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers hv WHERE LOWER(TRIM(COALESCE(hv.mac_address,'')))=LOWER(TRIM(COALESCE(t.matched_username,''))) OR LOWER(TRIM(COALESCE(hv.username,'')))=LOWER(TRIM(COALESCE(t.matched_username,''))) OR LOWER(TRIM(COALESCE(hv.password,'')))=LOWER(TRIM(COALESCE(t.matched_username,'')))) OR BTRIM(COALESCE(t.matched_username,'')) ~* '^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}
+  const hotspotTransactionSql="(LOWER(TRIM(COALESCE(t.service_type,'')))='hotspot' OR UPPER(TRIM(COALESCE(t.trx_id,''))) LIKE 'SCRATCH-%' OR EXISTS (SELECT 1 FROM hotspot_voucher_payments hvp WHERE hvp.transaction_id=t.id) OR EXISTS (SELECT 1 FROM hotspot_vouchers hv WHERE LOWER(TRIM(COALESCE(hv.mac_address,'')))=LOWER(TRIM(COALESCE(t.matched_username,''))) OR LOWER(TRIM(COALESCE(hv.username,'')))=LOWER(TRIM(COALESCE(t.matched_username,''))) OR LOWER(TRIM(COALESCE(hv.password,'')))=LOWER(TRIM(COALESCE(t.matched_username,'')))) OR BTRIM(COALESCE(t.matched_username,'')) ~* '^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$')";
+  const pppoeTransactionSql="(LOWER(TRIM(COALESCE(t.service_type,'')))='pppoe' OR EXISTS (SELECT 1 FROM pppoe_users pu WHERE LOWER(BTRIM(pu.username))=LOWER(BTRIM(t.matched_username))) OR EXISTS (SELECT 1 FROM customers cu WHERE LOWER(BTRIM(cu.username))=LOWER(BTRIM(t.matched_username))))";
+  if(serviceType==="hotspot")conditions.push(hotspotTransactionSql);
+  else if(serviceType==="pppoe")conditions.push(pppoeTransactionSql);
+  const where=conditions.length?" WHERE "+conditions.join(" AND "):"";
+  const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions t"+where,filterParams);
+  const total=Number(countQuery.rows[0]?.count||0);
+  const pageParams=filterParams.concat([limit,offset]);
+  const querySql="SELECT t.*, CASE WHEN "+hotspotTransactionSql+" THEN 'hotspot' WHEN "+pppoeTransactionSql+" THEN 'pppoe' ELSE 'unassigned' END AS customer_type FROM transactions t"+where+" ORDER BY t.created_at DESC, t.id DESC LIMIT $"+(filterParams.length+1)+" OFFSET $"+(filterParams.length+2);
   const r=await db.query(querySql,pageParams);
   const summary=await db.query("SELECT COALESCE(SUM(t.amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE t.status='unmatched')::int AS unmatched_count FROM transactions t"+where,filterParams);
   return res.json({success:true,gateway,service_type:serviceType,page,limit,total,total_pages:Math.max(1,Math.ceil(total/limit)),transactions:r.rows,summary:summary.rows[0]});
