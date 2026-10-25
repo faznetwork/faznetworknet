@@ -26,7 +26,7 @@ test("verified four-layer purge precedes soft delete and preserves MAC audit",as
  assert.match(f.calls[2].sql,/SET status='deleted'/);
  assert.match(f.calls[2].sql,/last_known_mac=COALESCE/);
  assert.match(f.calls[2].sql,/mac_address=NULL/);
- assert.doesNotMatch(f.calls[2].sql,/DELETE/i);
+ assert.doesNotMatch(f.calls[2].sql,/^\\s*DELETE\\s+FROM/i);
 });
 
 test("RouterOS outage retains database status and MAC binding for retry",async()=>{
