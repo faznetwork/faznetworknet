@@ -84,7 +84,10 @@ test("All Payments renders the Force Provision action and admin-only route is wi
  const routes=fs.readFileSync(path.join(__dirname,"../routes/paymentRoutes.js"),"utf8");
  const service=fs.readFileSync(path.join(__dirname,"../services/mikrotikService.js"),"utf8");
  assert.match(admin,/data-force-provision-trx/);
- assert.match(admin,/Force Provision Hotspot/);
+ assert.match(admin,/Generate Hotspot Voucher/);
+ assert.match(admin,/Generate &amp; Issue Voucher/);
+ assert.match(admin,/const canForceProvision = status === 'unmatched'/);
+ assert.doesNotMatch(admin,/id="forceProvisionMac"/);
  assert.match(admin,/\/api\/payments\/force-provision/);
  assert.match(routes,/router\.post\("\/payments\/force-provision",requireAdmin,requireRole\(\["super_admin","admin"\]\),controller\.forceProvisionHotspot\)/);
  assert.match(service,/async forceProvisionHotspotUser\(data\)/);
