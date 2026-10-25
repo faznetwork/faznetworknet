@@ -9,7 +9,7 @@ const formStart = source.indexOf('<form id="addHotspotUserForm"');
 const formEnd = source.indexOf("</form>", formStart);
 const formMarkup = source.slice(formStart, formEnd);
 const scriptStart = source.indexOf("const form = document.getElementById('addHotspotUserForm');");
-const scriptEnd = source.indexOf("\\n            await loadOptions();", source.indexOf("form.addEventListener(\'submit\', async event =>", scriptStart));
+const scriptEnd = source.indexOf("\n            await loadOptions();", source.indexOf("form.addEventListener(\'submit\', async event =>", scriptStart));
 const script = source.slice(scriptStart, scriptEnd);
 
 function normalizePhoneDigits(value) {
