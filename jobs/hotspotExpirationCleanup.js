@@ -106,7 +106,8 @@ function createHotspotExpirationCleanup(deps = {}) {
       // Atomically claim due alerts so multiple application instances cannot send the same voucher alert twice.
       try {
         const dueAlerts = await database.query(
-          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at"
+          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC LIMIT $1 FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at",
+          [MAX_EXPIRY_BATCH_SIZE]
         );
         await Promise.all((dueAlerts.rows||[]).map(async voucher=>{
           const phone=String(voucher.phone||'').trim();
@@ -121,7 +122,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,last_known_mac " +
         "FROM hotspot_vouchers WHERE (status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed'))) " +
         "AND (id > $1 OR status='expired' OR expires_at <= NOW()) " +
-        "ORDER BY CASE WHEN status='expired' THEN 0 WHEN expires_at <= NOW() THEN 1 ELSE 2 END, expires_at ASC NULLS LAST, id ASC LIMIT $2",
+        "ORDER BY CASE WHEN status IN ('active','unused','pending_claim') AND expires_at <= NOW() THEN 0 WHEN status='expired' THEN 1 ELSE 2 END, expires_at ASC NULLS LAST, id ASC LIMIT $2",
         [scanCursor, MAX_EXPIRY_BATCH_SIZE]
       );
 
@@ -142,8 +143,8 @@ function createHotspotExpirationCleanup(deps = {}) {
       const candidates = Array.isArray(result.rows) ? result.rows : [];
       const batchRows = candidates.slice(0, MAX_EXPIRY_BATCH_SIZE);
       batchContinuation = candidates.length >= MAX_EXPIRY_BATCH_SIZE;
-      batchContinuationUrgent = batchRows.some(voucher => voucher.status === "expired" ||
-        (voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime()));
+      batchContinuationUrgent = batchRows.some(voucher => voucher.status !== "expired" &&
+        voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime());
       const rotatingRows = batchRows.filter(voucher => voucher.status !== "expired" &&
         !(voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime()));
       if (rotatingRows.length) scanCursor = Math.max(scanCursor, ...rotatingRows.map(voucher => Number(voucher.id) || 0));
