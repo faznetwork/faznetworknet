@@ -20,7 +20,7 @@ test("Hotspot retention archives vouchers after verified RouterOS cleanup and ne
  assert.doesNotMatch(source,/profile='expired_profile'/);
  assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\\(\\) - INTERVAL '395 days'/);
  assert.match(source,/UPDATE hotspot_vouchers SET status='archived'/);
- assert.match(source,/last_known_mac=COALESCE\\(NULLIF\\(last_known_mac,''\\),NULLIF\\(mac_address,''\\)\\)/);
+ assert.ok(source.includes("last_known_mac=COALESCE(NULLIF(last_known_mac,''),NULLIF(mac_address,''))"));
  assert.doesNotMatch(source,/DELETE\\s+FROM\\s+(?:hotspot_vouchers|hotspot_voucher_payments|transactions)/i);
 });
 test("Scratch card redemption records a durable scratch_card sale",()=>{
