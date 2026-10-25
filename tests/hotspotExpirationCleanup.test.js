@@ -310,7 +310,7 @@ test("expired cleanup delegates to hard purge and preserves transaction audit hi
   const purges = [];
   const router = {
     async getHotspotExpirationSnapshot() { return { users: [], schedulerNames: [] }; },
-    async cleanupExpiredHotspotUser(username, mac) { purges.push({ username, mac }); return { usersRemoved: 1, sessionsRemoved: 1, cookiesRemoved: 1 }; }
+    async cleanupExpiredHotspotUser(username, mac) { purges.push({ username, mac }); return { verified: true, usersRemoved: 1, sessionsRemoved: 1, cookiesRemoved: 1 }; }
   };
   const run = createHotspotExpirationCleanup({ db: database, mikrotikService: router, logger: quietLogger(), now: () => new Date("2026-10-11T12:00:00Z") });
   const result = await run();
