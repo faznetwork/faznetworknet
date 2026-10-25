@@ -87,7 +87,7 @@ test("Archive delegates to verified canonical deletion and retains financial his
     await controller.archive({ params: { id: "63" } }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.success, true);
-    assert.match(res.body.message, /financial history/i);
+    assert.match(res.body.message, /payment ledger/i);
     assert.equal(res.body.voucher.status, "deleted");
   }, async sql => {
     if (sql.startsWith("SELECT id,username,mac_address,last_known_mac,status FROM hotspot_vouchers")) {
