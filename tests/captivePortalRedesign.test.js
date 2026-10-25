@@ -25,14 +25,12 @@ test("RouterOS CHAP/PAP submission helper is retained for the verified credentia
  assert.doesNotMatch(script,/submitMemberLogin|member_username|member_password/);
 });
 
-test("voucher login uses a single PIN field without remember-member legacy controls",()=>{
+test("voucher inputs require username and password without remember-member legacy controls",()=>{
  assert.match(portal,/id="voucher_pin"/);
- assert.doesNotMatch(portal,/id="voucher_password"/);
- assert.match(script,/voucher_code:pin/);
- assert.match(script,/voucher_password:pin/);
- assert.match(script,/username:pin,password:pin/);
- assert.match(portal,/autocomplete="one-time-code"/);
- assert.ok(portal.includes('pattern="[0-9]{6,8}"'));
+ assert.match(portal,/id="voucher_password"/);
+ assert.match(script,/voucher_code:username/);
+ assert.match(portal,/autocomplete="username"/);
+ assert.match(portal,/autocomplete="current-password"/);
  assert.doesNotMatch(portal,/remember-voucher|remember-member|id="router-error"/);
  assert.match(portal,/\$\(link-login-only\)/);
  assert.match(portal,/\$\(link-orig\)/);

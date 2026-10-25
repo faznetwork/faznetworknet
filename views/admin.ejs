@@ -3175,14 +3175,15 @@
                   <div class="hs-create-form-card">
                     <div class="hs-create-card-head">
                       <h5 class="fw-bold mb-1">Customer &amp; Package</h5>
-                      <p class="small text-muted mb-0">Create a voucher PIN for the selected package. Validity starts on first successful login.</p>
+                      <p class="small text-muted mb-0">Create a direct subscriber. First Login stages it; Pre-Assigned provisions immediately.</p>
                     </div>
                     <div class="hs-create-card-body">
                       <form id="addHotspotUserForm" novalidate>
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">1</span>
                           <div class="hs-create-step-content">
-                            <label class="hs-create-label" for="hsCustomerName">Customer Name <span class="text-muted fw-normal">(Optional)</span></label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Customer name">
+                            <label class="hs-create-label d-block">Activation Type</label><div class="d-flex flex-wrap gap-3 mb-3"><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="first_login" checked> On First Login</label><label class="form-check-label"><input class="form-check-input me-1" type="radio" name="activation_type" value="preassigned"> Pre-Assigned (Instant MAC Bind)</label></div>
+                            <label class="hs-create-label" for="hsCustomerName">Customer Name</label><input id="hsCustomerName" name="customer_name" type="text" class="hs-create-input mb-3" maxlength="160" autocomplete="name" placeholder="Md. Rahim" required>
                             <label class="hs-create-label" for="hsUsername">Customer Phone Number <span class="text-danger">*</span></label>
                             <p class="hs-create-help">Use the 11-digit Bangladesh phone number (01XXXXXXXXX).</p>
                             <div class="hs-create-input-shell">
@@ -3190,9 +3191,7 @@
                               <input id="hsUsername" name="phone" type="tel" class="hs-create-input" required minlength="11" maxlength="11" pattern="01[0-9]{9}" autocomplete="tel" inputmode="numeric" placeholder="01712345678" aria-describedby="hsPhoneFeedback">
                               <span id="hsPhoneValid" class="hs-create-valid-mark" aria-hidden="true">✓</span>
                             </div>
-                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div>
-                            <label class="hs-create-label mt-3" for="hsPassword">Voucher PIN <span class="text-muted fw-normal">(Optional; auto-generated if blank)</span></label>
-                            <input id="hsPassword" name="voucher_pin" type="text" class="hs-create-input mb-2" maxlength="8" minlength="6" pattern="[0-9]{6,8}" inputmode="numeric" autocomplete="off" placeholder="6-digit PIN or leave blank">
+                            <div id="hsPhoneFeedback" class="hs-create-feedback" aria-live="polite">Enter a valid 11-digit Bangladeshi mobile number.</div><label class="hs-create-label mt-3" for="hsDeviceMac">Device MAC Address <span class="text-muted fw-normal">(Required for Pre-Assigned)</span></label><input id="hsDeviceMac" name="mac" type="text" class="hs-create-input mb-3 font-monospace" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off"><label class="hs-create-label" for="hsPassword">Password <span class="text-muted fw-normal">(Defaults to phone)</span></label><input id="hsPassword" name="password" type="text" class="hs-create-input mb-2" maxlength="128" autocomplete="new-password" placeholder="Assigned automatically from device MAC">
                           </div>
                         </div>
 
@@ -3212,6 +3211,7 @@
                           </div>
                         </div>
 
+                        <div class="hs-create-step"><span class="hs-create-step-number" aria-hidden="true">+</span><div class="hs-create-step-content"><label class="hs-create-label" for="hsCustomExpiry">Custom Expiry Date &amp; Time <span class="text-muted fw-normal">(Optional override)</span></label><input id="hsCustomExpiry" name="expires_at" type="datetime-local" class="hs-create-input"><p class="hs-create-help">Used for Pre-Assigned accounts; first-login vouchers start their validity at activation.</p></div></div>
                         <div class="hs-create-step">
                           <span class="hs-create-step-number" aria-hidden="true">3</span>
                           <div class="hs-create-step-content">
@@ -3227,14 +3227,24 @@
                           </div>
                         </div>
 
-                        <select id="hsServer" name="server" hidden><option value="all">All Hotspot servers</option></select>
+                        <div class="hs-create-step">
+                          <span class="hs-create-step-number" aria-hidden="true">4</span>
+                          <div class="hs-create-step-content">
+                            <label class="hs-create-label" for="hsServer">Hotspot Server <span class="text-muted fw-normal">(Optional)</span></label>
+                            <select id="hsServer" name="server" class="hs-create-select">
+                              <option value="all">All Hotspot servers (default)</option>
+                            </select>
+                            <p class="hs-create-help mt-2 mb-0">Choose a specific server only when required; otherwise keep the default.</p>
+                          </div>
+                        </div>
+
                         <div class="mb-3"><label class="hs-create-label" for="hsCustomerNote">Optional Note / Address</label><textarea id="hsCustomerNote" name="note" class="form-control" rows="2" maxlength="1000" placeholder="Internal reference only"></textarea></div>
                         <div class="hs-create-actions">
                           <button type="button" id="hsClearForm" class="btn btn-outline-secondary hs-create-reset">
                             <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Reset
                           </button>
                           <button type="submit" id="hsSaveButton" class="btn btn-success hs-create-save" disabled>
-                            <i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Voucher
+                            <i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Pending Account
                           </button>
                         </div>
                         <div id="hotspotCreateResult" class="mt-3" role="status" aria-live="polite"></div>
@@ -3308,9 +3318,9 @@
             const phoneFeedback = document.getElementById('hsPhoneFeedback');
             const profile = document.getElementById('hsProfile');
             const server = document.getElementById('hsServer');
-            const macInput = null;
+            const macInput = document.getElementById('hsDeviceMac');
             const passwordInput = document.getElementById('hsPassword');
-            const expiryInput = null;
+            const expiryInput = document.getElementById('hsCustomExpiry');
             const activationInputs = [...form.querySelectorAll('input[name="activation_type"]')];
             const activationMode = () => activationInputs.find(input => input.checked)?.value || 'first_login';
             if (expiryInput) expiryInput.disabled = true;
@@ -3322,15 +3332,10 @@
             let profileRecords = [];
             let profileReady = false;
 
-            const asciiDigits = value => {
-                const raw = String(value ?? '').trim()
-                    .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
-                    .replace(/[^0-9]/g, '');
-                const normalized = raw.startsWith('880') && raw.length === 13
-                    ? '0' + raw.slice(3)
-                    : raw;
-                return normalized.slice(0, 11);
-            };
+            const asciiDigits = value => String(value || '')
+                .replace(/[০-৯]/g, ch => String('০১২৩৪৫৬৭৮৯'.indexOf(ch)))
+                .replace(/[^0-9]/g, '')
+                .slice(0, 11);
 
             const validityText = p => {
                 if (!p) return 'Select a profile';
@@ -3381,22 +3386,24 @@
             const updatePreview = () => {
                 const p = selectedProfile();
                 const validity = validityText(p);
+                const selectedServer = server.value || 'all';
                 if (validityLabel) validityLabel.textContent = p ? validity + ' — starts at first captive login' : 'Select a profile';
-                putText('hsPreviewUsername', String(passwordInput?.value || '').trim() || 'Auto-generated 6-digit voucher PIN');
-                putText('hsPreviewPassword', 'Voucher PIN');
+                const preassigned = activationMode() === 'preassigned';
+                putText('hsPreviewUsername', preassigned ? (macInput.value.trim().toUpperCase() || 'Enter device MAC') : 'Assigned at first login (Device MAC)');
+                putText('hsPreviewPassword', preassigned ? (macInput.value.trim().toUpperCase() || 'Same as device MAC') : 'Same as device MAC after first login');
                 putText('hsPreviewProfile', p ? String(p.name || '—') : '—');
                 putText('hsPreviewPrice', p ? priceText(p) : '—');
                 putText('hsPreviewValidity', p ? validity : '—');
-                putText('hsPreviewServer', 'All Hotspot servers (default)');
-                putText('hsPreviewExpiry', 'Starts at first login (continuous clock)');
-                putText('hsPreviewComment', 'Voucher PIN; first-login activation');
+                putText('hsPreviewServer', selectedServer === 'all' ? 'All Hotspot servers (default)' : selectedServer);
+                putText('hsPreviewExpiry', preassigned && expiryInput.value ? expiryInput.value.replace('T',' ') : preassigned ? 'Package validity starts now' : 'Starts at first login (Continuous clock)');
+                putText('hsPreviewComment', preassigned ? 'Exp: ' + (expiryInput.value ? expiryInput.value.replace('T',' ') + ':00' : 'calculated from package') : 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
             };
 
             const updateButton = () => {
                 const validPhone = updatePhoneFeedback();
-                const pin = String(passwordInput?.value || '').trim();
-                const validPin = !pin || /^\\d{6,8}$/.test(pin);
-                button.disabled = !(validPhone && validPin && profile.value && profileReady);
+                const preassigned = activationMode() === 'preassigned';
+                const validMac = !preassigned || /^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test((macInput.value || '').trim().replace(/-/g, ':'));
+                button.disabled = !(validPhone && profile.value && profileReady && validMac);
             };
 
             const toast = message => {
@@ -3420,8 +3427,8 @@
             };
 
             phone.addEventListener('input', () => { updatePreview(); updateButton(); });
-            [passwordInput].forEach(el => el?.addEventListener('input',()=>{updatePreview();updateButton();}));
-            
+            [macInput,passwordInput,expiryInput].forEach(el => el?.addEventListener('input',()=>{updatePreview();updateButton();}));
+            activationInputs.forEach(el=>el.addEventListener('change',()=>{macInput.required=activationMode()==='preassigned';expiryInput.disabled=activationMode()!=='preassigned';updatePreview();updateButton();}));
             profile.addEventListener('change', () => { updatePreview(); updateButton(); });
             server.addEventListener('change', updatePreview);
 
@@ -3483,7 +3490,7 @@
                 resetButton.addEventListener('click', () => {
                     form.reset();
                     profile.value = '';
-                    passwordInput.value='';
+                    macInput.value='';passwordInput.value='';expiryInput.value='';activationInputs.forEach(el=>el.checked=el.value==='first_login');macInput.required=false;expiryInput.disabled=true;
                     server.value = 'all';
                     server.dataset.selected = 'all';
                     if (result) result.innerHTML = '';
@@ -3495,8 +3502,8 @@
 
             form.addEventListener('submit', async event => {
                 event.preventDefault();
-                if (!updatePhoneFeedback()) {
-                    phone.focus();
+                if (!updatePhoneFeedback() || !document.getElementById('hsCustomerName')?.value.trim()) {
+                    if (!document.getElementById('hsCustomerName')?.value.trim()) document.getElementById('hsCustomerName')?.focus(); else phone.focus();
                     updateButton();
                     return;
                 }
@@ -3517,40 +3524,27 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             phone: value,
-                            voucher_pin: passwordInput.value.trim(),
+                            activation_type: activationMode(),
+                            mac: macInput.value.trim(),
+                            password: passwordInput.value.trim(),
+                            expires_at: expiryInput.value || '',
                             customer_name: document.getElementById('hsCustomerName')?.value.trim() || '',
                             note: document.getElementById('hsCustomerNote')?.value.trim() || '',
                             profile_id: chosen.profile_id || chosen.name,
                             server: server.value || 'all'
                         })
                     });
-                    if (!response || response.success !== true) {
-                        const apiError = new Error(response?.message || 'The pending account was not saved.');
-                        apiError.code = response?.code || response?.error?.code || null;
-                        throw apiError;
-                    }
-                    const successMessage = response.sms?.success ? 'Voucher created and SMS sent to ' + value + '.' : 'Voucher created for ' + value + '; SMS status: ' + (response.sms?.status || 'unknown') + '. Check SMS Alerts if needed.';
+                    if (!response || response.success !== true) throw new Error(response?.message || 'The pending account was not saved.');
+                    const successMessage = response.instant_provisioned ? 'Pre-assigned Hotspot user provisioned immediately for ' + value + '.' : 'First-login Hotspot package saved for ' + value + '. MAC binding and countdown start on captive-portal activation.';
                     toast(successMessage);
                     if (result) result.innerHTML = '<div class="alert alert-success mb-0">' + escapeHtml(successMessage) + '</div>';
-                    const pin = response.user?.voucher_pin || response.user?.username || '';
-                    const modalId = 'hotspotVoucherSuccessModal';
-                    document.getElementById(modalId)?.remove();
-                    const modalHtml = '<div class="modal fade" id="'+modalId+'" tabindex="-1" aria-labelledby="hotspotVoucherSuccessTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="hotspotVoucherSuccessTitle">Voucher Created</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><p>Share this voucher PIN with the customer.</p><div class="input-group"><input id="hotspotVoucherSuccessPin" class="form-control font-monospace fs-4 text-center" readonly value="'+escapeHtml(pin)+'"><button class="btn btn-outline-success" type="button" id="hotspotVoucherCopyPin">Copy PIN</button></div><p class="small mt-3 mb-0">SMS: '+escapeHtml(response.sms?.status || 'unknown')+'</p></div></div></div></div>';
-                    document.body.insertAdjacentHTML('beforeend',modalHtml);
-                    document.getElementById('hotspotVoucherCopyPin')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(pin);document.getElementById('hotspotVoucherCopyPin').textContent='Copied';}catch(error){console.error('[Voucher PIN copy] Clipboard failed',error);}});
-                    if (window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).show();
                     if (typeof window.refreshHotspotVoucherStats === 'function') {
                         Promise.resolve(window.refreshHotspotVoucherStats()).catch(() => {});
                     }
                 } catch (error) {
-                    console.error('[Hotspot user creation] API request failed', {
-                        code: error?.code || null,
-                        message: error?.message || String(error)
-                    });
-                    const codePrefix = error?.code ? '[' + String(error.code) + '] ' : '';
-                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(codePrefix + (error?.message || 'Unable to save pending account.')) + '</div>';
+                    if (result) result.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error?.message || 'Unable to save pending account.') + '</div>';
                 } finally {
-                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Create Voucher';
+                    button.innerHTML = '<i class="bi bi-person-check me-2" aria-hidden="true"></i>Save Direct Subscriber';
                     updateButton();
                 }
             });

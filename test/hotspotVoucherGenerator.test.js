@@ -8,7 +8,7 @@ function loadController(){
  const state={queries:[],creates:[],removes:[],vouchers:[],profileReads:0};
  const db={
   async query(sql,params=[]){state.queries.push({sql,params});return {rows:[]};},
-  async withTransaction(fn){return fn({async query(sql,params=[]){state.queries.push({sql,params});if(/INSERT INTO hotspot_vouchers/i.test(sql)){const row={id:state.vouchers.length+1,username:params[0],password:params[0],profile:params[1],validity:params[2],price:params[3],status:"unused"};state.vouchers.push(row);return {rows:[row]};}return {rows:[]};}});}
+  async withTransaction(fn){return fn({async query(sql,params=[]){state.queries.push({sql,params});if(/INSERT INTO hotspot_vouchers/i.test(sql)){const row={id:state.vouchers.length+1,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused"};state.vouchers.push(row);return {rows:[row]};}return {rows:[]};}});}
  };
  const mikrotik={async getHotspotProfiles(){state.profileReads++;return [{name:"Gold",sessionTimeout:"1d"}];},async getHotspotUsers(){return [];},async createHotspotUser(user){state.creates.push(user);},async removeHotspotUser(username){state.removes.push(username);}};
  delete require.cache[controllerPath];
@@ -24,16 +24,9 @@ test("generates scratch vouchers in the DB ledger without provisioning RouterOS 
  assert.ok(state.queries.every(q=>/scratch_voucher|SELECT value FROM app_settings/.test(q.sql)));
  assert.ok(state.vouchers.every(v=>v.status==="unused"&&v.profile==="Gold"&&v.validity==="1d"));
  assert.equal(new Set(state.vouchers.map(v=>v.username)).size,3);
- assert.ok(state.vouchers.every(v=>/^\d{8}$/.test(v.username)&&v.password===v.username));
  const insertQuery=state.queries.find(q=>/INSERT INTO hotspot_vouchers/i.test(q.sql));
  assert.ok(insertQuery);assert.match(insertQuery.sql,/ON CONFLICT DO NOTHING RETURNING/i);
  assert.doesNotMatch(insertQuery.sql,/ON CONFLICT\s*\(username\)/i);
-});
-test("ignores legacy prefix and length inputs while enforcing numeric PIN identity",async()=>{
- const {controller,state}=loadController(),res=responseRecorder();
- await controller.generate({body:{quantity:2,profile:"Gold",price:10,userPrefix:"LEGACY-",charLength:16}},res);
- assert.equal(res.statusCode,201);
- assert.ok(state.vouchers.every(v=>/^\d{8}$/.test(v.username)&&v.password===v.username));
 });
 test("rejects invalid quantities before database or RouterOS work",async()=>{
  const {controller,state}=loadController(),res=responseRecorder();
