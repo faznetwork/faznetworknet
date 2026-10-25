@@ -21,7 +21,11 @@ function normalizeDate(value, now = new Date()) {
   if (value instanceof Date) return dhakaDate(value);
   if (value === null || value === undefined || String(value).trim() === "") return dhakaDate(now);
   const raw = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw.split("T")[0];
+  if (DATE_ONLY.test(raw)) return raw;
+  // PostgreSQL drivers may return an expiry as a Date or ISO timestamp. Convert
+  // instants to the ISP billing timezone before passing a date-only value onward.
+  const timestamp = new Date(raw);
+  if (!Number.isNaN(timestamp.getTime())) return dhakaDate(timestamp);
   return raw;
 }
 
