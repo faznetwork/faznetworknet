@@ -280,6 +280,7 @@ ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS first_login_at TIMESTAMPTZ
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS expired_at TIMESTAMPTZ;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32);
+ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS mac_audit_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_status VARCHAR(20) NOT NULL DEFAULT 'not_required';
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS cleanup_error TEXT;
