@@ -26,24 +26,25 @@ async function runList(serviceType){
  }finally{db.query=originalQuery;}
 }
 
-test("PPPoE payment API filter applies to count, rows and summary",async()=>{
+test("PPPoE filter includes service type and linked PPPoE accounts in count, rows and summary",async()=>{
  const {res,calls}=await runList("pppoe");
  assert.equal(res.statusCode,200);
  assert.equal(res.body.service_type,"pppoe");
- assert.match(calls[0].sql,/COALESCE\(t\.service_type,''\).*\$1/);
- assert.deepEqual(calls[0].params,["pppoe"]);
- assert.match(calls[1].sql,/COALESCE\(t\.service_type,''\).*\$1/);
- assert.deepEqual(calls[1].params,["pppoe",50,0]);
- assert.match(calls[2].sql,/COALESCE\(t\.service_type,''\).*\$1/);
- assert.deepEqual(calls[2].params,["pppoe"]);
+ assert.match(calls[0].sql,/pppoe_users/);
+ assert.deepEqual(calls[0].params,[]);
+ assert.match(calls[1].sql,/pppoe_users/);
+ assert.deepEqual(calls[1].params,[50,0]);
+ assert.match(calls[2].sql,/pppoe_users/);
+ assert.deepEqual(calls[2].params,[]);
 });
 
-test("Hotspot payment API filter applies only the Hotspot service type",async()=>{
+test("Hotspot filter includes explicit type, scratch transactions and voucher-linked MAC/PIN records",async()=>{
  const {res,calls}=await runList("hotspot");
  assert.equal(res.statusCode,200);
  assert.equal(res.body.service_type,"hotspot");
- assert.ok(calls.every(call=>call.sql.includes("service_type")));
- assert.ok(calls.every(call=>call.params[0]==="hotspot"));
+ assert.ok(calls.every(call=>call.sql.includes("hotspot_voucher_payments")));
+ assert.ok(calls.every(call=>call.sql.includes("hotspot_vouchers")));
+ assert.ok(calls.every(call=>call.params.length===0));
 });
 
 test("All Payments remains unfiltered and keeps existing pagination",async()=>{
@@ -78,4 +79,31 @@ test("Payments submenu and SPA route preserve dedicated service filters without 
  assert.match(admin,/loadPaymentsSection\(gatewayType, titleKey, serviceType = ''\)/);
  assert.match(admin,/serviceQuery = currentPaymentServiceType \? '&service_type='/);
  assert.match(admin,/callIfAvailable\('loadPaymentsSection', \[r\.filter, r\.title, r\.serviceType \|\| ''\]\)/);
+});
+
+test("Customer type resolution never emits Unknown and prioritizes Hotspot evidence",async()=>{
+ const {calls}=await runList(undefined);
+ const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
+ assert.match(sql,/COALESCE\\(t\\.service_type,''\\)='hotspot'/);
+ assert.match(sql,/SCRATCH-%/);
+ assert.match(sql,/hotspot_voucher_payments hvp WHERE hvp\\.transaction_id=t\\.id/);
+ assert.match(sql,/hotspot_vouchers hv WHERE/);
+ assert.match(sql,/hv\\.mac_address/);
+ assert.match(sql,/hv\\.password/);
+ assert.match(sql,/THEN 'unassigned' END AS customer_type/);
+ assert.doesNotMatch(sql,/THEN 'unknown'/);
+});
+
+test("PPPoE filter includes pppoe_users/customers matches when service_type is absent",async()=>{
+ const {calls}=await runList("pppoe");
+ const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
+ assert.match(sql,/pppoe_users/);
+ assert.match(sql,/customers cu/);
+});
+
+test("Customer type badge has dedicated Hotspot color and safely falls back to Unassigned",()=>{
+ const admin=fs.readFileSync(path.join(__dirname,"../views/admin.ejs"),"utf8");
+ assert.match(admin,/requestedType.*includes\\(requestedType\\).*'unassigned'/);
+ assert.match(admin,/hotspot: 'bg-success'/);
+ assert.doesNotMatch(admin,/classes\\.unknown/);
 });
