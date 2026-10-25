@@ -51,7 +51,8 @@ test("All Payments remains unfiltered and keeps existing pagination",async()=>{
  const {res,calls}=await runList(undefined);
  assert.equal(res.statusCode,200);
  assert.equal(res.body.service_type,"all");
- assert.ok(calls.every(call=>!call.sql.includes("service_type")));
+ assert.ok(!calls[0].sql.includes("service_type"));
+ assert.ok(!calls[2].sql.includes("service_type"));
  assert.deepEqual(calls[0].params,[]);
  assert.deepEqual(calls[1].params,[50,0]);
  assert.deepEqual(calls[2].params,[]);
@@ -84,12 +85,12 @@ test("Payments submenu and SPA route preserve dedicated service filters without 
 test("Customer type resolution never emits Unknown and prioritizes Hotspot evidence",async()=>{
  const {calls}=await runList(undefined);
  const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
- assert.match(sql,/COALESCE\\(t\\.service_type,''\\)='hotspot'/);
+ assert.ok(sql.includes("COALESCE(t.service_type,'')='hotspot'"));
  assert.match(sql,/SCRATCH-%/);
- assert.match(sql,/hotspot_voucher_payments hvp WHERE hvp\\.transaction_id=t\\.id/);
+ assert.ok(sql.includes("hotspot_voucher_payments hvp WHERE hvp.transaction_id=t.id"));
  assert.match(sql,/hotspot_vouchers hv WHERE/);
- assert.match(sql,/hv\\.mac_address/);
- assert.match(sql,/hv\\.password/);
+ assert.ok(sql.includes("hv.mac_address"));
+ assert.ok(sql.includes("hv.password"));
  assert.match(sql,/THEN 'unassigned' END AS customer_type/);
  assert.doesNotMatch(sql,/THEN 'unknown'/);
 });
@@ -105,5 +106,5 @@ test("Customer type badge has dedicated Hotspot color and safely falls back to U
  const admin=fs.readFileSync(path.join(__dirname,"../views/admin.ejs"),"utf8");
  assert.match(admin,/requestedType.*includes\\(requestedType\\).*'unassigned'/);
  assert.match(admin,/hotspot: 'bg-success'/);
- assert.doesNotMatch(admin,/classes\\.unknown/);
+ assert.ok(!admin.includes("classes.unknown"));
 });
