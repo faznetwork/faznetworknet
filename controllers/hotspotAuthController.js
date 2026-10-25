@@ -229,7 +229,7 @@ async function claimVoucher(req,res){
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-mac:"+mac]);
-      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
+      const result=await client.query("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone,subscriber_type,activation_type FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1::text AND password=$2::text AND COALESCE(subscriber_type,'legacy') <> 'direct_subscriber' ORDER BY id DESC LIMIT 2 FOR UPDATE",[pin,password]);
       if(result.rows.length!==1)throw makeError("VOUCHER_INVALID",400,"Voucher PIN or password is incorrect.");
       const row=result.rows[0],status=String(row.status||"").toLowerCase();
       if(!["unused","pending_claim","active"].includes(status))throw makeError("VOUCHER_ALREADY_USED",409,"This voucher has already been used or expired.");
@@ -246,7 +246,7 @@ async function claimVoucher(req,res){
         await client.query("UPDATE hotspot_vouchers SET mac_address=NULL,status=CASE WHEN LOWER(COALESCE(status,''))='active' THEN 'expired' ELSE status END,expired_at=CASE WHEN LOWER(COALESCE(status,''))='active' THEN COALESCE(expired_at,expires_at,NOW()) ELSE expired_at END,updated_at=NOW() WHERE id=$1",[conflict.id]);
       }
       await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,updated_at=NOW() WHERE id=$2::bigint",[mac,row.id]);
-      return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),firstUse:status==="unused"||status==="pending_claim"};
+      return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),subscriberType:String(row.subscriber_type||"legacy"),firstUse:status==="unused"||status==="pending_claim"};
     });
     let statusCode=200;
     const responseProxy={
@@ -254,10 +254,12 @@ async function claimVoucher(req,res){
       async json(body){
         if(body?.success&&statusCode<400&&claimed.firstUse){
           try{
-            const trxId="SCRATCH-"+claimed.id+"-"+Date.now();
-            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot','scratch_card',NOW(),$6) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,"Scratch-card redemption for voucher "+claimed.id,"scratch-card:"+claimed.id]);
-            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'scratch_card') ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile]);
-          }catch(auditError){console.error("[Scratch voucher sales audit] Failed to record sale:",auditError.message);body.sale_audit_warning=true;}
+            const saleType=claimed.subscriberType==="admin_voucher"?"manual":"scratch_card";
+            const auditLabel=saleType==="manual"?"Admin manual voucher redemption":"Scratch-card redemption";
+            const trxId=(saleType==="manual"?"ADMIN-":"SCRATCH-")+claimed.id+"-"+Date.now();
+            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot',$6,NOW(),$7) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,auditLabel+" for voucher "+claimed.id,saleType+":"+claimed.id]);
+            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,$6::text) ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile,saleType]);
+          }catch(auditError){console.error("[Hotspot voucher sales audit] Failed to record sale:",JSON.stringify({voucherId:claimed.id,subscriberType:claimed.subscriberType,error:auditError.message}));body.sale_audit_warning=true;}
         }
         return res.status(statusCode).json(body);
       }
