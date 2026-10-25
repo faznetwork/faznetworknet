@@ -236,6 +236,7 @@ async function activateCredentials(req,res){
       const found=await client.query("SELECT * FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1::text) AND password=$2::text AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','active') LIMIT 2 FOR UPDATE",[username,password]);
       if(found.rows.length!==1)throw makeError("INVALID_CREDENTIALS",401,"Username or password is incorrect.");
       const row=found.rows[0],status=String(row.status||"").toLowerCase(),bound=normalizeMac(row.mac_address);
+      if(status==="pending_claim"&&String(row.cleanup_error||"")==="activation_in_progress")throw makeError("ACTIVATION_IN_PROGRESS",409,"This account is already being activated. Wait a moment and retry.");
       if(bound&&bound!==mac)throw makeError("MAC_ALREADY_BOUND",403,"This account is already bound to another device.");
       if(status==="active"){
         const expiry=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
@@ -247,7 +248,7 @@ async function activateCredentials(req,res){
       const profileMeta=metadata[String(profile.name||"")]||{};
       const packageInfo=getPackageDuration(row,profileMeta,profile);
       if(!packageInfo.duration&&!packageInfo.quota)throw makeError("PROFILE_INVALID",409,"This package has no valid time duration or data quota.");
-      const claim=await client.query("UPDATE hotspot_vouchers SET mac_address=$2::text,updated_at=NOW() WHERE id=$1::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($2::text)) AND status='pending_claim' RETURNING *",[row.id,mac]);
+      const claim=await client.query("UPDATE hotspot_vouchers SET mac_address=$2::text,cleanup_error='activation_in_progress',updated_at=NOW() WHERE id=$1::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($2::text)) AND status='pending_claim' AND COALESCE(cleanup_error,'')<>'activation_in_progress' RETURNING *",[row.id,mac]);
       if(!claim.rows?.length)throw makeError("MAC_RESERVATION_FAILED",409,"Could not reserve this account for the current device. Retry from the same device.");
       return {row:claim.rows[0],firstActivation:true,profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,duration:packageInfo.duration,firstLoginAt:new Date(),expiresAt:packageInfo.duration?new Date(Date.now()+packageInfo.duration):null};
     });
@@ -255,7 +256,7 @@ async function activateCredentials(req,res){
     if(reserved.firstActivation){
       await mikrotikService.rechargeHotspotUser({username:row.username,password:row.password,profile,validity:reserved.validity,limitBytesTotal:reserved.quota,comment:row.comment||("FAZ|FIRST_LOGIN|"+profile),server:row.server||"all",macAddress:mac,previousUsername:null});
       routerProvisioned=true;
-      const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),expires_at=COALESCE(expires_at,$4::timestamptz),comment=$5,cleanup_status='not_required',cleanup_error=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) AND status='pending_claim' RETURNING id,username,phone,customer_name,profile,first_login_at,expires_at",[row.id,mac,reserved.firstLoginAt,reserved.expiresAt,row.comment||("FAZ|FIRST_LOGIN|"+profile)]);
+      const finalized=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,first_login_at=COALESCE(first_login_at,$3::timestamptz),expires_at=COALESCE(expires_at,$4::timestamptz),comment=$5,cleanup_status='not_required',cleanup_error=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) AND status='pending_claim' AND cleanup_error='activation_in_progress' RETURNING id,username,phone,customer_name,profile,first_login_at,expires_at",[row.id,mac,reserved.firstLoginAt,reserved.expiresAt,row.comment||("FAZ|FIRST_LOGIN|"+profile)]);
       if(!finalized.rows?.length)throw new Error("RouterOS provisioning succeeded, but first-login activation could not be finalized. The MAC reservation is retained for safe retry.");
       return res.json({success:true,message:"Account activated; device MAC bound and package validity started.",username:row.username,password:row.password,mac,profile,first_login_at:finalized.rows[0].first_login_at,expires_at:finalized.rows[0].expires_at});
     }
@@ -270,6 +271,10 @@ async function activateCredentials(req,res){
     return res.json({success:true,message:"Account verified for this bound device.",username:row.username,password:row.password,mac,profile,first_login_at:reserved.firstLoginAt,expires_at:reserved.expiresAt});
   }catch(error){
     console.error("[Hotspot credential activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,username,mac,routerProvisioned});
+    if(reserved?.row?.id&&!routerProvisioned){
+      try{await db.query("UPDATE hotspot_vouchers SET cleanup_error=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) AND status='pending_claim' AND cleanup_error='activation_in_progress'",[reserved.row.id,mac]);}
+      catch(releaseError){console.error("[Hotspot credential activation] Failed to release activation lease",{id:reserved.row.id,message:releaseError.message});}
+    }
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account.");
   }
 }
