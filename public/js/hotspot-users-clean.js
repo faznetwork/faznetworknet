@@ -141,7 +141,7 @@
     } catch (error) {
       const message = error.message || "Hotspot deletion failed. Database status was not changed.";
       toast(message + " You can retry after checking the router connection.", false);
-      if (window.confirm(message + "\\n\\nRetry the verified RouterOS purge now? No financial records will be deleted.")) {
+      if (window.confirm(message + "\n\nRetry the verified RouterOS purge now? No financial records will be deleted.")) {
         try {
           await runDeletion();
           toast("Network access purged and voucher soft-deleted. Financial history retained.");
