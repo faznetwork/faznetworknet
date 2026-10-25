@@ -39,7 +39,7 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
         insertSql=sql;insertParams=params;
         return {rows:[{id:501,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:generatedAt,batch_id:params[7]}]};
       }
-      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'scratch_voucher'")) {
+      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'admin_voucher'")) {
         updateSql=sql;updateParams=params;
         return {rows:[{id:501,username:insertParams[0],password:insertParams[1],profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:params[1],customer_name:params[2],server:params[8],time_limit:params[5],data_limit:params[6]||null,expires_at:params[7],batch_id:insertParams[7],created_at:generatedAt}]};
       }
@@ -54,7 +54,7 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
 
     assert.equal(res.statusCode,201,JSON.stringify(res.body));
     assert.equal(res.body.success,true);
-    assert.equal(res.body.subscriber_type,"scratch_voucher");
+    assert.equal(res.body.subscriber_type,"admin_voucher");
     assert.equal(res.body.activation_type,"first_login");
     assert.equal(res.body.voucher.status,"unused");
     assert.equal(res.body.voucher.username,res.body.voucher.pin);
@@ -68,8 +68,8 @@ test("Admin creates exactly one unused voucher and never provisions a direct Rou
     assert.equal(updateParams[1],"01712345678");
     assert.equal(updateParams[2],"New Customer");
     assert.equal(routerWrites,0);
-    assert.equal(smsPayload.event,"hotspot_account_created");
-    assert.deepEqual(smsPayload.channels,["sms"]);
+    assert.equal(smsPayload.event,"hotspot_voucher_created");
+    assert.equal(Object.hasOwn(smsPayload,"channels"),false);
     assert.equal(smsPayload.variables.password,res.body.voucher.password);
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
@@ -90,7 +90,7 @@ test("Admin voucher creation skips SMS when no phone is supplied",async()=>{
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:502,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:new Date(),batch_id:params[7]}]};
-      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'scratch_voucher'"))return {rows:[{id:502,username:"PIN12345",password:"PASS12345",profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:null,customer_name:null,server:params[8],time_limit:params[5],data_limit:null,expires_at:null,batch_id:"batch-test",created_at:new Date()}]};
+      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'admin_voucher'"))return {rows:[{id:502,username:"PIN12345",password:"PASS12345",profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:null,customer_name:null,server:params[8],time_limit:params[5],data_limit:null,expires_at:null,batch_id:"batch-test",created_at:new Date()}]};
       throw new Error("Unexpected transactional query: "+sql);
     }});
     mikrotik.getHotspotProfiles=async()=>oneHourProfile();
