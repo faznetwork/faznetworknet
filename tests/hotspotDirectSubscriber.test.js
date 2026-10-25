@@ -27,7 +27,7 @@ test("captive portal first login validates credentials and reserves the MAC befo
  assert.match(auth,/async function activateCredentials/);
  assert.match(auth,/LOWER\(username\)=LOWER\(\$1::text\) AND password=\$2::text/);
  assert.match(auth,/faz-hotspot-credential:/);
- assert.match(auth,/SET mac_address=\$2::text,updated_at=NOW\(\) WHERE id=\$1::bigint AND \(mac_address IS NULL OR LOWER\(mac_address\)=LOWER\(\$2::text\)\)/);
+ assert.match(auth,/SET mac_address=\$2::text,cleanup_error='activation_in_progress',updated_at=NOW\(\) WHERE id=\$1::bigint AND \(mac_address IS NULL OR LOWER\(mac_address\)=LOWER\(\$2::text\)\)/);
  assert.match(routes,/controller\.activateCredentials/);
  assert.match(portal,/activate-credentials/);
  assert.match(portal,/submitMikrotikLogin\(result\.username,result\.password/);
