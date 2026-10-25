@@ -147,3 +147,13 @@ test("Hotspot profile lookup failures are logged and shown as a specific admin-f
  assert.match(controller,/code:"MIKROTIK_PROFILE_LOOKUP_FAILED"/);
  assert.match(controller,/Cannot load Hotspot profiles because the MikroTik router is unreachable/);
 });
+
+test("active credential recovery never recharges a missing RouterOS user or resets validity/quota",()=>{
+ const source=read("controllers/hotspotAuthController.js");
+ const activePath=source.slice(source.indexOf('const existing=await mikrotikService.getHotspotUser(row.username);'));
+ assert.match(activePath,/event:"active_hotspot_user_missing"/);
+ assert.match(activePath,/code:"ACTIVE_ROUTEROS_USER_MISSING"/);
+ assert.match(activePath,/protect your existing expiry and remaining quota/i);
+ assert.doesNotMatch(activePath.slice(0,activePath.indexOf("}else{")),/rechargeHotspotUser\(/);
+ assert.doesNotMatch(activePath.slice(0,activePath.indexOf("}else{")),/reset-counters/);
+});
