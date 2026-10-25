@@ -171,7 +171,7 @@ async function webhook(req,res){
   // An explicit PPPoE Reference is sufficient context even when MacroDroid does not
   // send service_type. Resolve it across both account tables, but fail closed if the
   // same identifier maps to more than one distinct username.
-  if(serviceType!=="hotspot"&&payment.customerRef){
+  if((serviceType===""||serviceType==="pppoe")&&payment.customerRef){
    const found=await db.query(
     "SELECT LOWER(username) AS normalized_username,MIN(username) AS username FROM (SELECT username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) UNION ALL SELECT username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1)) candidates WHERE username IS NOT NULL AND TRIM(username)<>'' GROUP BY LOWER(username) LIMIT 2",
     [payment.customerRef]
