@@ -6341,7 +6341,7 @@ async function deletePlan(id,name){
             const gateway = String(tx.channel || '').toLowerCase();
             const gatewayLabel = gateway === 'bkash' ? 'bKash' : gateway === 'nagad' ? 'Nagad' : gateway === 'rocket' ? 'Rocket' : gateway || '-';
             const manualAction = unmatched ? '<button type="button" class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" aria-label="' + escapeHtml(t.manual_match) + '" data-manual-match-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-person-check"></i></button>' : '';
-            const canForceProvision = ['unmatched','processing','processed','paid'].includes(status) && String(tx.customer_type || '').toLowerCase() !== 'pppoe';
+            const canForceProvision = status === 'unmatched' && String(tx.customer_type || '').toLowerCase() !== 'pppoe';
             const forceAction = canForceProvision ? '<button type="button" class="btn btn-sm btn-warning text-dark text-nowrap" title="Immediately provision Hotspot access" data-force-provision-trx="' + escapeHtml(tx.trx_id || '') + '"><i class="bi bi-lightning-charge-fill me-1"></i>Force Provision</button>' : '';
             const action = manualAction || forceAction ? manualAction + forceAction : '<span class="text-muted">—</span>';
             return '<tr data-payment-row>' +
@@ -6421,10 +6421,7 @@ async function deletePlan(id,name){
         async function openForceProvisionModal(trxId) {
             const tx = (currentPaymentRows || []).find(row => String(row.trx_id || '').trim().toLowerCase() === String(trxId || '').trim().toLowerCase());
             if (!tx) return alert('Payment row is no longer available. Refresh the ledger and try again.');
-            const phone = formatBdPhoneNumber(tx.sender_phone || '');
-            const linked = String(tx.matched_username || '').trim();
-            const compactMac = linked.replace(/[:-]/g, '');
-            const defaultMac = /^[0-9a-fA-F]{12}$/.test(compactMac) ? compactMac.match(/.{2}/g).join(':').toUpperCase() : '';
+            if (String(tx.status || '').trim().toLowerCase() !== 'unmatched') return alert('Only Unmatched payments can issue a new Hotspot voucher.');
             const modal = document.createElement('div');
             modal.className = 'modal fade';
             modal.setAttribute('tabindex', '-1');
@@ -6432,16 +6429,13 @@ async function deletePlan(id,name){
             modal.setAttribute('aria-hidden', 'true');
             modal.innerHTML =
                 '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content border-0 shadow-lg">' +
-                '<div class="modal-header text-white" style="background:linear-gradient(120deg,#0a3d2e,#0f766e)"><div><h5 class="modal-title" id="forceProvisionTitle"><i class="bi bi-lightning-charge-fill me-2"></i>Force Provision Hotspot</h5><div class="small opacity-75">Recover internet access from this payment</div></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+                '<div class="modal-header text-white" style="background:linear-gradient(120deg,#0a3d2e,#0f766e)"><div><h5 class="modal-title" id="forceProvisionTitle"><i class="bi bi-ticket-perforated-fill me-2"></i>Generate Hotspot Voucher</h5><div class="small opacity-75">Issue a voucher for this unmatched payment</div></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
                 '<form id="forceProvisionForm"><div class="modal-body">' +
-                '<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill me-1"></i>This action writes the selected Hotspot user to MikroTik and may disconnect an existing session. Use only after confirming the payment.</div>' +
                 '<div class="row g-3"><div class="col-md-7"><label class="form-label">TrxID</label><input class="form-control font-monospace" id="forceProvisionTrx" value="' + escapeHtml(tx.trx_id || '') + '" readonly></div>' +
-                '<div class="col-md-5"><label class="form-label">Paid Amount (৳)</label><input class="form-control" value="' + Number(tx.amount || 0).toFixed(2) + '" readonly></div>' +
-                '<div class="col-12"><label class="form-label">Customer phone <span class="text-muted">(optional)</span></label><input class="form-control" id="forceProvisionPhone" inputmode="numeric" maxlength="13" placeholder="017XXXXXXXX" value="' + escapeHtml(phone === '—' ? '' : phone) + '"><div class="form-text">Used for the voucher/payment association and notification only.</div></div>' +
-                '<div class="col-12"><label class="form-label">Device MAC address <span class="text-danger">*</span></label><input class="form-control font-monospace text-uppercase" id="forceProvisionMac" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" value="' + escapeHtml(defaultMac) + '" required><div class="form-text">Hotspot username and password will be set to this normalized MAC.</div></div>' +
-                '<div class="col-12"><label class="form-label">Hotspot package/profile <span class="text-danger">*</span></label><select class="form-select" id="forceProvisionPackage" required><option value="">Loading available packages…</option></select><div class="form-text">Only a profile with an exact price match to the transaction will be accepted by the backend.</div></div></div>' +
+                '<div class="col-md-5"><label class="form-label">Paid Amount (৳)</label><input class="form-control fw-bold" value="' + Number(tx.amount || 0).toFixed(2) + '" readonly></div>' +
+                '<div class="col-12"><label class="form-label">Hotspot package/profile <span class="text-danger">*</span></label><select class="form-select" id="forceProvisionPackage" required><option value="">Loading available packages…</option></select><div class="form-text">The package price must exactly match the paid amount. No device MAC is required.</div></div></div>' +
                 '<div id="forceProvisionResult" class="small mt-3" role="status" aria-live="polite"></div></div>' +
-                '<div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-warning fw-bold" id="forceProvisionSubmit"><i class="bi bi-lightning-charge-fill me-1"></i>Force Provision</button></div></form></div></div>';
+                '<div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success fw-bold" id="forceProvisionSubmit"><i class="bi bi-ticket-perforated-fill me-1"></i>Generate &amp; Issue Voucher</button></div></form></div></div>';
             document.body.appendChild(modal);
             const instance = getOrCreateModal(modal);
             if (!instance) { modal.remove(); return alert('Modal support is unavailable. Refresh the admin panel and retry.'); }
@@ -6451,7 +6445,7 @@ async function deletePlan(id,name){
             const result = modal.querySelector('#forceProvisionResult');
             try {
                 const data = await jsonFetch('/api/hotspot/profiles');
-                const profiles = (data.profiles || []).filter(p => p && p.name && Number(p.price) > 0 && (String(p.validity || p.validityLabel || '').trim() || Number(p.limitBytesTotal || 0) > 0));
+                const profiles = (data.profiles || []).filter(p => p && p.name && Number(p.price) >= 0 && (String(p.validity || p.validityLabel || '').trim() || Number(p.limitBytesTotal || 0) > 0));
                 profiles.sort((a,b) => {
                     const am = Math.round(Number(a.price) * 100) === Math.round(Number(tx.amount) * 100) ? 0 : 1;
                     const bm = Math.round(Number(b.price) * 100) === Math.round(Number(tx.amount) * 100) ? 0 : 1;
@@ -6462,8 +6456,18 @@ async function deletePlan(id,name){
                     const match = Math.round(Number(p.price) * 100) === Math.round(Number(tx.amount) * 100);
                     return '<option value="' + escapeHtml(id) + '">' + escapeHtml(p.name) + ' — ৳' + Number(p.price).toFixed(2) + (p.validityLabel || p.validity ? ' · ' + escapeHtml(p.validityLabel || p.validity) : '') + (match ? ' ✓ exact amount' : '') + '</option>';
                 }).join('');
-                const exact = profiles.find(p => Math.round(Number(p.price) * 100) === Math.round(Number(tx.amount) * 100));
-                if (exact) select.value = String(exact.profile_id || exact.profileId || exact.id || exact.name);
+                const exactMatches = profiles.filter(p => Math.round(Number(p.price) * 100) === Math.round(Number(tx.amount) * 100));
+                if (exactMatches.length === 1) {
+                    select.value = String(exactMatches[0].profile_id || exactMatches[0].profileId || exactMatches[0].id || exactMatches[0].name);
+                    result.className = 'small mt-3 text-success';
+                    result.textContent = 'Matching package selected automatically.';
+                } else if (exactMatches.length > 1) {
+                    result.className = 'small mt-3 text-warning';
+                    result.textContent = 'Multiple packages have this price. Select the correct package before issuing the voucher.';
+                } else {
+                    result.className = 'small mt-3 text-warning';
+                    result.textContent = 'No exact price match found. Select a package only if its configured price is correct; the server will validate the amount.';
+                }
                 if (!profiles.length) throw new Error('No valid Hotspot profiles are available. Check Hotspot profile settings first.');
             } catch (error) {
                 select.innerHTML = '<option value="">Unable to load packages</option>';
@@ -6474,20 +6478,19 @@ async function deletePlan(id,name){
                 event.preventDefault();
                 const submit = modal.querySelector('#forceProvisionSubmit');
                 const payload = {
+                    mode: 'issue_voucher',
                     trxId: modal.querySelector('#forceProvisionTrx').value.trim(),
-                    phone: modal.querySelector('#forceProvisionPhone').value.trim(),
-                    mac: modal.querySelector('#forceProvisionMac').value.trim(),
                     package_id: select.value
                 };
-                if (!payload.trxId || !payload.mac || !payload.package_id) {
+                if (!payload.trxId || !payload.package_id) {
                     result.className = 'small mt-3 text-danger';
-                    result.textContent = 'TrxID, device MAC and Hotspot package are required.';
+                    result.textContent = 'TrxID and Hotspot package are required.';
                     return;
                 }
                 submit.disabled = true;
-                submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Provisioning…';
+                submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating voucher…';
                 result.className = 'small mt-3 text-muted';
-                result.textContent = 'Validating payment and provisioning the Hotspot user…';
+                result.textContent = 'Validating payment and generating a unique voucher PIN…';
                 try {
                     const response = await fetch('/api/payments/force-provision', {
                         method: 'POST',
@@ -6497,19 +6500,61 @@ async function deletePlan(id,name){
                         cache: 'no-store'
                     });
                     const responseData = await response.json().catch(() => ({}));
-                    if (!response.ok || responseData.success === false) throw new Error(responseData.error || responseData.message || 'Force provisioning failed.');
-                    result.className = 'small mt-3 text-success fw-semibold';
-                    result.textContent = responseData.message || 'Hotspot user provisioned successfully.';
+                    if (!response.ok || responseData.success === false) throw new Error(responseData.error || responseData.message || 'Voucher issuance failed.');
+                    const voucher = responseData.voucher || {};
+                    const pin = String(responseData.voucherPin || voucher.username || '').trim();
+                    if (!pin) throw new Error('Voucher was issued but the server did not return a PIN. Check the transaction before retrying.');
+                    const profileName = String(responseData.profile || voucher.profile || '');
+                    const validity = String(voucher.validity || '');
+                    const amount = Number(responseData.amount || tx.amount || 0).toFixed(2);
+                    const receiptTrx = String(responseData.trxId || tx.trx_id || '');
+                    const body = modal.querySelector('.modal-body');
+                    body.innerHTML =
+                        '<div class="text-center py-3">' +
+                        '<div class="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle" style="width:64px;height:64px;background:#d1fae5;color:#065f46"><i class="bi bi-check-lg fs-2"></i></div>' +
+                        '<div class="text-success fw-bold text-uppercase small mb-2">Voucher issued successfully</div>' +
+                        '<h3 class="h5 mb-1">FAZ NETWORK</h3><p class="text-muted small mb-3">Fast Network · Hotspot Voucher</p>' +
+                        '<div class="border rounded-3 p-3 mb-3" style="background:#f0fdf4;border-color:#a7f3d0!important"><div class="small text-muted mb-1">Voucher PIN</div><div class="font-monospace fw-bold" style="font-size:clamp(2rem,8vw,3rem);letter-spacing:.12em;overflow-wrap:anywhere" id="issuedVoucherPin">' + escapeHtml(pin) + '</div></div>' +
+                        '<div class="row g-2 text-start small mb-3"><div class="col-6"><div class="text-muted">Package</div><div class="fw-semibold">' + escapeHtml(profileName) + '</div></div><div class="col-6"><div class="text-muted">Paid Amount</div><div class="fw-semibold">৳' + amount + '</div></div><div class="col-12"><div class="text-muted">TrxID</div><div class="font-monospace">' + escapeHtml(receiptTrx) + '</div></div>' +
+                        (validity ? '<div class="col-12"><div class="text-muted">Validity</div><div class="fw-semibold">' + escapeHtml(validity) + '</div></div>' : '') + '</div>' +
+                        '<div class="d-flex flex-wrap justify-content-center gap-2"><button type="button" class="btn btn-outline-success" id="copyIssuedVoucherPin"><i class="bi bi-clipboard me-1"></i>Copy PIN</button><button type="button" class="btn btn-success" id="printIssuedVoucher"><i class="bi bi-printer me-1"></i>Print Voucher</button></div>' +
+                        '<div id="voucherDeliveryStatus" class="small mt-3 text-muted" role="status" aria-live="polite">Voucher saved and associated with this payment.</div></div>';
+                    modal.querySelector('.modal-footer')?.remove();
+                    modal.querySelector('#copyIssuedVoucherPin').addEventListener('click', async () => {
+                        const status = modal.querySelector('#voucherDeliveryStatus');
+                        try {
+                            if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(pin);
+                            else {
+                                const temp = document.createElement('textarea');
+                                temp.value = pin; temp.style.position = 'fixed'; temp.style.opacity = '0';
+                                document.body.appendChild(temp); temp.select();
+                                const copied = document.execCommand('copy'); temp.remove();
+                                if (!copied) throw new Error('Clipboard access is unavailable.');
+                            }
+                            status.className = 'small mt-3 text-success';
+                            status.textContent = 'Voucher PIN copied.';
+                        } catch (copyError) {
+                            status.className = 'small mt-3 text-danger';
+                            status.textContent = 'Could not copy automatically. Select and copy the PIN above.';
+                        }
+                    });
+                    modal.querySelector('#printIssuedVoucher').addEventListener('click', () => {
+                        const printWindow = window.open('', '_blank', 'width=520,height=700');
+                        if (!printWindow) {
+                            modal.querySelector('#voucherDeliveryStatus').textContent = 'Print preview was blocked by the browser. Allow pop-ups and retry.';
+                            return;
+                        }
+                        const printable = '<!doctype html><html><head><meta charset="utf-8"><title>FAZ NETWORK Hotspot Voucher</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#0f172a}.voucher{max-width:420px;margin:auto;border:2px solid #0a3d2e;border-radius:16px;overflow:hidden}.head{background:#0a3d2e;color:white;padding:22px;text-align:center}.head h1{margin:0;font-size:22px}.head p{margin:6px 0 0}.content{padding:24px}.pin{font:700 34px monospace;letter-spacing:5px;text-align:center;background:#ecfdf5;border:1px dashed #10b981;padding:18px 8px;margin:12px 0;overflow-wrap:anywhere}.row{margin:10px 0;font-size:14px}.label{color:#64748b}.foot{border-top:1px solid #d1d5db;padding:14px;text-align:center;font-size:11px;color:#64748b}@media print{body{padding:0}.voucher{break-inside:avoid}}</style></head><body><article class="voucher"><header class="head"><h1>FAZ NETWORK</h1><p>Fast Network · Hotspot Voucher</p></header><section class="content"><div class="label">Voucher PIN</div><div class="pin">' + escapeHtml(pin) + '</div><div class="row"><span class="label">Package:</span> <strong>' + escapeHtml(profileName) + '</strong></div><div class="row"><span class="label">Validity:</span> <strong>' + escapeHtml(validity || 'As configured in package') + '</strong></div><div class="row"><span class="label">Paid:</span> <strong>৳' + amount + '</strong></div><div class="row"><span class="label">TrxID:</span> ' + escapeHtml(receiptTrx) + '</div></section><footer class="foot">Keep this PIN secure. Connect to FAZ NETWORK Hotspot and enter the voucher PIN.</footer></article><script>window.addEventListener("load",function(){window.print()});<\/script></body></html>';
+                        printWindow.document.open(); printWindow.document.write(printable); printWindow.document.close();
+                    });
                     await fetchPaymentsSection();
-                    window.setTimeout(() => bootstrap.Modal.getInstance(modal)?.hide(), 650);
                 } catch (error) {
                     result.className = 'small mt-3 text-danger fw-semibold';
-                    result.textContent = error.message || 'Force provisioning failed.';
+                    result.textContent = error.message || 'Voucher issuance failed.';
                     submit.disabled = false;
-                    submit.innerHTML = '<i class="bi bi-lightning-charge-fill me-1"></i>Force Provision';
+                    submit.innerHTML = '<i class="bi bi-ticket-perforated-fill me-1"></i>Generate &amp; Issue Voucher';
                 }
             });
-            setTimeout(() => modal.querySelector('#forceProvisionMac')?.focus(), 250);
         }
 
         async function openManualMatchModal(trxId) {
