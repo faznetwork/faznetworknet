@@ -42,7 +42,8 @@ test("Subscriber 360 uses guarded session disconnect and canonical verified dele
   assert.match(controller, /Network access purged and subscriber soft-deleted/);
   assert.match(ui, /\/api\/hotspot\/active\/disconnect/);
   assert.match(ui, /user\.sessionId/);
-  assert.match(ui, /verified RouterOS purge now/);\n  assert.match(ui, /Financial history retained/);
+  assert.match(ui, /verified RouterOS purge now/);
+  assert.match(ui, /Financial history retained/);
 });
 
 test("Hotspot subscriber UI uses a softened slate header and readable action styles",()=>{const css=read("public/css/hotspot-users-clean.css");assert.match(css,/#1e293b/);assert.match(css,/\.hotspot-table-header th/);assert.match(css,/\.hs-subscriber-name\{[^}]*15px/);assert.match(css,/\.btn-action-renew/);});
