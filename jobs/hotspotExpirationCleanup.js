@@ -265,10 +265,10 @@ async function runHotspotRetentionCleanup(deps = {}) {
     }
     if (!purgeIds.length) return { archivedTransactions: 0, deletedVouchers: 0, routerPurgeFailed: (candidates.rows || []).length };
     const archived = await database.query(
-      "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at,voucher_count) " +
-      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,COUNT(DISTINCT v.id)::integer " +
+      "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at,voucher_count,sale_type,subscriber_type) " +
+      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,COUNT(DISTINCT v.id)::integer,COALESCE(t.sale_type,hp.sale_type),MAX(v.subscriber_type) " +
       "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
-      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' GROUP BY t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
+      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' GROUP BY t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,t.sale_type,hp.sale_type " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
       [purgeIds]
     );
