@@ -53,7 +53,7 @@ test("staged direct subscribers remain distinct from redeemable voucher inventor
 test("All Hotspot Users remains PostgreSQL-first and enriched only by active sessions",()=>{
  const controller=read("controllers/hotspotUserController.js");
  assert.match(controller,/SELECT id,username,customer_name,phone,mac_address,profile/);
- assert.match(controller,/FROM hotspot_vouchers WHERE LOWER\\(COALESCE\\(status,''\\)\\) NOT IN \\('archived','deleted'\\)/);
+ assert.ok(controller.includes("FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted')"));
  assert.match(controller,/getActiveHotspotSessions\(\)\.catch/);
  assert.doesNotMatch(controller,/getHotspotUsers\(\)/);
  for(const status of ["all","online","active","offline","expired"]) assert.ok(controller.includes('"'+status+'"')||controller.includes("'"+status+"'"));
