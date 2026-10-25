@@ -454,7 +454,7 @@ async function voucherRecords(req,res){
    const username=String(row.username||"").trim(),mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(username);
    const session=byUsername.get(username.toLowerCase())||(mac?byMac.get(mac):null)||null;
    const expiry=row.expires_at?new Date(row.expires_at):null;
-   const expired=String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
+   const expired=String(row.status||"").toLowerCase()==="expired"||Boolean(expiry&&Number.isFinite(expiry.getTime())&&expiry.getTime()<=now);
    const online=Boolean(session&&String(session.address||session.ip||"").trim())&&!expired;
    const status=expired?"expired":online?"online":String(row.status||"").toLowerCase()==="pending_claim"?"pending_claim":String(row.status||"").toLowerCase()==="unused"?"unused":"offline";
    const scratchUnused=String(row.subscriber_type||"").toLowerCase()==="scratch_voucher"&&String(row.status||"").toLowerCase()==="unused";
