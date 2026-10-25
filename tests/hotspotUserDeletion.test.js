@@ -9,7 +9,7 @@ function fixture({purgeResult={verified:true,alreadyAbsent:false,sessionsRemoved
   calls.push({type:"db",sql,params});
   if(sql.startsWith("SELECT id,username,mac_address,last_known_mac,status FROM hotspot_vouchers"))
    return {rows:[{id:12,username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF",last_known_mac:null,status:"active"}]};
-  if(sql.startsWith("UPDATE hotspot_vouchers SET status='deleted'"))
+  if(sql.startsWith("UPDATE hotspot_vouchers AS v SET status='deleted'"))
    return {rowCount:1,rows:[{id:12,username:"AA:BB:CC:DD:EE:FF",status:"deleted",last_known_mac:"AA:BB:CC:DD:EE:FF",mac_address:null}]};
   throw new Error("Unexpected SQL: "+sql);
  }};
