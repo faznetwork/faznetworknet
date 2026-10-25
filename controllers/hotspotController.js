@@ -115,7 +115,6 @@ async function refreshHotspotListCache(){
   const now=Date.now();
   const expiredUsers=new Set((ledger.rows||[]).filter(row=>String(row.status||"").toLowerCase()==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=now)).flatMap(row=>[String(row.username||"").trim().toLowerCase(),normalizeHotspotMac(row.mac_address||row.username).toLowerCase()].filter(Boolean)));
   const activeUsers=(Array.isArray(sessionRows)?sessionRows:[]).filter(row=>String(row?.username||"").trim()&&String(row.username).toLowerCase()!=="default-trial"&&!expiredUsers.has(String(row.username||"").trim().toLowerCase())&&!expiredUsers.has(normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||"").toLowerCase())).map(row=>({id:row.id||"",sessionId:row.id||"",user:row.username,username:row.username,address:row.address||"",macAddress:normalizeHotspotMac(row.macAddress||row.mac_address||row["mac-address"]||""),uptime:row.uptime||"",sessionTimeLeft:row.sessionTimeLeft||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),server:row.server||"",profile:row.profile||""}));
-  const now=Date.now();
   const users=(ledger.rows||[]).map(row=>{
    const mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username);
    const session=activeUsers.find(item=>(mac&&normalizeHotspotMac(item.macAddress)===mac)||String(item.username||"").trim().toLowerCase()===String(row.username||"").trim().toLowerCase())||null;
