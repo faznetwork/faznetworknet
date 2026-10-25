@@ -15,8 +15,10 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   }
   assert.ok(service.includes("SET status='deleted'"));
   assert.ok(service.includes("last_known_mac=COALESCE"));
-  assert.ok(service.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
-  assert.ok(retention.includes("mac_audit_history=(SELECT COALESCE(jsonb_agg"));
+  assert.ok(service.includes("mac_audit_history=COALESCE(v.mac_audit_history"));
+  assert.ok(service.includes("jsonb_agg(mac_value ORDER BY ordinal"));
+  assert.ok(retention.includes("mac_audit_history=COALESCE(v.mac_audit_history"));
+  assert.ok(retention.includes("jsonb_agg(mac_value ORDER BY ordinal"));
   assert.ok(service.includes("mac_address=NULL"));
   assert.ok(retention.includes("UPDATE hotspot_vouchers AS v SET status='archived'"));
 });
