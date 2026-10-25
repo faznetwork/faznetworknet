@@ -6,16 +6,24 @@ const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("Add User implements distinct direct-subscriber creation modes",()=>{
+test("Admin Add Hotspot User creates simple voucher PINs without activation mode or MAC input",()=>{
  const source=read("controllers/hotspotController.js");
- assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
- assert.match(source,/activation_type/);
- assert.match(source,/subscriber_type='direct_subscriber'/);
- assert.match(source,/preassigned\?"active":"pending_claim"/);
- assert.match(source,/preassigned\?mac:null/);
- assert.match(source,/first_login_at/);
- assert.match(source,/db\.withTransaction\(async client=>/);
- assert.match(source,/rechargeHotspotUser\(\{username:mac,password:mac,profile/);
+ const ui=read("views/admin.ejs");
+ const generator=read("services/hotspotVoucherGenerator.js");
+ assert.match(source,/requestedPin/);
+ assert.match(source,/VOUCHER_PIN_EXISTS/);
+ assert.match(source,/subscriber_type,activation_type/);
+ assert.match(source,/'scratch_voucher','first_login'/);
+ assert.match(source,/notificationDispatcher\.dispatchNotification/);
+ assert.match(source,/await dispatch\.task/);
+ assert.match(generator,/crypto\.randomInt\(0,10\)/);
+ assert.match(ui,/name="phone"/);
+ assert.match(ui,/name="voucher_pin"/);
+ assert.match(ui,/hotspotVoucherSuccessModal/);
+ assert.match(ui,/hotspotVoucherCopyPin/);
+ assert.doesNotMatch(ui,/name="activation_type"/);
+ assert.doesNotMatch(ui,/id="hsDeviceMac"/);
+ assert.doesNotMatch(ui,/id="hsCustomExpiry"/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
@@ -122,4 +130,13 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  assert.match(auth,/const requestedLoginUrl=String\(req\.body\?\.login_url\|\|req\.body\?\.link_login_only\|\|""\)\.trim\(\)/);
  assert.match(auth,/success:true,message:"Hotspot account activated for this device\."/);
  assert.match(auth,/redirect_url:redirectUrl/);
+});
+
+test("voucher claims accept a PIN alone and retain voucher PIN as RouterOS username",()=>{
+ const auth=read("controllers/hotspotAuthController.js");
+ assert.match(auth,/voucher_password\|\|req\.body\?\.password\|\|pin/);
+ assert.match(auth,/password=username/);
+ assert.match(auth,/voucherPinAccount/);
+ assert.match(auth,/routerUsername=voucherPinAccount\?previousUsername:mac/);
+ assert.match(auth,/macAddress:mac/);
 });
