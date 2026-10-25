@@ -322,7 +322,19 @@ async function createUser(req,res){
           await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
           const duplicate=await client.query("SELECT id FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 LIMIT 1 FOR UPDATE",[pin]);
           if(duplicate.rows?.length)throw hotspotError("VOUCHER_PIN_EXISTS",409,"That voucher PIN already exists. Choose another PIN.");
-          const result=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,mac_lock,subscriber_type,activation_type) VALUES($1,$1,$2,$3,$4,'unused',$5,$6,'all',$4,$7,$8,NULL,$9,$10,'not_required',false,'scratch_voucher','first_login') RETURNING id,username,profile,profile_id,phone,status,customer_name,note,validity,price,created_at",[pin,profile,validity,price,"Voucher; validity starts on first successful login.",phone,quota?String(quota):null,String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||requestedProfile),customerName||null,note||null]);
+          const insertSql="INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,mac_lock,subscriber_type,activation_type) VALUES($1,$1,$2,$3::text,$4::numeric,'unused',$5,$6,'all',$7::text,$8::text,$9,NULL,$10,$11,'not_required',false,'scratch_voucher','first_login') RETURNING id,username,profile,profile_id,phone,status,customer_name,note,validity,price,created_at";
+          const insertValues=[pin,profile,validity,price,"Voucher; validity starts on first successful login.",phone,validity,quota?String(quota):null,String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||requestedProfile),customerName||null,note||null];
+          let result;
+          try {
+            result=await client.query(insertSql,insertValues);
+          } catch(error) {
+            console.error("[Hotspot user creation] voucher INSERT failed", {
+              message:error?.message||String(error),
+              code:error?.code||null,
+              parameterColumns:{"$1":"username/password","$2":"profile","$3":"validity","$4":"price","$5":"comment","$6":"phone","$7":"time_limit","$8":"data_limit","$9":"profile_id","$10":"customer_name","$11":"note"}
+            });
+            throw error;
+          }
           if(!result.rows?.length)throw new Error("Voucher could not be saved in PostgreSQL.");
           return result.rows[0];
         });
