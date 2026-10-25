@@ -166,15 +166,24 @@ async function webhook(req,res){
   const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
   // Never mutate the original transaction when MacroDroid retries delivery.
   if(existing.rows.length)return res.json({success:true,status:"duplicate_ignored",code:"DUPLICATE_IGNORED",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
-  const serviceType=String(req.body?.service_type||req.body?.serviceType||req.query?.service_type||req.query?.serviceType||"").trim().toLowerCase();
+  let serviceType=String(req.body?.service_type||req.body?.serviceType||req.query?.service_type||req.query?.serviceType||"").trim().toLowerCase();
   let user=null;
-  // A Hotspot-originated payment is isolated from PPPoE resolvers by contract.
-  // Generic SMS events have no trusted service context, so phone-only matches stay unmatched
-  // until the customer explicitly verifies the TrxID in the correct service flow.
-  if(serviceType==="pppoe"&&payment.customerRef){
-   const found=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) OR id::text=$1 LIMIT 1",[payment.customerRef]);
-   user=found.rows[0]||null;
+  // An explicit PPPoE Reference is sufficient context even when MacroDroid does not
+  // send service_type. Resolve it across both account tables, but fail closed if the
+  // same identifier maps to more than one distinct username.
+  if((serviceType===""||serviceType==="pppoe")&&payment.customerRef){
+   const found=await db.query(
+    "SELECT LOWER(username) AS normalized_username,MIN(username) AS username FROM (SELECT username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) UNION ALL SELECT username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1)) candidates WHERE username IS NOT NULL AND TRIM(username)<>'' GROUP BY LOWER(username) LIMIT 2",
+    [payment.customerRef]
+   );
+   if(found.rows.length===1){
+    user={username:found.rows[0].username};
+    serviceType="pppoe";
+   }else if(found.rows.length>1){
+    console.warn("[Payment Webhook] Reference is ambiguous across PPPoE account records; leaving transaction unmatched.",{reference:payment.customerRef});
+   }
   }
+  // Phone-only matching remains restricted to explicitly typed PPPoE events.
   if(!user&&serviceType==="pppoe"&&payment.senderPhone){
    const found=await db.query("SELECT username,phone FROM pppoe_users WHERE phone IS NOT NULL");
    user=found.rows.find(row=>normalizePhone(row.phone)===payment.senderPhone)||null;
@@ -355,13 +364,13 @@ async function manualMatch(req,res){
   if(tx.used===true||["paid","processed","processing","duplicate"].includes(status))return res.status(409).json({success:false,error:"This transaction has already been claimed or processed and cannot be manually matched."});
   if(status!=="unmatched")return res.status(409).json({success:false,error:"Only unmatched transactions can be manually matched."});
   if(serviceType==="hotspot")return await manualMatchHotspot(req,res,tx,trxId);
-  const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+  const user=await db.query("SELECT username FROM (SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) UNION SELECT username FROM customers WHERE LOWER(username)=LOWER($1)) account_candidates WHERE username IS NOT NULL LIMIT 1",[username]);
   if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
   const customer=await getCustomerPackage(user.rows[0].username);
   if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});
   const expected=Number(customer.price||0);
   if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='pppoe',matched_username=$1,service_type='pppoe' WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,claimed_at=NOW(),claimed_by=$1,claim_flow='pppoe',matched_username=$1,service_type='pppoe' WHERE id=$2 AND COALESCE(used,FALSE)=FALSE AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
@@ -382,7 +391,15 @@ async function manualMatch(req,res){
    try{const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);}
    catch(rollbackError){console.error("[Manual Match] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
   }else if(claimedTransactionId!==null&&routerSucceeded){
-   console.error("[CRITICAL_PARTIAL_PROVISION] Manual PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:req.body?.username,error:e?.message||String(e)});
+   const detail={flow:"pppoe",transactionId:claimedTransactionId,username:req.body?.username||null,error:e?.message||String(e),recordedAt:new Date().toISOString()};
+   try{
+    await db.query("UPDATE transactions SET needs_reconciliation=true WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);
+    await db.query("INSERT INTO payment_reconciliation_audit(transaction_id,flow,account_identifier,details) VALUES($1,'pppoe',$2,$3::jsonb)",[claimedTransactionId,String(req.body?.username||""),JSON.stringify(detail)]);
+   }catch(auditError){
+    console.error("[CRITICAL] Manual Match reconciliation audit write failed",{transactionId:claimedTransactionId,error:auditError?.message||String(auditError)});
+   }
+   console.error("[CRITICAL_PARTIAL_PROVISION] Manual PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",detail);
+   return res.status(503).json({success:false,code:"PARTIAL_PROVISION_REQUIRES_RECONCILIATION",message:"MikroTik renewal was applied, but payment finalization failed. Do not retry this TrxID; an administrator must reconcile it.",error:e?.message||"Database finalization failed."});
   }
   console.error("[Manual Match] Renewal failed:",e?.message||e);
   return errorResponse(res,e,500);

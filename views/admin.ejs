@@ -6618,15 +6618,27 @@ async function deletePlan(id,name){
             const submit = document.getElementById('manualMatchSubmit');
             if (submit) { submit.disabled = true; submit.textContent = 'Matching…'; }
             try {
-                await jsonFetch('/api/payments/manual-match', {
+                const result = await jsonFetch('/api/payments/manual-match', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body:JSON.stringify(payload)
                 });
+                if (!result || result.success !== true) {
+                    const reason = result?.message || result?.error || 'The server did not confirm that this payment was matched.';
+                    throw new Error(reason);
+                }
+                const successMessage = result.message || 'Payment matched and customer renewal completed.';
                 document.querySelector('.modal.show .btn-close')?.click();
-                await fetchPaymentsSection();
+                alert(successMessage);
+                try {
+                    await fetchPaymentsSection();
+                } catch (refreshError) {
+                    console.error('[Manual Match] Payment succeeded, but the transaction list refresh failed:', refreshError);
+                    alert('Payment was matched successfully, but the payment list could not refresh. Please refresh the page.');
+                }
             } catch (error) {
-                alert(error.message);
+                console.error('[Manual Match] Request did not complete successfully:', error);
+                alert(error?.message || 'Manual payment matching failed. Please check the transaction and try again.');
                 if (submit) { submit.disabled = false; submit.textContent = tSafeManualMatchLabel(); }
             }
         }
