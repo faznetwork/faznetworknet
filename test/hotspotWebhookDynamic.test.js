@@ -23,53 +23,88 @@ function paymentTransaction(id=5,amount=10){
   return {id,trx_id:"TXN-TEST-5",channel:"bkash",sender_phone:"01712345678",amount,status:"unmatched",used:false,matched_username:null};
 }
 
-test("Admin creates a direct active subscriber, provisions RouterOS, and reuses an expired phone record",async()=>{
+test("Admin creates exactly one unused voucher and never provisions a direct RouterOS subscriber",async()=>{
   const oldQuery=db.query,oldTransaction=db.withTransaction;
-  const oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
-  let insertedSql="",insertedParams=[],updatedSql="",updatedParams=[],routerWrites=0;
-  const expired={id:41,username:"AA:BB:CC:DD:EE:FF",password:"AA:BB:CC:DD:EE:FF",profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"expired",phone:"01712345678",server:"all",time_limit:"1h",data_limit:null,mac_address:"AA:BB:CC:DD:EE:FF",customer_name:"Old Name",note:"old",first_login_at:new Date(Date.now()-7200000),expires_at:new Date(Date.now()-3600000),expired_at:new Date(Date.now()-3500000),cleanup_status:"done",cleanup_error:null,router_removed_at:new Date(Date.now()-3400000),mac_lock:true,subscriber_type:"direct_subscriber",activation_type:"preassigned"};
+  const oldProfiles=mikrotik.getHotspotProfiles,oldDispatch=require("../services/notificationDispatcher").dispatchNotification;
+  const dispatcher=require("../services/notificationDispatcher");
+  let insertSql="",insertParams=[],updateSql="",updateParams=[],routerWrites=0,smsPayload=null;
+  const generatedAt=new Date();
   try{
-    db.query=async(sql)=> {
+    db.query=async(sql)=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
-      if(sql.startsWith("SELECT price FROM hotspot_vouchers"))return {rows:[{price:10}]};
-      if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[]};
       throw new Error("Unexpected database query: "+sql);
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
-      if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
-      if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[expired]};
-      if(sql.startsWith("SELECT phone FROM hotspot_vouchers"))return {rows:[{phone:"01712345678"}]};
-      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")) {
-        updatedSql=sql;updatedParams=params;
-        return {rows:[{id:41,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:"active",mac_address:params[11],customer_name:params[12],note:params[13],expires_at:params[15]}]};
+      if(sql.startsWith("INSERT INTO hotspot_vouchers")) {
+        insertSql=sql;insertParams=params;
+        return {rows:[{id:501,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:generatedAt,batch_id:params[7]}]};
       }
-      if(sql.startsWith("INSERT INTO hotspot_vouchers")){insertedSql=sql;insertedParams=params;return {rows:[{id:42,username:params[0],profile:params[2],profile_id:params[10],phone:params[6],status:"active",mac_address:params[11],customer_name:params[12],note:params[13],expires_at:params[15]}]};}
+      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'scratch_voucher'")) {
+        updateSql=sql;updateParams=params;
+        return {rows:[{id:501,username:insertParams[0],password:insertParams[1],profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:params[1],customer_name:params[2],server:params[8],time_limit:params[5],data_limit:params[6]||null,expires_at:params[7],batch_id:insertParams[7],created_at:generatedAt}]};
+      }
       throw new Error("Unexpected transactional query: "+sql);
     }});
     mikrotik.getHotspotProfiles=async()=>oneHourProfile();
-    mikrotik.rechargeHotspotUser=async options=>{routerWrites++;assert.equal(options.username,"AA:BB:CC:DD:EE:FF");assert.equal(options.password,"AA:BB:CC:DD:EE:FF");assert.equal(options.profile,"1-Hour");assert.match(options.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);};
+    mikrotik.rechargeHotspotUser=async()=>{routerWrites++;throw new Error("Voucher creation must not provision RouterOS directly.");};
+    dispatcher.dispatchNotification=payload=>{smsPayload=payload;return {accepted:true,task:Promise.resolve({success:true})};};
+
     const res=responseRecorder();
-    await hotspotController.createUser({body:{phone:"01712345678",mac:"aa-bb-cc-dd-ee-ff",profile_id:"pkg-1-hour",customer_name:"New Customer"}},res);
-    assert.equal(res.statusCode,201);
+    await hotspotController.createUser({body:{phone:"01712345678",profile_id:"pkg-1-hour",customer_name:"New Customer"}},res);
+
+    assert.equal(res.statusCode,201,JSON.stringify(res.body));
     assert.equal(res.body.success,true);
-    assert.equal(res.body.pending_activation,false);
-    assert.equal(res.body.user.status,"active");
-    assert.equal(res.body.user.username,"AA:BB:CC:DD:EE:FF");
-    assert.equal(updatedSql.startsWith("UPDATE hotspot_vouchers"),true,"expired record is reactivated instead of creating a voucher row");
-    assert.match(updatedSql,/status=\$18/);
-    assert.equal(updatedParams[17],"active");
-    assert.equal(updatedParams[18],"preassigned");
-    assert.equal(updatedParams[19],41);
-    assert.match(updatedSql,/expired_at=NULL/);
-    assert.equal(updatedParams[0],"AA:BB:CC:DD:EE:FF");
-    assert.equal(updatedParams[1],"AA:BB:CC:DD:EE:FF");
-    assert.equal(updatedParams[6],"01712345678");
-    assert.ok(new Date(updatedParams[15]).getTime()>Date.now());
-    assert.equal(insertedSql,"","a previous expired phone record should be reused");
-    assert.equal(routerWrites,1,"direct account must be provisioned immediately");
+    assert.equal(res.body.subscriber_type,"scratch_voucher");
+    assert.equal(res.body.activation_type,"first_login");
+    assert.equal(res.body.voucher.status,"unused");
+    assert.equal(res.body.voucher.username,res.body.voucher.pin);
+    assert.equal(res.body.voucher.profile,"1-Hour");
+    assert.equal(insertSql.startsWith("INSERT INTO hotspot_vouchers"),true);
+    assert.match(insertSql,/'unused'/);
+    assert.match(insertSql,/'scratch_voucher'/);
+    assert.match(insertSql,/'first_login'/);
+    assert.equal(updateSql.includes("status = 'unused'"),true);
+    assert.equal(updateSql.includes("mac_lock = FALSE"),true);
+    assert.equal(updateParams[1],"01712345678");
+    assert.equal(updateParams[2],"New Customer");
+    assert.equal(routerWrites,0);
+    assert.equal(smsPayload.event,"hotspot_account_created");
+    assert.deepEqual(smsPayload.channels,["sms"]);
+    assert.equal(smsPayload.variables.password,res.body.voucher.password);
   }finally{
     db.query=oldQuery;db.withTransaction=oldTransaction;
-    mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
+    mikrotik.getHotspotProfiles=oldProfiles;
+    dispatcher.dispatchNotification=oldDispatch;
+  }
+});
+
+test("Admin voucher creation skips SMS when no phone is supplied",async()=>{
+  const oldQuery=db.query,oldTransaction=db.withTransaction;
+  const oldProfiles=mikrotik.getHotspotProfiles,dispatcher=require("../services/notificationDispatcher");
+  const oldDispatch=dispatcher.dispatchNotification;
+  let dispatchCount=0;
+  try{
+    db.query=async(sql)=>{
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      throw new Error("Unexpected database query: "+sql);
+    };
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
+      if(sql.startsWith("INSERT INTO hotspot_vouchers"))return {rows:[{id:502,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",created_at:new Date(),batch_id:params[7]}]};
+      if(sql.includes("UPDATE hotspot_vouchers")&&sql.includes("subscriber_type = 'scratch_voucher'"))return {rows:[{id:502,username:"PIN12345",password:"PASS12345",profile:"1-Hour",profile_id:params[4],validity:"1h",price:10,status:"unused",phone:null,customer_name:null,server:params[8],time_limit:params[5],data_limit:null,expires_at:null,batch_id:"batch-test",created_at:new Date()}]};
+      throw new Error("Unexpected transactional query: "+sql);
+    }});
+    mikrotik.getHotspotProfiles=async()=>oneHourProfile();
+    dispatcher.dispatchNotification=()=>{dispatchCount++;return {accepted:true};};
+    const res=responseRecorder();
+    await hotspotController.createUser({body:{profile_id:"pkg-1-hour"}},res);
+    assert.equal(res.statusCode,201,JSON.stringify(res.body));
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.sms.requested,false);
+    assert.equal(dispatchCount,0);
+  }finally{
+    db.query=oldQuery;db.withTransaction=oldTransaction;
+    mikrotik.getHotspotProfiles=oldProfiles;
+    dispatcher.dispatchNotification=oldDispatch;
   }
 });
 test("verifyTrx validates payment and stages a pending phone package without RouterOS writes",async()=>{
