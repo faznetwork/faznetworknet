@@ -34,7 +34,7 @@ async function hotspot(req,res){try{
  const params=[],where=["t.status IN ('processed','PAID')"];
  if(from){params.push(from);where.push(`t.created_at >= $${params.length}::date`)}
  if(to){params.push(to);where.push(`t.created_at < ($${params.length}::date + INTERVAL '1 day')`)}
- if(saleType!=="all"){params.push(saleType);where.push(`COALESCE(t.sale_type,'other') = $${params.length}`)}
+ if(saleType!=="all"){params.push(saleType);where.push(`${saleTypeExpr} = $${params.length}`)}
  const filter=where.join(" AND ");
  const [profiles,transactions,summary]=await Promise.all([
   db.query(`SELECT COALESCE(hp.profile,v.profile,'Unknown package') profile_name,COALESCE(SUM(hp.amount),0)::numeric(14,2) price,COUNT(*)::int quantity,COALESCE(SUM(hp.amount),0)::numeric(14,2) revenue FROM transactions t LEFT JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id LEFT JOIN hotspot_vouchers v ON v.id=hp.voucher_id WHERE ${filter} AND (hp.transaction_id IS NOT NULL OR t.claim_flow IN ('hotspot','manual_hotspot') OR t.matched_username IS NULL) GROUP BY COALESCE(hp.profile,v.profile,'Unknown package') ORDER BY revenue DESC,quantity DESC`,params),
