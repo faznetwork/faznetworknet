@@ -6329,10 +6329,11 @@ async function deletePlan(id,name){
         }
 
         function paymentCustomerTypeBadge(value, t) {
-            const type = String(value || 'unassigned').toLowerCase();
-            const labels = { pppoe: t.type_pppoe || 'PPPoE', hotspot: t.type_hotspot || 'Hotspot', unassigned: t.type_unassigned || 'Unassigned', unknown: t.type_unknown || 'Unknown' };
-            const classes = { pppoe: 'bg-primary', hotspot: 'bg-success', unassigned: 'bg-secondary', unknown: 'bg-warning text-dark' };
-            return '<span class="badge ' + (classes[type] || classes.unknown) + '">' + escapeHtml(labels[type] || labels.unknown) + '</span>';
+            const requestedType = String(value || '').trim().toLowerCase();
+            const type = ['pppoe', 'hotspot', 'unassigned'].includes(requestedType) ? requestedType : 'unassigned';
+            const labels = { pppoe: t.type_pppoe || 'PPPoE', hotspot: t.type_hotspot || 'Hotspot', unassigned: t.type_unassigned || 'Unassigned' };
+            const classes = { pppoe: 'bg-primary', hotspot: 'bg-success', unassigned: 'bg-secondary' };
+            return '<span class="badge ' + classes[type] + '">' + escapeHtml(labels[type]) + '</span>';
         }
 
         function paymentRowHtml(tx, index, t) {
