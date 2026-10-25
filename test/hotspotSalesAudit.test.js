@@ -62,3 +62,18 @@ test("Voucher sales archive stores verified voucher counts and leaves legacy cou
  assert.match(controller,/matchedTransactions:/);
  assert.match(controller,/voucherCountComplete:/);
 });
+
+test("voucher source channels are explicit, constraint-backed, and drive Hotspot sales classification",()=>{
+ const schema=read("db/schema.sql");
+ const migration=read("db/migrations/20261025_hotspot_voucher_subscriber_type_channels.sql");
+ const create=read("controllers/hotspotController.js");
+ const payment=read("controllers/paymentController.js");
+ const report=read("controllers/reportController.js");
+ assert.match(migration,/CHECK \(subscriber_type IN \([\s\S]*'direct_subscriber'[\s\S]*'scratch_voucher'[\s\S]*'admin_voucher'[\s\S]*'mfs'[\s\S]*'legacy'[\s\S]*\)\)/);
+ assert.match(schema,/CHECK \(subscriber_type IN \('direct_subscriber','scratch_voucher','admin_voucher','mfs','legacy'\)\)/);
+ assert.match(create,/subscriber_type = 'admin_voucher'/);
+ assert.match(payment,/SET subscriber_type='mfs'/);
+ assert.match(report,/v\.subscriber_type='admin_voucher'/);
+ assert.match(report,/v\.subscriber_type='scratch_voucher'/);
+ assert.match(report,/v\.subscriber_type='mfs'/);
+});
