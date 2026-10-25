@@ -15,14 +15,14 @@ test("Hotspot sales origin migration preserves independent transaction history",
  assert.doesNotMatch(sql,/DELETE\s+FROM\s+transactions/i);
 });
 
-test("Hotspot expiry retains purchase audit rows for 395 days and purges only after RouterOS hard cleanup",()=>{
+test("Hotspot retention archives vouchers after verified RouterOS cleanup and never deletes financial or voucher rows",()=>{
  const source=read("jobs/hotspotExpirationCleanup.js");
  assert.doesNotMatch(source,/profile='expired_profile'/);
- assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\(\) - INTERVAL '395 days'/);
- assert.match(source,/DELETE FROM hotspot_vouchers WHERE id = ANY\(\$1::bigint\[\]\) AND status='expired' AND cleanup_status='completed'/);
- assert.doesNotMatch(source,/DELETE\s+FROM\s+transactions/i);
+ assert.match(source,/SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW\\(\\) - INTERVAL '395 days'/);
+ assert.match(source,/UPDATE hotspot_vouchers SET status='archived'/);
+ assert.match(source,/last_known_mac=COALESCE\\(NULLIF\\(last_known_mac,''\\),NULLIF\\(mac_address,''\\)\\)/);
+ assert.doesNotMatch(source,/DELETE\\s+FROM\\s+(?:hotspot_vouchers|hotspot_voucher_payments|transactions)/i);
 });
-
 test("Scratch card redemption records a durable scratch_card sale",()=>{
  const source=read("controllers/hotspotAuthController.js");
  assert.match(source,/async function claimVoucher/);
