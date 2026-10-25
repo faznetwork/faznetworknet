@@ -590,8 +590,8 @@ async function createUser(req, res) {
     return res.status(201).json({
       success: true,
       message: phone
-        ? "Hotspot voucher created successfully. SMS dispatch was requested."
-        : "Hotspot voucher created successfully. SMS skipped because no phone number was provided.",
+        ? "Hotspot voucher created successfully. Notification Hub dispatch was requested."
+        : "Hotspot voucher created successfully. No notification was requested because no phone number was provided.",
       subscriber_type: stored.subscriber_type || "admin_voucher",
       activation_type: stored.activation_type || "first_login",
       voucher: {
