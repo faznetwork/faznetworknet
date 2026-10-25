@@ -171,21 +171,24 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
-      if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
+      const voucherPinAccount=String(row.subscriber_type||"")==="scratch_voucher";
+      const routerUsername=voucherPinAccount?previousUsername:mac;
+      const routerPassword=voucherPinAccount?String(row.password||previousUsername):mac;
+      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[routerUsername,routerPassword,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
+      if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This voucher is already bound to another device.");
       const account=locked.rows[0];
-      return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
+      return {account:{...account,username:routerUsername,password:routerPassword,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,routerUsername,routerPassword,voucherPinAccount,mac,phone};
     });
     const account=reservation.account;
     const expiry=account.expires_at?new Date(account.expires_at):null;
     if(reservation.firstActivation){
-      await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
+      await mikrotikService.rechargeHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,validity:reservation.validity,limitBytesTotal:reservation.quota,comment:account.comment,server:account.server||"all",macAddress:mac,previousUsername:reservation.previousUsername});
       routerSucceeded=true;
     }else{
-      const existing=await mikrotikService.getHotspotUser(mac);
+      const existing=await mikrotikService.getHotspotUser(reservation.routerUsername);
       if(!existing){
-        if(reservation.quota>0)return fail(503,"ACTIVE_DATA_ACCOUNT_MISSING","The active data-quota user is missing from RouterOS. Support must reconcile usage before re-provisioning to avoid resetting the quota.");
-        await mikrotikService.createHotspotUser({username:mac,password:mac,profile:reservation.profile,server:account.server||"all",validity:reservation.validity,comment:account.comment,macAddress:mac});
+        if(reservation.quota>0)return fail(409,"ACTIVE_DATA_ACCOUNT_MISSING","This active data-quota voucher needs usage reconciliation before safe recovery; no quota or validity was reset.");
+        await mikrotikService.createHotspotUser({username:reservation.routerUsername,password:reservation.routerPassword,profile:reservation.profile,server:account.server||"all",validity:reservation.validity,comment:account.comment,macAddress:mac});
         routerSucceeded=true;
       }else{
         const actualMac=normalizeMac(existing.raw?.["mac-address"]||existing.macAddress||"");
