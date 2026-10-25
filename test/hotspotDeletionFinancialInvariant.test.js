@@ -11,31 +11,33 @@ test("canonical Hotspot deletion has no financial or voucher hard-delete SQL", (
   const subscriberController = read("controllers/hotspotUserController.js");
   const retention = read("jobs/hotspotExpirationCleanup.js");
   for (const [name, source] of Object.entries({ service, controller, subscriberController, retention })) {
-    assert.doesNotMatch(source, /DELETE\\s+FROM\\s+(?:public\\.)?(?:hotspot_vouchers|hotspot_voucher_payments|transactions)\\b/i, name + " must preserve all voucher and financial rows");
+    assert.equal(/DELETE\\s+FROM\\s+(?:public\\.)?(?:hotspot_vouchers|hotspot_voucher_payments|transactions)\\b/i.test(source), false, name + " must preserve voucher and financial rows");
   }
-  assert.match(service, /SET status='deleted'/);
-  assert.match(service, /last_known_mac=COALESCE/);
-  assert.match(service, /mac_address=NULL/);
-  assert.match(retention, /UPDATE hotspot_vouchers SET status='archived'/);
+  assert.ok(service.includes("SET status='deleted'"));
+  assert.ok(service.includes("last_known_mac=COALESCE"));
+  assert.ok(service.includes("mac_address=NULL"));
+  assert.ok(retention.includes("UPDATE hotspot_vouchers SET status='archived'"));
 });
 
 test("RouterOS purge requires fresh reads of all four resource layers before verified success", () => {
   const source = read("services/mikrotikService.js");
-  assert.match(source, /connection\\.write\\("\/ip\/hotspot\/active\/print"\)/);
-  assert.match(source, /connection\\.write\\("\/ip\/hotspot\/cookie\/print"\)/);
-  assert.match(source, /connection\\.write\\("\/ip\/hotspot\/host\/print"\)/);
-  assert.match(source, /connection\\.write\\("\/ip\/hotspot\/user\/print"\)/);
-  assert.match(source, /HOTSPOT_PURGE_VERIFICATION_FAILED/);
-  assert.match(source, /verified: true/);
+  for (const path of [
+    '/ip/hotspot/active/print',
+    '/ip/hotspot/cookie/print',
+    '/ip/hotspot/host/print',
+    '/ip/hotspot/user/print'
+  ]) assert.ok(source.includes('connection.write("' + path + '")'), "missing fresh read: " + path);
+  assert.ok(source.includes("HOTSPOT_PURGE_VERIFICATION_FAILED"));
+  assert.ok(source.includes("verified: true"));
 });
 
 test("schema and migration retain last-known MAC and allow the deleted lifecycle state", () => {
   const schema = read("db/schema.sql");
   const migration = read("db/migrations/20261025_unified_hotspot_deletion_purge.sql");
-  assert.match(schema, /ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR\\(32\\)/);
-  assert.match(schema, /'archived','deleted'/);
-  assert.match(migration, /ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR\\(32\\)/);
-  assert.match(migration, /'archived','deleted'/);
-  assert.match(migration, /NOT VALID/);
-  assert.doesNotMatch(migration, /DELETE\\s+FROM/i);
+  assert.ok(schema.includes("ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32)"));
+  assert.ok(schema.includes("'archived','deleted'"));
+  assert.ok(migration.includes("ADD COLUMN IF NOT EXISTS last_known_mac VARCHAR(32)"));
+  assert.ok(migration.includes("'archived','deleted'"));
+  assert.ok(migration.includes("NOT VALID"));
+  assert.equal(/DELETE\\s+FROM/i.test(migration), false);
 });
