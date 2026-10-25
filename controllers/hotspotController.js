@@ -107,7 +107,7 @@ async function refreshHotspotListCache(){
  if(hotspotListRefresh)return hotspotListRefresh;
  hotspotListRefresh=(async()=>{
   // Persist expiry state first so both this response and downstream cleanup observe the same lifecycle state.
-  await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
+  await db.query("UPDATE hotspot_vouchers SET status='expired',cleanup_status=CASE WHEN LOWER(COALESCE(cleanup_status,'')) IN ('completed','not_required') THEN cleanup_status ELSE 'pending' END,expired_at=COALESCE(expired_at,expires_at,NOW()),updated_at=NOW() WHERE expires_at < NOW() AND LOWER(COALESCE(status,'')) NOT IN ('archived','expired')");
   // PostgreSQL is the subscriber source of truth. RouterOS contributes live-session telemetry only.
   const ledgerPromise=db.query("SELECT id,username,password,status,comment,expires_at,first_login_at,validity,customer_name,phone,mac_address,server,transaction_id,profile,price,mac_lock,subscriber_type,activation_type,profile_id,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC");
   const sessionsPromise=mikrotikService.getActiveHotspotSessions().catch(error=>{console.warn("[Hotspot API] Active-session lookup unavailable; returning database records as offline:",error.message);return [];});
@@ -118,7 +118,7 @@ async function refreshHotspotListCache(){
    const mac=normalizeHotspotMac(row.mac_address)||normalizeHotspotMac(row.username);
    const session=activeUsers.find(item=>(mac&&normalizeHotspotMac(item.macAddress)===mac)||String(item.username||"").trim().toLowerCase()===String(row.username||"").trim().toLowerCase())||null;
    const expiry=row.expires_at?new Date(row.expires_at):null;
-   const isExpired=Boolean((expiry&&!Number.isNaN(expiry.getTime())&&expiry.getTime()<=now)||String(row.status||"").toLowerCase()==="expired"||String(row.profile||"").toLowerCase()==="expired_profile");
+   const isExpired=Boolean((expiry&&!Number.isNaN(expiry.getTime())&&expiry.getTime()<=now)||String(row.status||"").toLowerCase()==="expired");
    const status=isExpired?"expired":String(row.status||"").toLowerCase();
    return {id:row.id,voucherId:row.id,username:row.username||mac||"",password:row.password||"",name:row.customer_name||"",customer_name:row.customer_name||"",phone:row.phone||"",macAddress:mac||row.mac_address||"",mac_address:mac||row.mac_address||"",transaction_id:row.transaction_id||null,price:Number(row.price||0),profile:row.profile||"",profile_id:row.profile_id||null,subscriber_type:row.subscriber_type||"legacy",activation_type:row.activation_type||"legacy",uptime:session?.uptime||"",limitUptime:"",bytesIn:Number(session?.bytesIn||0),bytesOut:Number(session?.bytesOut||0),ip:session?.address||"",address:session?.address||"",sessionId:session?.sessionId||session?.id||"",comment:row.comment||"",disabled:status==="expired"||status==="archived",status,expires_at:row.expires_at||null,first_login_at:row.first_login_at||null,validity:row.validity||"",server:row.server||"all",macLock:row.mac_lock!==false,is_online:Boolean(session&&String(session.address||"").trim()),online:Boolean(session&&String(session.address||"").trim()),created_at:row.created_at||null,updated_at:row.updated_at||null};
   });
