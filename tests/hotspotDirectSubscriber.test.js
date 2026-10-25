@@ -36,7 +36,7 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  assert.match(auth,/async function activate/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
-  assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
+  assert.ok(auth.includes("phone=COALESCE(NULLIF($6::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
 });
 
