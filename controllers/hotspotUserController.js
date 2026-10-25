@@ -56,7 +56,7 @@ async function list(req, res) {
         console.warn("[Hotspot Subscriber 360] Active-session lookup unavailable; showing DB subscribers offline:", error?.message || error);
         return [];
       }),
-      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,first_login_at,validity,status,server,mac_lock,price,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) <> 'archived' ORDER BY id DESC")
+      db.query("SELECT id,username,customer_name,phone,mac_address,profile,profile_id,comment,note,expires_at,first_login_at,validity,status,server,mac_lock,price,subscriber_type,activation_type,created_at,updated_at FROM hotspot_vouchers WHERE LOWER(COALESCE(status,'')) NOT IN ('archived','deleted') ORDER BY id DESC")
     ]);
     const ledger = ledgerResult.rows || [];
     const sessions = (Array.isArray(sessionsResult) ? sessionsResult : []).map(session => ({
