@@ -265,15 +265,15 @@ async function runHotspotRetentionCleanup(deps = {}) {
     }
     if (!purgeIds.length) return { archivedTransactions: 0, deletedVouchers: 0, routerPurgeFailed: (candidates.rows || []).length };
     const archived = await database.query(
-      "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at) " +
-      "SELECT DISTINCT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
+      "INSERT INTO hotspot_voucher_sales_archive(transaction_id,channel,trx_id,sender_phone,amount,status,matched_username,created_at,voucher_count) " +
+      "SELECT t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at,COUNT(DISTINCT v.id)::integer " +
       "FROM transactions t INNER JOIN hotspot_voucher_payments hp ON hp.transaction_id=t.id INNER JOIN hotspot_vouchers v ON v.id=hp.voucher_id " +
-      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' " +
+      "WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' GROUP BY t.id,t.channel,t.trx_id,t.sender_phone,t.amount,t.status,t.matched_username,t.created_at " +
       "ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id",
       [purgeIds]
     );
     const deleted = await database.query(
-      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '30 days' RETURNING id",
+      "DELETE FROM hotspot_vouchers WHERE id = ANY($1::bigint[]) AND status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days' RETURNING id",
       [purgeIds]
     );
     const result = {
