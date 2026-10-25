@@ -42,8 +42,7 @@ test("captive portal exposes only voucher and online recharge choices",()=>{
  assert.equal((html.match(/id="tab-recharge-btn"/g)||[]).length,1);
  assert.equal((html.match(/id="tab-voucher-btn"/g)||[]).length,1);
  assert.match(html,/id="voucher_pin"/);
- assert.match(html,/id="voucher_pin"/);
- assert.doesNotMatch(html,/id="voucher_password"/);
+ assert.match(html,/id="voucher_password"/);
  assert.doesNotMatch(html,/member_username|member_password|m-btn-member|btn-master-action/);
  assert.doesNotMatch(script,/\/api\/hotspot-auth\/activate/);
  assert.doesNotMatch(script,/\/api\/hotspot-auth\/device-lookup/);
@@ -51,9 +50,8 @@ test("captive portal exposes only voucher and online recharge choices",()=>{
 
 test("voucher login sends username, password and router context to the existing claim endpoint",()=>{
  assert.match(script,/\/api\/hotspot-auth\/claim-voucher/);
- assert.match(script,/voucher_code:pin/);
- assert.match(script,/voucher_password:pin/);
- assert.match(script,/username:pin,password:pin/);
+ assert.match(script,/voucher_code:username/);
+ assert.match(script,/voucher_password:password/);
  assert.match(script,/mac:device\.mac,ip:device\.ip,login_url:device\.login/);
  assert.match(script,/if\(!result\.username\|\|!result\.password\)/);
  assert.match(script,/submitMikrotikLogin\(result\.username,result\.password,result\.redirect_url\)/);

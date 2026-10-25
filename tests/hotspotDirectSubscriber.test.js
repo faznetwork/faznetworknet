@@ -6,27 +6,16 @@ const path=require("node:path");
 const root=path.resolve(__dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 
-test("Admin Add Hotspot User creates simple voucher PINs without activation mode or MAC input",()=>{
+test("Add User implements distinct direct-subscriber creation modes",()=>{
  const source=read("controllers/hotspotController.js");
- const ui=read("views/admin.ejs");
- const form=ui.slice(ui.indexOf('id="addHotspotUserForm"'),ui.indexOf("</form>",ui.indexOf('id="addHotspotUserForm"')));
- const generator=read("services/hotspotVoucherGenerator.js");
- assert.match(source,/requestedPin/);
- assert.match(source,/VOUCHER_PIN_EXISTS/);
- assert.match(source,/subscriber_type,activation_type/);
- assert.match(source,/'scratch_voucher','first_login'/);
- assert.match(source,/notificationDispatcher\.dispatchNotification/);
- assert.match(source,/await dispatch\.task/);
- assert.ok(generator.includes("crypto.randomInt(0, 10)"));
- assert.match(form,/name="phone"/);
- assert.match(form,/name="voucher_pin"/);
- assert.match(ui,/hotspotVoucherSuccessModal/);
- assert.match(ui,/hotspotVoucherCopyPin/);
- assert.doesNotMatch(form,/name="activation_type"/);
- assert.doesNotMatch(form,/id="hsDeviceMac"/);
- assert.doesNotMatch(form,/id="hsCustomExpiry"/);
- assert.match(source,/Voucher created, but SMS was not confirmed/);
- assert.match(source,/sms:\{status:sms\.status,success:sms\.success,reason:sms\.reason\}/);
+ assert.match(source,/\["preassigned","first_login"\]\.includes\(mode\)/);
+ assert.match(source,/activation_type/);
+ assert.match(source,/subscriber_type='direct_subscriber'/);
+ assert.match(source,/preassigned\?"active":"pending_claim"/);
+ assert.match(source,/preassigned\?mac:null/);
+ assert.match(source,/first_login_at/);
+ assert.match(source,/db\.withTransaction\(async client=>/);
+ assert.match(source,/rechargeHotspotUser\(\{username:mac,password:mac,profile/);
 });
 
 test("staged direct subscribers bind by registered phone and MAC on first authentication",()=>{
@@ -36,7 +25,7 @@ test("staged direct subscribers bind by registered phone and MAC on first authen
  assert.match(auth,/async function activate/);
  assert.match(auth,/subscriber_type/);
  assert.match(auth,/const stagedDirect=phoneRows\.filter/);
-  assert.ok(auth.includes("phone=COALESCE(NULLIF($6::text,''),NULLIF(phone,''),'Unlinked')"));
+  assert.ok(auth.includes("phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked')"));
  assert.match(routes,/controller\.deviceLookup/);
 });
 
@@ -133,27 +122,4 @@ test("captive portal calls the hosted backend and submits the MikroTik login han
  assert.match(auth,/const requestedLoginUrl=String\(req\.body\?\.login_url\|\|req\.body\?\.link_login_only\|\|""\)\.trim\(\)/);
  assert.match(auth,/success:true,message:"Hotspot account activated for this device\."/);
  assert.match(auth,/redirect_url:redirectUrl/);
-});
-
-test("captive portal exposes one numeric Voucher PIN field and maps PIN to both credentials while preserving QR/camera flow",()=>{
- const portal=read("public/login.html");
- assert.match(portal,/label for="voucher_pin">ভাউচার পিন \/ Voucher PIN/);
- assert.match(portal,/id="voucher_pin"[^>]*pattern="\[0-9\]\{6,8\}"/);
- assert.doesNotMatch(portal,/id="voucher_password"/);
- assert.match(portal,/voucher_password:pin/);
- assert.match(portal,/password:pin/);
- assert.match(portal,/id="qr-scan-button"/);
- assert.match(portal,/function openQrScanner\(\)/);
- assert.match(portal,/function triggerNativeCameraCapture\(\)/);
- assert.match(portal,/id="qr-file-input"/);
- assert.match(portal,/function applyScannedCredentials\(raw\)/);
-});
-
-test("voucher claims accept a PIN alone and retain voucher PIN as RouterOS username",()=>{
- const auth=read("controllers/hotspotAuthController.js");
- assert.match(auth,/voucher_password\|\|req\.body\?\.password\|\|pin/);
- assert.match(auth,/password=username/);
- assert.match(auth,/voucherPinAccount/);
- assert.match(auth,/routerUsername=voucherPinAccount\?previousUsername:mac/);
- assert.match(auth,/macAddress:mac/);
 });

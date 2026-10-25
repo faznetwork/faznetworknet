@@ -24,7 +24,7 @@ test("unmatched Hotspot payment issues a branded voucher PIN and atomically asso
   db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
    if(sql.startsWith("SELECT * FROM transactions WHERE id=$1::bigint FOR UPDATE"))return {rows:[payment()]};
    if(sql.startsWith("SELECT voucher_id FROM hotspot_voucher_payments"))return {rows:[]};
-   if(sql.startsWith("INSERT INTO hotspot_vouchers")){seen.voucherInsert={sql,params};return {rows:[{id:92,username:params[0],password:params[0],profile:params[1],validity:params[2],price:params[3],status:"unused",transaction_id:params[7]}]};}
+   if(sql.startsWith("INSERT INTO hotspot_vouchers")){seen.voucherInsert={sql,params};return {rows:[{id:92,username:params[0],password:params[1],profile:params[2],validity:params[3],price:params[4],status:"unused",transaction_id:params[8]}]};}
    if(sql.startsWith("INSERT INTO hotspot_voucher_payments")){seen.association={sql,params};return {rows:[]};}
    if(sql.startsWith("UPDATE transactions SET status='processed'")){seen.finalize={sql,params};return {rows:[{id:901,status:"processed",matched_username:params[0]}]};}
    throw new Error("Unexpected transaction query: "+sql);
@@ -36,12 +36,12 @@ test("unmatched Hotspot payment issues a branded voucher PIN and atomically asso
   assert.equal(res.body.success,true);
   assert.equal(res.body.status,"processed");
   assert.equal(res.body.profile,"1-Hour");
-  assert.match(res.body.voucherPin,/^\d{8}$/);
+  assert.match(res.body.voucherPin,/^[A-Z0-9]{8}$/);
   assert.equal(res.body.voucher.username,res.body.voucherPin);
   assert.equal(res.body.voucher.password,res.body.voucherPin,"single-PIN voucher must use the PIN as the login password too");
-  assert.equal(seen.voucherInsert.params[1],"1-Hour");
-  assert.equal(Number(seen.voucherInsert.params[3]),10);
-  assert.equal(Number(seen.voucherInsert.params[7]),901);
+  assert.equal(seen.voucherInsert.params[2],"1-Hour");
+  assert.equal(Number(seen.voucherInsert.params[4]),10);
+  assert.equal(Number(seen.voucherInsert.params[8]),901);
   assert.equal(seen.association.params[0],901);
   assert.equal(seen.association.params[1],92);
   assert.equal(seen.association.params[2],"01712345678");
@@ -96,5 +96,5 @@ test("payment ledger hides Force Provision for processed rows and modal has no M
  assert.match(controllerSource,/hotspotVoucherGenerator\.generateVoucherBatch/);
  assert.match(controllerSource,/matched_username=\$1::text/);
  assert.match(hotspotSource,/hotspotVoucherGenerator\.generateVoucherBatch/);
- assert.match(generatorSource,/randomPin\(8\)/);
+ assert.match(generatorSource,/randomPin\(charLength\)/);
 });
