@@ -24,7 +24,7 @@ test("generates scratch vouchers in the DB ledger without provisioning RouterOS 
  assert.ok(state.queries.every(q=>/scratch_voucher|SELECT value FROM app_settings/.test(q.sql)));
  assert.ok(state.vouchers.every(v=>v.status==="unused"&&v.profile==="Gold"&&v.validity==="1d"));
  assert.equal(new Set(state.vouchers.map(v=>v.username)).size,3);
- assert.ok(state.vouchers.every(v=>/^\\d{8}$/.test(v.username)&&v.password===v.username));
+ assert.ok(state.vouchers.every(v=>/^\d{8}$/.test(v.username)&&v.password===v.username));
  const insertQuery=state.queries.find(q=>/INSERT INTO hotspot_vouchers/i.test(q.sql));
  assert.ok(insertQuery);assert.match(insertQuery.sql,/ON CONFLICT DO NOTHING RETURNING/i);
  assert.doesNotMatch(insertQuery.sql,/ON CONFLICT\s*\(username\)/i);
@@ -33,7 +33,7 @@ test("ignores legacy prefix and length inputs while enforcing numeric PIN identi
  const {controller,state}=loadController(),res=responseRecorder();
  await controller.generate({body:{quantity:2,profile:"Gold",price:10,userPrefix:"LEGACY-",charLength:16}},res);
  assert.equal(res.statusCode,201);
- assert.ok(state.vouchers.every(v=>/^\\d{8}$/.test(v.username)&&v.password===v.username));
+ assert.ok(state.vouchers.every(v=>/^\d{8}$/.test(v.username)&&v.password===v.username));
 });
 test("rejects invalid quantities before database or RouterOS work",async()=>{
  const {controller,state}=loadController(),res=responseRecorder();
