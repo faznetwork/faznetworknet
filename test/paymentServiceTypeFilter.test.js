@@ -44,7 +44,9 @@ test("Hotspot filter includes explicit type, scratch transactions and voucher-li
  assert.equal(res.body.service_type,"hotspot");
  assert.ok(calls.every(call=>call.sql.includes("hotspot_voucher_payments")));
  assert.ok(calls.every(call=>call.sql.includes("hotspot_vouchers")));
- assert.ok(calls.every(call=>call.params.length===0));
+ assert.deepEqual(calls[0].params,[]);
+ assert.deepEqual(calls[1].params,[50,0]);
+ assert.deepEqual(calls[2].params,[]);
 });
 
 test("All Payments remains unfiltered and keeps existing pagination",async()=>{
@@ -85,7 +87,7 @@ test("Payments submenu and SPA route preserve dedicated service filters without 
 test("Customer type resolution never emits Unknown and prioritizes Hotspot evidence",async()=>{
  const {calls}=await runList(undefined);
  const sql=calls.find(call=>call.sql.startsWith("SELECT t.*")).sql;
- assert.ok(sql.includes("COALESCE(t.service_type,'')='hotspot'"));
+ assert.ok(sql.includes("LOWER(TRIM(COALESCE(t.service_type,'')))='hotspot'"));
  assert.ok(sql.includes("SCRATCH-%"));
  assert.ok(sql.includes("hotspot_voucher_payments hvp WHERE hvp.transaction_id=t.id"));
  assert.ok(sql.includes("hotspot_vouchers hv WHERE"));
