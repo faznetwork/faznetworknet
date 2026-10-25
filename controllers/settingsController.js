@@ -95,11 +95,19 @@ async function syncMikrotikProfilesInternal(){
  for(const p of pppoeProfiles){
   await db.query("INSERT INTO pppoe_profiles(name,rate_limit,local_address,remote_address,session_timeout,idle_timeout,only_one,change_tcp_mss,comment,router_id,raw_config,synced_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW(),NOW()) ON CONFLICT(name) DO UPDATE SET rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,session_timeout=EXCLUDED.session_timeout,idle_timeout=EXCLUDED.idle_timeout,only_one=EXCLUDED.only_one,change_tcp_mss=EXCLUDED.change_tcp_mss,comment=EXCLUDED.comment,router_id=EXCLUDED.router_id,raw_config=EXCLUDED.raw_config,synced_at=NOW(),updated_at=NOW()",[p.name,p.rateLimit,p.localAddress,p.remoteAddress,p.sessionTimeout,p.idleTimeout,Boolean(p.onlyOne),String(p.changeTcpMss||"").toLowerCase()==="yes",p.comment||"",p.id||null,JSON.stringify(p.raw||p)]);
  }
- const current=await getSettingsMap(["hotspot_profile_metadata"]);let metadata={};try{metadata=JSON.parse(current.hotspot_profile_metadata||"{}");}catch(_){}
- if(!metadata||typeof metadata!=="object"||Array.isArray(metadata))metadata={};
- for(const p of hotspotProfiles){const name=String(p.name||"");if(!metadata[name])metadata[name]={};}
- await upsertSetting("hotspot_profile_metadata",JSON.stringify(metadata));
- return {pppoeProfiles:pppoeProfiles.length,hotspotProfiles:hotspotProfiles.length,message:"Live MikroTik profiles synced into the local profile cache. Existing prices, profile metadata, and customer records were preserved."};
+ // Do not mutate metadata until the RouterOS profile query above has completed successfully.
+ // Rebuild from the live RouterOS list so metadata for removed profiles cannot survive sync.
+ const current=await getSettingsMap(["hotspot_profile_metadata"]);let existingMetadata={};
+ try{existingMetadata=JSON.parse(current.hotspot_profile_metadata||"{}");}catch(error){console.error("[MikroTik profile sync] Invalid hotspot_profile_metadata JSON; rebuilding from live profiles.",error);}
+ if(!existingMetadata||typeof existingMetadata!=="object"||Array.isArray(existingMetadata))existingMetadata={};
+ const liveMetadata={};
+ for(const p of hotspotProfiles){
+  const name=String(p.name||"").trim();
+  if(!name)continue;
+  liveMetadata[name]=Object.prototype.hasOwnProperty.call(existingMetadata,name)&&existingMetadata[name]&&typeof existingMetadata[name]==="object"&&!Array.isArray(existingMetadata[name])?existingMetadata[name]:{};
+ }
+ await upsertSetting("hotspot_profile_metadata",JSON.stringify(liveMetadata));
+ return {pppoeProfiles:pppoeProfiles.length,hotspotProfiles:hotspotProfiles.length,message:"Live MikroTik profiles synced; metadata for profiles absent from RouterOS was purged."};
 }
 async function saveMikrotik(req,res){
  try{
