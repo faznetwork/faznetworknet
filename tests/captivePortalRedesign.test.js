@@ -32,7 +32,7 @@ test("voucher login uses a single PIN field without remember-member legacy contr
  assert.match(script,/voucher_password:pin/);
  assert.match(script,/username:pin,password:pin/);
  assert.match(portal,/autocomplete="one-time-code"/);
- assert.match(portal,/pattern="[0-9]{6,8}"/);
+ assert.ok(portal.includes('pattern="[0-9]{6,8}"'));
  assert.doesNotMatch(portal,/remember-voucher|remember-member|id="router-error"/);
  assert.match(portal,/\$\(link-login-only\)/);
  assert.match(portal,/\$\(link-orig\)/);
