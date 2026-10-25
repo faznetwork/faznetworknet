@@ -3227,17 +3227,7 @@
                           </div>
                         </div>
 
-                        <div class="hs-create-step">
-                          <span class="hs-create-step-number" aria-hidden="true">4</span>
-                          <div class="hs-create-step-content">
-                            <label class="hs-create-label" for="hsServer">Hotspot Server <span class="text-muted fw-normal">(Optional)</span></label>
-                            <select id="hsServer" name="server" class="hs-create-select">
-                              <option value="all">All Hotspot servers (default)</option>
-                            </select>
-                            <p class="hs-create-help mt-2 mb-0">Choose a specific server only when required; otherwise keep the default.</p>
-                          </div>
-                        </div>
-
+                        <select id="hsServer" name="server" hidden><option value="all">All Hotspot servers</option></select>
                         <div class="mb-3"><label class="hs-create-label" for="hsCustomerNote">Optional Note / Address</label><textarea id="hsCustomerNote" name="note" class="form-control" rows="2" maxlength="1000" placeholder="Internal reference only"></textarea></div>
                         <div class="hs-create-actions">
                           <button type="button" id="hsClearForm" class="btn btn-outline-secondary hs-create-reset">
@@ -3386,17 +3376,15 @@
             const updatePreview = () => {
                 const p = selectedProfile();
                 const validity = validityText(p);
-                const selectedServer = server.value || 'all';
                 if (validityLabel) validityLabel.textContent = p ? validity + ' — starts at first captive login' : 'Select a profile';
-                const preassigned = activationMode() === 'preassigned';
-                putText('hsPreviewUsername', preassigned ? (macInput.value.trim().toUpperCase() || 'Enter device MAC') : 'Assigned at first login (Device MAC)');
-                putText('hsPreviewPassword', preassigned ? (macInput.value.trim().toUpperCase() || 'Same as device MAC') : 'Same as device MAC after first login');
+                putText('hsPreviewUsername', String(passwordInput?.value || '').trim() || 'Auto-generated 6-digit voucher PIN');
+                putText('hsPreviewPassword', 'Voucher PIN');
                 putText('hsPreviewProfile', p ? String(p.name || '—') : '—');
                 putText('hsPreviewPrice', p ? priceText(p) : '—');
                 putText('hsPreviewValidity', p ? validity : '—');
-                putText('hsPreviewServer', selectedServer === 'all' ? 'All Hotspot servers (default)' : selectedServer);
-                putText('hsPreviewExpiry', preassigned && expiryInput.value ? expiryInput.value.replace('T',' ') : preassigned ? 'Package validity starts now' : 'Starts at first login (Continuous clock)');
-                putText('hsPreviewComment', preassigned ? 'Exp: ' + (expiryInput.value ? expiryInput.value.replace('T',' ') + ':00' : 'calculated from package') : 'FAZ | PENDING | ' + (p ? String(p.name || 'PROFILE') : '—'));
+                putText('hsPreviewServer', 'All Hotspot servers (default)');
+                putText('hsPreviewExpiry', 'Starts at first login (continuous clock)');
+                putText('hsPreviewComment', 'Voucher PIN; first-login activation');
             };
 
             const updateButton = () => {
