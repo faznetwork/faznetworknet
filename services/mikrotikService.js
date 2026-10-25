@@ -1212,28 +1212,6 @@ class MikroTikService {
     });
   }
 
-  async createVoucherHotspotUser(data) {
-    const username=this._str(data.username||data.voucherPin).trim();
-    const password=this._str(data.password||username).trim();
-    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address);
-    const profile=this._str(data.profile).trim();
-    const limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
-    if(!/^\d{6,8}$/.test(username)||password!==username)throw new Error("Voucher Hotspot provisioning requires a 6 to 8 digit PIN as both username and password.");
-    if(!macAddress||!profile||(!this._str(data.validity).trim()&&!limitBytesTotal))throw new Error("Voucher provisioning requires a valid device MAC, profile, and time validity or data quota.");
-    const comment=this._hotspotExpiryComment(data);
-    return this._withConnection("Voucher Hotspot user creation",async connection=>{
-      const rows=await connection.write("/ip/hotspot/user/print");
-      const existing=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name).trim()===username&&item[".id"]);
-      if(existing.length){
-        const item=existing[0],actualMac=normalizeHotspotMac(item["mac-address"]);
-        if(actualMac!==macAddress||this._str(item.password)!==password||this._str(item.profile)!==profile)throw new Error("Voucher PIN already exists on RouterOS with a different MAC, password, or profile; refusing to overwrite it.");
-        return {username,password,macAddress,profile,limitBytesTotal,created:false,alreadyProvisioned:true,credentials:"voucher_pin"};
-      }
-      await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all","limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress,comment}));
-      return {username,password,macAddress,profile,limitBytesTotal,created:true,credentials:"voucher_pin"};
-    });
-  }
-
   async rechargeHotspotUser(data) {
     const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
     if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires a valid device MAC, profile, and time validity or a data quota.");

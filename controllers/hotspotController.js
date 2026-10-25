@@ -253,9 +253,12 @@ async function generate(req,res){
  const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
  const price=Number(body.price??0);
  const server=clean(body.server||"all",100)||"all";
+ const userPrefix=clean(body.userPrefix??body.user_prefix??"",20).replace(/[^a-zA-Z0-9_-]/g,"").toUpperCase();
+ const charLength=Number(body.charLength??body.char_length??6);
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>500)return res.status(400).json({success:false,code:"INVALID_QUANTITY",error:"Quantity must be a whole number from 1 to 500."});
  if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",error:"Select an existing Hotspot profile."});
  if(!Number.isFinite(price)||price<0||price>1000000)return res.status(400).json({success:false,code:"INVALID_PRICE",error:"Enter a valid non-negative price."});
+ if(!Number.isSafeInteger(charLength)||charLength<4||charLength>16)return res.status(400).json({success:false,code:"INVALID_PIN_LENGTH",error:"Voucher PIN length must be between 4 and 16 characters."});
  try{
   const routerProfiles=await mikrotikService.getHotspotProfiles();
   const meta=await readProfileMetadata();
@@ -277,7 +280,7 @@ async function generate(req,res){
   const normalizedValidity=String(profileValidity.validity||"").trim()||(quota?"0m":"");
   const batchId=crypto.randomUUID();
   const generated=await db.withTransaction(client=>hotspotVoucherGenerator.generateVoucherBatch({
-   client,profileName,validity:normalizedValidity,price,server,quantity,batchId,
+   client,profileName,validity:normalizedValidity,price,server,quantity,userPrefix,charLength,batchId,
    comment:"Scratch voucher; profile validity applies on first successful login."
   }));
   const created=generated.vouchers;
@@ -286,80 +289,91 @@ async function generate(req,res){
  }catch(error){return errorResponse(res,error);}
 }
 async function createUser(req,res){
+  let savedId=null,routerProvisioned=false,previousRecord=null,createdNewRecord=false;
   try{
     const body=req.body&&typeof req.body==="object"?req.body:{};
     const phone=normalizeHotspotPhone(body.phone||body.customer_phone||"");
-    const customerName=clean(body.customer_name||body.name,160);
-    const note=clean(body.note,1000);
+    const rawMac=String(body.mac||body.mac_address||"").trim();
+    const mac=normalizeHotspotMac(rawMac);
     const requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100);
-    const requestedPin=String(body.voucher_pin||body.pin||body.password||"").trim();
-    if(!/^01[0-9]{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX)."});
+    const server=clean(body.server||"all",100)||"all";
+    const mode=String(body.activation_type||body.activationMode||(rawMac?"preassigned":"first_login")).trim().toLowerCase();
+    const preassigned=mode==="preassigned";
+    const customerName=clean(body.customer_name||body.name,160);
+    const note=clean(body.note||body.address,1000);
+    const customRaw=String(body.expires_at||body.custom_expiry||"").trim();
+    const customExpiry=customRaw?new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(customRaw)?customRaw+":00+06:00":customRaw):null;
+    if(!["preassigned","first_login"].includes(mode))return res.status(400).json({success:false,code:"INVALID_ACTIVATION_MODE",message:"Choose Pre-Assigned or On First Login."});
+    if(!customerName)return res.status(400).json({success:false,code:"CUSTOMER_NAME_REQUIRED",message:"Customer name is required for a direct subscriber."});
+    if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,code:"INVALID_ACCOUNT_PHONE",message:"Enter a valid 11-digit Bangladeshi phone number (01XXXXXXXXX)."});
+    if(preassigned&&(!rawMac||!mac))return res.status(400).json({success:false,code:"MAC_REQUIRED",message:"Pre-Assigned mode requires a valid device MAC address."});
+    if(!preassigned&&rawMac)return res.status(400).json({success:false,code:"ACTIVATION_MODE_MISMATCH",message:"Leave the MAC field empty for On First Login, or select Pre-Assigned."});
     if(!requestedProfile)return res.status(400).json({success:false,code:"PROFILE_REQUIRED",message:"Select a Hotspot package/profile."});
-    if(requestedPin&&!/^\d{6,8}$/.test(requestedPin))return res.status(400).json({success:false,code:"INVALID_VOUCHER_PIN",message:"Voucher PIN must contain 6 to 8 digits."});
-    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
-    const availableProfiles=Array.isArray(routerProfiles)?routerProfiles.filter(item=>item&&String(item.name||"").trim()):[];
-    const metadataIdentifierMatches=availableProfiles.filter(item=>{
-      const details=meta[String(item.name)]||{};
-      const identifiers=[details.id,details.profileId,details.profile_id,details.packageId,details.package_id];
-      return identifiers.some(identifier=>identifier!==undefined&&identifier!==null&&String(identifier).trim()===requestedProfile);
-    });
-    let candidates=metadataIdentifierMatches;
-    if(!candidates.length)candidates=availableProfiles.filter(item=>String(item.name).trim()===requestedProfile);
-    if(!candidates.length)candidates=availableProfiles.filter(item=>profileIdentifierMatches(item.name,meta[String(item.name)]||{},requestedProfile));
+    if(customRaw&&(!preassigned||!customExpiry||Number.isNaN(customExpiry.getTime())||customExpiry.getTime()<=Date.now()))return res.status(400).json({success:false,code:"INVALID_EXPIRY",message:"Custom expiry is allowed only in Pre-Assigned mode and must be a valid future date and time."});
+    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles().catch(()=>[]),readProfileMetadata()]);
+    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
     if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
-    if(candidates.length!==1)return res.status(400).json({success:false,code:candidates.length?"PROFILE_NOT_FOUND_OR_AMBIGUOUS":"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:candidates.length?"The selected package/profile identifier matches multiple saved Hotspot profiles. Please refresh packages and select one profile.":"The selected package/profile could not be mapped to a saved MikroTik Hotspot profile."});
+    if(candidates.length!==1)return res.status(400).json({success:false,code:"PROFILE_NOT_FOUND_OR_AMBIGUOUS",message:"The selected package/profile could not be mapped to exactly one saved Hotspot profile."});
     const profileRow=candidates[0],profile=String(profileRow.name||"").trim(),profileMeta=meta[profile]||{};
     const profileValidity=profileMeta.validityValue?normalizeProfileValidity(profileMeta.validityValue,profileMeta.validityUnit):parseStoredValidity(profileRow);
     const validity=String(profileValidity.validity||"").trim(),quota=Number(profileMeta.limitBytesTotal||profileValidity.limitBytesTotal||0);
-    if(!validity&&!quota)return res.status(400).json({success:false,code:"PROFILE_INVALID",message:"Configure a time validity or data quota for this package before creating a voucher."});
+    if(!validity&&!quota&&!customExpiry)return res.status(400).json({success:false,code:"PROFILE_INVALID",message:"Configure a time validity or data quota for this package before creating an account."});
+    const durationMs=validityMs(validity);
+    const now=new Date();
+    const expiresAt=preassigned?(customExpiry||(durationMs?new Date(now.getTime()+durationMs):null)):null;
+    if(preassigned&&!expiresAt&&!quota)return res.status(400).json({success:false,code:"PROFILE_INVALID",message:"The selected profile must have a validity duration or data quota."});
+    const dhakaStamp=date=>{const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(date).reduce((o,x)=>(o[x.type]=x.value,o),{});return p.year+"-"+p.month+"-"+p.day+" "+p.hour+":"+p.minute+":"+p.second;};
+    const comment=preassigned?(expiresAt?"Exp: "+dhakaStamp(expiresAt):(quota?"FAZ|DATA_ONLY":"")):"FAZ|PENDING|DIRECT_SUBSCRIBER|PROFILE="+profile;
     const priceResult=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 1",[profile]).catch(()=>({rows:[]}));
     const price=Number(profileMeta.price??priceResult.rows?.[0]?.price??0);
-    let pin=requestedPin,stored;
-    for(let attempt=0;attempt<12&&!stored;attempt++){
-      if(!pin){pin="";for(let i=0;i<6;i++)pin+=String(crypto.randomInt(0,10));}
-      try{
-        stored=await db.withTransaction(async client=>{
-          await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
-          const duplicate=await client.query("SELECT id FROM hotspot_vouchers WHERE UPPER(BTRIM(username))=$1 LIMIT 1 FOR UPDATE",[pin]);
-          if(duplicate.rows?.length)throw hotspotError("VOUCHER_PIN_EXISTS",409,"That voucher PIN already exists. Choose another PIN.");
-          const insertSql="INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,mac_lock,subscriber_type,activation_type) VALUES($1,$1,$2,$3::text,$4::numeric,'unused',$5,$6,'all',$7::text,$8::text,$9,NULL,$10,$11,'not_required',false,'scratch_voucher','first_login') RETURNING id,username,profile,profile_id,phone,status,customer_name,note,validity,price,created_at";
-          const insertValues=[pin,profile,validity,price,"Voucher; validity starts on first successful login.",phone,validity,quota?String(quota):null,String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||requestedProfile),customerName||null,note||null];
-          let result;
-          try {
-            result=await client.query(insertSql,insertValues);
-          } catch(error) {
-            console.error("[Hotspot user creation] voucher INSERT failed", {
-              message:error?.message||String(error),
-              code:error?.code||null,
-              parameterColumns:{"$1":"username/password","$2":"profile","$3":"validity","$4":"price","$5":"comment","$6":"phone","$7":"time_limit","$8":"data_limit","$9":"profile_id","$10":"customer_name","$11":"note"}
-            });
-            throw error;
-          }
-          if(!result.rows?.length)throw new Error("Voucher could not be saved in PostgreSQL.");
-          return result.rows[0];
-        });
-      }catch(error){
-        if(error.code==="VOUCHER_PIN_EXISTS"&&!requestedPin){pin="";continue;}
-        throw error;
+    const profileId=String(profileMeta.id||profileMeta.profileId||profileMeta.profile_id||profileMeta.packageId||profileMeta.package_id||profileMeta.packageName||profileMeta.package_name||profileMeta.alias||requestedProfile);
+    const stagedUsername="STAGED-"+crypto.randomUUID();
+    const initialUsername=preassigned?mac:stagedUsername;
+    const initialPassword=preassigned?mac:crypto.randomBytes(24).toString("base64url");
+    const stored=await db.withTransaction(async client=>{
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-phone:"+phone]);
+      if(preassigned)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-direct-mac:"+mac]);
+      const existingPhone=await client.query("SELECT * FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1,'880'||SUBSTRING($1 FROM 2)) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY id DESC FOR UPDATE",[phone]);
+      const phoneRows=existingPhone.rows||[];
+      if(phoneRows.some(row=>String(row.status||"").toLowerCase()==="active"&&(!row.expires_at||new Date(row.expires_at).getTime()>Date.now())))throw hotspotError("ACTIVE_PACKAGE_EXISTS",409,"This phone already has an active direct Hotspot subscriber/package.");
+      const existingMac=preassigned?await client.query("SELECT * FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1) OR LOWER(username)=LOWER($1)) AND COALESCE(subscriber_type,'legacy')='direct_subscriber' AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused','active','expired') ORDER BY id DESC FOR UPDATE",[mac]):{rows:[]};
+      if(preassigned&&(existingMac.rows||[]).some(row=>normalizeHotspotPhone(row.phone)&&normalizeHotspotPhone(row.phone)!==phone))throw hotspotError("MAC_ALREADY_BOUND",409,"This MAC address is already bound to another direct subscriber.");
+      const reusable=phoneRows.find(row=>["expired","unused","pending_claim"].includes(String(row.status||"").toLowerCase())||Boolean(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now()));
+      const params=[initialUsername,initialPassword,profile,validity,price,comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,preassigned?now:null,expiresAt,true];
+      if(reusable){
+        previousRecord=reusable;
+        const result=await client.query("UPDATE hotspot_vouchers SET username=$1,password=$2,profile=$3,validity=$4,price=$5,status=$18,comment=$6,phone=$7,server=$8,time_limit=$9,data_limit=$10,profile_id=$11,mac_address=$12,customer_name=$13,note=$14,first_login_at=$15,expires_at=$16,mac_lock=$17,subscriber_type='direct_subscriber',activation_type=$19,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$20 RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at,first_login_at",[...params,preassigned?"active":"pending_claim",mode,reusable.id]);
+        if(!result.rows?.length)throw new Error("Direct subscriber could not be saved in PostgreSQL.");
+        return result.rows[0];
+      }
+      const result=await client.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit,profile_id,mac_address,customer_name,note,cleanup_status,first_login_at,expires_at,mac_lock,subscriber_type,activation_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'not_required',$16,$17,$18,'direct_subscriber',$19) RETURNING id,username,profile,profile_id,phone,status,mac_address,customer_name,note,expires_at,first_login_at",[initialUsername,initialPassword,profile,validity,price,preassigned?"active":"pending_claim",comment,phone,server,validity||null,quota?String(quota):null,profileId,preassigned?mac:null,customerName,note,preassigned?now:null,expiresAt,true,mode]);
+      if(!result.rows?.length)throw new Error("Direct subscriber could not be saved in PostgreSQL.");
+      createdNewRecord=true;
+      return result.rows[0];
+    });
+    savedId=stored.id;
+    if(preassigned){
+      await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,comment,server,macAddress:mac,previousUsername:previousRecord?.username});
+      routerProvisioned=true;
+      await db.query("UPDATE hotspot_vouchers SET status='active',username=$2,password=$2,mac_address=$2,first_login_at=COALESCE(first_login_at,$3),expires_at=$4,comment=$5,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1",[stored.id,mac,now,expiresAt,comment]);
+    }
+    if(phone){
+      const customerLabel=String(stored.customer_name||customerName||"গ্রাহক").trim()||"গ্রাহক";
+      if(preassigned){
+        const expiryStr=expiresAt?new Date(expiresAt).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
+        notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_account_created",to:phone,recipient:phone,phone,username:preassigned?mac:stagedUsername,customer:{username:preassigned?mac:stagedUsername,name:customerLabel,phone,profile},customerName:customerLabel,message:"আসসালামু আলাইকুম "+customerLabel+", FAZ NETWORK-এ আপনার হটস্পট অ্যাকাউন্ট "+(preassigned?"সফলভাবে চালু করা হয়েছে।":"তৈরি করা হয়েছে; প্রথম লগইনে সক্রিয় হবে।")+"\nপ্যাকেজ: "+profile+"\nমেয়াদ: "+expiryStr+" পর্যন্ত।\nধন্যবাদ!",useMessageDirectly:true,channels:["whatsapp"],variables:{name:customerLabel,username:preassigned?mac:stagedUsername,profile,package:profile,expiry_date:expiryStr}});
       }
     }
-    if(!stored)return res.status(503).json({success:false,code:"VOUCHER_PIN_ALLOCATION_FAILED",message:"Could not allocate a unique voucher PIN. No voucher was created; please retry."});
-    const expiryLabel=validity||"data quota";
-    const message="FAZ NETWORK Voucher\nPackage: "+profile+"\nVoucher PIN: "+pin+"\nValidity: "+expiryLabel+" (starts at first login).";
-    let sms={success:false,status:"failed",reason:"dispatch_not_started"};
-    try{
-      const dispatch=notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_account_created",to:phone,recipient:phone,phone,username:pin,customer:{username:pin,name:customerName||"Customer",phone,profile},customerName:customerName||"Customer",message,useMessageDirectly:true,channels:["sms"],variables:{name:customerName||"Customer",username:pin,profile,package:profile,expiry_date:expiryLabel}});
-      const result=await dispatch.task;
-      const channel=(result.results||[]).find(item=>item.channel==="sms");
-      sms=channel?{success:channel.status==="sent"||channel.status==="success"||channel.status==="delivered",status:channel.status||"unknown",reason:channel.reason||channel.error||null}:{success:false,status:result.success?"unknown":"failed",reason:result.error||"SMS channel returned no result"};
-      if(!result.success)console.error("[Hotspot voucher SMS] dispatch failed",{event:"hotspot_account_created",voucherId:stored.id,phone,status:sms.status,reason:sms.reason});
-    }catch(error){
-      console.error("[Hotspot voucher SMS] dispatch threw",{event:"hotspot_account_created",voucherId:stored.id,phone,message:error?.message||String(error)});
-      sms={success:false,status:"failed",reason:error?.message||"SMS dispatch failed"};
-    }
     hotspotListCache.expiresAt=0;
-    return res.status(201).json({success:true,subscriber_type:"scratch_voucher",pending_activation:true,message:sms.success?"Voucher created and SMS accepted by the gateway.":"Voucher created, but SMS was not confirmed; check SMS Alerts settings and retry notification.",sms:{status:sms.status,success:sms.success,reason:sms.reason},user:{id:stored.id,username:pin,voucher_pin:pin,phone,customer_name:customerName||null,profile:stored.profile,profile_id:stored.profile_id,status:stored.status,validity,expires_at:null}});
-  }catch(error){return errorResponse(res,error);}
+    return res.status(201).json({success:true,subscriber_type:"direct_subscriber",activation_type:mode,pending_activation:!preassigned,instant_provisioned:preassigned,message:preassigned?"Direct subscriber created and provisioned on MikroTik immediately.":"Direct subscriber staged in PostgreSQL; MAC binding and validity countdown begin on first captive-portal authentication.",user:{id:stored.id,username:preassigned?mac:null,phone,customer_name:customerName,profile:stored.profile,profile_id:stored.profile_id,status:stored.status,mac_address:preassigned?mac:null,first_login_at:stored.first_login_at||null,expires_at:expiresAt?expiresAt.toISOString():null}});
+  }catch(e){
+    if(savedId&&!routerProvisioned){
+      if(previousRecord){
+        await db.query("UPDATE hotspot_vouchers SET username=$2,password=$3,profile=$4,validity=$5,price=$6,status=$7,comment=$8,phone=$9,server=$10,time_limit=$11,data_limit=$12,profile_id=$13,mac_address=$14,customer_name=$15,note=$16,first_login_at=$17,expires_at=$18,mac_lock=$19,expired_at=$20,cleanup_status=$21,cleanup_error=$22,router_removed_at=$23,subscriber_type=$24,activation_type=$25,updated_at=NOW() WHERE id=$1",[savedId,previousRecord.username,previousRecord.password,previousRecord.profile,previousRecord.validity,previousRecord.price,previousRecord.status,previousRecord.comment,previousRecord.phone,previousRecord.server,previousRecord.time_limit,previousRecord.data_limit,previousRecord.profile_id,previousRecord.mac_address,previousRecord.customer_name,previousRecord.note,previousRecord.first_login_at,previousRecord.expires_at,previousRecord.mac_lock,previousRecord.expired_at,previousRecord.cleanup_status,previousRecord.cleanup_error,previousRecord.router_removed_at,previousRecord.subscriber_type,previousRecord.activation_type]).catch(()=>{});
+      }else if(createdNewRecord&&preassigned)await db.query("DELETE FROM hotspot_vouchers WHERE id=$1 AND subscriber_type='direct_subscriber' AND LOWER(username)=LOWER($2)",[savedId,normalizeHotspotMac(req.body?.mac||req.body?.mac_address||"")]).catch(()=>{});
+    }
+    return errorResponse(res,e);
+  }
 }
 async function dashboardMetrics(req,res){
   try{
