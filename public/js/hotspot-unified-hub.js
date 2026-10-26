@@ -181,7 +181,7 @@
   if(action==='add'){if(!state.profiles)await loadResource('profiles',false);openBindingForm(null);return;}
   var row=button.dataset.binding?JSON.parse(button.dataset.binding):null;
   if(action==='edit'){if(!state.profiles)await loadResource('profiles',false);openBindingForm(row);return;}
-  if(action==='renew'){if(!state.profiles)await loadResource('profiles',false);row.expiry_date=dhakaDateInput(row.expiry_date&&new Date(row.expiry_date).getTime()>Date.now()?new Date(new Date(row.expiry_date).getTime()+30*86400000):null);openBindingForm(row);return;}
+  if(action==='renew'){if(!state.profiles)await loadResource('profiles',false);row.binding_type='bypassed';row.expiry_date=dhakaDateInput(row.expiry_date&&new Date(row.expiry_date).getTime()>Date.now()?new Date(new Date(row.expiry_date).getTime()+30*86400000):null);openBindingForm(row);return;}
   if(action==='delete'){
    if(!window.confirm('Unbind this device from MikroTik and archive the binding?'))return;
    button.disabled=true;try{await request('/api/hotspot/ip-bindings/'+encodeURIComponent(button.dataset.id),{method:'DELETE'});state.bindings=null;await loadResource('bindings',true);}catch(error){window.alert(error.message);button.disabled=false;}
