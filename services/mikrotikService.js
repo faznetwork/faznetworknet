@@ -21,8 +21,8 @@ if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyRe
   });
 }
 
-const CONNECTION_TIMEOUT_MS = 10000;
-const OPERATION_TIMEOUT_MS = 10000;
+const CONNECTION_TIMEOUT_MS = 15000;
+const OPERATION_TIMEOUT_MS = 30000;
 const DEFAULT_PORT = 8728;
 
 // IPv4 pool matching helpers: RouterOS ranges, CIDR and single IPs.
