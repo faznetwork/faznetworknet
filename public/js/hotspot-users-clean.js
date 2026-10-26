@@ -80,40 +80,27 @@
   }
   function actionButtons(u,context){
     const online=stateOf(u)==="online"&&Boolean(u.sessionId),scope=context==="mobile"?"mobile":"desktop";
-    const kick=online?'<button type="button" class="btn btn-sm btn-outline-warning hs-quick-kick" data-row-action="disconnect" data-id="'+esc(u.id)+'" aria-label="Quick kick '+esc(u.customer_name||u.name||u.username||"subscriber")+'" title="Quick kick"><span aria-hidden="true">⚡</span></button>':"";
-    return '<div class="hs-action-cluster btn-hotspot-action hs-action-'+scope+'" data-action-scope="'+scope+'">'+
-      '<button type="button" class="btn btn-sm btn-outline-primary hs-action-renew btn-action-renew" data-row-action="renew" data-id="'+esc(u.id)+'" aria-label="Renew '+esc(u.customer_name||u.name||u.username||"subscriber")+'" title="Renew"><span aria-hidden="true">🔄</span><span>Renew</span></button>'+kick+
-      '<button type="button" class="btn btn-sm btn-light border hs-kebab-toggle" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="More subscriber actions" title="More actions"><span aria-hidden="true">⋮</span></button>'+
+    const kick=online?'<button type="button" class="hs-quick-kick" data-row-action="disconnect" data-id="'+esc(u.id)+'" aria-label="Disconnect '+esc(u.customer_name||u.name||u.username||"subscriber")+'" title="Quick disconnect">⚡</button>':"";
+    return '<div class="hs-action-cluster btn-hotspot-action" data-action-scope="'+scope+'">'+kick+
+      '<button type="button" class="hs-kebab-toggle" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Subscriber actions">⋮</button>'+
       '<div class="hs-action-menu" role="menu" hidden>'+
-        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="edit" data-id="'+esc(u.id)+'"><span aria-hidden="true">✏️</span><span>Edit Details</span></button>'+
-        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="unbind" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔓</span><span>Reset MAC Binding</span></button>'+
+        '<button type="button" class="hs-action-item btn-action-renew" role="menuitem" data-row-action="renew" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔄</span> Renew / Extend Plan</button>'+
+        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="edit" data-id="'+esc(u.id)+'"><span aria-hidden="true">✏️</span> Edit Details</button>'+
+        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="unbind" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔓</span> Reset MAC Binding</button>'+
         '<hr>'+
-        '<button type="button" class="hs-action-item hs-action-danger" role="menuitem" data-row-action="archive" data-id="'+esc(u.id)+'"><span aria-hidden="true">🗑️</span><span>4-Layer Purge</span></button>'+
+        '<button type="button" class="hs-action-item hs-action-danger" role="menuitem" data-row-action="archive" data-id="'+esc(u.id)+'"><span aria-hidden="true">🗑️</span> Purge &amp; Revoke</button>'+
       '</div></div>';
   }
   function closeActionMenus(except){
     document.querySelectorAll(".hs-action-menu:not([hidden])").forEach(menu=>{
       if(except&&menu===except)return;
-      menu.hidden=true;
-      menu.style.removeProperty("left");menu.style.removeProperty("top");menu.style.removeProperty("max-height");
-      menu.style.removeProperty("display");menu.style.removeProperty("visibility");
-      const toggle=menu.__actionToggle||menu.closest(".hs-action-cluster")?.querySelector("[data-menu-toggle]");
+      menu.hidden=true;menu.style.removeProperty("left");menu.style.removeProperty("top");menu.style.removeProperty("max-height");
+      const toggle=menu.closest(".hs-action-cluster")?.querySelector("[data-menu-toggle]");
       if(toggle)toggle.setAttribute("aria-expanded","false");
-      const placeholder=menu.__actionPlaceholder;
-      if(placeholder?.parentNode){placeholder.parentNode.insertBefore(menu,placeholder);placeholder.remove();}
-      menu.__actionPlaceholder=null;menu.__actionToggle=null;
     });
   }
   function openActionMenu(toggle,menu){
-    closeActionMenus(menu);
-    if(menu.parentNode){
-      const placeholder=document.createComment("subscriber action menu");
-      menu.parentNode.insertBefore(placeholder,menu);menu.__actionPlaceholder=placeholder;
-    }
-    menu.__actionToggle=toggle;
-    const portal=toggle.closest(".fresh-hs-workspace")||document.body;
-    portal.appendChild(menu);
-    menu.hidden=false;menu.style.position="fixed";menu.style.display="block";menu.style.visibility="hidden";
+    closeActionMenus(menu);menu.hidden=false;menu.style.position="fixed";menu.style.display="block";menu.style.visibility="hidden";
     menu.style.maxHeight="min(70vh, 420px)";
     let box=menu.getBoundingClientRect();const rect=toggle.getBoundingClientRect(),gap=8,pad=8;
     const available=Math.max(120,window.innerHeight-pad*2);
@@ -156,9 +143,9 @@
     const cards=list.map((u,i)=>{
       const s=stateOf(u),ip=u.ip||u.address||"—",name=u.customer_name||u.name||"Unnamed Subscriber";
       return '<article class="hs-mobile-card mobile-sub-card" data-user-id="'+esc(u.id)+'">'+
-        '<div class="hs-mobile-row-one"><span class="hs-serial">#'+(i+1)+'</span><button type="button" class="hs-subscriber-name hs-mobile-name" data-row-action="edit" data-id="'+esc(u.id)+'">'+esc(name)+'</button><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span><span class="hs-state hs-state-'+s+'">'+esc(statusLabel(u))+'</span></div>'+
+        '<div class="hs-mobile-row-one"><span class="hs-serial">#'+(i+1)+'</span><button type="button" class="hs-subscriber-name hs-mobile-name" data-row-action="edit" data-id="'+esc(u.id)+'">'+esc(name)+'</button><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span><span class="hs-state hs-state-'+s+'">'+esc(statusLabel(u))+'</span>'+actionButtons(u,"mobile")+'</div>'+
         '<div class="hs-mobile-row-two"><span class="hs-subscriber-phone">'+esc(u.phone||"No phone")+'</span><span class="hs-mobile-separator" aria-hidden="true">·</span>'+copyMacButton(u)+'</div>'+
-        '<div class="hs-mobile-footer"><div class="hs-mobile-traffic"><strong>'+esc(ip)+'</strong><span>↑ '+esc(bytesLabel(u.bytesIn))+' · ↓ '+esc(bytesLabel(u.bytesOut))+'</span></div><div class="hs-mobile-expiry">'+remainTag(u)+'</div></div>'+'<div class="hs-mobile-actions">'+actionButtons(u,"mobile")+'</div>'+
+        '<div class="hs-mobile-footer"><div class="hs-mobile-traffic"><strong>'+esc(ip)+'</strong><span>↑ '+esc(bytesLabel(u.bytesIn))+' · ↓ '+esc(bytesLabel(u.bytesOut))+'</span></div><div class="hs-mobile-expiry">'+remainTag(u)+'</div></div>'+
       '</article>';
     }).join("");
     host.innerHTML=tabs+
