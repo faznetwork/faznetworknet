@@ -1,3 +1,4 @@
+const crypto=require("crypto");
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
@@ -593,6 +594,8 @@ async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
 async function verifyTrx(req,res){
+ const traceId=crypto.randomUUID();
+ console.info("[VERIFY-TRX]",{traceId,checkpoint:"verify:start"});
  const body=req.body&&typeof req.body==="object"?req.body:{},query=req.query&&typeof req.query==="object"?req.query:{};
  const fail=(status,code,message,extra={})=>res.status(status).json({success:false,code,error:message,message,...extra});
  if(!rateLimit(String(req.ip||"unknown")))return fail(429,"RATE_LIMITED","Too many verification attempts. Try again later.");
@@ -634,6 +637,7 @@ async function verifyTrx(req,res){
   const tx=found.rows[0],status=String(tx.status||"").trim().toLowerCase();
   if(tx.used===true||["processing","processed","paid","duplicate"].includes(status))return fail(409,"ALREADY_CLAIMED","This TrxID has already been used or is being processed.");
   if(status!=="unmatched")return fail(409,"TRANSACTION_NOT_ELIGIBLE","This transaction is not eligible for Hotspot verification.");
+  console.info("[VERIFY-TRX]",{traceId,checkpoint:"db:check:success"});
   const method=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
   if(method&&["bkash","nagad","rocket","upay"].includes(method)&&String(tx.channel||"").toLowerCase()!==method)return fail(400,"PAYMENT_METHOD_MISMATCH","Select the payment method used for this TrxID.");
   const amount=Number(tx.amount),requestedAmount=Number(body.amount);
@@ -698,22 +702,26 @@ async function verifyTrx(req,res){
    provisioningVoucher={...row,username,phone,mac_address:boundMac||null,expires_at:nextExpiry,first_login_at:firstLoginAt,comment:stagedComment,profile:profile.name,server:row.server||"all",id:row.id};
   });
   claimedTransactionId=null;
-  let activated=false,activationPending=false,accountUsername=provisioningVoucher?.username||("PENDING-"+phone),expiration=provisioningVoucher?.expires_at||null;
+  let activated=false,activationPending=false,routerActivationFailed=false,accountUsername=provisioningVoucher?.username||("PENDING-"+phone),expiration=provisioningVoucher?.expires_at||null;
   const mac=normalizeMac(provisioningVoucher?.mac_address||submittedMac);
   if(mac){
    try{
+    console.info("[VERIFY-TRX]",{traceId,checkpoint:"router:activation:start"});
     await mikrotikService.rechargeHotspotUser({username:mac,previousUsername:provisioningVoucher?.username,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment:provisioningVoucher?.comment||pendingComment,server:provisioningVoucher?.server||"all"});
     const final=await db.query("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active',comment=$2,first_login_at=COALESCE(first_login_at,NOW()),expires_at=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$4 RETURNING id,username,status,expires_at",[mac,provisioningVoucher?.comment||pendingComment,expiration,provisioningVoucher.id]);
     activated=Boolean(final.rows?.length);accountUsername=mac;
    }catch(routerError){
     activationPending=true;
-    console.error("[VERIFY-TRX] Payment recorded; MAC-bound RouterOS activation needs retry:",{mac,error:routerError?.message||String(routerError)});
+    routerActivationFailed=true;
+    const errorCode=String(routerError?.code||routerError?.name||"ROUTEROS_ACTIVATION_FAILED").slice(0,80);
+    console.error("[VERIFY-TRX]",{traceId,checkpoint:"router:activation:failed",errorCode});
    }
   }else activationPending=true;
   if(phone){
    const paymentMessage=`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK-এ আপনার ৳${amount} টাকা পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে (TrxID: ${tx.trx_id||cleanTrx})। ওয়াইফাই চালু করে ইন্টারনেট উপভোগ করুন। হেল্পলাইন: 01339932887`;
    require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_payment_received",to:phone,recipient:phone,phone,username:accountUsername,customer:{username:accountUsername,name:customerName,phone,profile:profile.name},customerName,message:paymentMessage,useMessageDirectly:true,excludeChannels:["email"],variables:{name:customerName,username:accountUsername,amount,profile:profile.name,gateway:tx.channel,trx_id:tx.trx_id||cleanTrx,email_idempotency_key:"hotspot-payment:"+String(claimedTransactionId||tx.id)+":paid"}});
   }
+  if(routerActivationFailed)return res.status(200).json({success:false,activation_pending:true,message:"পেমেন্ট সফলভাবে গৃহীত হয়েছে, কিন্তু রাউটারে সংযোগ দিতে বিলম্ব হচ্ছে। কিছুক্ষণ অপেক্ষা করুন।"});
   return res.json({success:true,pending_activation:!activated,activation_pending:activationPending,message:activated?"Payment verified and the existing MAC-bound Hotspot account has been recharged.":activationPending?"Payment verified and saved; RouterOS activation is pending. Reconnect or contact support if it does not activate automatically.":"Payment verified.",phone,account_phone:phone,profile:profile.name,profile_id:profileId,validity,amount,expiration:expiration?new Date(expiration).toISOString():null,username:mac||null,password:mac||null,mac:mac||null});
  }catch(e){
   if(claimedTransactionId!==null)try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL,claimed_at=NULL,claimed_by=NULL,claim_flow=NULL,needs_reconciliation=false WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}catch(rollbackError){console.error("[VERIFY-TRX] Claim rollback failed",claimedTransactionId,rollbackError?.message||rollbackError);}
