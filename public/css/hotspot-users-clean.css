@@ -232,7 +232,7 @@ body:has(#freshHotspotWorkspace) #pageTitle{display:none!important}
 .active-hotspot-dashboard .active-hotspot-toolbar-actions .active-hotspot-export{border-color:#059669;color:#047857}
 .active-hotspot-dashboard .active-hotspot-table-wrap{overflow-x:auto;overflow-y:visible}
 .active-hotspot-dashboard .active-hotspot-table{width:100%;min-width:1120px;margin:0;border-collapse:separate;border-spacing:0;background:#fff}
-.active-hotspot-dashboard .active-hotspot-table th{padding:14px 16px;vertical-align:middle;border-right:1.5px solid rgba(226,232,240,.55);background:#1e40af;color:#fff;text-align:left;font-size:13px;font-weight:800;letter-spacing:.045em;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-table th{padding:14px 16px;vertical-align:middle;border-right:1.5px solid #e2e8f0;background:#1e40af;color:#fff;text-align:left;font-size:13px;font-weight:800;letter-spacing:.045em;white-space:nowrap}
 .active-hotspot-dashboard .active-hotspot-table th:last-child,.active-hotspot-dashboard .active-hotspot-table td:last-child{border-right:0}
 .active-hotspot-dashboard .active-hotspot-table td{padding:14px 16px;vertical-align:middle;border-right:1.5px solid #e2e8f0;border-bottom:1px solid #e2e8f0;background:#fff;color:#1e293b;font-size:14px}
 .active-hotspot-dashboard .active-hotspot-table tbody tr:nth-child(even) td{background:#f8fafc}
