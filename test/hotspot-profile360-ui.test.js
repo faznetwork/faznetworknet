@@ -48,3 +48,30 @@ test("Subscriber 360 uses guarded session disconnect and canonical verified dele
 
 test("Hotspot subscriber UI uses a softened slate header and readable action styles",()=>{const css=read("public/css/hotspot-users-clean.css");assert.match(css,/#1e293b/);assert.match(css,/\.hotspot-table-header th/);assert.match(css,/\.hs-subscriber-name\{[^}]*15px/);assert.match(css,/\.btn-action-renew/);});
 test("Hotspot API requires an active session with an assigned IP to mark a subscriber online",()=>{const controller=read("controllers/hotspotController.js");assert.match(controller,/is_online:Boolean\(session&&String\(session\.address\|\|\"\"\)\.trim\(\)\)/);assert.match(controller,/getTime\(\)<=now/);});
+
+
+test("Hotspot subscriber live countdown uses a single visibility-aware interval and expiry-driven status refresh",()=>{
+  const js=read("public/js/hotspot-users-clean.js");
+  assert.match(js,/let countdownInterval = null/);
+  assert.match(js,/if\(countdownInterval!==null\)return/);
+  assert.match(js,/window\.setInterval\(updateLiveCountdowns,1000\)/);
+  assert.match(js,/document\.visibilityState===\"hidden\"/);
+  assert.match(js,/data-expiry=.*esc\(u\.expires_at\)/);
+  assert.match(js,/if\(statusChanged\)renderList\(\)/);
+});
+test("Mobile subscriber action menu is viewport-positioned and closes accessibly",()=>{
+  const js=read("public/js/hotspot-users-clean.js"),css=read("public/css/hotspot-users-clean.css");
+  assert.match(js,/data-mobile-menu-toggle/);
+  assert.match(js,/getBoundingClientRect\(\)/);
+  assert.match(js,/event\.key!==\"Escape\"/);
+  assert.match(css,/\.hs-mobile-action-menu\{position:fixed/);
+  assert.match(css,/\.hs-mobile-action-menu\[hidden\]\{display:none!important\}/);
+});
+test("Subscriber rerender preserves query, selected filter, list scroll and page scroll without changing backend contracts",()=>{
+  const js=read("public/js/hotspot-users-clean.js");
+  assert.match(js,/selectedFilter\s*=\s*\"all\"/);
+  assert.match(js,/const pageScrollY=window\.scrollY,listScrollTop=host\.scrollTop/);
+  assert.match(js,/host\.scrollTop=listScrollTop;window\.scrollTo\(window\.scrollX,pageScrollY\)/);
+  assert.match(js,/freshHotspotSearch/);
+  assert.match(js,/const b=\{all:users,online:/);
+});
