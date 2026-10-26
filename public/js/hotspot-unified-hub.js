@@ -89,6 +89,9 @@
   var root=document.getElementById('hotspotUnifiedHub');if(!root)return;
   root.querySelectorAll('[data-hub-tab]').forEach(function(b){b.setAttribute('aria-selected',b.dataset.hubTab===state.tab?'true':'false');b.classList.toggle('is-active',b.dataset.hubTab===state.tab);});
   var cards=kpis(state.tab);root.querySelector('#huhKpis').innerHTML=cards.map(function(c){return '<article class="huh-kpi huh-'+c[3]+'"><div>'+esc(c[0])+'</div><strong>'+esc(c[1])+'</strong><small>'+esc(c[2])+'</small></article>';}).join('');
+  var bindingAdd=root.querySelector('[data-binding-action="add"]'),exportButton=root.querySelector('[data-hub-export]');
+  if(state.tab==='bindings'&&!bindingAdd&&exportButton)exportButton.insertAdjacentHTML('beforebegin','<button type="button" class="huh-primary" data-binding-action="add">＋ Add Bypassed Device</button>');
+  if(state.tab!=='bindings'&&bindingAdd)bindingAdd.remove();
   var content=root.querySelector('#huhContent');
   if(state.tab==='users')content.innerHTML=renderUsers();
   else if(state.tab==='sessions')content.innerHTML=renderSessions();
