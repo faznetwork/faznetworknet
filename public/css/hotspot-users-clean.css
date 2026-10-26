@@ -205,3 +205,58 @@ body:has(#freshHotspotWorkspace) #pageTitle{display:none!important}
 .fresh-hs-workspace .hs-mobile-actions .hs-quick-kick,.fresh-hs-workspace .hs-mobile-actions .hs-kebab-toggle{flex-basis:44px;width:44px;height:44px;min-height:44px;font-size:20px}
 .fresh-hs-workspace .hs-desktop-table-wrap{overflow-x:auto;overflow-y:visible}
 .fresh-hs-workspace .hs-executive-table tbody,.fresh-hs-workspace .hs-executive-table tr,.fresh-hs-workspace .hs-executive-table td{overflow:visible}
+
+
+/* Active Hotspot enterprise light dashboard */
+.active-hotspot-dashboard{--active-ink:#0f172a;--active-muted:#475569;--active-line:#e2e8f0;background:#f8fafc!important;color:var(--active-ink);padding:20px!important}
+.active-hotspot-dashboard .active-hotspot-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 18px}
+.active-hotspot-dashboard .active-hotspot-eyebrow{display:inline-flex;align-items:center;gap:8px;color:#1e40af;font-size:13px;font-weight:800;letter-spacing:.09em}
+.active-hotspot-dashboard .active-hotspot-heading h2{margin:7px 0 3px;color:#0f172a;font-size:25px;font-weight:800}
+.active-hotspot-dashboard .active-hotspot-heading p,.active-hotspot-dashboard .active-hotspot-updated{margin:0;color:#475569;font-size:14px}
+.active-hotspot-dashboard .active-hotspot-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:18px}
+.active-hotspot-dashboard .active-hotspot-kpi{min-height:142px;padding:19px 20px;border-radius:16px;background:var(--active-kpi-color);color:#fff;box-shadow:0 8px 22px rgba(15,23,42,.13)}
+.active-hotspot-dashboard .active-hotspot-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;letter-spacing:.065em}
+.active-hotspot-dashboard .active-hotspot-kpi-top i{font-size:21px;opacity:.9}
+.active-hotspot-dashboard .active-hotspot-kpi-value{margin:10px 0 6px;font-size:25px;line-height:1.25;font-weight:800;color:#fff;overflow-wrap:anywhere}
+.active-hotspot-dashboard .active-hotspot-kpi-foot{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.9)}
+.active-hotspot-dashboard .active-hotspot-pulse{width:9px;height:9px;flex:none;border-radius:50%;background:#bbf7d0;box-shadow:0 0 0 4px rgba(187,247,208,.2);animation:activeHotspotPulse 1.6s ease-in-out infinite}
+@keyframes activeHotspotPulse{50%{box-shadow:0 0 0 7px rgba(187,247,208,0)}}
+.active-hotspot-dashboard .active-hotspot-panel{overflow:visible;border:1px solid #dbe3ee;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(15,23,42,.06)}
+.active-hotspot-dashboard .active-hotspot-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;border-bottom:1px solid #e2e8f0}
+.active-hotspot-dashboard .active-hotspot-search{position:relative;display:flex;align-items:center;flex:1;max-width:780px}
+.active-hotspot-dashboard .active-hotspot-search>i{position:absolute;left:14px;color:#64748b;font-size:16px}
+.active-hotspot-dashboard .active-hotspot-search input{width:100%;height:44px;border:1.5px solid #cbd5e1;border-radius:9px;background:#fff;padding:0 14px 0 42px;color:#0f172a;font-size:14.5px;outline:none}
+.active-hotspot-dashboard .active-hotspot-search input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.active-hotspot-dashboard .active-hotspot-toolbar-actions{display:flex;gap:9px}
+.active-hotspot-dashboard .active-hotspot-toolbar-actions button{min-height:42px;padding:8px 13px;border:1.5px solid #2563eb;border-radius:8px;background:#fff;color:#1e40af;font-size:14px;font-weight:700;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-toolbar-actions .active-hotspot-export{border-color:#059669;color:#047857}
+.active-hotspot-dashboard .active-hotspot-table-wrap{overflow-x:auto;overflow-y:visible}
+.active-hotspot-dashboard .active-hotspot-table{width:100%;min-width:1120px;margin:0;border-collapse:separate;border-spacing:0;background:#fff}
+.active-hotspot-dashboard .active-hotspot-table th{padding:14px 16px;vertical-align:middle;border-right:1.5px solid #e2e8f0;background:#1e40af;color:#fff;text-align:left;font-size:13px;font-weight:800;letter-spacing:.045em;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-table th:last-child,.active-hotspot-dashboard .active-hotspot-table td:last-child{border-right:0}
+.active-hotspot-dashboard .active-hotspot-table td{padding:14px 16px;vertical-align:middle;border-right:1.5px solid #e2e8f0;border-bottom:1px solid #e2e8f0;background:#fff;color:#1e293b;font-size:14px}
+.active-hotspot-dashboard .active-hotspot-table tbody tr:nth-child(even) td{background:#f8fafc}
+.active-hotspot-dashboard .active-hotspot-table tbody tr:hover td{background:#eff6ff;transition:background .16s ease}
+.active-hotspot-dashboard .active-hotspot-subscriber{display:flex;align-items:center;gap:11px;min-width:190px}
+.active-hotspot-dashboard .active-hotspot-avatar{display:grid;width:36px;height:36px;flex:none;place-items:center;border-radius:50%;background:var(--avatar-color);color:#fff;font-size:13px;font-weight:800}
+.active-hotspot-dashboard .active-hotspot-name-wrap{display:grid;gap:3px}
+.active-hotspot-dashboard .active-hotspot-name-wrap strong{color:#0f172a;font-size:15.5px;font-weight:800}
+.active-hotspot-dashboard .active-hotspot-name-wrap small,.active-hotspot-dashboard .active-hotspot-auth{color:#475569;font-size:13px}
+.active-hotspot-dashboard .active-hotspot-package{display:inline-block;padding:6px 10px;border:1px solid #c4b5fd;border-radius:999px;background:#f5f3ff;color:#6d28d9;font-size:13px;font-weight:700;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-table code,.active-hotspot-dashboard .active-hotspot-mac{color:#1e293b;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-copy{margin-left:7px;padding:5px 7px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#1e40af;font-size:13px}
+.active-hotspot-dashboard .active-hotspot-rate{display:block;min-width:130px;font-size:13px;font-weight:700;white-space:nowrap}
+.active-hotspot-dashboard .active-hotspot-rate-rx{color:#0891b2}
+.active-hotspot-dashboard .active-hotspot-rate-tx{color:#059669}
+.active-hotspot-dashboard .active-hotspot-auth{display:block;margin-top:5px}
+.active-hotspot-dashboard .active-hotspot-actions{display:flex;align-items:center;gap:7px}
+.active-hotspot-dashboard .active-hotspot-kick,.active-hotspot-dashboard .active-hotspot-more{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:40px;min-height:38px;padding:7px 10px;border:1.5px solid #f59e0b;border-radius:8px;background:#fff;color:#b45309;font-size:14px;font-weight:700}
+.active-hotspot-dashboard .active-hotspot-more{border-color:#cbd5e1;color:#334155}
+.active-hotspot-dashboard .active-hotspot-kick:disabled,.active-hotspot-dashboard .active-hotspot-copy:disabled{opacity:.5}
+.active-hotspot-dashboard .active-hotspot-empty,.active-hotspot-dashboard .active-hotspot-loading{padding:42px 16px!important;text-align:center;color:#475569;font-size:15px}
+.active-hotspot-dashboard .active-hotspot-result-count{padding:12px 16px;color:#475569;font-size:13px}
+.active-hotspot-portal-menu{position:fixed;z-index:1050;min-width:190px;padding:6px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;box-shadow:0 12px 32px rgba(15,23,42,.2)}
+.active-hotspot-portal-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:10px;border:0;border-radius:6px;background:#fff;color:#1e293b;text-align:left;font-size:14px}
+.active-hotspot-portal-menu button:hover{background:#eff6ff;color:#1e40af}
+@media(max-width:1100px){.active-hotspot-dashboard .active-hotspot-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.active-hotspot-dashboard{padding:16px!important}}
+@media(max-width:700px){.active-hotspot-dashboard{padding:12px!important}.active-hotspot-dashboard .active-hotspot-heading{align-items:flex-start;flex-direction:column}.active-hotspot-dashboard .active-hotspot-heading h2{font-size:22px}.active-hotspot-dashboard .active-hotspot-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.active-hotspot-dashboard .active-hotspot-kpi{min-height:132px;padding:14px;border-radius:12px}.active-hotspot-dashboard .active-hotspot-kpi-value{font-size:21px}.active-hotspot-dashboard .active-hotspot-kpi-top{font-size:13px}.active-hotspot-dashboard .active-hotspot-toolbar{align-items:stretch;flex-direction:column;padding:12px}.active-hotspot-dashboard .active-hotspot-toolbar-actions{display:grid;grid-template-columns:1fr 1fr}.active-hotspot-dashboard .active-hotspot-toolbar-actions button{padding:8px 7px;font-size:13px}.active-hotspot-dashboard .active-hotspot-table-wrap{overflow:auto}.active-hotspot-dashboard .active-hotspot-table{min-width:1100px}}
