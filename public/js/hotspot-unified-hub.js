@@ -12,7 +12,7 @@
  function durationSeconds(value){var raw=String(value||'').trim(),m,total=0,found=false;if(/^\d+:\d{2}:\d{2}$/.test(raw)){var p=raw.split(':').map(Number);return p[0]*3600+p[1]*60+p[2];}var re=/(\d+)\s*(w|d|h|m|s)/ig;while((m=re.exec(raw))){found=true;total+=Number(m[1])*({w:604800,d:86400,h:3600,m:60,s:1}[m[2].toLowerCase()]);}return found?total:null;}
  function duration(value){var sec=durationSeconds(value);if(sec===null)return value||'—';var d=Math.floor(sec/86400);sec%=86400;var h=Math.floor(sec/3600);sec%=3600;var m=Math.floor(sec/60);return [d?d+'d':'',h?h+'h':'',m?m+'m':''].filter(Boolean).join(' ')||'<1m';}
  async function request(url,options){
-  var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},12000);
+  var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);
   try{
    var response=await fetch(url,Object.assign({credentials:'include',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal},options||{}));
    var data={};try{data=await response.json();}catch(_){}
