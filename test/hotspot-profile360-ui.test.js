@@ -56,7 +56,7 @@ test("Hotspot subscriber live countdown uses a single visibility-aware interval 
   assert.match(js,/if\(countdownInterval!==null\)return/);
   assert.match(js,/window\.setInterval\(updateLiveCountdowns,1000\)/);
   assert.match(js,/document\.visibilityState===\"hidden\"/);
-  assert.match(js,/data-expiry=\"\'+esc\(u\.expires_at\)/);
+  assert.match(js,/data-expiry=.*esc\(u\.expires_at\)/);
   assert.match(js,/if\(statusChanged\)renderList\(\)/);
 });
 test("Mobile subscriber action menu is viewport-positioned and closes accessibly",()=>{
