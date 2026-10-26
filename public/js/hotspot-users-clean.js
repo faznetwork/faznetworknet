@@ -3,6 +3,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
   let users = [], selected = null, profiles = [], loading = false, selectedFilter = "all";
+  let countdownInterval = null, countdownRenderPending = false, countdownVisibilityBound = false;
   const endpoint = id => "/api/hotspot/users/" + encodeURIComponent(String(id));
   async function request(url, options = {}) {
     const response = await fetch(url, { cache: "no-store", ...options, headers: { Accept: "application/json", ...(options.headers || {}) } });
@@ -25,28 +26,173 @@
   function stateOf(user){const s=String(user?.status||"").toLowerCase(),e=user?.expires_at?new Date(user.expires_at):null;if(s==="expired"||(e&&!Number.isNaN(e.getTime())&&e.getTime()<=Date.now())||String(user?.profile||"").toLowerCase()==="expired_profile")return "expired";if((user?.is_online||user?.online)&&String(user?.ip||user?.address||"").trim())return "online";return "offline";}
   function statusLabel(user){const state=stateOf(user);if(state==="offline"&&isValidPackage(user))return "Offline (Active Plan)";return ({online:"Online",offline:"Offline",expired:"Expired"})[state];}
   function expiryLabel(v){if(!v)return "Not set";const d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);if(window.FazDate&&typeof window.FazDate.formatDateTime==="function")return window.FazDate.formatDateTime(d);return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}).format(d);}
-  function remainTag(u){if(!u.expires_at)return '<span class="hs-remain-tag hs-remain-none">—</span>';const remaining=window.FazRemainingTime.format(u.expires_at);const ms=new Date(u.expires_at).getTime()-Date.now();const k=ms<=0?"expired":ms<86400000?"soon":ms<=259200000?"soon":"good";return '<span class="hs-remain-tag hs-remain-'+k+'">'+esc(remaining)+'</span>';}
+  function stopLiveCountdown(){if(countdownInterval!==null){window.clearInterval(countdownInterval);countdownInterval=null;}}
+  function formatCountdown(delta){
+    const seconds=Math.max(0,Math.floor(delta/1000)),days=Math.floor(seconds/86400),hours=Math.floor(seconds%86400/3600),minutes=Math.floor(seconds%3600/60),secs=seconds%60;
+    if(days>0)return String(days).padStart(2,"0")+"d "+String(hours).padStart(2,"0")+"h "+String(minutes).padStart(2,"0")+"m "+String(secs).padStart(2,"0")+"s";
+    if(hours>0)return String(hours).padStart(2,"0")+"h "+String(minutes).padStart(2,"0")+"m "+String(secs).padStart(2,"0")+"s";
+    return String(minutes).padStart(2,"0")+"m "+String(secs).padStart(2,"0")+"s";
+  }
+  function updateLiveCountdowns(){
+    if(document.hidden)return;
+    const now=Date.now();let statusChanged=false;
+    document.querySelectorAll(".hs-live-countdown[data-expiry]").forEach(el=>{
+      const target=Date.parse(el.dataset.expiry||"");
+      if(!Number.isFinite(target)){el.textContent="Expiry unavailable";el.classList.add("hs-remain-none");return;}
+      const delta=target-now;
+      if(delta<=0){
+        if(el.dataset.expiredState!=="true")statusChanged=true;
+        el.dataset.expiredState="true";el.textContent="EXPIRED";
+        el.classList.remove("hs-remain-good","hs-remain-soon","hs-remain-none");
+        el.classList.add("hs-remain-expired","badge","bg-danger-subtle","text-danger","font-mono");
+        return;
+      }
+      el.dataset.expiredState="false";el.textContent=formatCountdown(delta);
+      el.classList.remove("hs-remain-expired","hs-remain-none","badge","bg-danger-subtle","text-danger");
+      el.classList.add("font-mono","tabular-nums");
+      el.classList.toggle("hs-remain-soon",delta<=259200000);el.classList.toggle("hs-remain-good",delta>259200000);
+    });
+    if(statusChanged&&!countdownRenderPending){
+      countdownRenderPending=true;
+      window.setTimeout(()=>{countdownRenderPending=false;renderList();},0);
+    }
+  }
+  function startLiveCountdown(){
+    if(!countdownVisibilityBound){document.addEventListener("visibilitychange",handleCountdownVisibility);countdownVisibilityBound=true;}
+    if(document.hidden){stopLiveCountdown();return;}
+    stopLiveCountdown();updateLiveCountdowns();
+    countdownInterval=window.setInterval(updateLiveCountdowns,1000);
+  }
+  function handleCountdownVisibility(){if(document.hidden)stopLiveCountdown();else startLiveCountdown();}
+  function remainTag(u){
+    if(!u.expires_at)return '<span class="hs-remain-tag hs-remain-none">—</span>';
+    const target=Date.parse(u.expires_at),expired=Number.isFinite(target)&&target-Date.now()<=0;
+    const initial=Number.isFinite(target)?(expired?"EXPIRED":formatCountdown(target-Date.now())):"Expiry unavailable";
+    return '<span class="hs-remain-tag hs-live-countdown '+(expired?'hs-remain-expired badge bg-danger-subtle text-danger':'hs-remain-good')+' font-mono tabular-nums" data-expiry="'+esc(u.expires_at)+'" data-expired-state="'+String(expired)+'" aria-live="off">'+esc(initial)+'</span>';
+  }
   function packageClass(u){if(stateOf(u)==="expired")return "expired";const t=String(u.validity||u.profile||"").toLowerCase();if(/30\s*(day|d)|1\s*month/.test(t))return "30d";if(/15\s*(day|d)/.test(t))return "15d";if(/7\s*(day|d)|1\s*week/.test(t))return "7d";if(/1\s*(day|d)|24\s*h/.test(t))return "1d";return "default";}
   function packageLabel(u){return stateOf(u)==="expired"?"Expired":String(u.profile||u.validity||"No Package");}
   function bytesLabel(v){const n=Number(v||0);if(!n)return "0 B";const a=["B","KB","MB","GB","TB"],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),4);return (n/Math.pow(1024,i)).toFixed(i?1:0)+" "+a[i];}
-  function actionButtons(u,mobile){const online=stateOf(u)==="online";return '<div class="hs-row-actions"><button class="btn-hotspot-action btn-action-renew" type="button" data-row-action="renew" data-id="'+esc(u.id)+'"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>Renew</span></button><button class="btn-hotspot-action btn-action-edit" type="button" data-row-action="edit" data-id="'+esc(u.id)+'"><i class="bi bi-pencil-square" aria-hidden="true"></i><span>Edit</span></button><button class="btn-hotspot-action btn-action-disconnect" type="button" data-row-action="disconnect" data-id="'+esc(u.id)+'" '+(online&&u.sessionId?"":"disabled")+'><i class="bi bi-plug" aria-hidden="true"></i><span>Disconnect</span></button><button class="btn-hotspot-action btn-action-delete" type="button" data-row-action="archive" data-id="'+esc(u.id)+'"><i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span></button>'+(mobile?'<button class="btn btn-sm btn-dark" type="button" data-open-user="'+esc(u.id)+'">Details</button>':"")+'</div>';}
+  function copyMacButton(user){
+    const mac=String(user.mac_address||user.macAddress||user.username||"").trim();
+    if(!mac)return '<span class="hs-mac-value">—</span>';
+    return '<span class="hs-mac-copy"><code class="hs-mac-value">'+esc(mac)+'</code><button type="button" class="hs-copy-mac" data-copy-mac="'+esc(mac)+'" aria-label="Copy MAC address" title="Copy MAC address">📋</button></span>';
+  }
+  function actionButtons(u,context){
+    const online=stateOf(u)==="online"&&Boolean(u.sessionId),scope=context==="mobile"?"mobile":"desktop";
+    const kick=online?'<button type="button" class="hs-quick-kick" data-row-action="disconnect" data-id="'+esc(u.id)+'" aria-label="Disconnect '+esc(u.customer_name||u.name||u.username||"subscriber")+'" title="Quick disconnect">⚡</button>':"";
+    return '<div class="hs-action-cluster btn-hotspot-action" data-action-scope="'+scope+'">'+kick+
+      '<button type="button" class="hs-kebab-toggle" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Subscriber actions">⋮</button>'+
+      '<div class="hs-action-menu" role="menu" hidden>'+
+        '<button type="button" class="hs-action-item btn-action-renew" role="menuitem" data-row-action="renew" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔄</span> Renew / Extend Plan</button>'+
+        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="edit" data-id="'+esc(u.id)+'"><span aria-hidden="true">✏️</span> Edit Details</button>'+
+        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="unbind" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔓</span> Reset MAC Binding</button>'+
+        '<hr>'+
+        '<button type="button" class="hs-action-item hs-action-danger" role="menuitem" data-row-action="archive" data-id="'+esc(u.id)+'"><span aria-hidden="true">🗑️</span> Purge &amp; Revoke</button>'+
+      '</div></div>';
+  }
+  function closeActionMenus(except){
+    document.querySelectorAll(".hs-action-menu:not([hidden])").forEach(menu=>{
+      if(except&&menu===except)return;
+      menu.hidden=true;menu.style.removeProperty("left");menu.style.removeProperty("top");menu.style.removeProperty("max-height");
+      const toggle=menu.closest(".hs-action-cluster")?.querySelector("[data-menu-toggle]");
+      if(toggle)toggle.setAttribute("aria-expanded","false");
+    });
+  }
+  function openActionMenu(toggle,menu){
+    closeActionMenus(menu);menu.hidden=false;menu.style.position="fixed";menu.style.display="block";menu.style.visibility="hidden";
+    menu.style.maxHeight="min(70vh, 420px)";
+    let box=menu.getBoundingClientRect();const rect=toggle.getBoundingClientRect(),gap=8,pad=8;
+    const available=Math.max(120,window.innerHeight-pad*2);
+    if(box.height>available){menu.style.maxHeight="calc(100vh - 16px)";box=menu.getBoundingClientRect();}
+    const below=window.innerHeight-rect.bottom-gap,above=rect.top-gap;
+    const upward=box.height>below&&above>below;
+    const top=upward?Math.max(pad,rect.top-box.height-gap):Math.min(rect.bottom+gap,window.innerHeight-box.height-pad);
+    const left=Math.max(pad,Math.min(window.innerWidth-box.width-pad,rect.right-box.width));
+    menu.style.left=left+"px";menu.style.top=top+"px";menu.style.visibility="visible";
+    menu.dataset.placement=upward?"top":"bottom";toggle.setAttribute("aria-expanded","true");
+  }
+  async function copyMac(mac){
+    try{
+      if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(mac);
+      else{
+        const input=document.createElement("textarea");input.value=mac;input.setAttribute("readonly","");input.style.position="fixed";input.style.opacity="0";document.body.appendChild(input);input.select();
+        const ok=document.execCommand("copy");input.remove();if(!ok)throw new Error("Clipboard access was denied.");
+      }
+      toast("MAC address copied.");
+    }catch(error){toast(error.message||"Could not copy MAC address.",false);}
+  }
   function renderList(){
     const host=$("#freshHotspotUserList"),q=($("#freshHotspotSearch")?.value||"").trim().toLowerCase();if(!host)return;
+    stopLiveCountdown();closeActionMenus();
     const b={all:users,online:users.filter(u=>stateOf(u)==="online"),active:users.filter(u=>isValidPackage(u)),offline:users.filter(u=>stateOf(u)==="offline"&&isValidPackage(u)),expired:users.filter(u=>stateOf(u)==="expired")};
     const list=(b[selectedFilter]||users).filter(u=>[u.username,u.customer_name,u.phone,u.mac_address,u.macAddress,u.profile,u.ip,u.address].some(v=>String(v||"").toLowerCase().includes(q)));
     $("#freshHotspotCount").textContent=users.length+" Total Users";
     const tabs='<div class="hs-filter-tabs" role="group" aria-label="Filter Hotspot subscribers">'+[["all","All Users","count-all"],["online","Online","count-online"],["active","Active","count-active"],["offline","Offline","count-offline"],["expired","Expired","count-expired"]].map(([k,l,id])=>'<button type="button" class="hs-filter-tab hs-filter-'+k+(selectedFilter===k?" is-selected":"")+'" data-filter="'+k+'" aria-pressed="'+(selectedFilter===k)+'"><i class="hs-filter-dot" aria-hidden="true"></i>'+l+' <span id="'+id+'">'+b[k].length+'</span></button>').join("")+'</div>';
-    const rows=list.map((u,i)=>{const s=stateOf(u);return '<tr class="hs-executive-row" data-user-id="'+esc(u.id)+'"><td><span class="hs-serial">'+(i+1)+'</span></td><td><button type="button" class="hs-subscriber-name hs-quick-edit" data-row-action="edit" data-id="'+esc(u.id)+'" aria-label="Edit subscriber '+esc(u.customer_name||u.name||u.username||"subscriber")+'">'+esc(u.customer_name||u.name||"Unnamed Subscriber")+' <i class="bi bi-pencil-square" aria-hidden="true"></i></button><div class="hs-subscriber-phone">'+esc(u.phone||"No phone")+'</div><span class="hs-mac-pill">'+esc(u.mac_address||u.macAddress||u.username||"—")+'</span></td><td><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span></td><td><span class="hs-state hs-state-'+s+'">'+(s==="online"?"● ":s==="active"?"⚡ ":"")+statusLabel(u)+'</span></td><td><div class="hs-ip">'+esc(u.ip||u.address||"—")+'</div><div class="hs-session">'+esc(u.uptime||"—")+' · ↓ '+esc(bytesLabel(u.bytesOut))+'</div></td><td><div class="hs-expiry">'+esc(expiryLabel(u.expires_at))+'</div>'+remainTag(u)+'</td><td>'+actionButtons(u,false)+'</td></tr>';}).join("");
-    const cards=list.map((u,i)=>{const s=stateOf(u);return '<article class="hs-mobile-card"><button type="button" class="hs-mobile-open" data-open-user="'+esc(u.id)+'"><span class="hs-serial">'+(i+1)+'</span><span class="hs-mobile-main"><strong>'+esc(u.customer_name||u.name||"Unnamed Subscriber")+'</strong><small>'+esc(u.phone||"No phone")+' · '+esc(u.mac_address||u.macAddress||u.username||"—")+'</small><span class="hs-state hs-state-'+s+'">'+statusLabel(u)+'</span></span><span class="hs-mobile-chevron">›</span></button><div class="hs-mobile-meta"><span>'+esc(packageLabel(u))+'</span><span>'+esc(expiryLabel(u.expires_at))+'</span>'+remainTag(u)+'</div><div class="hs-mobile-actions">'+actionButtons(u,true)+'</div></article>';}).join("");
-    host.innerHTML=tabs+'<div class="hs-desktop-table-wrap"><table class="hs-executive-table"><thead><tr class="hotspot-table-header"><th>#</th><th>SUBSCRIBER &amp; DEVICE</th><th>PACKAGE</th><th>STATUS</th><th>IP &amp; SESSION</th><th>EXPIRATION &amp; REMAINING</th><th>ACTIONS</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="hs-empty-row">No subscribers in this filter.</td></tr>')+'</tbody></table></div><div class="hs-mobile-cards">'+(cards||'<div class="hs-empty-row">No subscribers in this filter.</div>')+'</div>';
+    const rows=list.map((u,i)=>{
+      const s=stateOf(u),mac=String(u.mac_address||u.macAddress||u.username||"").trim(),ip=u.ip||u.address||"—";
+      return '<tr class="hs-executive-row" data-user-id="'+esc(u.id)+'">'+
+        '<td class="table-col-border"><span class="hs-serial">'+(i+1)+'</span></td>'+
+        '<td class="table-col-border"><div class="hs-subscriber-identity"><button type="button" class="hs-subscriber-name hs-quick-edit" data-row-action="edit" data-id="'+esc(u.id)+'" aria-label="Edit subscriber '+esc(u.customer_name||u.name||u.username||"subscriber")+'">'+esc(u.customer_name||u.name||"Unnamed Subscriber")+'</button><div class="hs-subscriber-phone">'+esc(u.phone||"No phone")+'</div>'+copyMacButton(u)+'</div></td>'+
+        '<td class="table-col-border"><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span></td>'+
+        '<td class="table-col-border"><span class="hs-state hs-state-'+s+'">'+(s==="online"?"● ":"")+esc(statusLabel(u))+'</span></td>'+
+        '<td class="table-col-border"><div class="hs-ip">'+esc(ip)+'</div><div class="hs-session"><span>↑ '+esc(bytesLabel(u.bytesIn))+'</span><span>↓ '+esc(bytesLabel(u.bytesOut))+'</span></div></td>'+
+        '<td class="table-col-border"><div class="hs-expiry">'+esc(expiryLabel(u.expires_at))+'</div>'+remainTag(u)+'</td>'+
+        '<td class="hs-actions-cell">'+actionButtons(u,"desktop")+'</td></tr>';
+    }).join("");
+    const cards=list.map((u,i)=>{
+      const s=stateOf(u),ip=u.ip||u.address||"—",name=u.customer_name||u.name||"Unnamed Subscriber";
+      return '<article class="hs-mobile-card mobile-sub-card" data-user-id="'+esc(u.id)+'">'+
+        '<div class="hs-mobile-row-one"><span class="hs-serial">#'+(i+1)+'</span><button type="button" class="hs-subscriber-name hs-mobile-name" data-row-action="edit" data-id="'+esc(u.id)+'">'+esc(name)+'</button><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span><span class="hs-state hs-state-'+s+'">'+esc(statusLabel(u))+'</span>'+actionButtons(u,"mobile")+'</div>'+
+        '<div class="hs-mobile-row-two"><span class="hs-subscriber-phone">'+esc(u.phone||"No phone")+'</span><span class="hs-mobile-separator" aria-hidden="true">·</span>'+copyMacButton(u)+'</div>'+
+        '<div class="hs-mobile-footer"><div class="hs-mobile-traffic"><strong>'+esc(ip)+'</strong><span>↑ '+esc(bytesLabel(u.bytesIn))+' · ↓ '+esc(bytesLabel(u.bytesOut))+'</span></div><div class="hs-mobile-expiry">'+remainTag(u)+'</div></div>'+
+      '</article>';
+    }).join("");
+    host.innerHTML=tabs+
+      '<div class="hs-desktop-table-wrap"><table class="modern-sub-table hs-executive-table"><thead><tr class="hotspot-table-header">'+
+        '<th class="table-col-border">#</th><th class="table-col-border">SUBSCRIBER &amp; DEVICE</th><th class="table-col-border">PACKAGE</th><th class="table-col-border">STATUS</th><th class="table-col-border">IP &amp; LIVE TRAFFIC</th><th class="table-col-border">EXPIRATION &amp; COUNTDOWN</th><th>ACTIONS</th>'+
+      '</tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="hs-empty-row">No subscribers in this filter.</td></tr>')+'</tbody></table></div>'+
+      '<div class="hs-mobile-cards mobile-subscribers-list">'+(cards||'<div class="hs-empty-row">No subscribers in this filter.</div>')+'</div>';
     host.querySelectorAll("[data-filter]").forEach(x=>x.addEventListener("click",()=>{selectedFilter=x.dataset.filter||"all";renderList();}));
     host.querySelectorAll("[data-open-user]").forEach(x=>x.addEventListener("click",e=>{e.stopPropagation();selectUser(x.dataset.openUser,true);}));
-    host.querySelectorAll("[data-row-action]").forEach(x=>x.addEventListener("click",e=>{e.stopPropagation();const u=users.find(v=>String(v.id)===String(x.dataset.id));if(u){selected=u;renderDetail();runRowAction(x.dataset.rowAction,u);}}));
-    host.querySelectorAll(".hs-executive-row").forEach(x=>x.addEventListener("click",()=>selectUser(x.dataset.userId,false)));
+    host.querySelectorAll("[data-copy-mac]").forEach(x=>x.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();copyMac(x.dataset.copyMac||"");}));
+    host.querySelectorAll("[data-menu-toggle]").forEach(toggle=>toggle.addEventListener("click",e=>{
+      e.preventDefault();e.stopPropagation();const menu=toggle.closest(".hs-action-cluster")?.querySelector(".hs-action-menu");if(!menu)return;
+      if(!menu.hidden){closeActionMenus();return;}openActionMenu(toggle,menu);
+    }));
+    host.querySelectorAll("[data-row-action]").forEach(button=>button.addEventListener("click",e=>{
+      e.preventDefault();e.stopPropagation();const user=users.find(v=>String(v.id)===String(button.dataset.id));if(!user)return;
+      selected=user;renderDetail();closeActionMenus();runRowAction(button.dataset.rowAction,user);
+    }));
+    host.querySelectorAll(".hs-executive-row").forEach(row=>row.addEventListener("click",()=>selectUser(row.dataset.userId,false)));
+    startLiveCountdown();
   }
   function detailsMarkup(user){if(!user)return '<div class="fresh-hs-empty fresh-hs-detail-empty">Select a subscriber</div>';const s=stateOf(user),item=(l,v)=>'<div class="fresh-hs-stat"><span>'+esc(l)+'</span><strong>'+esc(v||"Not set")+'</strong></div>';return '<div class="fresh-hs-detail-head"><div><div class="fresh-hs-eyebrow">SUBSCRIBER 360</div><h3>'+esc(user.customer_name||user.name||"Unnamed Subscriber")+'</h3><div>'+esc(user.username)+'</div></div><span class="hs-state hs-state-'+s+'">'+statusLabel(user)+'</span></div><div class="fresh-hs-stats">'+item("Mobile",user.phone)+item("MAC",user.mac_address||user.macAddress)+item("Package",packageLabel(user))+item("IP",user.ip||user.address)+item("Uptime",user.uptime)+item("Downloaded",bytesLabel(user.bytesOut))+item("Expiration",expiryLabel(user.expires_at))+item("Server",user.server)+item("Comment",user.comment)+'</div><div class="fresh-hs-actions"><button class="btn btn-success" data-action="renew">🔄 Renew</button><button class="btn btn-outline-success" data-action="edit">✏️ Edit</button><button class="btn btn-outline-warning" data-action="disconnect" '+(s==="online"&&user.sessionId?"":"disabled")+'>🚫 Disconnect</button><button class="btn btn-outline-danger" data-action="archive">🗑️ Delete / Archive</button></div>';}
   function renderDetail(){const d=$("#freshHotspotDetail");if(d)d.innerHTML=detailsMarkup(selected);const m=$("#freshHotspotMobileBody");if(m)m.innerHTML=detailsMarkup(selected)+'<button type="button" class="btn btn-dark w-100 mt-3" data-bs-dismiss="modal">✕ Close</button>';[d,m].filter(Boolean).forEach(root=>root.querySelectorAll("[data-action]").forEach(x=>x.addEventListener("click",()=>{if(selected)runRowAction(x.dataset.action,selected);})));}
-  async function runRowAction(action,user){if(action==="edit"){openEdit();return;}if(action==="renew"){openRenew();return;}if(action==="archive"){await archiveUser();return;}if(action==="disconnect"){if(!user.sessionId){toast("No active MikroTik session ID is available.",false);return;}if(!window.confirm("Disconnect this active Hotspot session?"))return;try{await request("/api/hotspot/active/disconnect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:user.sessionId})});toast("Active session disconnected.");await loadUsers(user.id);}catch(e){toast(e.message||"Disconnect failed.",false);}}}
+  async function resetMacBinding(user){
+    if(!user)return;
+    if(!window.confirm("Reset the MAC lock for this subscriber? The saved MAC address will remain in the audit/profile record."))return;
+    try{
+      const response=await fetch(endpoint(user.id)+"/profile",{method:"PUT",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({customer_name:user.customer_name||user.name||user.username||"",phone:user.phone||"",mac_address:"",note:user.note||"",mac_lock:false}),cache:"no-store"});
+      let data={};try{data=await response.json();}catch(_){}
+      if(!response.ok||data.success!==true)throw new Error(data.message||data.error||"MAC lock reset failed.");
+      toast("MAC lock reset. The saved MAC address was retained.");await loadUsers(user.id);
+    }catch(error){toast(error.message||"MAC lock reset failed.",false);}
+  }
+  async function runRowAction(action,user){
+    selected=user||selected;if(!selected)return;
+    if(action==="edit"){if(typeof window.openEditModal==="function"){window.openEditModal(selected.id,selected);return;}openEdit();return;}
+    if(action==="renew"){if(typeof window.openRenewModal==="function"){window.openRenewModal(selected.id,selected);return;}openRenew();return;}
+    if(action==="archive"){if(typeof window.openDeleteConfirmationModal==="function"){window.openDeleteConfirmationModal(selected.id,selected);return;}await archiveUser();return;}
+    if(action==="unbind"){await resetMacBinding(selected);return;}
+    if(action==="disconnect"){
+      if(typeof window.disconnectSubscriber==="function"){await window.disconnectSubscriber(selected.id,selected);return;}
+      if(!selected.sessionId){toast("No active MikroTik session ID is available.",false);return;}
+      if(!window.confirm("Disconnect this active Hotspot session?"))return;
+      try{await request("/api/hotspot/active/disconnect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:selected.sessionId})});toast("Active session disconnected.");await loadUsers(selected.id);}
+      catch(error){toast(error.message||"Disconnect failed.",false);}
+    }
+  }
   function selectUser(id, openMobile) {
     selected = users.find(user => String(user.id) === String(id)) || null;
     renderList(); renderDetail();
@@ -188,6 +334,11 @@
     $("#freshHotspotRefresh")?.addEventListener("click", () => loadUsers(selected?.id));
     $("#freshHotspotSync")?.addEventListener("click", () => { const source=$("#btnImportFromMikrotik"); if(source && !source.disabled) source.click(); else toast("MikroTik import is unavailable.",false); });
     $("#freshHotspotExport")?.addEventListener("click", exportCsv);
+    if(!countdownVisibilityBound){document.addEventListener("visibilitychange",handleCountdownVisibility);countdownVisibilityBound=true;}
+    document.addEventListener("click",event=>{if(!event.target.closest(".hs-action-cluster")&&!event.target.closest(".hs-action-menu"))closeActionMenus();});
+    document.addEventListener("keydown",event=>{if(event.key==="Escape"){const open=document.querySelector(".hs-action-menu:not([hidden])");const toggle=open?.closest(".hs-action-cluster")?.querySelector("[data-menu-toggle]");closeActionMenus();toggle?.focus();}});
+    window.addEventListener("resize",()=>closeActionMenus());
+    window.addEventListener("scroll",()=>closeActionMenus(),true);
     $("#freshEditProfileForm")?.addEventListener("submit", submitEdit);
     $("#freshRenewForm")?.addEventListener("submit", submitRenew);
     $("#freshRenewProfile")?.addEventListener("change", updateRenewPreview);
