@@ -150,7 +150,7 @@ body:has(#freshHotspotWorkspace) #pageTitle{display:none!important}
 .fresh-hs-workspace .hs-quick-kick{border-color:#fcd34d;background:#fffbeb;color:#b45309}
 .fresh-hs-workspace .hs-quick-kick:hover,.fresh-hs-workspace .hs-quick-kick:focus-visible{background:#f59e0b;color:#fff}
 .fresh-hs-workspace .hs-kebab-toggle:hover,.fresh-hs-workspace .hs-kebab-toggle:focus-visible{border-color:#10b981;color:#047857}
-.fresh-hs-workspace .hs-action-menu{position:fixed;z-index:1090;width:min(250px,calc(100vw - 16px));max-height:min(70vh,420px);overflow-y:auto;padding:7px;border:1px solid var(--border-color,#dbe3ec);border-radius:12px;background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#0f172a);box-shadow:0 16px 40px rgba(15,23,42,.22)}
+.fresh-hs-workspace .hs-action-menu{position:fixed;z-index:1050;width:min(250px,calc(100vw - 16px));max-height:min(70vh,420px);overflow-y:auto;padding:7px;border:1px solid var(--border-color,#dbe3ec);border-radius:12px;background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#0f172a);box-shadow:0 16px 40px rgba(15,23,42,.22)}
 .fresh-hs-workspace .hs-action-menu[hidden]{display:none!important}
 .fresh-hs-workspace .hs-action-menu .hs-action-item{display:flex;align-items:center;gap:9px;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left;font-size:13px;font-weight:600;white-space:normal;cursor:pointer}
 .fresh-hs-workspace .hs-action-menu .hs-action-item:hover,.fresh-hs-workspace .hs-action-menu .hs-action-item:focus-visible{background:rgba(16,185,129,.1);outline:none}
@@ -187,3 +187,21 @@ body:has(#freshHotspotWorkspace) #pageTitle{display:none!important}
   .fresh-hs-workspace .hs-mobile-expiry{flex:0 0 auto}
   .fresh-hs-workspace .hs-mobile-expiry .hs-remain-tag{margin:0;padding:3px 6px;font-size:10px!important}
 }
+
+/* Visible hybrid subscriber actions; menu is portaled above the table overflow layer. */
+.fresh-hs-workspace .hs-actions-cell{min-width:190px;white-space:nowrap}
+.fresh-hs-workspace .hs-action-cluster{display:flex;align-items:center;justify-content:flex-end;gap:6px;position:relative;overflow:visible}
+.fresh-hs-workspace .hs-action-renew{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:4px 9px;border-radius:7px;font-weight:700;white-space:nowrap}
+.fresh-hs-workspace .hs-quick-kick{display:inline-grid;place-items:center;flex:0 0 36px;width:36px;height:34px;min-height:34px;padding:0;border:1px solid #f0ad4e;border-radius:7px;background:#fff8e6;color:#9a5b00;font-size:17px;line-height:1}
+.fresh-hs-workspace .hs-quick-kick:hover,.fresh-hs-workspace .hs-quick-kick:focus-visible{background:#f0ad4e;color:#172033}
+.fresh-hs-workspace .hs-kebab-toggle{display:inline-grid;place-items:center;flex:0 0 36px;width:36px;height:34px;min-height:34px;padding:0;border:1px solid #cbd5e1!important;border-radius:7px;background:#f8fafc!important;color:#334155!important;font-size:20px;line-height:1}
+.fresh-hs-workspace .hs-kebab-toggle:hover,.fresh-hs-workspace .hs-kebab-toggle:focus-visible{border-color:#64748b!important;background:#e2e8f0!important;color:#0f172a!important}
+.fresh-hs-workspace .hs-action-menu{position:fixed;z-index:1050;width:min(260px,calc(100vw - 16px));max-height:min(70vh,420px);overflow:auto;isolation:isolate}
+.fresh-hs-workspace .hs-action-menu .hs-action-item{gap:10px;min-height:44px;padding:10px 12px;border-radius:8px;font-size:14px}
+.fresh-hs-workspace .hs-action-menu .hs-action-item span:first-child{display:inline-grid;place-items:center;width:22px;flex:0 0 22px;font-size:16px}
+.fresh-hs-workspace .hs-mobile-actions{padding-top:8px;margin-top:8px;border-top:1px solid var(--border-color,#e2e8f0)}
+.fresh-hs-workspace .hs-mobile-actions .hs-action-cluster{justify-content:flex-start;width:100%;gap:8px}
+.fresh-hs-workspace .hs-mobile-actions .hs-action-renew{flex:1;min-height:44px}
+.fresh-hs-workspace .hs-mobile-actions .hs-quick-kick,.fresh-hs-workspace .hs-mobile-actions .hs-kebab-toggle{flex-basis:44px;width:44px;height:44px;min-height:44px;font-size:20px}
+.fresh-hs-workspace .hs-desktop-table-wrap{overflow-x:auto;overflow-y:visible}
+.fresh-hs-workspace .hs-executive-table tbody,.fresh-hs-workspace .hs-executive-table tr,.fresh-hs-workspace .hs-executive-table td{overflow:visible}
