@@ -1811,7 +1811,7 @@
   }
 }
 </style>
-<style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=unified-hotspot-20261026-eight-tab">
+<style>.hotspot-executive-modal .modal-dialog{max-width:980px}.hotspot-executive-content{border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.22)}.modal-backdrop.show{opacity:.52;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.hotspot-executive-header,.hotspot-renew-header{background:linear-gradient(120deg,#0a3d2e,#0f766e);color:#fff;border:0;padding:1.25rem 1.4rem}.hotspot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}.hotspot-detail-tile{padding:1rem;border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow-wrap:anywhere}.hotspot-detail-label{font-size:.76rem;color:#64748b;margin-bottom:.25rem}.hotspot-detail-value{font-weight:750;color:#0f172a}.hotspot-renew-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.hotspot-renew-summary>div{padding:.85rem;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;overflow-wrap:anywhere}.hotspot-renew-summary span,.hotspot-renew-summary strong{display:block}.hotspot-renew-summary span{font-size:.75rem;color:#64748b;margin-bottom:.35rem}.hotspot-renew-summary strong{color:#065f46}.hotspot-row-actions .btn{transition:transform .16s ease,box-shadow .16s ease}.hotspot-row-actions .btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.1)}.hotspot-live-table tbody td{padding-top:1rem;padding-bottom:1rem;border-color:#e2e8f0}@media(max-width:767.98px){.hotspot-detail-grid,.hotspot-renew-summary{grid-template-columns:1fr}.hotspot-executive-modal .modal-dialog{margin:.5rem}}</style><link rel="stylesheet" href="/css/hotspot-users-clean.css?v=hs-subscribers-compact-20261019">
 
 <script>
     try {
@@ -1915,12 +1915,11 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="/admin/hotspot/dashboard"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
+                    <li><a href="/admin/hotspot/dashboard" data-view-target="view-hotspot-dashboard"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
                     <li><a href="/admin/hotspot/add-user"><span data-key="add_hotspot_user">Add Hotspot User</span></a></li>
                     <li><a href="/admin/hotspot/users/all"><span data-key="hotspot_all_users">All Users</span></a></li>
                     <li><a href="/admin/hotspot/users/active"><span data-key="hotspot_active_users">Active Users</span></a></li>
-                    <li><a href="/admin/hotspot/profiles"><span data-key="hotspot_profile">Profiles &amp; Packages</span></a></li>
-                    <li><a href="/admin/hotspot/ip-bindings"><span>IP/MAC Binding</span></a></li>
+                    <li><a href="/admin/hotspot/profiles"><span data-key="hotspot_profile">Profile</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/generate"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/manage"><span>Voucher &amp; Recharge Ledger</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/cleanup"><span>Expired &amp; Cleanup</span></a></li>
@@ -3685,111 +3684,13 @@
             return (n/Math.pow(1024,i)).toFixed(i?1:0)+' '+units[i];
         }
 
-        function activeHotspotEscape(value){
- return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});
-}
-function activeHotspotBytes(value){
- const n=Number(value||0);if(!Number.isFinite(n)||n<=0)return '0 B';
- const units=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),units.length-1);
- return (n/Math.pow(1024,i)).toFixed(i?1:0)+' '+units[i];
-}
-function activeHotspotSeconds(value){
- const raw=String(value||'').trim();if(!raw)return null;
- if(/^\d+:\d{2}:\d{2}$/.test(raw)){const p=raw.split(':').map(Number);return p[0]*3600+p[1]*60+p[2];}
- let total=0,matched=false,m;
- const re=/(\d+)\s*(w|d|h|m|s)/ig;
- while((m=re.exec(raw))){matched=true;const unit=m[2].toLowerCase();total+=Number(m[1])*({w:604800,d:86400,h:3600,m:60,s:1}[unit]);}
- return matched?total:null;
-}
-function activeHotspotInitials(name){
- const words=String(name||'').trim().split(/\s+/).filter(Boolean);
- return (words.length>1?words[0][0]+words[words.length-1][0]:(words[0]||'??').slice(0,2)).toUpperCase();
-}
-function activeHotspotAvatarColor(value){
- let hash=0;for(const ch of String(value||''))hash=(hash*31+ch.charCodeAt(0))|0;
- return ['#1d4ed8','#047857','#7e22ce','#c2410c','#0e7490','#be123c'][Math.abs(hash)%6];
-}
-function activeHotspotRate(current,previous,elapsed){
- if(!previous||elapsed<=0)return null;
- const bytes=Math.max(0,Number(current||0)-Number(previous.value||0));
- return bytes*8/elapsed/1000000;
-}
-function activeHotspotToday(timestamp){
- if(!timestamp)return false;
- const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(timestamp));
- const date=Object.fromEntries(parts.map(p=>[p.type,p.value]));
- return date.year+'-'+date.month+'-'+date.day===new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-}
-function activeHotspotCsv(rows){
- const quote=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
- const lines=[['Subscriber','Phone','Package','IP Address','MAC Address','Uptime','Bytes In','Bytes Out'].map(quote).join(',')];
- rows.forEach(r=>lines.push([r.displayName,r.phone,r.profile,r.address,r.macAddress,r.uptime,r.bytesIn,r.bytesOut].map(quote).join(',')));
- const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
- const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='active-hotspot-subscribers.csv';link.click();URL.revokeObjectURL(link.href);
-}
-function renderActiveHotspotDashboard(sessionData,subscriberData){
- const sessions=Array.isArray(sessionData?.users)?sessionData.users:[];
- const subscribers=Array.isArray(subscriberData?.users)?subscriberData.users:[];
- const byUser=new Map(subscribers.map(u=>[String(u.username||u.user||'').trim().toLowerCase(),u]));
- const now=Date.now(),sampleKey='fazActiveHotspotRates:v1',previous=window[sampleKey]||{at:now,rows:{}};
- const elapsed=Math.max(0.001,(now-previous.at)/1000),nextSamples={};
- let rx=0,tx=0,knownRates=0,newToday=0,expiring=0;
- const rows=sessions.map((s,index)=>{
-  const username=String(s.user||s.username||'').trim(),profile=byUser.get(username.toLowerCase())||{};
-  const identity=String(s.id||username+'|'+(s.macAddress||'')),old=previous.rows[identity];
-  const inRate=activeHotspotRate(s.bytesIn,old&&{value:old.bytesIn},elapsed),outRate=activeHotspotRate(s.bytesOut,old&&{value:old.bytesOut},elapsed);
-  if(inRate!==null||outRate!==null){rx+=inRate||0;tx+=outRate||0;knownRates++;}
-  nextSamples[identity]={bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0)};
-  const uptimeSeconds=activeHotspotSeconds(s.uptime),startedAt=uptimeSeconds===null?null:now-uptimeSeconds*1000;
-  if(startedAt&&activeHotspotToday(startedAt))newToday++;
-  const remaining=activeHotspotSeconds(s.sessionTimeLeft);
-  const expiry=profile.expires_at?new Date(profile.expires_at).getTime():null;if(Number.isFinite(expiry)&&expiry>now&&expiry-now<=86400000)expiring++;else if(!Number.isFinite(expiry)&&remaining!==null&&remaining<=86400)expiring++;
-  const name=profile.customer_name||profile.name||username||'Unknown subscriber';
-  return {id:String(s.id||s.sessionId||''),username,displayName:name,phone:profile.phone||'',profile:s.profile||profile.profile||'Profile unavailable',address:s.address||s.ip||'',macAddress:s.macAddress||s.mac_address||'',uptime:s.uptime||'',bytesIn:Number(s.bytesIn||0),bytesOut:Number(s.bytesOut||0),inRate,outRate,auth:'RouterOS active',index};
- });
- window[sampleKey]={at:now,rows:nextSamples};
- const container=document.getElementById('dynamicPageContent');
- if(!container)return;
- const cards=[
-  ['total','TOTAL ACTIVE',String(rows.length),'Connected sessions','bi-wifi','#2563eb'],
-  ['bandwidth','LIVE BANDWIDTH',knownRates?(('↑ '+rx.toFixed(1)+' Mbps · ↓ '+tx.toFixed(1)+' Mbps')):'Sampling live rates…','Aggregate RX / TX','bi-arrow-down-up','#059669'],
-  ['new','NEW SESSIONS TODAY',String(newToday),'Authenticated today (from uptime)','bi-person-plus','#7c3aed'],
-  ['expiring','EXPIRING ≤ 24 HOURS',String(expiring),'Package expiry or session limit','bi-hourglass-split','#ea580c']
- ];
- const cardsHtml=cards.map(c=>'<article class="active-hotspot-kpi" style="--active-kpi-color:'+c[5]+'"><div class="active-hotspot-kpi-top"><span>'+c[1]+'</span><i class="bi '+c[4]+'"></i></div><div class="active-hotspot-kpi-value">'+c[2]+'</div><div class="active-hotspot-kpi-foot"><span class="active-hotspot-pulse"></span>'+c[3]+'</div></article>').join('');
- const body=rows.map(r=>{
-  const initials=activeHotspotInitials(r.displayName),color=activeHotspotAvatarColor(r.username||r.displayName);
-  const rxText=r.inRate===null?'Sampling…':'↓ '+r.inRate.toFixed(2)+' Mbps',txText=r.outRate===null?'Sampling…':'↑ '+r.outRate.toFixed(2)+' Mbps';
-  return '<tr><td><div class="active-hotspot-subscriber"><span class="active-hotspot-avatar" style="--avatar-color:'+color+'">'+activeHotspotEscape(initials)+'</span><span class="active-hotspot-name-wrap"><strong>'+activeHotspotEscape(r.displayName)+'</strong><small>'+activeHotspotEscape(r.phone||r.username)+'</small></span></div></td><td><span class="active-hotspot-package">'+activeHotspotEscape(r.profile)+'</span></td><td><code>'+activeHotspotEscape(r.address||'—')+'</code></td><td><span class="active-hotspot-mac">'+activeHotspotEscape(r.macAddress||'—')+'</span><button type="button" class="active-hotspot-copy" data-copy="'+activeHotspotEscape(r.macAddress)+'" aria-label="Copy MAC" '+(r.macAddress?'':'disabled')+'><i class="bi bi-clipboard"></i></button></td><td><span class="active-hotspot-rate active-hotspot-rate-rx">'+rxText+'</span><span class="active-hotspot-rate active-hotspot-rate-tx">'+txText+'</span></td><td><strong>'+activeHotspotEscape(formatHotspotDuration(r.uptime)||'—')+'</strong><small class="active-hotspot-auth">'+r.auth+'</small></td><td><div class="active-hotspot-actions"><button type="button" class="active-hotspot-kick" data-disconnect="'+activeHotspotEscape(r.id)+'" data-user="'+activeHotspotEscape(r.username)+'" title="Disconnect session" '+(r.id?'':'disabled')+'><i class="bi bi-lightning-charge-fill"></i><span>Kick</span></button><button type="button" class="active-hotspot-more" data-active-menu aria-label="More actions" data-user="'+activeHotspotEscape(r.username)+'" data-ip="'+activeHotspotEscape(r.address)+'" data-mac="'+activeHotspotEscape(r.macAddress)+'"><i class="bi bi-three-dots-vertical"></i></button></div></td></tr>';
- }).join('');
- const html='<section class="hotspot-dynamic-view admin-view active-hotspot-dashboard"><div class="active-hotspot-heading"><div><span class="active-hotspot-eyebrow"><span class="active-hotspot-pulse"></span>LIVE NETWORK</span><h2>Active Hotspot Subscribers</h2><p>Current sessions, subscriber identity and live traffic</p></div><span class="active-hotspot-updated">Updated '+new Date(now).toLocaleTimeString()+'</span></div><div class="active-hotspot-kpis">'+cardsHtml+'</div><div class="active-hotspot-panel"><div class="active-hotspot-toolbar"><label class="active-hotspot-search"><i class="bi bi-search"></i><input id="activeHotspotSearch" type="search" placeholder="Search active subscriber by name, phone, IP, or MAC..." aria-label="Search active subscribers"></label><div class="active-hotspot-toolbar-actions"><button type="button" class="active-hotspot-refresh" data-active-refresh><i class="bi bi-arrow-clockwise"></i> Refresh Telemetry</button><button type="button" class="active-hotspot-export" data-active-export><i class="bi bi-download"></i> Export CSV</button></div></div><div class="active-hotspot-table-wrap"><table class="active-hotspot-table"><thead><tr><th>SUBSCRIBER</th><th>PACKAGE</th><th>IP ADDRESS</th><th>MAC ADDRESS</th><th>LIVE BANDWIDTH</th><th>UPTIME &amp; AUTH</th><th>ACTIONS</th></tr></thead><tbody id="activeHotspotRows">'+(body||'<tr><td colspan="7" class="active-hotspot-empty">No active Hotspot sessions.</td></tr>')+'</tbody></table></div><div class="active-hotspot-result-count">'+rows.length+' active session'+(rows.length===1?'':'s')+'</div></div></section>';
- appendHotspotView(html);
- const search=document.getElementById('activeHotspotSearch');
- if(search)search.addEventListener('input',function(){const q=this.value.trim().toLowerCase();document.querySelectorAll('#activeHotspotRows tr').forEach(row=>row.style.display=row.innerText.toLowerCase().includes(q)?'':'');});
- if(!window.__activeHotspotEventsBound){
-  window.__activeHotspotEventsBound=true;
-  document.addEventListener('click',async function(event){
-   const target=event.target.closest('[data-active-refresh],[data-active-export],[data-copy],[data-disconnect],[data-active-menu]');
-   if(!target)return;
-   if(target.hasAttribute('data-active-refresh')){event.preventDefault();loadHotspotSection('active','active_user');return;}
-   if(target.hasAttribute('data-active-export')){event.preventDefault();activeHotspotCsv(window.__activeHotspotExportRows||[]);return;}
-   if(target.hasAttribute('data-copy')){event.preventDefault();const value=target.getAttribute('data-copy');if(value)try{await navigator.clipboard.writeText(value);target.innerHTML='<i class="bi bi-check2"></i>';setTimeout(()=>target.innerHTML='<i class="bi bi-clipboard"></i>',1000);}catch(_){showHotspotSyncToast('Clipboard access is unavailable in this browser.',false);}return;}
-   if(target.hasAttribute('data-disconnect')){event.preventDefault();const id=target.getAttribute('data-disconnect'),username=target.getAttribute('data-user');if(!id||!confirm('Disconnect '+(username||'this active session')+'?'))return;try{await jsonFetch('/api/hotspot/active/disconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});loadHotspotSection('active','active_user');}catch(error){alert(error.message);}return;}
-   if(target.hasAttribute('data-active-menu')){event.preventDefault();document.getElementById('activeHotspotActionMenu')?.remove();const menu=document.createElement('div');menu.id='activeHotspotActionMenu';menu.className='active-hotspot-portal-menu';menu.innerHTML='<button type="button" data-copy="'+activeHotspotEscape(target.dataset.ip||'')+'"><i class="bi bi-copy"></i> Copy IP address</button><button type="button" data-copy="'+activeHotspotEscape(target.dataset.mac||'')+'"><i class="bi bi-hdd-network"></i> Copy MAC address</button>';document.body.appendChild(menu);const rect=target.getBoundingClientRect();menu.style.top=Math.min(rect.bottom,window.innerHeight-menu.offsetHeight-8)+'px';menu.style.left=Math.max(8,Math.min(rect.right-menu.offsetWidth,window.innerWidth-menu.offsetWidth-8))+'px';setTimeout(()=>document.addEventListener('click',function closeMenu(e){if(!menu.contains(e.target)&&e.target!==target){menu.remove();document.removeEventListener('click',closeMenu);}}),0);}
-  });
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('activeHotspotActionMenu')?.remove();});
- }
- window.__activeHotspotExportRows=rows;
- if(window.__activeHotspotPoll)clearInterval(window.__activeHotspotPoll);
- window.__activeHotspotPoll=setInterval(async function(){if(currentHotspotMode!=='active'||currentHotspotTitleKey!=='active_user'){clearInterval(window.__activeHotspotPoll);return;}try{const result=await loadActiveHotspotData();renderActiveHotspotDashboard(result.sessions,result.subscribers);}catch(error){console.warn('[Active Hotspot] Telemetry refresh failed:',error.message);}},5000);
-}
-async function loadActiveHotspotData(){
- const results=await Promise.all([jsonFetch('/api/hotspot/active'),jsonFetch('/api/hotspot/users?filter=online')]);
- return {sessions:results[0],subscribers:results[1]};
-}
-function renderHotspotTable(data,mode,titleKey){
+        function renderHotspotTable(data,mode,titleKey){
  const users=Array.isArray(data.users)?data.users:[];
- if(mode==='active'){renderActiveHotspotDashboard(data,window.__activeHotspotSubscribers||{users:[]});return;}
+ if(mode==='active'){
+  const rows=users.map((u,i)=>'<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(u.user||u.username||'-')+'</strong></td><td>'+escapeHtml(u.address||u.ip||'-')+'</td><td>'+escapeHtml(u.macAddress||u.mac_address||'-')+'</td><td>'+escapeHtml(u.uptime||'-')+'</td><td>'+formatBytes(u.bytesIn)+' / '+formatBytes(u.bytesOut)+'</td><td><button class="btn btn-sm btn-outline-warning" disabled title="RouterOS sessions are intentionally untouched during this rebuild">Kick disabled</button></td></tr>').join('');
+  appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header">'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span><button class="btn btn-outline-success btn-sm ms-auto" onclick="refreshHotspotCurrent()">Refresh</button></div><div class="table-responsive"><table class="table"><thead><tr><th>#</th><th>Username</th><th>IP</th><th>MAC</th><th>Uptime</th><th>Traffic</th><th>Action</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No active Hotspot sessions.</td></tr>')+'</tbody></table></div></div></section>');
+  return;
+ }
  appendHotspotView('<section class="hotspot-dynamic-view admin-view" id="freshHotspotLoading"><div class="card card-custom"><div class="card-body text-center py-4"><div class="spinner-border text-success" role="status"></div><span class="ms-2">Opening Subscriber 360…</span></div></div></section>');
 }
 async function kickHotspotSession(id, username) {
@@ -3982,7 +3883,7 @@ window.editHotspotUser=function(username,event){
             if(typeof window.editHotspotUserProfile360==="function")return window.editHotspotUserProfile360(username,event);
             alert("Subscriber Profile 360 is still loading. Please try again.");
         };
-        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);if(filter==='active'&&titleKey==='active_user'){if(window.__activeHotspotPoll){clearInterval(window.__activeHotspotPoll);window.__activeHotspotPoll=null;}appendHotspotView('<section class="hotspot-dynamic-view admin-view active-hotspot-dashboard"><div class="active-hotspot-loading">Loading active subscriber telemetry…</div></section>');try{const result=await loadActiveHotspotData();window.__activeHotspotSubscribers=result.subscribers;renderActiveHotspotDashboard(result.sessions,result.subscribers);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}return;}const ep='/api/hotspot/users?filter='+encodeURIComponent(['all','online','active','offline','expired'].includes(filter)?filter:'all');try{const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
+        async function loadHotspotSection(filter,titleKey){purgeStuckBackdrops();currentHotspotMode=filter;currentHotspotTitleKey=titleKey;setHotspotTitle(titleKey);appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');try{const ep=filter==='active'&&titleKey==='active_user'?'/api/hotspot/active':'/api/hotspot/users?filter='+encodeURIComponent(['all','online','active','offline','expired'].includes(filter)?filter:'all');const d=await jsonFetch(ep);renderHotspotTable(d,filter,titleKey);}catch(err){appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(err.message)+'</div></section>');}}
         async function refreshHotspotCurrent(){await loadHotspotSection(currentHotspotMode,currentHotspotTitleKey);}
 
         function showHotspotSyncToast(message,success){
@@ -9071,7 +8972,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hotspot/users/active': { view: 'hotspot', section: 'users', filter: 'active', title: 'active_user' },
                     '/admin/hotspot/users/offline': { view: 'hotspot', section: 'users', filter: 'offline', title: 'offline_user' },
                     '/admin/hotspot/profiles': { view: 'hotspot', section: 'profiles' },
-                    '/admin/hotspot/ip-bindings': { view: 'hotspot', section: 'bindings' },
                     '/admin/hotspot/vouchers/generate': { view: 'hotspot', section: 'voucher-generator' },
                     '/admin/hotspot/vouchers/manage': { view: 'hotspot', section: 'vouchers', filter: 'all' },
                     '/admin/hotspot/vouchers/cleanup': { view: 'hotspot', section: 'vouchers', filter: 'cleanup' },
@@ -9168,7 +9068,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     if (normalized.section === 'add-user') return '/admin/hotspot/add-user';
                     if (normalized.section === 'users') return '/admin/hotspot/users/' + (normalized.filter || 'all');
                     if (normalized.section === 'profiles') return '/admin/hotspot/profiles';
-                    if (normalized.section === 'bindings') return '/admin/hotspot/ip-bindings';
                     if (normalized.section === 'voucher-generator') return '/admin/hotspot/vouchers/generate';
                     if (normalized.section === 'vouchers') return '/admin/hotspot/vouchers/' + (normalized.filter === 'cleanup' ? 'cleanup' : 'manage');
                     if (normalized.section === 'sales') return '/admin/hotspot/sales';
@@ -9246,19 +9145,15 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         return callIfAvailable('loadCustomerSection', [r.filter, r.title]);
                     case 'payments':
                         return callIfAvailable('loadPaymentsSection', [r.filter, r.title, r.serviceType || '']);
-                    case 'hotspot': {
-                        const hotspotTab = r.section === 'dashboard' ? 'dashboard'
-                            : r.section === 'add-user' ? 'add-user'
-                            : r.section === 'users' ? (r.filter === 'active' ? 'sessions' : 'users')
-                            : r.section === 'profiles' ? 'profiles'
-                            : r.section === 'bindings' ? 'bindings'
-                            : r.section === 'voucher-generator' ? 'vouchers'
-                            : r.section === 'vouchers' ? (r.filter === 'cleanup' ? 'ledger-cleanup' : 'ledger')
-                            : r.section === 'sales' ? 'sales' : 'dashboard';
-                        if (typeof window.loadHotspotHubTab === 'function') return window.loadHotspotHubTab(hotspotTab);
-                        window.location.assign('/admin/hotspot/dashboard');
-                        return false;
-                    }
+                    case 'hotspot':
+                        if (r.section === 'dashboard') return callIfAvailable('loadHotspotDashboard');
+                        if (r.section === 'users') return callIfAvailable('loadHotspotSection', [r.filter, r.title]);
+                        if (r.section === 'add-user') return callIfAvailable('loadAddHotspotUserView');
+                        if (r.section === 'profiles') return callIfAvailable('loadHotspotProfiles', ['hotspot_profile']);
+                        if (r.section === 'voucher-generator') return callIfAvailable('loadVoucherGeneratorSection');
+                        if (r.section === 'vouchers') return callIfAvailable('loadHotspotVoucherRecords', [r.filter, r.filter === 'cleanup' ? 'Expired & Cleanup' : 'Voucher Management']);
+                        if (r.section === 'sales') return callIfAvailable('loadHotspotVoucherSales');
+                        break;
                     case 'devices': return callIfAvailable('loadDevices');
                     case 'packages': return callIfAvailable('loadPlanPackages');
                     case 'ip-pools': return callIfAvailable('loadIpPools');
@@ -9781,6 +9676,5 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="/js/remaining-time.js?v=remaining-time-20261025"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
-<script src="/js/hotspot-unified-hub.js?v=20261026-eight-tab-2" defer></script>
 </body>
 </html>
