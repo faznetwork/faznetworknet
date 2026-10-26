@@ -3753,7 +3753,7 @@ function renderActiveHotspotDashboard(sessionData,subscriberData){
   ['total','TOTAL ACTIVE',String(rows.length),'Connected sessions','bi-wifi','#2563eb'],
   ['bandwidth','LIVE BANDWIDTH',knownRates?(('↑ '+rx.toFixed(1)+' Mbps · ↓ '+tx.toFixed(1)+' Mbps')):'Sampling live rates…','Aggregate RX / TX','bi-arrow-down-up','#059669'],
   ['new','NEW SESSIONS TODAY',String(newToday),'Authenticated today (from uptime)','bi-person-plus','#7c3aed'],
-  ['expiring','EXPIRING ≤ 24 HOURS',String(expiring),'Package expiry or session limit'],'bi-hourglass-split','#ea580c']
+  ['expiring','EXPIRING ≤ 24 HOURS',String(expiring),'Package expiry or session limit','bi-hourglass-split','#ea580c']
  ];
  const cardsHtml=cards.map(c=>'<article class="active-hotspot-kpi" style="--active-kpi-color:'+c[5]+'"><div class="active-hotspot-kpi-top"><span>'+c[1]+'</span><i class="bi '+c[4]+'"></i></div><div class="active-hotspot-kpi-value">'+c[2]+'</div><div class="active-hotspot-kpi-foot"><span class="active-hotspot-pulse"></span>'+c[3]+'</div></article>').join('');
  const body=rows.map(r=>{
