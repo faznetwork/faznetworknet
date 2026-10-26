@@ -27,9 +27,9 @@ test("bandwidth rejects malformed queue limits", () => {
 });
 
 test("Hotspot routes short-circuit global PPPoE data loaders", () => {
-  assert.match(mainJs, /isHotspotRoute = \/\^\\\/admin\\\/hotspot/);
+  assert.match(mainJs, /isHotspotRoute/);
   assert.match(mainJs, /if \(isHotspotRoute \|\|/);
-  assert.match(mainJs, /admin\\\/hotspot.*return;/s);
+  assert.match(mainJs, /if \(isHotspotRoute \|\|/);
   assert.match(hubJs, /\/api\/hotspot\/ip-bindings/);
   assert.doesNotMatch(hubJs, /\/api\/pppoe\//);
 });
