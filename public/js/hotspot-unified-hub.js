@@ -17,6 +17,8 @@
    var response=await fetch(url,Object.assign({credentials:'include',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal},options||{}));
    var data={};try{data=await response.json();}catch(_){}
    if(!response.ok||data.success===false)throw new Error(data.message||data.error||('Request failed ('+response.status+').'));
+   var path=new URL(url,location.origin).pathname,expected=path==='/api/hotspot/active'||path==='/api/hotspot/users'?'users':path==='/api/hotspot/profiles'?'profiles':path==='/api/hotspot/voucher-sales'?'transactions':null;
+   if(expected&&!Array.isArray(data[expected]))throw new Error('The endpoint returned an unexpected response. Please retry this tab.');
    return data;
   }catch(error){if(error.name==='AbortError')throw new Error('This service did not respond in 12 seconds. Other Hotspot tabs remain available.');throw error;}
   finally{clearTimeout(timer);}
