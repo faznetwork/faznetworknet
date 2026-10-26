@@ -1,5 +1,9 @@
-const express=require("express");const controller=require("../controllers/hotspotController");const userController=require("../controllers/hotspotUserController");const router=express.Router();
+const express=require("express");const controller=require("../controllers/hotspotController");const userController=require("../controllers/hotspotUserController");const ipBindingController=require("../controllers/hotspotIpBindingController");const router=express.Router();
 router.get("/",controller.page);
+router.get("/ip-bindings",ipBindingController.list);
+router.post("/ip-bindings",ipBindingController.create);
+router.patch("/ip-bindings/:id",ipBindingController.update);
+router.delete("/ip-bindings/:id",ipBindingController.remove);
 router.get("/users",userController.list);
 router.post("/sync/import-from-mikrotik",controller.importFromMikrotik);
 router.post("/sync/push-to-mikrotik",controller.pushToMikrotik);
