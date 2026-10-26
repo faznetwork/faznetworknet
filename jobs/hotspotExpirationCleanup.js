@@ -267,12 +267,12 @@ function createHotspotExpirationCleanup(deps = {}) {
         }
       }
 
-      const summary = { checked, activated, expired, removed, failed, preExpiryNotified, batchContinuation, batchContinuationUrgent, durationMs: Date.now() - startedAt };
+      const summary = { checked, activated, expired, removed, failed, preExpiryNotified, durationMs: Date.now() - startedAt };
       if (checked || failed) logger.log("[HOTSPOT EXPIRY] Completed.", summary);
       return summary;
     } catch (error) {
       logger.error("[HOTSPOT EXPIRY] Worker failed; records were retained for retry:", error.message);
-      return { checked, activated, expired, removed, failed: failed + 1, batchContinuation, batchContinuationUrgent, error: error.message };
+      return { checked, activated, expired, removed, failed: failed + 1, error: error.message };
     } finally {
       running = false;
     }
@@ -334,8 +334,6 @@ function startHotspotExpirationCleanup(deps = {}) {
   const logger = deps.logger || console;
   let timer = null;
   let stopped = false;
-  let batchContinuation = false;
-  let batchContinuationUrgent = false;
   const scheduleNext = async () => {
     if (stopped) return;
     if (timer) clearTimeout(timer);
@@ -347,11 +345,8 @@ function startHotspotExpirationCleanup(deps = {}) {
         ? (batchContinuationUrgent ? 1000 : 30000)
         : row.retry_due ? 30000 : Math.max(1000, Math.min(2147483647, Number.isFinite(nextAt) ? nextAt - Date.now() : 2147483647));
       timer = setTimeout(async () => {
-        try {
-          const result = await runHotspotExpirationCleanup();
-          batchContinuation = Boolean(result?.batchContinuation);
-          batchContinuationUrgent = Boolean(result?.batchContinuationUrgent);
-        } catch (error) { logger.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message); }
+        try { await runHotspotExpirationCleanup(); }
+        catch (error) { logger.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message); }
         await scheduleNext();
       }, delay);
       if (typeof timer.unref === "function") timer.unref();
@@ -361,11 +356,7 @@ function startHotspotExpirationCleanup(deps = {}) {
       if (typeof timer.unref === "function") timer.unref();
     }
   };
-  runHotspotExpirationCleanup().then(result => {
-    batchContinuation = Boolean(result?.batchContinuation);
-    batchContinuationUrgent = Boolean(result?.batchContinuationUrgent);
-    return scheduleNext();
-  }).catch(error => {
+  runHotspotExpirationCleanup().then(scheduleNext).catch(error => {
     logger.error("[HOTSPOT EXPIRY] Startup recovery sweep failed:", error.message);
     scheduleNext().catch(err => logger.error("[HOTSPOT EXPIRY] Scheduler setup failed:", err.message));
   });

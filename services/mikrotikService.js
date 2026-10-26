@@ -21,8 +21,8 @@ if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyRe
   });
 }
 
-const CONNECTION_TIMEOUT_MS = 15000;
-const OPERATION_TIMEOUT_MS = 30000;
+const CONNECTION_TIMEOUT_MS = 10000;
+const OPERATION_TIMEOUT_MS = 10000;
 const DEFAULT_PORT = 8728;
 
 // IPv4 pool matching helpers: RouterOS ranges, CIDR and single IPs.
@@ -1280,79 +1280,6 @@ class MikroTikService {
       return { username:name, removed:matches.length };
     });
   }
-  async getHotspotIpBindings() {
-    return this._withConnection("Hotspot IP binding query", async (connection) => {
-      const rows = await connection.write("/ip/hotspot/ip-binding/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({
-        id: this._str(item[".id"]),
-        macAddress: this._str(item["mac-address"]),
-        address: this._str(item.address),
-        toAddress: this._str(item["to-address"]),
-        type: this._str(item.type).toLowerCase(),
-        comment: this._str(item.comment),
-      })).filter((item) => item.comment.startsWith("FAZ|HSIPBIND|"));
-    });
-  }
-
-  async syncHotspotIpBinding(binding) {
-    const id = String(binding.id);
-    const marker = "FAZ|HSIPBIND|" + id + "|";
-    const mac = normalizeHotspotMac(binding.macAddress);
-    if (!mac) throw new Error("A valid MAC address is required.");
-    const type = ["bypassed", "regular", "blocked"].includes(binding.bindingType) ? binding.bindingType : "bypassed";
-    const bandwidth = String(binding.bandwidthProfile || "unlimited").trim();
-    const ip = String(binding.ipAddress || "").trim();
-    const limited = bandwidth && !/^unlimited$|^full\s*speed$/i.test(bandwidth);
-    if (limited && !ip) throw new Error("A static or active-session IP address is required for a bandwidth-limited binding.");
-    return this._withConnection("Hotspot IP binding sync", async (connection) => {
-      const rows = await connection.write("/ip/hotspot/ip-binding/print");
-      const all = Array.isArray(rows) ? rows : [];
-      const existing = all.find((item) => this._str(item.comment).startsWith(marker) && item[".id"]);
-      const values = { "mac-address": mac, type, comment: marker + String(binding.comment || "").replace(/[\r\n]/g, " ").slice(0, 180) };
-      if (ip) values.address = ip;
-      if (binding.toAddress) values["to-address"] = String(binding.toAddress);
-      let routerId;
-      if (existing) {
-        routerId = this._str(existing[".id"]);
-        await connection.write("/ip/hotspot/ip-binding/set", this._writeParams(Object.assign({ ".id": routerId }, values)));
-      } else {
-        await connection.write("/ip/hotspot/ip-binding/add", this._writeParams(values));
-      }
-
-      const queues = await connection.write("/queue/simple/print");
-      const queue = (Array.isArray(queues) ? queues : []).find((item) => this._str(item.comment).startsWith(marker) && item[".id"]);
-      if (type === "blocked" || !limited) {
-        if (queue) await connection.write("/queue/simple/remove", this._writeParams({ ".id": queue[".id"] }));
-      } else {
-        const target = ip.includes("/") ? ip : ip + (ip.includes(":") ? "/128" : "/32");
-        const maxLimit = bandwidth.replace(/\s/g, "");
-        const queueValues = { name: "FAZ-HSIPBIND-" + id, target, "max-limit": maxLimit, comment: marker + "queue" };
-        if (queue) await connection.write("/queue/simple/set", this._writeParams(Object.assign({ ".id": queue[".id"] }, queueValues)));
-        else await connection.write("/queue/simple/add", this._writeParams(queueValues));
-      }
-      const refreshed = await connection.write("/ip/hotspot/ip-binding/print");
-      const saved = (Array.isArray(refreshed) ? refreshed : []).find((item) => this._str(item.comment).startsWith(marker) && item[".id"]);
-      return { routerBindingId: this._str(saved && saved[".id"]) || routerId || null, queueManaged: type !== "blocked" && Boolean(limited) };
-    });
-  }
-
-  async expireHotspotIpBinding(binding) {
-    return this.syncHotspotIpBinding(Object.assign({}, binding, { bindingType: "blocked", bandwidthProfile: "unlimited" }));
-  }
-
-  async removeHotspotIpBinding(id) {
-    const marker = "FAZ|HSIPBIND|" + String(id) + "|";
-    return this._withConnection("Hotspot IP binding removal", async (connection) => {
-      const bindings = await connection.write("/ip/hotspot/ip-binding/print");
-      const owned = (Array.isArray(bindings) ? bindings : []).filter((item) => this._str(item.comment).startsWith(marker) && item[".id"]);
-      for (const item of owned) await connection.write("/ip/hotspot/ip-binding/remove", this._writeParams({ ".id": item[".id"] }));
-      const queues = await connection.write("/queue/simple/print");
-      const ownedQueues = (Array.isArray(queues) ? queues : []).filter((item) => this._str(item.comment).startsWith(marker) && item[".id"]);
-      for (const item of ownedQueues) await connection.write("/queue/simple/remove", this._writeParams({ ".id": item[".id"] }));
-      return { removedBindings: owned.length, removedQueues: ownedQueues.length };
-    });
-  }
-
   async getActiveHotspotSessions() {
     return this._withConnection("active Hotspot session query", async (connection) => {
       const rows=await connection.write("/ip/hotspot/active/print");
