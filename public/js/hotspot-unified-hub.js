@@ -28,7 +28,7 @@
   state.errors[key]='';state.loading[key]=(async function(){
    try{var data=await request(endpointFor(key));state[key]=data;state.errors[key]='';}
    catch(error){state.errors[key]=error.message;console.error('[Hotspot hub] '+key+' request failed:',error.message);}
-   finally{state.loading[key]=null;if(state.tab===key||key==='users'&&state.tab==='bindings'||key==='sessions'&&state.tab==='bindings')renderCurrent();}
+   finally{state.loading[key]=null;if(state.tab===key||state.tab==='bindings'&&(key==='users'||key==='sessions')||state.tab==='sessions'&&key==='users'||state.tab==='vouchers'&&key==='profiles')renderCurrent();}
    return state[key];
   })();
   return state.loading[key];
@@ -76,7 +76,7 @@
   if(rateTimer){clearInterval(rateTimer);rateTimer=null;}
   renderCurrent();
   if(tab==='users')loadResource('users',force);
-  if(tab==='sessions'){loadResource('sessions',force);rateTimer=setInterval(function(){if(state.tab==='sessions')loadResource('sessions',true);},5000);}
+  if(tab==='sessions'){loadResource('users',force);loadResource('sessions',force);rateTimer=setInterval(function(){if(state.tab==='sessions')loadResource('sessions',true);},5000);}
   if(tab==='profiles')loadResource('profiles',force);
   if(tab==='bindings'){loadResource('users',force);loadResource('sessions',force);}
   if(tab==='sales')loadResource('sales',force);
