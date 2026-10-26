@@ -81,10 +81,10 @@
   function actionButtons(u,context){
     const online=stateOf(u)==="online"&&Boolean(u.sessionId),scope=context==="mobile"?"mobile":"desktop";
     const kick=online?'<button type="button" class="hs-quick-kick" data-row-action="disconnect" data-id="'+esc(u.id)+'" aria-label="Disconnect '+esc(u.customer_name||u.name||u.username||"subscriber")+'" title="Quick disconnect">⚡</button>':"";
-    return '<div class="hs-action-cluster" data-action-scope="'+scope+'">'+kick+
+    return '<div class="hs-action-cluster btn-hotspot-action" data-action-scope="'+scope+'">'+kick+
       '<button type="button" class="hs-kebab-toggle" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Subscriber actions">⋮</button>'+
       '<div class="hs-action-menu" role="menu" hidden>'+
-        '<button type="button" class="hs-action-item" role="menuitem" data-row-action="renew" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔄</span> Renew / Extend Plan</button>'+
+        '<button type="button" class="hs-action-item btn-action-renew" role="menuitem" data-row-action="renew" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔄</span> Renew / Extend Plan</button>'+
         '<button type="button" class="hs-action-item" role="menuitem" data-row-action="edit" data-id="'+esc(u.id)+'"><span aria-hidden="true">✏️</span> Edit Details</button>'+
         '<button type="button" class="hs-action-item" role="menuitem" data-row-action="unbind" data-id="'+esc(u.id)+'"><span aria-hidden="true">🔓</span> Reset MAC Binding</button>'+
         '<hr>'+
