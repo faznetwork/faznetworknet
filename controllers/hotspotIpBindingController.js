@@ -71,7 +71,7 @@ async function create(req, res) {
     if (!["bypassed", "regular", "blocked"].includes(type)) throw Object.assign(new Error("Binding type must be bypassed, regular, or blocked."), { status: 400 });
     const bandwidthProfile = bandwidth(req.body.bandwidth_profile || req.body.bandwidthProfile);
     let ipAddress = clean(req.body.ip_address || req.body.ipAddress, 64) || null;
-    if (ipAddress && !/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$|^[0-9a-f:]+(?:\/\d{1,3})?$/i.test(ipAddress)) throw Object.assign(new Error("IP address is invalid."), { status: 400 });
+    if (ipAddress) { const address = ipAddress.split("/")[0]; const prefix = ipAddress.includes("/") ? Number(ipAddress.split("/")[1]) : (address.includes(":") ? 128 : 32); if (!net.isIP(address) || !Number.isInteger(prefix) || prefix < 0 || prefix > (address.includes(":") ? 128 : 32)) throw Object.assign(new Error("IP address is invalid."), { status: 400 }); }
     if (bandwidthProfile !== "unlimited" && !ipAddress) {
       const sessions = await mikrotikService.getActiveHotspotSessions();
       const session = sessions.find((item) => String(item.macAddress || "").replace(/[:-]/g, "").toUpperCase() === macAddress.replace(/:/g, ""));
@@ -79,7 +79,7 @@ async function create(req, res) {
       if (!ipAddress) throw Object.assign(new Error("A bandwidth-limited binding needs an IP address or a current active Hotspot session for this MAC."), { status: 400 });
     }
     const expiryDate = dhakaDate(req.body.expiry_date || req.body.expiryDate);
-    if (!expiryDate) throw Object.assign(new Error("Choose an expiry date."), { status: 400 });
+    if (!expiryDate || new Date(expiryDate).getTime() <= Date.now()) throw Object.assign(new Error("Choose an expiry date in the future."), { status: 400 });
     const values = [macAddress, ipAddress, clean(req.body.customer_name || req.body.customerName, 160) || null, clean(req.body.phone, 40) || null, clean(req.body.comment, 500), type, clean(req.body.package_id || req.body.packageId, 120) || null, bandwidthProfile, expiryDate];
     const saved = await db.query(
       "INSERT INTO hotspot_ip_bindings (mac_address,ip_address,customer_name,phone,comment,binding_type,package_id,bandwidth_profile,expiry_date,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'disabled') RETURNING *", values
@@ -113,11 +113,11 @@ async function update(req, res) {
     if (body.bandwidth_profile !== undefined || body.bandwidthProfile !== undefined) next.bandwidth_profile = bandwidth(body.bandwidth_profile || body.bandwidthProfile);
     if (body.package_id !== undefined || body.packageId !== undefined) next.package_id = clean(body.package_id || body.packageId, 120) || null;
     if (body.expiry_date !== undefined || body.expiryDate !== undefined) next.expiry_date = dhakaDate(body.expiry_date || body.expiryDate);
-    if (!next.expiry_date) throw Object.assign(new Error("Choose an expiry date."), { status: 400 });
+    if (!next.expiry_date || new Date(next.expiry_date).getTime() <= Date.now()) throw Object.assign(new Error("Choose an expiry date in the future."), { status: 400 });
     if (next.bandwidth_profile !== "unlimited" && !next.ip_address) throw Object.assign(new Error("A bandwidth-limited binding needs an IP address."), { status: 400 });
     const router = await mikrotikService.syncHotspotIpBinding({ id, macAddress: next.mac_address, ipAddress: next.ip_address, comment: next.comment, bindingType: next.binding_type, bandwidthProfile: next.bandwidth_profile });
     const saved = await db.query(
-      "UPDATE hotspot_ip_bindings SET mac_address=$2,ip_address=$3,customer_name=$4,phone=$5,comment=$6,binding_type=$7,package_id=$8,bandwidth_profile=$9,expiry_date=$10,router_binding_id=$11,last_synced_at=NOW(),router_sync_error=NULL,updated_at=NOW() WHERE id=$1 RETURNING *",
+      "UPDATE hotspot_ip_bindings SET mac_address=$2,ip_address=$3,customer_name=$4,phone=$5,comment=$6,binding_type=$7,package_id=$8,bandwidth_profile=$9,expiry_date=$10,status='active',archived_at=NULL,router_binding_id=$11,last_synced_at=NOW(),router_sync_error=NULL,updated_at=NOW() WHERE id=$1 RETURNING *",
       [id,next.mac_address,next.ip_address,next.customer_name,next.phone,next.comment,next.binding_type,next.package_id,next.bandwidth_profile,next.expiry_date,router.routerBindingId]
     );
     await audit(req, "hotspot_ip_binding.updated", saved.rows[0], { expiry_date: next.expiry_date });
