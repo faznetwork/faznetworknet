@@ -1,7 +1,7 @@
 (function hotspotUnifiedHub(){
  'use strict';
  var tabNames={users:'All Users',sessions:'Active Sessions',profiles:'Profiles & Packages',bindings:'IP/MAC Binding',vouchers:'Generate / Print Vouchers',sales:'Voucher Sales History'};
- var state={tab:'users',users:null,sessions:null,profiles:null,sales:null,errors:{},loading:{},rateSamples:{}};
+ var state={tab:'users',users:null,sessions:null,profiles:null,bindings:null,sales:null,errors:{},loading:{},rateSamples:{}};
  var rateTimer=null;
  function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
  function toArray(value){return Array.isArray(value)?value:[];}
@@ -23,14 +23,14 @@
   }catch(error){if(error.name==='AbortError')throw new Error('This service did not respond in 12 seconds. Other Hotspot tabs remain available.');throw error;}
   finally{clearTimeout(timer);}
  }
- function endpointFor(key){return {users:'/api/hotspot/users?filter=all',sessions:'/api/hotspot/active',profiles:'/api/hotspot/profiles',sales:'/api/hotspot/voucher-sales'}[key];}
+ function endpointFor(key){return {users:'/api/hotspot/users?filter=all',sessions:'/api/hotspot/active',profiles:'/api/hotspot/profiles',bindings:'/api/hotspot/ip-bindings',sales:'/api/hotspot/voucher-sales'}[key];}
  async function loadResource(key,force){
   if(state.loading[key])return state.loading[key];
   if(state[key]&&!force)return state[key];
   state.errors[key]='';state.loading[key]=(async function(){
    try{var data=await request(endpointFor(key));state[key]=data;state.errors[key]='';}
    catch(error){state.errors[key]=error.message;console.error('[Hotspot hub] '+key+' request failed:',error.message);}
-   finally{state.loading[key]=null;if(state.tab===key||state.tab==='bindings'&&(key==='users'||key==='sessions')||state.tab==='sessions'&&key==='users'||state.tab==='vouchers'&&key==='profiles')renderCurrent();}
+   finally{state.loading[key]=null;if(state.tab===key||state.tab==='sessions'&&key==='users'||state.tab==='vouchers'&&key==='profiles')renderCurrent();}
    return state[key];
   })();
   return state.loading[key];
@@ -38,7 +38,7 @@
  function activeCount(){return toArray(state.sessions&&state.sessions.users).length;}
  function onlineCount(){var users=toArray(state.users&&state.users.users);return users.filter(function(u){return u.is_online===true||u.online===true;}).length;}
  function kpis(tab){
-  var users=toArray(state.users&&state.users.users),sessions=toArray(state.sessions&&state.sessions.users),profiles=toArray(state.profiles&&state.profiles.profiles),sales=toArray(state.sales&&state.sales.transactions),items=[];
+  var users=toArray(state.users&&state.users.users),sessions=toArray(state.sessions&&state.sessions.users),profiles=toArray(state.profiles&&state.profiles.profiles),sales=toArray(state.sales&&state.sales.transactions),bindings=toArray(state.bindings&&state.bindings.bindings),items=[];
   var online=onlineCount(),today=0,expires=0,now=Date.now();
   users.forEach(function(u){var created=u.created_at&&new Date(u.created_at).getTime();if(created&&new Date(created).toDateString()===new Date().toDateString())today++;var exp=u.expires_at&&new Date(u.expires_at).getTime();if(exp&&exp>now&&exp-now<=86400000)expires++;});
   if(tab==='users')items=[['TOTAL SUBSCRIBERS',users.length,'Saved accounts','blue'],['ONLINE NOW',online,'Active billing sessions','green'],['NEW TODAY',today,'Accounts created today','purple'],['EXPIRING ≤ 24H',expires,'Subscriber package expiry','orange']];
@@ -80,7 +80,7 @@
   if(tab==='users')loadResource('users',force);
   if(tab==='sessions'){loadResource('users',force);loadResource('sessions',force);rateTimer=setInterval(function(){if(state.tab==='sessions')loadResource('sessions',true);},5000);}
   if(tab==='profiles')loadResource('profiles',force);
-  if(tab==='bindings'){loadResource('users',force);loadResource('sessions',force);}
+  if(tab==='bindings')loadResource('bindings',force);
   if(tab==='sales')loadResource('sales',force);
   if(tab==='vouchers'){loadResource('profiles',force);renderVoucherForm();}
  }
@@ -123,13 +123,16 @@
   }).join('')+'</div>';
  }
  function renderBindings(){
-  if((state.errors.users&&!state.users)||(state.errors.sessions&&!state.sessions))return '<div class="huh-alert">'+esc([state.errors.users,state.errors.sessions].filter(Boolean).join(' · '))+'</div>';
-  if(!state.users||!state.sessions)return '<div class="huh-state">Loading saved subscriber records and live sessions independently…</div>';
-  var users=toArray(state.users.users),sessions=toArray(state.sessions.users),sessionBy=new Map(sessions.map(function(s){return [String(s.user||s.username||'').toLowerCase(),s];}));
-  return '<div class="huh-note">Read-only view combining saved MAC lock records with current RouterOS IP/MAC telemetry. No separate static IP-binding API is configured.</div>'+table(['SUBSCRIBER','USERNAME','SAVED MAC','LIVE MAC','IP ADDRESS','MAC LOCK'],users.map(function(u){
-   var key=String(u.username||'').toLowerCase(),s=sessionBy.get(key),mac=u.mac_address||u.macAddress||'',live=s&&(s.macAddress||s.mac_address)||'';
-   return '<tr><td>'+avatar(u.customer_name||u.name||u.username,u.phone||'')+'</td><td><strong>'+esc(u.username||'—')+'</strong></td><td>'+macCell(mac)+'</td><td>'+macCell(live)+'</td><td><code>'+esc(s&&(s.address||s.ip)||u.ip||u.address||'—')+'</code></td><td><span class="huh-status '+((u.macLock===true||u.mac_lock===true)?'online':'offline')+'">'+((u.macLock===true||u.mac_lock===true)?'Locked':'Not locked')+'</span></td></tr>';
-  }),6);
+  if(!state.bindings)return notice('bindings','IP/MAC bindings');
+  var rows=toArray(state.bindings.bindings);
+  return table(['MAC ADDRESS','IP ADDRESS','ASSIGNED CUSTOMER','PACKAGE / SPEED','EXPIRY / COUNTDOWN','STATUS','ACTIONS'],rows.map(function(b){
+   var expiryAt=b.expiry_date?new Date(b.expiry_date):null,remaining=expiryAt&&!Number.isNaN(expiryAt.getTime())?expiryAt.getTime()-Date.now():null;
+   var countdown=remaining===null?'No expiry':remaining<=0?'Expired':duration(Math.floor(remaining/1000))+' left';
+   var status=b.status==='expired'?'Expired · Blocked':b.status==='disabled'?'Disabled':b.router_status==='unavailable'?'Active · Sync unknown':b.router_status==='blocked'?'Active · Blocked':b.router_status==='bypassed'?'Active · Bypassed':'Active · '+(b.router_status||'Router pending');
+   var cls=b.status==='active'&&b.router_status==='bypassed'?'online':'offline';
+   var payload=esc(JSON.stringify({id:b.id,mac_address:b.mac_address,ip_address:b.ip_address||'',customer_name:b.customer_name||'',phone:b.phone||'',comment:b.comment||'',binding_type:b.binding_type||'bypassed',package_id:b.package_id||'',bandwidth_profile:b.bandwidth_profile||'unlimited',expiry_date:b.expiry_date||''}));
+   return '<tr><td>'+macCell(b.mac_address)+'</td><td><code>'+esc(b.ip_address||'—')+'</code></td><td>'+avatar(b.customer_name||'Unassigned',b.phone||'')+'</td><td><strong>'+esc(b.package_id||'Custom')+'</strong><small class="huh-subline">'+esc(b.bandwidth_profile||'unlimited')+'</small></td><td>'+esc(expiry(b.expiry_date))+'<small class="huh-subline">'+esc(countdown)+'</small></td><td><span class="huh-status '+cls+'">'+esc(status)+'</span></td><td class="huh-binding-actions"><button type="button" class="huh-binding-btn" data-binding-action="renew" data-binding="'+payload+'">↻ Renew</button><button type="button" class="huh-binding-btn" data-binding-action="edit" data-binding="'+payload+'">⚙ Edit</button><button type="button" class="huh-binding-btn is-danger" data-binding-action="delete" data-id="'+esc(b.id)+'">🗑 Unbind</button></td></tr>';
+  }),7);
  }
  function renderSales(){
   if(!state.sales)return notice('sales','voucher sales');
@@ -155,8 +158,30 @@
   if(!rows.length)return;var blob=new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hotspot-'+state.tab+'.csv';a.click();URL.revokeObjectURL(a.href);
  }
  async function handleAction(event){
+  var actionButton=event.target.closest('[data-binding-action]');if(actionButton){await bindingAction(actionButton);return;}
   var button=event.target.closest('[data-copy]');if(!button)return;
   try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='✓';setTimeout(function(){button.textContent='▢';},900);}catch(_){button.title='Clipboard access unavailable';}
+ }
+ function dhakaDateInput(value){
+  var date=value?new Date(value):new Date(Date.now()+30*86400000);if(Number.isNaN(date.getTime()))date=new Date(Date.now()+30*86400000);
+  var local=new Date(date.getTime()+6*60*60*1000);return local.toISOString().slice(0,16);
+ }
+ function openBindingForm(binding){
+  var current=binding||{},profiles=toArray(state.profiles&&state.profiles.profiles),overlay=document.createElement('div');overlay.className='huh-modal-backdrop';
+  overlay.innerHTML='<section class="huh-modal" role="dialog" aria-modal="true" aria-labelledby="huhBindingTitle"><button type="button" class="huh-modal-close" data-modal-close aria-label="Close">×</button><h3 id="huhBindingTitle">'+(binding?'Edit / Renew Binding':'Add Bypassed Device')+'</h3><form id="huhBindingForm"><label>MAC address<input name="mac_address" required placeholder="AA:BB:CC:DD:EE:FF" value="'+esc(current.mac_address||'')+'"></label><label>Static IP address (optional)<input name="ip_address" placeholder="192.168.88.10" value="'+esc(current.ip_address||'')+'"></label><label>Customer name<input name="customer_name" value="'+esc(current.customer_name||'')+'"></label><label>Phone<input name="phone" value="'+esc(current.phone||'')+'"></label><label>Package / profile<select name="package_id"><option value="">Custom / none</option>'+profiles.map(function(p){var name=p.profile_id||p.name;return '<option value="'+esc(name)+'" '+(String(current.package_id)===String(name)?'selected':'')+'>'+esc(p.name||name)+'</option>';}).join('')+'</select></label><label>Bandwidth upload/download<input name="bandwidth_profile" placeholder="unlimited or 5M/5M" value="'+esc(current.bandwidth_profile||'unlimited')+'"></label><label>Binding type<select name="binding_type"><option value="bypassed" '+((current.binding_type||'bypassed')==='bypassed'?'selected':'')+'>Bypassed</option><option value="regular" '+(current.binding_type==='regular'?'selected':'')+'>Regular</option><option value="blocked" '+(current.binding_type==='blocked'?'selected':'')+'>Blocked</option></select></label><label>Expiry date & time (Dhaka)<input name="expiry_date" type="datetime-local" required value="'+dhakaDateInput(current.expiry_date)+'"></label><label class="huh-modal-wide">Comment<input name="comment" maxlength="500" value="'+esc(current.comment||'')+'"></label><div class="huh-modal-error" aria-live="polite"></div><footer><button type="button" class="huh-export" data-modal-close>Cancel</button><button type="submit" class="huh-primary">'+(binding?'Save / Extend':'Create binding')+'</button></footer></form></section>';
+  document.body.appendChild(overlay);overlay.addEventListener('click',function(event){if(event.target===overlay||event.target.closest('[data-modal-close]'))overlay.remove();});
+  var form=overlay.querySelector('#huhBindingForm');form.addEventListener('submit',async function(event){event.preventDefault();var submit=form.querySelector('[type=submit]'),error=overlay.querySelector('.huh-modal-error'),data=Object.fromEntries(new FormData(form).entries());if(binding)data.package_id=data.package_id||'';submit.disabled=true;error.textContent='Saving and synchronizing with MikroTik…';try{await request(binding?'/api/hotspot/ip-bindings/'+encodeURIComponent(binding.id):'/api/hotspot/ip-bindings',{method:binding?'PATCH':'POST',body:JSON.stringify(data)});overlay.remove();state.bindings=null;await loadResource('bindings',true);}catch(err){error.textContent=err.message;submit.disabled=false;}});
+ }
+ async function bindingAction(button){
+  var action=button.dataset.bindingAction;
+  if(action==='add'){if(!state.profiles)await loadResource('profiles',false);openBindingForm(null);return;}
+  var row=button.dataset.binding?JSON.parse(button.dataset.binding):null;
+  if(action==='edit'){if(!state.profiles)await loadResource('profiles',false);openBindingForm(row);return;}
+  if(action==='renew'){if(!state.profiles)await loadResource('profiles',false);row.expiry_date=dhakaDateInput(row.expiry_date&&new Date(row.expiry_date).getTime()>Date.now()?new Date(new Date(row.expiry_date).getTime()+30*86400000):null);openBindingForm(row);return;}
+  if(action==='delete'){
+   if(!window.confirm('Unbind this device from MikroTik and archive the binding?'))return;
+   button.disabled=true;try{await request('/api/hotspot/ip-bindings/'+encodeURIComponent(button.dataset.id),{method:'DELETE'});state.bindings=null;await loadResource('bindings',true);}catch(error){window.alert(error.message);button.disabled=false;}
+  }
  }
  function tabFromPath(){
   var path=location.pathname;
