@@ -163,7 +163,7 @@
   try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='✓';setTimeout(function(){button.textContent='▢';},900);}catch(_){button.title='Clipboard access unavailable';}
  }
  function dhakaDateInput(value){
-  if(typeof value==='string'&&/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(value))return value;
+  if(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))return value;
   var date=value?new Date(value):new Date(Date.now()+30*86400000);if(Number.isNaN(date.getTime()))date=new Date(Date.now()+30*86400000);
   var local=new Date(date.getTime()+6*60*60*1000);return local.toISOString().slice(0,16);
  }
