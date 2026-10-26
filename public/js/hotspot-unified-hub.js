@@ -1,7 +1,7 @@
 (function hotspotUnifiedHub(){
  'use strict';
- var tabNames={users:'All Users',sessions:'Active Sessions',profiles:'Profiles & Packages',bindings:'IP/MAC Binding',vouchers:'Generate / Print Vouchers',sales:'Voucher Sales History'};
- var state={tab:'users',users:null,sessions:null,profiles:null,bindings:null,sales:null,errors:{},loading:{},rateSamples:{}};
+ var tabNames={dashboard:'Dashboard / Overview',users:'All Users',sessions:'Active Sessions',profiles:'Profiles & Packages',bindings:'IP/MAC Binding',vouchers:'Generate & Print',ledger:'Voucher Ledger & Cleanup',sales:'Sales History'};
+ var state={tab:'dashboard',users:null,sessions:null,profiles:null,bindings:null,sales:null,stats:null,ledger:null,ledgerFilter:'all',errors:{},loading:{},rateSamples:{},openAddUser:false};
  var rateTimer=null;
  function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
  function toArray(value){return Array.isArray(value)?value:[];}
@@ -17,20 +17,20 @@
    var response=await fetch(url,Object.assign({credentials:'include',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal},options||{}));
    var data={};try{data=await response.json();}catch(_){}
    if(!response.ok||data.success===false)throw new Error(data.message||data.error||('Request failed ('+response.status+').'));
-   var path=new URL(url,location.origin).pathname,expected=path==='/api/hotspot/active'||path==='/api/hotspot/users'?'users':path==='/api/hotspot/profiles'?'profiles':path==='/api/hotspot/voucher-sales'?'transactions':path==='/api/hotspot/ip-bindings'?'bindings':null;
+   var path=new URL(url,location.origin).pathname,expected=path==='/api/hotspot/active'||path==='/api/hotspot/users'?'users':path==='/api/hotspot/profiles'?'profiles':path==='/api/hotspot/voucher-sales'?'transactions':path==='/api/hotspot/ip-bindings'?'bindings':path==='/api/hotspot/voucher-records'?'vouchers':null;
    if(expected&&!Array.isArray(data[expected]))throw new Error('The endpoint returned an unexpected response. Please retry this tab.');
    return data;
-  }catch(error){if(error.name==='AbortError')throw new Error('This service did not respond in 12 seconds. Other Hotspot tabs remain available.');throw error;}
+  }catch(error){if(error.name==='AbortError')throw new Error('This Hotspot endpoint did not respond in 30 seconds. Other Hub tabs remain available.');throw error;}
   finally{clearTimeout(timer);}
  }
- function endpointFor(key){return {users:'/api/hotspot/users?filter=all',sessions:'/api/hotspot/active',profiles:'/api/hotspot/profiles',bindings:'/api/hotspot/ip-bindings',sales:'/api/hotspot/voucher-sales'}[key];}
+ function endpointFor(key){if(key==='ledger')return '/api/hotspot/voucher-records?status='+encodeURIComponent(state.ledgerFilter);return {users:'/api/hotspot/users?filter=all',sessions:'/api/hotspot/active',profiles:'/api/hotspot/profiles',bindings:'/api/hotspot/ip-bindings',sales:'/api/hotspot/voucher-sales',stats:'/api/hotspot/voucher-stats'}[key];}
  async function loadResource(key,force){
   if(state.loading[key])return state.loading[key];
   if(state[key]&&!force)return state[key];
   state.errors[key]='';state.loading[key]=(async function(){
    try{var data=await request(endpointFor(key));state[key]=data;state.errors[key]='';}
    catch(error){state.errors[key]=error.message;console.error('[Hotspot hub] '+key+' request failed:',error.message);}
-   finally{state.loading[key]=null;if(state.tab===key||state.tab==='sessions'&&key==='users'||state.tab==='vouchers'&&key==='profiles')renderCurrent();}
+   finally{state.loading[key]=null;if(state.tab===key||state.tab==='sessions'&&key==='users'||state.tab==='vouchers'&&key==='profiles'||state.tab==='dashboard'||state.tab==='ledger'&&key==='stats')renderCurrent();}
    return state[key];
   })();
   return state.loading[key];
@@ -45,6 +45,8 @@
   else if(tab==='sessions')items=[['ACTIVE SESSIONS',sessions.length,'Live RouterOS sessions','blue'],['LIVE BANDWIDTH',hubBandwidth(sessions),'RX / TX from session samples','green'],['NEW SESSIONS TODAY',countStartedToday(sessions),'Estimated from uptime','purple'],['SESSION EXPIRY ≤ 24H',countExpiring(sessions),'Session time remaining','orange']];
   else if(tab==='profiles')items=[['PROFILES',profiles.length,'MikroTik Hotspot profiles','blue'],['SHARED DEVICES',profiles.reduce(function(n,p){return n+Number(p.sharedUsers||p['shared-users']||1);},0),'Total configured shared users','green'],['TIMEOUT SET',profiles.filter(function(p){return !!(p.sessionTimeout||p['session-timeout']);}).length,'Profiles with session timeout','purple'],['PRICED PLANS',profiles.filter(function(p){return Number(p.price||0)>0;}).length,'Profiles with price metadata','orange']];
   else if(tab==='bindings'){var due=bindings.filter(function(b){var x=new Date(b.expiry_date).getTime();return b.status==='active'&&x>Date.now()&&x-Date.now()<=86400000;}).length;items=[['TOTAL BINDINGS',bindings.length,'Managed devices','blue'],['ACTIVE',bindings.filter(function(b){return b.status==='active';}).length,'Router synchronized','green'],['EXPIRING ≤ 24H',due,'Device access expiry','purple'],['EXPIRED / BLOCKED',bindings.filter(function(b){return b.status==='expired';}).length,'Auto-blocked devices','orange']];}
+  else if(tab==='dashboard'){var stats=state.stats||{},sessionsCount=sessions.length,up=hubBandwidth(sessions);items=[['TOTAL ACTIVE',sessionsCount,'Live Hotspot sessions','blue'],['LIVE BANDWIDTH',up,'Aggregate from session samples','green'],['NEW SESSIONS TODAY',countStartedToday(sessions),'Estimated from live session uptime','purple'],['ALERTS / EXPIRING',Number(stats.expiredVouchers||0)+Number(stats.cleanupPending||0),'Expired vouchers + cleanup queue','orange']];}
+  else if(tab==='ledger'){var stats=state.stats||{};items=[['TOTAL VOUCHERS',Number(stats.totalVouchers||0),'Voucher records','blue'],['ACTIVE / USED',Number(stats.usedVouchers||stats.activeVouchers||0),'Redeemed / active vouchers','green'],['UNUSED',Number(stats.unusedVouchers||0),'Ready to issue','purple'],['CLEANUP QUEUE',Number(stats.cleanupPending||0),'Expired records pending cleanup','orange']];}
   else if(tab==='sales'){var amount=Number(state.sales&&state.sales.totalAmount||0),tx=Number(state.sales&&state.sales.matchedTransactions||sales.length),vouchers=Number(state.sales&&state.sales.totalVouchersSold||0);items=[['TOTAL COLLECTED',money(amount),'Matched processed sales','blue'],['TRANSACTIONS',tx,'Processed matched transactions','green'],['VOUCHERS SOLD',vouchers,'From sales summary','purple'],['RECORDS',sales.length,'Transactions in this result','orange']];}
   else items=[['AVAILABLE PROFILES',profiles.length,'Select a voucher package','blue'],['ACTIVE SESSIONS',activeCount(),'Current RouterOS sessions','green'],['SAVED SUBSCRIBERS',users.length,'Existing Hotspot accounts','purple'],['VOUCHER QUANTITY','1–500','Server-side validated','orange']];
   return items;
@@ -53,8 +55,8 @@
  function countExpiring(sessions){return sessions.filter(function(s){var sec=durationSeconds(s.sessionTimeLeft);return sec!==null&&sec<=86400;}).length;}
  function hubBandwidth(sessions){var totalIn=0,totalOut=0,elapsed=0,now=Date.now();sessions.forEach(function(s){var key=String(s.id||s.user||s.username||''),prev=state.rateSamples[key];if(prev){var dt=Math.max(1,(now-prev.time)/1000);totalIn+=Math.max(0,Number(s.bytesIn||0)-prev.in)*8/dt/1e6;totalOut+=Math.max(0,Number(s.bytesOut||0)-prev.out)*8/dt/1e6;elapsed++;}state.rateSamples[key]={in:Number(s.bytesIn||0),out:Number(s.bytesOut||0),time:now};});return elapsed?('↑ '+totalOut.toFixed(1)+' · ↓ '+totalIn.toFixed(1)+' Mbps'):'Sampling…';}
  function shellMarkup(){
-  var tabs=[['users','All Users'],['sessions','Active Sessions'],['profiles','Profiles & Packages'],['bindings','IP/MAC Binding'],['vouchers','Generate / Print Vouchers'],['sales','Voucher Sales History']];
-  return '<section id="hotspotUnifiedHub" class="hotspot-dynamic-view admin-view hotspot-unified-hub"><div class="huh-heading"><div><span class="huh-eyebrow">HOTSPOT OPERATIONS</span><h2>Hotspot Master Hub</h2><p>Subscribers, live sessions, packages, bindings and sales</p></div><button type="button" class="huh-refresh" data-hub-refresh>↻ Refresh</button></div><nav class="huh-tabs" role="tablist" aria-label="Hotspot sections">'+tabs.map(function(t){return '<button class="huh-tab" type="button" role="tab" data-hub-tab="'+t[0]+'" aria-selected="false">'+esc(t[1])+'</button>';}).join('')+'</nav><div class="huh-kpis" id="huhKpis"></div><div class="huh-panel"><div class="huh-toolbar"><input id="huhSearch" type="search" placeholder="Search this tab by name, phone, IP, or MAC…" aria-label="Search Hotspot records">'+(state.tab==='bindings'?'<button type="button" class="huh-primary" data-binding-action="add">＋ Add Bypassed Device</button>':'')+'<button type="button" class="huh-export" data-hub-export>↓ Export CSV</button></div><div id="huhContent" role="tabpanel" aria-live="polite"></div></div></section>';
+  var tabs=[['dashboard','📊 Dashboard / Overview'],['users','👥 All Users'],['sessions','🟢 Active Sessions'],['profiles','⚡ Profiles & Packages'],['bindings','🔗 IP/MAC Binding'],['vouchers','🖨️ Generate & Print'],['ledger','📋 Voucher Ledger & Cleanup'],['sales','💰 Sales History']];
+  return '<section id="hotspotUnifiedHub" class="hotspot-dynamic-view admin-view hotspot-unified-hub"><div class="huh-heading"><div><span class="huh-eyebrow">HOTSPOT OPERATIONS</span><h2>Hotspot Master Hub</h2><p>One workspace for subscribers, sessions, vouchers and network access</p></div><button type="button" class="huh-refresh" data-hub-refresh>↻ Refresh</button></div><nav class="huh-tabs" role="tablist" aria-label="Hotspot sections">'+tabs.map(function(t){return '<button class="huh-tab" type="button" role="tab" data-hub-tab="'+t[0]+'" aria-selected="false">'+esc(t[1])+'</button>';}).join('')+'</nav><div class="huh-kpis" id="huhKpis"></div><div class="huh-panel"><div class="huh-toolbar"><input id="huhSearch" type="search" placeholder="Search this tab by name, phone, IP, or MAC…" aria-label="Search Hotspot records"><span class="huh-toolbar-actions">'+(state.tab==='bindings'?'<button type="button" class="huh-primary" data-binding-action="add">＋ Add Bypassed Device</button>':'')+(state.tab==='users'?'<button type="button" class="huh-primary" data-user-action="add">＋ Add Hotspot User</button>':'')+(state.tab==='ledger'?'<button type="button" class="huh-primary" data-ledger-action="cleanup">↻ Run Cleanup</button>':'')+'<button type="button" class="huh-export" data-hub-export>↓ Export CSV</button></span></div><div id="huhContent" role="tabpanel" aria-live="polite"></div></div></section>';
  }
  function renderShell(tab){
   var dynamic=document.getElementById('dynamicPageContent');if(!dynamic)return false;
@@ -70,13 +72,18 @@
  }
  function setPageTitle(tab){var el=document.getElementById('pageTitle');if(el)el.textContent=tabNames[tab]||'Hotspot Master Hub';}
  function openTab(tab,push,force){
-  if(!tabNames[tab])tab='users';
+  if(tab==='add-user'){state.openAddUser=true;tab='users';}
+  if(tab==='ledger-cleanup'){state.ledgerFilter='cleanup';tab='ledger';}
+  if(!tabNames[tab])tab='dashboard';
+  if(tab==='ledger'&&/\/vouchers\/cleanup\/?$/.test(location.pathname))state.ledgerFilter='cleanup';
   state.tab=tab;setPageTitle(tab);
   var dynamic=document.getElementById('dynamicPageContent');if(!dynamic||!dynamic.querySelector('#hotspotUnifiedHub'))renderShell(tab);
-  var route={users:'/admin/hotspot/users/all',sessions:'/admin/hotspot/users/active',profiles:'/admin/hotspot/profiles',bindings:'/admin/hotspot/users/all?tab=bindings',vouchers:'/admin/hotspot/vouchers/generate',sales:'/admin/hotspot/sales'}[tab];
+  var route={dashboard:'/admin/hotspot/dashboard',users:'/admin/hotspot/users/all',sessions:'/admin/hotspot/users/active',profiles:'/admin/hotspot/profiles',bindings:'/admin/hotspot/ip-bindings',vouchers:'/admin/hotspot/vouchers/generate',ledger:state.ledgerFilter==='cleanup'?'/admin/hotspot/vouchers/cleanup':'/admin/hotspot/vouchers/manage',sales:'/admin/hotspot/sales'}[tab];
   if(push&&route&&location.pathname+location.search!==route)history.pushState({hotspotHubTab:tab},'',route);
   if(rateTimer){clearInterval(rateTimer);rateTimer=null;}
   renderCurrent();
+  if(tab==='dashboard'){loadResource('sessions',force);loadResource('stats',force);loadResource('sales',force);}
+  if(tab==='ledger'){loadResource('ledger',force);loadResource('stats',force);}
   if(tab==='users')loadResource('users',force);
   if(tab==='sessions'){loadResource('users',force);loadResource('sessions',force);rateTimer=setInterval(function(){if(state.tab==='sessions')loadResource('sessions',true);},5000);}
   if(tab==='profiles')loadResource('profiles',force);
@@ -90,15 +97,55 @@
   root.querySelectorAll('[data-hub-tab]').forEach(function(b){b.setAttribute('aria-selected',b.dataset.hubTab===state.tab?'true':'false');b.classList.toggle('is-active',b.dataset.hubTab===state.tab);});
   var cards=kpis(state.tab);root.querySelector('#huhKpis').innerHTML=cards.map(function(c){return '<article class="huh-kpi huh-'+c[3]+'"><div>'+esc(c[0])+'</div><strong>'+esc(c[1])+'</strong><small>'+esc(c[2])+'</small></article>';}).join('');
   var bindingAdd=root.querySelector('[data-binding-action="add"]'),exportButton=root.querySelector('[data-hub-export]');
-  if(state.tab==='bindings'&&!bindingAdd&&exportButton)exportButton.insertAdjacentHTML('beforebegin','<button type="button" class="huh-primary" data-binding-action="add">＋ Add Bypassed Device</button>');
+  if(state.tab==='bindings'&&!bindingAdd&&exportButton)root.querySelector('.huh-toolbar-actions').insertAdjacentHTML('afterbegin','<button type="button" class="huh-primary" data-binding-action="add">＋ Add Bypassed Device</button>');
   if(state.tab!=='bindings'&&bindingAdd)bindingAdd.remove();
+  var toolbar=root.querySelector('.huh-toolbar-actions');
+  if(state.tab==='users'&&!toolbar.querySelector('[data-user-action]'))toolbar.insertAdjacentHTML('afterbegin','<button type="button" data-user-action="add" class="huh-primary">＋ Add Hotspot User</button>');
+  if(state.tab!=='users')toolbar.querySelector('[data-user-action]')?.remove();
+  if(state.tab==='ledger'&&!toolbar.querySelector('[data-ledger-action]'))toolbar.insertAdjacentHTML('afterbegin','<button type="button" data-ledger-action="cleanup" class="huh-primary">↻ Run Cleanup</button>');
+  if(state.tab!=='ledger')toolbar.querySelector('[data-ledger-action]')?.remove();
   var content=root.querySelector('#huhContent');
-  if(state.tab==='users')content.innerHTML=renderUsers();
+  if(state.tab==='dashboard')content.innerHTML=renderDashboard();
+  else if(state.tab==='ledger')content.innerHTML=renderLedger();
+  else if(state.tab==='users')content.innerHTML=renderUsers();
   else if(state.tab==='sessions')content.innerHTML=renderSessions();
   else if(state.tab==='profiles')content.innerHTML=renderProfiles();
   else if(state.tab==='bindings')content.innerHTML=renderBindings();
   else if(state.tab==='sales')content.innerHTML=renderSales();
   else if(state.tab==='vouchers')renderVoucherForm();
+  if(state.openAddUser&&state.tab==='users'&&!state.loading.users){state.openAddUser=false;setTimeout(openAddUserForm,0);}
+ }
+ function renderDashboard(){
+  var sessions=toArray(state.sessions&&state.sessions.users),tx=toArray(state.sales&&state.sales.transactions);
+  var quick='<div class="huh-quick-actions"><button type="button" data-hub-tab="users">Manage users</button><button type="button" data-hub-tab="sessions">View live sessions</button><button type="button" data-hub-tab="vouchers">Generate vouchers</button><button type="button" data-hub-tab="ledger">Review voucher ledger</button></div>';
+  var live=table(['LIVE SESSION','IP ADDRESS','UPTIME','TRAFFIC'],sessions.slice(0,8).map(function(x){return '<tr><td><strong>'+esc(x.user||x.username||'Unknown')+'</strong></td><td><code>'+esc(x.address||x.ip||'—')+'</code></td><td>'+esc(duration(x.uptime))+'</td><td><span class="huh-rx">↓ '+bytes(x.bytesIn)+'</span> <span class="huh-tx">↑ '+bytes(x.bytesOut)+'</span></td></tr>'; }),4);
+  return '<div class="huh-dashboard-grid"><section><h3>Quick actions</h3>'+quick+'</section><section><h3>Recent sales</h3>'+renderSalesPreview(tx)+'</section></div><h3 class="huh-section-title">Current Hotspot sessions</h3>'+(!state.sessions?notice('sessions','live sessions'):live);
+ }
+ function renderSalesPreview(rows){
+  if(!state.sales)return notice('sales','sales');
+  return rows.length?'<div class="huh-sales-preview">'+rows.slice(0,5).map(function(t){return '<div><span>'+esc(t.matched_username||t.trx_id||'Payment')+'</span><strong>'+esc(money(t.amount))+'</strong></div>';}).join('')+'</div>':'<div class="huh-state">No matched sales in the current result.</div>';
+ }
+ function renderLedger(){
+  if(!state.ledger)return notice('ledger','voucher ledger');
+  var records=toArray(state.ledger.vouchers),stats=state.stats||{},filters=[['all','All'],['unused','Unused'],['active','Active'],['expired','Expired'],['cleanup','Cleanup queue']];
+  var pills='<div class="huh-ledger-filters">'+filters.map(function(f){var n=f[0]==='all'?Number(stats.totalVouchers||records.length):f[0]==='unused'?Number(stats.unusedVouchers||0):f[0]==='active'?Number(stats.activeVouchers||0):f[0]==='expired'?Number(stats.expiredVouchers||0):Number(stats.cleanupPending||0);return '<button type="button" data-ledger-filter="'+f[0]+'" class="'+(state.ledgerFilter===f[0]?'is-active':'')+'">'+f[1]+' <span>'+n+'</span></button>';}).join('')+'</div>';
+  var rows=records.map(function(v){var cleanup=v.cleanup_status||'—',status=v.display_status||v.status||'Unknown';return '<tr><td><strong>'+esc(v.username||'—')+'</strong><small class="huh-subline">PIN / password: <code>'+esc(v.password||'—')+'</code></small></td><td>'+esc(v.profile||'—')+'</td><td>'+esc(v.customer_name||v.phone||'—')+'</td><td><span class="huh-status '+(v.status==='expired'?'offline':'online')+'">'+esc(status)+'</span></td><td>'+esc(expiry(v.expires_at))+'</td><td>'+esc(cleanup)+(v.cleanup_error?'<small class="huh-subline">'+esc(v.cleanup_error)+'</small>':'')+'</td></tr>';});
+  return pills+table(['VOUCHER / USER','PROFILE','CUSTOMER','STATUS','EXPIRY','CLEANUP'],rows,6);
+ }
+ async function runCleanup(button){
+  if(!window.confirm('Run the existing expired voucher cleanup now?'))return;
+  button.disabled=true;button.textContent='Running cleanup…';
+  try{var result=await request('/api/hotspot/vouchers/cleanup/run',{method:'POST',body:JSON.stringify({})});window.alert(result.message||'Voucher cleanup completed.');state.ledger=null;state.stats=null;await loadResource('ledger',true);loadResource('stats',true);}
+  catch(error){window.alert(error.message);}
+  finally{button.disabled=false;button.textContent='↻ Run Cleanup';}
+ }
+ async function openAddUserForm(){
+  if(!state.profiles)await loadResource('profiles',false);
+  var overlay=document.createElement('div');overlay.className='huh-modal-backdrop';
+  var options=toArray(state.profiles&&state.profiles.profiles).map(function(p){var id=p.profile_id||p.name;return '<option value="'+esc(id)+'">'+esc(p.name||id)+'</option>';}).join('');
+  overlay.innerHTML='<section class="huh-modal" role="dialog" aria-modal="true" aria-labelledby="huhAddUserTitle"><button type="button" class="huh-modal-close" data-modal-close>×</button><h3 id="huhAddUserTitle">Add Hotspot User</h3><form id="huhAddUserForm"><label>Customer name<input name="customer_name" required maxlength="160"></label><label>Phone (optional)<input name="phone" inputmode="tel"></label><label>Package / profile<select name="profile_id" required><option value="">Select profile…</option>'+options+'</select></label><label>Custom expiry (Dhaka, optional)<input name="custom_expiry" type="datetime-local"></label><label class="huh-modal-wide">Note / address<input name="note" maxlength="1000"></label><div class="huh-modal-error" aria-live="polite"></div><footer><button type="button" class="huh-export" data-modal-close>Cancel</button><button type="submit" class="huh-primary" '+(options?'':'disabled')+'>Create user</button></footer></form></section>';
+  document.body.appendChild(overlay);overlay.addEventListener('click',function(e){if(e.target===overlay||e.target.closest('[data-modal-close]'))overlay.remove();});
+  overlay.querySelector('#huhAddUserForm').addEventListener('submit',async function(e){e.preventDefault();var form=e.currentTarget,submit=form.querySelector('[type=submit]'),err=overlay.querySelector('.huh-modal-error');submit.disabled=true;err.textContent='Creating Hotspot account…';try{var result=await request('/api/hotspot/users',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});overlay.remove();window.alert(result.message||'Hotspot user created.');state.users=null;await loadResource('users',true);}catch(error){err.textContent=error.message;submit.disabled=false;}});
  }
  function renderUsers(){
   if(!state.users)return notice('users','subscribers');
@@ -161,6 +208,7 @@
   if(!rows.length)return;var blob=new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hotspot-'+state.tab+'.csv';a.click();URL.revokeObjectURL(a.href);
  }
  async function handleAction(event){
+  var hubTab=event.target.closest('#huhContent [data-hub-tab]');if(hubTab){var targetTab=hubTab.dataset.hubTab;if(targetTab==='ledger'&&state.tab==='dashboard')state.ledgerFilter='all';openTab(targetTab,true);return;}
   var actionButton=event.target.closest('[data-binding-action]');if(actionButton){await bindingAction(actionButton);return;}
   var button=event.target.closest('[data-copy]');if(!button)return;
   try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='✓';setTimeout(function(){button.textContent='▢';},900);}catch(_){button.title='Clipboard access unavailable';}
@@ -191,17 +239,23 @@
  }
  function tabFromPath(){
   var path=location.pathname;
-  if(location.search.indexOf('tab=bindings')>=0)return 'bindings';
-  if(/\/users\/active\/?$/.test(path))return 'sessions';
-  if(/\/profiles\/?$/.test(path))return 'profiles';
-  if(/\/vouchers\/generate\/?$/.test(path))return 'vouchers';
-  if(/\/sales\/?$/.test(path))return 'sales';
-  if(/\/vouchers\/manage\/?$/.test(path))return 'sales';
+  if(/^\/admin\/hotspot\/(?:dashboard|index)\/?$/.test(path))return 'dashboard';
+  if(/^\/admin\/hotspot\/ip-bindings\/?$/.test(path))return 'bindings';
+  if(/^\/admin\/hotspot\/add-user\/?$/.test(path))return 'add-user';
+  if(/^\/admin\/hotspot\/users\/active\/?$/.test(path))return 'sessions';
+  if(/^\/admin\/hotspot\/profiles\/?$/.test(path))return 'profiles';
+  if(/^\/admin\/hotspot\/vouchers\/generate\/?$/.test(path))return 'vouchers';
+  if(/^\/admin\/hotspot\/vouchers\/cleanup\/?$/.test(path)){state.ledgerFilter='cleanup';return 'ledger';}
+  if(/^\/admin\/hotspot\/vouchers\/manage\/?$/.test(path)){state.ledgerFilter=new URLSearchParams(location.search).get('status')||'all';return 'ledger';}
+  if(/^\/admin\/hotspot\/sales\/?$/.test(path))return 'sales';
   return 'users';
  }
  function boot(){if(!document.getElementById('dynamicPageContent'))return;renderShell(tabFromPath());}
  window.loadHotspotHubTab=function(tab){openTab(tab,true);return false;};
  window.loadHotspotSection=function(filter,titleKey){return openTab(filter==='active'?'sessions':'users',true);};
+ window.loadAddHotspotUserView=function(){return openTab('add-user',true);};
+ window.loadVoucherGeneratorSection=function(){return openTab('vouchers',true);};
+ window.loadHotspotVoucherRecords=function(filter){return openTab(filter==='cleanup'?'ledger-cleanup':'ledger',true);};
  window.loadHotspotProfiles=function(){return openTab('profiles',true);};
  window.loadHotspotVoucherSales=function(){return openTab('sales',true);};
  window.addEventListener('popstate',function(){if(document.getElementById('dynamicPageContent'))openTab(tabFromPath(),false);});
