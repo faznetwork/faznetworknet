@@ -16,9 +16,9 @@ function formatDhaka(value){
  const get=k=>p.find(x=>x.type===k).value;
  return get("year")+"-"+get("month")+"-"+get("day")+" "+get("hour")+":"+get("minute")+":"+get("second");
 }
-async function withPaymentMocks({voucherRows=[],onStage=()=>{},claimBehavior}={},run){
- const oldQuery=db.query,oldTx=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles;
- let claimCount=0,stageCount=0,associationCount=0;
+async function withPaymentMocks({voucherRows=[],onStage=()=>{},claimBehavior,rechargeError}={},run){
+ const oldQuery=db.query,oldTx=db.withTransaction,oldProfiles=mikrotik.getHotspotProfiles,oldRecharge=mikrotik.rechargeHotspotUser;
+ let claimCount=0,stageCount=0,associationCount=0,processedCount=0;
  const tx=transaction();
  try{
   db.query=async(sql,params=[])=>{
@@ -48,14 +48,15 @@ async function withPaymentMocks({voucherRows=[],onStage=()=>{},claimBehavior}={}
    if(sql.startsWith("INSERT INTO hotspot_voucher_payments")){
     associationCount++;assert.equal(params[0],tx.id);assert.equal(params[1],41);assert.equal(params[2],"01712345678");assert.equal(params[3],10);return {rows:[]};
    }
-   if(sql.startsWith("UPDATE transactions SET status='processed'"))return {rows:[{id:tx.id}]};
+   if(sql.startsWith("UPDATE transactions SET status='processed'")){processedCount++;tx.status="processed";tx.used=true;return {rows:[{id:tx.id}]};}
    throw new Error("Unexpected transaction SQL: "+sql);
   }});
   mikrotik.getHotspotProfiles=async()=>profile();
-  const result=await run({tx,stats:()=>({claimCount,stageCount,associationCount})});
+   if(rechargeError)mikrotik.rechargeHotspotUser=async()=>{throw rechargeError;};
+  const result=await run({tx,stats:()=>({claimCount,stageCount,associationCount,processedCount})});
   return result;
  }finally{
-  db.query=oldQuery;db.withTransaction=oldTx;mikrotik.getHotspotProfiles=oldProfiles;
+  db.query=oldQuery;db.withTransaction=oldTx;mikrotik.getHotspotProfiles=oldProfiles;mikrotik.rechargeHotspotUser=oldRecharge;
  }
 }
 
@@ -88,12 +89,15 @@ test("active Hotspot renewal stacks new duration from the saved future expires_a
  const firstLogin=new Date(Date.now()-30*60*1000);
  let staged;
  const voucher={id:41,username:"AA:BB:CC:DD:EE:FF",password:"01712345678",profile:"1-Hour",profile_id:"pkg-1-hour",validity:"1h",price:10,status:"active",phone:"01712345678",server:"all",time_limit:"1h",data_limit:null,mac_address:"AA:BB:CC:DD:EE:FF",comment:"Exp: "+formatDhaka(oldExpiry),first_login_at:firstLogin,expires_at:oldExpiry,transaction_id:904};
- await withPaymentMocks({voucherRows:[voucher],onStage:value=>{staged=value;}},async({stats})=>{
+ await withPaymentMocks({voucherRows:[voucher],onStage:value=>{staged=value;},rechargeError:Object.assign(new Error("RouterOS timeout"),{code:"ETIMEDOUT"})},async({stats})=>{
   const res=responseRecorder();
   await paymentController.verifyTrx({ip:"expiry-stack-test",body:{service_type:"hotspot",phone:"01712345678",trxId:"STACK-TEST-905",amount:10,profile_id:"pkg-1-hour",paymentMethod:"bkash"}},res);
   assert.equal(res.statusCode,200,JSON.stringify(res.body));
-  assert.equal(res.body.pending_activation,true);
+  assert.equal(res.body.success,false);
+  assert.equal(res.body.activation_pending,true);
+  assert.equal(res.body.message,"পেমেন্ট সফলভাবে গৃহীত হয়েছে, কিন্তু রাউটারে সংযোগ দিতে বিলম্ব হচ্ছে। কিছুক্ষণ অপেক্ষা করুন।");
   assert.equal(stats().associationCount,1);
+  assert.equal(stats().processedCount,1,"payment stays processed when RouterOS activation fails");
  });
  assert.ok(staged,"existing voucher should be updated rather than replaced");
  assert.match(staged.sql,/transaction_id=\$14/);
