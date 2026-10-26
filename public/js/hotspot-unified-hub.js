@@ -208,6 +208,9 @@
   if(!rows.length)return;var blob=new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hotspot-'+state.tab+'.csv';a.click();URL.revokeObjectURL(a.href);
  }
  async function handleAction(event){
+  var userAction=event.target.closest('[data-user-action]');if(userAction){openAddUserForm();return;}
+  var cleanupAction=event.target.closest('[data-ledger-action]');if(cleanupAction){await runCleanup(cleanupAction);return;}
+  var filterAction=event.target.closest('[data-ledger-filter]');if(filterAction){state.ledgerFilter=filterAction.dataset.ledgerFilter;state.ledger=null;var ledgerPath=state.ledgerFilter==='cleanup'?'/admin/hotspot/vouchers/cleanup':'/admin/hotspot/vouchers/manage'+(state.ledgerFilter==='all'?'':'?status='+encodeURIComponent(state.ledgerFilter));history.pushState({hotspotHubTab:'ledger'},'',ledgerPath);loadResource('ledger',true);return;}
   var hubTab=event.target.closest('#huhContent [data-hub-tab]');if(hubTab){var targetTab=hubTab.dataset.hubTab;if(targetTab==='ledger'&&state.tab==='dashboard')state.ledgerFilter='all';openTab(targetTab,true);return;}
   var actionButton=event.target.closest('[data-binding-action]');if(actionButton){await bindingAction(actionButton);return;}
   var button=event.target.closest('[data-copy]');if(!button)return;
