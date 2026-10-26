@@ -84,7 +84,7 @@ async function create(req, res) {
       "INSERT INTO hotspot_ip_bindings (mac_address,ip_address,customer_name,phone,comment,binding_type,package_id,bandwidth_profile,expiry_date,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'disabled') RETURNING *", values
     );
     inserted = saved.rows[0];
-    const router = await mikrotikService.syncHotspotIpBinding(inserted);
+    const router = await mikrotikService.syncHotspotIpBinding({ id: inserted.id, macAddress: inserted.mac_address, ipAddress: inserted.ip_address, comment: inserted.comment, bindingType: inserted.binding_type, bandwidthProfile: inserted.bandwidth_profile });
     const active = await db.query("UPDATE hotspot_ip_bindings SET status='active',router_binding_id=$2,last_synced_at=NOW(),router_sync_error=NULL,updated_at=NOW() WHERE id=$1 RETURNING *", [inserted.id, router.routerBindingId]);
     await audit(req, "hotspot_ip_binding.created", active.rows[0], { binding_type: type, bandwidth_profile: bandwidthProfile, expiry_date: expiryDate });
     return res.status(201).json({ success: true, binding: active.rows[0] });
