@@ -35,7 +35,7 @@
       if(!Number.isFinite(target)||!el.dataset.expiryMs){target=new Date(raw).getTime();el.dataset.expiryMs=String(target);}
       if(!Number.isFinite(target)){el.textContent="Expiry unavailable";el.classList.add("hs-remain-none");return;}
       const delta=target-now;
-      if(delta<=0){if(el.dataset.expiredState!=="true"){el.dataset.expiredState="true";statusChanged=true;}el.textContent="EXPIRED";el.classList.remove("hs-remain-good","hs-remain-soon","hs-remain-none");el.classList.add("hs-remain-expired");return;}
+      if(delta<=0){if(el.dataset.expiredState==="false")statusChanged=true;el.dataset.expiredState="true";el.textContent="EXPIRED";el.classList.remove("hs-remain-good","hs-remain-soon","hs-remain-none");el.classList.add("hs-remain-expired");return;}
       el.dataset.expiredState="false";
       const seconds=Math.floor(delta/1000),days=Math.floor(seconds/86400),hours=Math.floor(seconds%86400/3600),minutes=Math.floor(seconds%3600/60),secs=seconds%60;
       el.textContent=(days>0?days+"d ":"")+String(hours).padStart(2,"0")+"h "+String(minutes).padStart(2,"0")+"m "+String(secs).padStart(2,"0")+"s";
@@ -68,9 +68,9 @@
       menu.style.position="fixed";menu.style.visibility="hidden";menu.style.display="block";const rect=button.getBoundingClientRect(),box=menu.getBoundingClientRect(),gap=8;
       const left=Math.max(gap,Math.min(window.innerWidth-box.width-gap,rect.right-box.width));
       const below=window.innerHeight-rect.bottom,top=below>=box.height+gap?rect.bottom+gap:Math.max(gap,rect.top-box.height-gap);
-      menu.style.left=left+"px";menu.style.top=Math.min(top,window.innerHeight-box.height-gap)+"px";menu.style.visibility="visible";menu.style.display="";
+      menu.style.left=left+"px";menu.style.top=Math.max(gap,Math.min(top,window.innerHeight-box.height-gap))+"px";menu.style.visibility="visible";menu.style.display="";
     }));
-    host.querySelectorAll(".hs-mobile-action-menu [data-row-action]").forEach(button=>button.addEventListener("click",()=>{const menu=button.closest(".hs-mobile-action-menu");if(menu)menu.hidden=true;}));
+    host.querySelectorAll(".hs-mobile-action-menu [data-row-action]").forEach(button=>button.addEventListener("click",()=>{const menu=button.closest(".hs-mobile-action-menu");if(menu){menu.hidden=true;const toggle=menu.closest(".hs-mobile-card")?.querySelector("[data-mobile-menu-toggle]");if(toggle)toggle.setAttribute("aria-expanded","false");}}));
     host.querySelectorAll("[data-row-action]").forEach(x=>x.addEventListener("click",e=>{e.stopPropagation();const u=users.find(v=>String(v.id)===String(x.dataset.id));if(u){selected=u;renderDetail();runRowAction(x.dataset.rowAction,u);}}));
     host.querySelectorAll(".hs-executive-row").forEach(x=>x.addEventListener("click",()=>selectUser(x.dataset.userId,false)));
   }
@@ -185,7 +185,7 @@
   async function loadUsers(keepId) {
     if (loading) return; loading = true;
     const host = $("#freshHotspotUserList");
-    if (host) host.innerHTML = '<div class="fresh-hs-empty">Loading subscribers…</div>';
+    if (host && !host.querySelector(".hs-executive-table,.hs-mobile-cards")) host.innerHTML = '<div class="fresh-hs-empty">Loading subscribers…</div>';
     try {
       const data = await request("/api/hotspot/users");
       users = Array.isArray(data.users) ? data.users : [];
