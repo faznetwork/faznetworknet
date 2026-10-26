@@ -18,6 +18,7 @@ router.post("/users/update",userController.updateFromBody);
 router.post("/manual-renew",userController.renewFromBody);
 router.get("/dashboard-metrics",controller.dashboardMetrics);
 router.get("/voucher-stats",controller.voucherStats);
+router.post("/vouchers/cleanup/run",controller.runVoucherCleanup);
 router.get("/voucher-records",controller.voucherRecords);
 router.get("/voucher-sales",controller.voucherSales);
 router.get("/profiles",controller.profiles);
