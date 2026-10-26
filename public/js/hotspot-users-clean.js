@@ -3,7 +3,6 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
   let users = [], selected = null, profiles = [], loading = false, selectedFilter = "all";
-  let countdownInterval = null;
   const endpoint = id => "/api/hotspot/users/" + encodeURIComponent(String(id));
   async function request(url, options = {}) {
     const response = await fetch(url, { cache: "no-store", ...options, headers: { Accept: "application/json", ...(options.headers || {}) } });
@@ -26,24 +25,7 @@
   function stateOf(user){const s=String(user?.status||"").toLowerCase(),e=user?.expires_at?new Date(user.expires_at):null;if(s==="expired"||(e&&!Number.isNaN(e.getTime())&&e.getTime()<=Date.now())||String(user?.profile||"").toLowerCase()==="expired_profile")return "expired";if((user?.is_online||user?.online)&&String(user?.ip||user?.address||"").trim())return "online";return "offline";}
   function statusLabel(user){const state=stateOf(user);if(state==="offline"&&isValidPackage(user))return "Offline (Active Plan)";return ({online:"Online",offline:"Offline",expired:"Expired"})[state];}
   function expiryLabel(v){if(!v)return "Not set";const d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);if(window.FazDate&&typeof window.FazDate.formatDateTime==="function")return window.FazDate.formatDateTime(d);return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}).format(d);}
-  function remainTag(u){if(!u.expires_at)return '<span class="hs-remain-tag hs-remain-none">—</span>';const ms=new Date(u.expires_at).getTime()-Date.now();const remaining=window.FazRemainingTime&&typeof window.FazRemainingTime.format==="function"?window.FazRemainingTime.format(u.expires_at):"Calculating…";const k=!Number.isFinite(ms)||ms<=0?"expired":ms<=259200000?"soon":"good";return '<span class="hs-remain-tag hs-live-countdown hs-remain-'+k+'" data-expiry="'+esc(u.expires_at)+'" aria-live="off">'+esc(remaining)+'</span>';}
-  function updateLiveCountdowns(){
-    if(document.visibilityState==="hidden")return;
-    const now=Date.now();let statusChanged=false;
-    document.querySelectorAll(".hs-live-countdown[data-expiry]").forEach(el=>{
-      const raw=el.dataset.expiry||"";let target=Number(el.dataset.expiryMs);
-      if(!Number.isFinite(target)||!el.dataset.expiryMs){target=new Date(raw).getTime();el.dataset.expiryMs=String(target);}
-      if(!Number.isFinite(target)){el.textContent="Expiry unavailable";el.classList.add("hs-remain-none");return;}
-      const delta=target-now;
-      if(delta<=0){if(el.dataset.expiredState==="false")statusChanged=true;el.dataset.expiredState="true";el.textContent="EXPIRED";el.classList.remove("hs-remain-good","hs-remain-soon","hs-remain-none");el.classList.add("hs-remain-expired");return;}
-      el.dataset.expiredState="false";
-      const seconds=Math.floor(delta/1000),days=Math.floor(seconds/86400),hours=Math.floor(seconds%86400/3600),minutes=Math.floor(seconds%3600/60),secs=seconds%60;
-      el.textContent=(days>0?days+"d ":"")+String(hours).padStart(2,"0")+"h "+String(minutes).padStart(2,"0")+"m "+String(secs).padStart(2,"0")+"s";
-      el.classList.remove("hs-remain-expired","hs-remain-none");el.classList.toggle("hs-remain-soon",delta<=259200000);el.classList.toggle("hs-remain-good",delta>259200000);
-    });
-    if(statusChanged)renderList();
-  }
-  function startLiveCountdown(){if(countdownInterval!==null)return;updateLiveCountdowns();countdownInterval=window.setInterval(updateLiveCountdowns,1000);document.addEventListener("visibilitychange",updateLiveCountdowns);}
+  function remainTag(u){if(!u.expires_at)return '<span class="hs-remain-tag hs-remain-none">—</span>';const remaining=window.FazRemainingTime.format(u.expires_at);const ms=new Date(u.expires_at).getTime()-Date.now();const k=ms<=0?"expired":ms<86400000?"soon":ms<=259200000?"soon":"good";return '<span class="hs-remain-tag hs-remain-'+k+'">'+esc(remaining)+'</span>';}
   function packageClass(u){if(stateOf(u)==="expired")return "expired";const t=String(u.validity||u.profile||"").toLowerCase();if(/30\s*(day|d)|1\s*month/.test(t))return "30d";if(/15\s*(day|d)/.test(t))return "15d";if(/7\s*(day|d)|1\s*week/.test(t))return "7d";if(/1\s*(day|d)|24\s*h/.test(t))return "1d";return "default";}
   function packageLabel(u){return stateOf(u)==="expired"?"Expired":String(u.profile||u.validity||"No Package");}
   function bytesLabel(v){const n=Number(v||0);if(!n)return "0 B";const a=["B","KB","MB","GB","TB"],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),4);return (n/Math.pow(1024,i)).toFixed(i?1:0)+" "+a[i];}
@@ -55,22 +37,10 @@
     $("#freshHotspotCount").textContent=users.length+" Total Users";
     const tabs='<div class="hs-filter-tabs" role="group" aria-label="Filter Hotspot subscribers">'+[["all","All Users","count-all"],["online","Online","count-online"],["active","Active","count-active"],["offline","Offline","count-offline"],["expired","Expired","count-expired"]].map(([k,l,id])=>'<button type="button" class="hs-filter-tab hs-filter-'+k+(selectedFilter===k?" is-selected":"")+'" data-filter="'+k+'" aria-pressed="'+(selectedFilter===k)+'"><i class="hs-filter-dot" aria-hidden="true"></i>'+l+' <span id="'+id+'">'+b[k].length+'</span></button>').join("")+'</div>';
     const rows=list.map((u,i)=>{const s=stateOf(u);return '<tr class="hs-executive-row" data-user-id="'+esc(u.id)+'"><td><span class="hs-serial">'+(i+1)+'</span></td><td><button type="button" class="hs-subscriber-name hs-quick-edit" data-row-action="edit" data-id="'+esc(u.id)+'" aria-label="Edit subscriber '+esc(u.customer_name||u.name||u.username||"subscriber")+'">'+esc(u.customer_name||u.name||"Unnamed Subscriber")+' <i class="bi bi-pencil-square" aria-hidden="true"></i></button><div class="hs-subscriber-phone">'+esc(u.phone||"No phone")+'</div><span class="hs-mac-pill">'+esc(u.mac_address||u.macAddress||u.username||"—")+'</span></td><td><span class="hs-package-pill hs-package-'+packageClass(u)+'">'+esc(packageLabel(u))+'</span></td><td><span class="hs-state hs-state-'+s+'">'+(s==="online"?"● ":s==="active"?"⚡ ":"")+statusLabel(u)+'</span></td><td><div class="hs-ip">'+esc(u.ip||u.address||"—")+'</div><div class="hs-session">'+esc(u.uptime||"—")+' · ↓ '+esc(bytesLabel(u.bytesOut))+'</div></td><td><div class="hs-expiry">'+esc(expiryLabel(u.expires_at))+'</div>'+remainTag(u)+'</td><td>'+actionButtons(u,false)+'</td></tr>';}).join("");
-    const cards=list.map((u,i)=>{const s=stateOf(u);return '<article class="hs-mobile-card"><button type="button" class="hs-mobile-open" data-open-user="'+esc(u.id)+'"><span class="hs-serial">'+(i+1)+'</span><span class="hs-mobile-main"><strong>'+esc(u.customer_name||u.name||"Unnamed Subscriber")+'</strong><small>'+esc(u.phone||"No phone")+' · '+esc(u.mac_address||u.macAddress||u.username||"—")+'</small><span class="hs-state hs-state-'+s+'">'+statusLabel(u)+'</span></span><span class="hs-mobile-chevron">›</span></button><div class="hs-mobile-meta"><span>'+esc(packageLabel(u))+'</span><span>'+esc(expiryLabel(u.expires_at))+'</span>'+remainTag(u)+'<button type="button" class="hs-mobile-menu-toggle" data-mobile-menu-toggle aria-expanded="false" aria-label="Subscriber actions">⋮</button></div><div class="hs-mobile-action-menu" role="menu" hidden>'+actionButtons(u,true)+'</div></article>';}).join("");
-    const pageScrollY=window.scrollY,listScrollTop=host.scrollTop;
+    const cards=list.map((u,i)=>{const s=stateOf(u);return '<article class="hs-mobile-card"><button type="button" class="hs-mobile-open" data-open-user="'+esc(u.id)+'"><span class="hs-serial">'+(i+1)+'</span><span class="hs-mobile-main"><strong>'+esc(u.customer_name||u.name||"Unnamed Subscriber")+'</strong><small>'+esc(u.phone||"No phone")+' · '+esc(u.mac_address||u.macAddress||u.username||"—")+'</small><span class="hs-state hs-state-'+s+'">'+statusLabel(u)+'</span></span><span class="hs-mobile-chevron">›</span></button><div class="hs-mobile-meta"><span>'+esc(packageLabel(u))+'</span><span>'+esc(expiryLabel(u.expires_at))+'</span>'+remainTag(u)+'</div><div class="hs-mobile-actions">'+actionButtons(u,true)+'</div></article>';}).join("");
     host.innerHTML=tabs+'<div class="hs-desktop-table-wrap"><table class="hs-executive-table"><thead><tr class="hotspot-table-header"><th>#</th><th>SUBSCRIBER &amp; DEVICE</th><th>PACKAGE</th><th>STATUS</th><th>IP &amp; SESSION</th><th>EXPIRATION &amp; REMAINING</th><th>ACTIONS</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="hs-empty-row">No subscribers in this filter.</td></tr>')+'</tbody></table></div><div class="hs-mobile-cards">'+(cards||'<div class="hs-empty-row">No subscribers in this filter.</div>')+'</div>';
-    host.scrollTop=listScrollTop;window.scrollTo(window.scrollX,pageScrollY);
     host.querySelectorAll("[data-filter]").forEach(x=>x.addEventListener("click",()=>{selectedFilter=x.dataset.filter||"all";renderList();}));
     host.querySelectorAll("[data-open-user]").forEach(x=>x.addEventListener("click",e=>{e.stopPropagation();selectUser(x.dataset.openUser,true);}));
-    host.querySelectorAll("[data-mobile-menu-toggle]").forEach(button=>button.addEventListener("click",event=>{
-      event.preventDefault();event.stopPropagation();const menu=button.closest(".hs-mobile-card")?.querySelector(".hs-mobile-action-menu");if(!menu)return;
-      host.querySelectorAll(".hs-mobile-action-menu").forEach(other=>{if(other!==menu){other.hidden=true;other.style.removeProperty("top");other.style.removeProperty("left");}});
-      const open=menu.hidden;menu.hidden=!open;button.setAttribute("aria-expanded",String(open));if(!open)return;
-      menu.style.position="fixed";menu.style.visibility="hidden";menu.style.display="block";const rect=button.getBoundingClientRect(),box=menu.getBoundingClientRect(),gap=8;
-      const left=Math.max(gap,Math.min(window.innerWidth-box.width-gap,rect.right-box.width));
-      const below=window.innerHeight-rect.bottom,top=below>=box.height+gap?rect.bottom+gap:Math.max(gap,rect.top-box.height-gap);
-      menu.style.left=left+"px";menu.style.top=Math.max(gap,Math.min(top,window.innerHeight-box.height-gap))+"px";menu.style.visibility="visible";menu.style.display="";
-    }));
-    host.querySelectorAll(".hs-mobile-action-menu [data-row-action]").forEach(button=>button.addEventListener("click",()=>{const menu=button.closest(".hs-mobile-action-menu");if(menu){menu.hidden=true;const toggle=menu.closest(".hs-mobile-card")?.querySelector("[data-mobile-menu-toggle]");if(toggle)toggle.setAttribute("aria-expanded","false");}}));
     host.querySelectorAll("[data-row-action]").forEach(x=>x.addEventListener("click",e=>{e.stopPropagation();const u=users.find(v=>String(v.id)===String(x.dataset.id));if(u){selected=u;renderDetail();runRowAction(x.dataset.rowAction,u);}}));
     host.querySelectorAll(".hs-executive-row").forEach(x=>x.addEventListener("click",()=>selectUser(x.dataset.userId,false)));
   }
@@ -185,7 +155,7 @@
   async function loadUsers(keepId) {
     if (loading) return; loading = true;
     const host = $("#freshHotspotUserList");
-    if (host && !host.querySelector(".hs-executive-table,.hs-mobile-cards")) host.innerHTML = '<div class="fresh-hs-empty">Loading subscribers…</div>';
+    if (host) host.innerHTML = '<div class="fresh-hs-empty">Loading subscribers…</div>';
     try {
       const data = await request("/api/hotspot/users");
       users = Array.isArray(data.users) ? data.users : [];
@@ -221,7 +191,6 @@
     $("#freshEditProfileForm")?.addEventListener("submit", submitEdit);
     $("#freshRenewForm")?.addEventListener("submit", submitRenew);
     $("#freshRenewProfile")?.addEventListener("change", updateRenewPreview);
-    startLiveCountdown();
     loadUsers();
     loadProfiles().then(updateRenewPreview).catch(error => console.warn("[Subscriber 360] Package list unavailable:", error.message));
   }
@@ -236,8 +205,6 @@
     window.addEventListener("resize", () => {
       if (window.matchMedia("(min-width: 992px)").matches) modalHide("freshSubscriberMobileModal");
     });
-    document.addEventListener("click",event=>{if(event.target.closest("[data-mobile-menu-toggle]")||event.target.closest(".hs-mobile-action-menu"))return;document.querySelectorAll(".hs-mobile-action-menu:not([hidden])").forEach(menu=>{menu.hidden=true;const toggle=menu.closest(".hs-mobile-card")?.querySelector("[data-mobile-menu-toggle]");if(toggle)toggle.setAttribute("aria-expanded","false");});});
-    document.addEventListener("keydown",event=>{if(event.key!=="Escape")return;document.querySelectorAll(".hs-mobile-action-menu:not([hidden])").forEach(menu=>{menu.hidden=true;const toggle=menu.closest(".hs-mobile-card")?.querySelector("[data-mobile-menu-toggle]");if(toggle){toggle.setAttribute("aria-expanded","false");toggle.focus();}});});
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, {once:true}); else install();
 })();
