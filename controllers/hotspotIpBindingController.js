@@ -34,7 +34,7 @@ async function audit(req, action, row, details = {}) {
   await db.query(
     "INSERT INTO admin_audit_logs (actor_username, actor_role, action, details, ip_address, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,NOW())",
     [who.username, who.role, action, JSON.stringify(Object.assign({ binding_id: row.id, mac_address: row.mac_address, ip_address: row.ip_address }, details)), req.ip || null]
-  );
+  ).catch((error) => console.error("[Hotspot binding audit] Could not write audit event:", error.message));
 }
 function responseError(res, error) {
   const status = Number(error.status) || 500;
@@ -99,7 +99,7 @@ async function update(req, res) {
   try {
     const id = Number(req.params.id);
     if (!Number.isSafeInteger(id) || id <= 0) throw Object.assign(new Error("Binding was not found."), { status: 404 });
-    const found = await db.query("SELECT * FROM hotspot_ip_bindings WHERE id=$1 AND archived_at IS NULL AND expiry_processing_started_at IS NULL", [id]);
+    const found = await db.query("UPDATE hotspot_ip_bindings SET expiry_processing_started_at=NOW() WHERE id=$1 AND archived_at IS NULL AND expiry_processing_started_at IS NULL RETURNING *", [id]);
     if (!found.rows.length) throw Object.assign(new Error("Binding is unavailable or currently expiring."), { status: 409 });
     const current = found.rows[0], body = req.body || {};
     const next = Object.assign({}, current);
@@ -117,25 +117,25 @@ async function update(req, res) {
     if (next.bandwidth_profile !== "unlimited" && !next.ip_address) throw Object.assign(new Error("A bandwidth-limited binding needs an IP address."), { status: 400 });
     const router = await mikrotikService.syncHotspotIpBinding({ id, macAddress: next.mac_address, ipAddress: next.ip_address, comment: next.comment, bindingType: next.binding_type, bandwidthProfile: next.bandwidth_profile });
     const saved = await db.query(
-      "UPDATE hotspot_ip_bindings SET mac_address=$2,ip_address=$3,customer_name=$4,phone=$5,comment=$6,binding_type=$7,package_id=$8,bandwidth_profile=$9,expiry_date=$10,status='active',archived_at=NULL,router_binding_id=$11,last_synced_at=NOW(),router_sync_error=NULL,updated_at=NOW() WHERE id=$1 RETURNING *",
+      "UPDATE hotspot_ip_bindings SET mac_address=$2,ip_address=$3,customer_name=$4,phone=$5,comment=$6,binding_type=$7,package_id=$8,bandwidth_profile=$9,expiry_date=$10,status='active',archived_at=NULL,expiry_processing_started_at=NULL,router_binding_id=$11,last_synced_at=NOW(),router_sync_error=NULL,updated_at=NOW() WHERE id=$1 RETURNING *",
       [id,next.mac_address,next.ip_address,next.customer_name,next.phone,next.comment,next.binding_type,next.package_id,next.bandwidth_profile,next.expiry_date,router.routerBindingId]
     );
     await audit(req, "hotspot_ip_binding.updated", saved.rows[0], { expiry_date: next.expiry_date });
     return res.json({ success: true, binding: saved.rows[0] });
-  } catch (error) { return responseError(res, error); }
+  } catch (error) { const id=Number(req.params.id); if(Number.isSafeInteger(id)) await db.query("UPDATE hotspot_ip_bindings SET expiry_processing_started_at=NULL WHERE id=$1", [id]).catch(()=>{}); return responseError(res, error); }
 }
 
 async function remove(req, res) {
   try {
     const id = Number(req.params.id);
-    const result = await db.query("SELECT * FROM hotspot_ip_bindings WHERE id=$1 AND archived_at IS NULL AND expiry_processing_started_at IS NULL", [id]);
+    const result = await db.query("UPDATE hotspot_ip_bindings SET expiry_processing_started_at=NOW() WHERE id=$1 AND archived_at IS NULL AND expiry_processing_started_at IS NULL RETURNING *", [id]);
     if (!result.rows.length) throw Object.assign(new Error("Binding is unavailable or currently expiring."), { status: 409 });
     const row = result.rows[0];
     await mikrotikService.removeHotspotIpBinding(id);
-    const saved = await db.query("UPDATE hotspot_ip_bindings SET status='disabled',archived_at=NOW(),updated_at=NOW(),router_binding_id=NULL,last_synced_at=NOW(),router_sync_error=NULL WHERE id=$1 RETURNING *", [id]);
+    const saved = await db.query("UPDATE hotspot_ip_bindings SET status='disabled',archived_at=NOW(),expiry_processing_started_at=NULL,updated_at=NOW(),router_binding_id=NULL,last_synced_at=NOW(),router_sync_error=NULL WHERE id=$1 RETURNING *", [id]);
     await audit(req, "hotspot_ip_binding.archived", saved.rows[0]);
     return res.json({ success: true, binding: saved.rows[0] });
-  } catch (error) { return responseError(res, error); }
+  } catch (error) { const id=Number(req.params.id); if(Number.isSafeInteger(id)) await db.query("UPDATE hotspot_ip_bindings SET expiry_processing_started_at=NULL WHERE id=$1", [id]).catch(()=>{}); return responseError(res, error); }
 }
 
 module.exports = { list, create, update, remove, audit, dhakaDate, bandwidth };
