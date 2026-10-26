@@ -2,6 +2,7 @@ const crypto=require("crypto");const db=require("../db");const mikrotikService=r
 const notificationDispatcher=require("../services/notificationDispatcher");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 const {deleteHotspotSubscriber}=require("../services/hotspotDeletionService");
+const {runHotspotExpirationCleanup}=require("../jobs/hotspotExpirationCleanup");
 const {normalizeSalesCategory,transactionCategorySql}=require("../services/hotspotSalesCategory");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
@@ -724,6 +725,12 @@ async function voucherBatch(req,res){
   return res.json({success:true,batchId,count:result.rows.length,vouchers:result.rows});
  }catch(e){return errorResponse(res,e);}
 }
+async function runVoucherCleanup(req,res){
+ try{
+  const result=await runHotspotExpirationCleanup();
+  return res.json({success:true,message:result?.skipped?"Cleanup is already running.":"Expired voucher cleanup completed.",cleanup:result});
+ }catch(error){return errorResponse(res,error);}
+}
 async function voucherRecords(req,res){
  try{
   const allowed=new Set(["all","unused","active","online","offline","expired","cleanup"]);
@@ -829,4 +836,4 @@ async function manualRenew(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,voucherBatches,voucherBatch,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
+module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,voucherBatches,voucherBatch,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,runVoucherCleanup,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};

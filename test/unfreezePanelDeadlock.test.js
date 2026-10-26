@@ -12,10 +12,10 @@ test("public homepage never opens a live MikroTik connection", () => {
   assert.match(server, /Saved hotspot metadata unavailable/);
 });
 
-test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {
+test("MikroTik API disables socket idle timeout and keeps bounded operation deadlines", () => {
   const service = read("services/mikrotikService.js");
-  assert.match(service, /const CONNECTION_TIMEOUT_MS = 1000/);
-  assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
+  assert.match(service, /const CONNECTION_TIMEOUT_MS = 15000/);
+  assert.match(service, /const OPERATION_TIMEOUT_MS = 30000/);
   assert.match(service, /timeout: 0/);
   assert.match(service, /socket\.setTimeout\(0\)/);
   assert.match(service, /_executeWithTimeout\(/);

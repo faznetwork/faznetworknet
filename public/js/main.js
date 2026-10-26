@@ -232,18 +232,30 @@
   let profiles = [];
   let activeSessions = [];
 
-  if (!syncBtn && !usersBody) return;
+  // admin.ejs keeps all views in the DOM, so element presence alone does not mean
+  // PPPoE management is active. Avoid starting RouterOS-backed PPPoE requests
+  // while the operator is in Hotspot routes.
+  const isHotspotRoute = /^\/admin\/hotspot(?:\/|$)/.test(window.location.pathname);
+  if (isHotspotRoute || (!syncBtn && !usersBody)) return;
 
   const pppoeApi = async (url, options = {}) => {
-    const response = await fetch(url, {
-      ...options,
-      headers: { Accept: "application/json", "Content-Type": "application/json", ...(options.headers || {}) },
-      cache: "no-store"
-    });
-    let data;
-    try { data = await response.json(); } catch (_) { throw new Error("Invalid server response."); }
-    if (!response.ok || data.success === false) throw new Error(data.error || "PPPoE request failed.");
-    return data;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: { Accept: "application/json", "Content-Type": "application/json", ...(options.headers || {}) },
+        cache: "no-store",
+        signal: controller.signal
+      });
+      let data;
+      try { data = await response.json(); } catch (_) { throw new Error("Invalid server response."); }
+      if (!response.ok || data.success === false) throw new Error(data.error || "PPPoE request failed.");
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("PPPoE request timed out after 30 seconds.");
+      throw error;
+    } finally { clearTimeout(timer); }
   };
 
   const esc = (value) => {
@@ -316,7 +328,11 @@
     }).join("") : "<tr><td colspan='6' class='empty-cell'>No PPPoE users in database. Click Sync from MikroTik.</td></tr>";
   };
 
+  let activePollInFlight = false;
   const loadActive = async () => {
+    if (activePollInFlight) return;
+    activePollInFlight = true;
+    try {
     const data = await pppoeApi("/api/pppoe/active");
     activeSessions = data.sessions || [];
     if (onlineCount) onlineCount.textContent = activeSessions.length;
@@ -328,6 +344,7 @@
       ).join("") : "<tr><td colspan='6' class='empty-cell'>No active PPPoE sessions.</td></tr>";
     }
     renderUsers();
+    } finally { activePollInFlight = false; }
   };
 
   const sync = async (silent = false) => {
@@ -487,6 +504,7 @@
 (() => {
   const txBody=document.getElementById("transactions-body");
   const voucherBody=document.getElementById("vouchers-body");
+  if (/^\/admin\/hotspot(?:\/|$)/.test(window.location.pathname)) return;
   if(txBody){
     let txs=[],users=[];
     const api=async(url,opt={})=>{const res=await fetch(url,{...opt,headers:{"Content-Type":"application/json",Accept:"application/json"}});const d=await res.json();if(!res.ok||d.success===false)throw new Error(d.error||"Request failed.");return d;};

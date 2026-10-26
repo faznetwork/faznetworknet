@@ -329,3 +329,29 @@ body:has(#freshHotspotWorkspace) #pageTitle{display:none!important}
 @media(max-width:1050px){.hotspot-unified-hub .huh-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hotspot-unified-hub{padding:15px!important}}
 @media(max-width:680px){.hotspot-unified-hub{padding:11px!important}.hotspot-unified-hub .huh-heading{align-items:flex-start}.hotspot-unified-hub .huh-heading h2{font-size:22px}.hotspot-unified-hub .huh-kpis{gap:9px}.hotspot-unified-hub .huh-kpi{min-height:118px;padding:13px}.hotspot-unified-hub .huh-kpi strong{font-size:20px}.hotspot-unified-hub .huh-toolbar{align-items:stretch;flex-direction:column}.hotspot-unified-hub .huh-toolbar input{width:100%}.hotspot-unified-hub .huh-profile-grid{grid-template-columns:1fr;padding:12px}.hotspot-unified-hub .huh-voucher-form{grid-template-columns:1fr;padding:13px}.hotspot-unified-hub .huh-sales-summary{align-items:flex-start;flex-direction:column}}
 @media print{body *{visibility:hidden!important}.huh-voucher-print,.huh-voucher-print *{visibility:visible!important}.huh-voucher-print{position:absolute;left:0;top:0;width:100%;grid-template-columns:repeat(2,1fr)!important}.huh-voucher-print article{break-inside:avoid}}
+
+/* Managed Hotspot IP/MAC binding lifecycle */
+.huh-binding-actions{white-space:nowrap;min-width:220px}.huh-binding-btn{min-height:36px;padding:7px 9px;margin:2px;border:1.5px solid #bfdbfe;border-radius:7px;background:#eff6ff;color:#1e40af;font-weight:700;cursor:pointer}.huh-binding-btn:hover{background:#dbeafe}.huh-binding-btn.is-danger{color:#b91c1c;border-color:#fecaca;background:#fff7f7}.huh-subline{display:block;margin-top:4px;color:#64748b;font-size:13px}.huh-modal-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(15,23,42,.58);display:grid;place-items:center;padding:18px}.huh-modal{position:relative;width:min(680px,100%);max-height:min(92vh,900px);overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:24px;box-shadow:0 24px 80px rgba(15,23,42,.28);color:#0f172a}.huh-modal h3{font-size:21px;margin:0 40px 18px 0}.huh-modal-close{position:absolute;right:16px;top:12px;border:0;background:transparent;font-size:28px;cursor:pointer}.huh-modal form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.huh-modal label{display:grid;gap:6px;font-size:14px;font-weight:700}.huh-modal input,.huh-modal select{width:100%;min-height:42px;border:1.5px solid #cbd5e1;border-radius:7px;padding:8px 10px;font-size:14px;background:#fff;color:#0f172a}.huh-modal-wide,.huh-modal-error,.huh-modal footer{grid-column:1/-1}.huh-modal-error{color:#b91c1c;font-size:14px;min-height:20px}.huh-modal footer{display:flex;justify-content:flex-end;gap:10px;padding-top:4px}.huh-modal footer button{min-height:40px;padding:8px 14px;border-radius:7px;cursor:pointer}
+@media(max-width:700px){.huh-binding-actions{white-space:normal;min-width:0}.huh-binding-btn{min-height:42px;margin:3px 2px}.huh-modal-backdrop{padding:10px}.huh-modal{padding:20px 16px}.huh-modal form{grid-template-columns:1fr}.huh-modal-wide,.huh-modal-error,.huh-modal footer{grid-column:1}}
+
+/* Unified Hotspot Hub additions */
+.hotspot-unified-hub .huh-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.hotspot-unified-hub .huh-primary,.hotspot-unified-hub .huh-export{min-height:42px;padding:9px 13px;border:1.5px solid #1e40af;border-radius:8px;background:#1e40af;color:#fff;font-size:14px;font-weight:750}
+.hotspot-unified-hub .huh-export{background:#fff;color:#1e40af}
+.hotspot-unified-hub .huh-dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
+.hotspot-unified-hub .huh-dashboard-grid>section{min-width:0;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.hotspot-unified-hub .huh-dashboard-grid h3,.hotspot-unified-hub .huh-section-title{margin:0 0 13px;color:#0f172a;font-size:16px;font-weight:800}
+.hotspot-unified-hub .huh-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hotspot-unified-hub .huh-quick-actions button{min-height:54px;padding:12px;border:1.5px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#1e40af;font-size:14px;font-weight:750;text-align:left}
+.hotspot-unified-hub .huh-quick-actions button:hover{border-color:#2563eb;background:#eff6ff}
+.hotspot-unified-hub .huh-sales-preview{display:grid;gap:8px}
+.hotspot-unified-hub .huh-sales-preview>div{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #e2e8f0;color:#334155;font-size:14px}
+.hotspot-unified-hub .huh-sales-preview strong{color:#047857}
+.hotspot-unified-hub .huh-ledger-filters{display:flex;gap:8px;overflow-x:auto;padding:14px 14px 0}
+.hotspot-unified-hub .huh-ledger-filters button{display:flex;gap:7px;align-items:center;min-height:38px;padding:7px 11px;border:1.5px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;font-size:13px;font-weight:750;white-space:nowrap}
+.hotspot-unified-hub .huh-ledger-filters button.is-active{border-color:#1e40af;background:#eff6ff;color:#1e40af}
+.hotspot-unified-hub .huh-ledger-filters span{padding:1px 6px;border-radius:20px;background:#e2e8f0}
+.hotspot-unified-hub .huh-subline{display:block;margin-top:4px;color:#64748b;font-size:12px}
+.hotspot-unified-hub .huh-table-wrap{border-radius:0 0 12px 12px}
+@media(max-width:900px){.hotspot-unified-hub .huh-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hotspot-unified-hub .huh-dashboard-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.hotspot-unified-hub .huh-toolbar{align-items:stretch;flex-direction:column}.hotspot-unified-hub .huh-toolbar-actions{justify-content:flex-start}.hotspot-unified-hub .huh-kpi{min-height:110px;padding:14px}.hotspot-unified-hub .huh-kpi strong{font-size:20px}.hotspot-unified-hub .huh-dashboard-grid{padding:10px}.hotspot-unified-hub .huh-quick-actions{grid-template-columns:1fr}}
