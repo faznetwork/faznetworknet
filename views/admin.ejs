@@ -377,24 +377,6 @@
         @keyframes hotspotPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.45)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
         @media(max-width:768px){.hotspot-enterprise-search{min-width:100%;width:100%}.hotspot-enterprise-table{min-width:900px}}
 
-        .hotspot-unified-nav{display:flex;gap:8px;overflow-x:auto;white-space:nowrap;padding:8px;margin:0 0 18px;background:#fff;border:1.5px solid #cbd5e1;border-radius:14px;scrollbar-width:thin}
-        .hotspot-unified-nav .hotspot-subnav-link{flex:0 0 auto;display:inline-flex;align-items:center;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#1e293b;padding:9px 13px;font-size:14px;font-weight:700;text-decoration:none;min-height:40px}
-        .hotspot-unified-nav .hotspot-subnav-link:hover,.hotspot-unified-nav .hotspot-subnav-link:focus{background:#eff6ff;border-color:#1e40af;color:#1e40af}
-        .hotspot-unified-view{background:#fff!important;color:#0f172a}
-        .hotspot-unified-view .card,.hotspot-unified-view .card-custom,.hotspot-unified-view .table-responsive{background:#fff}
-        .hotspot-unified-view .card,.hotspot-unified-view .card-custom{border:1.5px solid #cbd5e1!important;border-radius:15px}
-        .hotspot-cell-copy{margin-left:6px;border:0;border-radius:6px;background:#eff6ff;color:#1e40af;padding:2px 6px;font-size:11px;font-weight:700;cursor:pointer}
-        .hotspot-unified-view .table thead th{background:#1e40af!important;color:#fff!important;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-color:#1e40af!important}
-        .hotspot-unified-view .table th,.hotspot-unified-view .table td{border-right:1.5px solid #e2e8f0!important;vertical-align:middle}
-        .hotspot-unified-view .table td{font-size:15px;font-weight:650}
-        .hotspot-unified-view .table .font-monospace,.hotspot-unified-view .table code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace!important;font-size:14px}
-        .hotspot-unified-profile-card{background:#fff;border:1.5px solid #cbd5e1;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-        .hotspot-rule-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#fff;border:1.5px solid #cbd5e1;border-radius:14px;padding:14px;margin-bottom:16px}
-        .hotspot-rule-modal[hidden]{display:none!important}.hotspot-rule-modal{position:fixed;inset:0;z-index:20001;display:grid;place-items:center;padding:16px;background:rgba(15,23,42,.48)}
-        .hotspot-rule-dialog{width:min(100%,560px);background:#fff;border:1.5px solid #cbd5e1;border-radius:18px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.24)}
-        .hotspot-rule-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.hotspot-rule-fields label{display:grid;gap:5px;font-weight:700;font-size:13px}
-        .hotspot-rule-fields input,.hotspot-rule-fields select{width:100%;min-height:42px;border:1px solid #cbd5e1;border-radius:9px;padding:8px 10px;background:#fff}
-        @media(max-width:700px){.hotspot-unified-nav{margin-inline:-2px}.hotspot-rule-fields{grid-template-columns:1fr}}
         #dynamicPageContent{width:100%;min-width:0}
 /* Static synchronization controls appear only on the All Hotspot Users screen. */
 #mainContent:has(.hotspot-all-users-view) #hotspotStaticSyncToolbar{display:flex!important}
@@ -2996,8 +2978,8 @@
             document.querySelectorAll('.hotspot-dynamic-view').forEach(function(view){ view.remove(); });
         }
 
-        function hotspotSubnavMarkup(isAddUserView) {
-            if (isAddUserView) return '<nav class="hotspot-subnav" aria-label="Hotspot sections">'+
+        function hotspotSubnavMarkup() {
+            return '<nav class="hotspot-subnav" aria-label="Hotspot sections">'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotDashboard()">▦ Dashboard</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'all\',\'all_user\')">▤ All Hotspot Users</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'active\',\'active_user\')">◉ Active Sessions</button>'+
@@ -3006,58 +2988,7 @@
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher & Recharge Ledger\')">▤ Voucher &amp; Recharge Ledger</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherSales()">৳ Sales History</button>'+
             '</nav>';
-            return '<nav class="hotspot-subnav hotspot-unified-nav" aria-label="Hotspot sections">'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'all\',\'all_user\')">All Users</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'active\',\'active_user\')">Active Sessions</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotProfiles(\'hotspot_profile\')">Profile</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadVoucherGeneratorSection()">Generate &amp; Print</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher & Recharge Ledger\')">Voucher &amp; Recharge Ledger</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'cleanup\',\'Expired & Cleanup\')">Expired &amp; Cleanup</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherSales()">Voucher Sales History</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotRuleView(\'ip-binding\')">IP Binding</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotRuleView(\'walled-garden\')">Walled Garden</button>'+
-              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotRuleView(\'walled-garden-ip\')">Walled Garden IP</button>'+
-            '</nav>';
         }
-
-        window.loadHotspotRuleView = function(kind) {
-            const config = {
-                'ip-binding': { title: 'IP Binding', routerPath: '/ip hotspot ip-binding', primary: 'MAC Address', key: 'mac-address', secondary: 'Address', secondaryKey: 'address', fields: [['mac-address','MAC address'],['address','IP address'],['server','Server'],['type','Binding type']], copies: ['mac-address','address'] },
-                'walled-garden': { title: 'Walled Garden', routerPath: '/ip hotspot walled-garden', primary: 'Domain', key: 'dst-host', secondary: 'Action', secondaryKey: 'action', fields: [['dst-host','Domain / destination host'],['action','Action'],['comment','Comment']], copies: ['dst-host'] },
-                'walled-garden-ip': { title: 'Walled Garden IP List', routerPath: '/ip hotspot walled-garden ip', primary: 'IP address', key: 'dst-address', secondary: 'Action', secondaryKey: 'action', fields: [['dst-address','Destination IP / CIDR'],['action','Action'],['comment','Comment']], copies: ['dst-address'] }
-            }[kind];
-            if (!config) return;
-            const state = window.__hotspotMikrotikRuleState || (window.__hotspotMikrotikRuleState = {});
-            const rows = state[kind] || (state[kind] = []);
-            setPageTitleSafe(config.title);
-            function draw() {
-                const body = rows.length ? rows.map((rule,index) => '<tr>'+
-                    '<td><span class="font-monospace">'+escapeHtml(rule[config.key]||'—')+'</span> <button class="btn btn-sm btn-light" type="button" data-rule-copy="'+index+'" aria-label="Copy '+escapeHtml(config.primary)+'">Copy</button></td>'+
-                    '<td>'+escapeHtml(rule[config.secondaryKey]||'—')+'</td>'+
-                    '<td><span class="badge rounded-pill '+(rule.status==='Blocked'?'text-bg-danger':rule.status==='Bypassed'?'text-bg-warning':'text-bg-success')+'">'+escapeHtml(rule.status||'Active')+'</span></td>'+
-                    '<td>'+escapeHtml(rule.comment||'—')+'</td>'+
-                    '<td class="text-end"><button class="btn btn-sm btn-outline-primary me-1" type="button" data-rule-edit="'+index+'">Edit</button><button class="btn btn-sm btn-outline-danger" type="button" data-rule-remove="'+index+'">Remove</button></td>'+
-                    '</tr>').join('') : '<tr><td colspan="5" class="text-center py-5 text-secondary">No rules in this session. Add a rule to preview the MikroTik list.</td></tr>';
-                const fields = config.fields.map((field,index) => '<label>'+escapeHtml(field[1])+'<input name="'+escapeHtml(field[0])+'" '+(index===0?'required':'')+' autocomplete="off"></label>').join('');
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view hotspot-rule-view"><div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3"><div><div class="small fw-bold text-primary text-uppercase">MikroTik live-sync management</div><h2 class="h3 fw-bold mb-1">'+escapeHtml(config.title)+'</h2><div class="text-secondary font-monospace">'+escapeHtml(config.routerPath)+'</div></div><span class="badge rounded-pill text-bg-light border px-3 py-2">Rule API connection pending</span></div>'+
-                    '<div class="hotspot-rule-toolbar"><div class="d-flex gap-2 flex-wrap"><button class="btn btn-primary" id="hotspot-rule-add" type="button">＋ Add New Rule</button><button class="btn btn-outline-primary" id="hotspot-rule-sync" type="button">⚡ Push / Sync to MikroTik</button></div><div class="small text-secondary" id="hotspot-rule-feedback" role="status">Rule changes are a local UI preview until a rule API is available.</div></div>'+
-                    '<div class="table-responsive bg-white border rounded-3"><table class="table table-hover mb-0"><thead><tr><th>'+escapeHtml(config.primary)+'</th><th>'+escapeHtml(config.secondary)+'</th><th>Status</th><th>Comment</th><th class="text-end">Actions</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-                    '<div class="hotspot-rule-modal" id="hotspot-rule-modal" hidden><form class="hotspot-rule-dialog" id="hotspot-rule-form" role="dialog" aria-modal="true" aria-labelledby="hotspot-rule-modal-title"><div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h5 fw-bold mb-0" id="hotspot-rule-modal-title">Add rule</h3><button class="btn-close" id="hotspot-rule-close" type="button" aria-label="Close"></button></div><div class="hotspot-rule-fields">'+fields+'<label>Status<select name="status"><option>Active</option><option>Bypassed</option><option>Blocked</option></select></label></div><div class="d-flex justify-content-end gap-2 mt-4"><button class="btn btn-light" id="hotspot-rule-cancel" type="button">Cancel</button><button class="btn btn-primary" type="submit">Save rule</button></div></form></div></section>');
-                const modal=document.getElementById('hotspot-rule-modal'),form=document.getElementById('hotspot-rule-form');
-                let editIndex=-1;
-                function close(){modal.hidden=true;form.reset();editIndex=-1;}
-                function open(index){editIndex=Number.isInteger(index)?index:-1;form.reset();if(editIndex>=0){const rule=rows[editIndex]||{};Object.keys(rule).forEach(key=>{if(form.elements[key])form.elements[key].value=rule[key]});document.getElementById('hotspot-rule-modal-title').textContent='Edit rule';}else{document.getElementById('hotspot-rule-modal-title').textContent='Add rule';}modal.hidden=false;form.elements[config.fields[0][0]].focus();}
-                document.getElementById('hotspot-rule-add').onclick=()=>open(-1);
-                document.getElementById('hotspot-rule-close').onclick=close;document.getElementById('hotspot-rule-cancel').onclick=close;
-                modal.onclick=e=>{if(e.target===modal)close();};
-                form.onsubmit=e=>{e.preventDefault();const rule=Object.fromEntries(new FormData(form).entries());if(editIndex>=0)rows[editIndex]=rule;else rows.push(rule);draw();};
-                document.querySelectorAll('[data-rule-edit]').forEach(button=>button.onclick=()=>open(Number(button.dataset.ruleEdit)));
-                document.querySelectorAll('[data-rule-remove]').forEach(button=>button.onclick=()=>{const index=Number(button.dataset.ruleRemove);rows.splice(index,1);draw();});
-                document.querySelectorAll('[data-rule-copy]').forEach(button=>button.onclick=async()=>{const value=rows[Number(button.dataset.ruleCopy)]?.[config.key]||'';try{await navigator.clipboard.writeText(value);document.getElementById('hotspot-rule-feedback').textContent='Copied '+config.primary.toLowerCase()+'.';}catch(_){document.getElementById('hotspot-rule-feedback').textContent='Clipboard access is unavailable in this browser.';}});
-                document.getElementById('hotspot-rule-sync').onclick=()=>{document.getElementById('hotspot-rule-feedback').textContent='Live push and pull are not connected: this frontend-only update does not add MikroTik API endpoints.';};
-            }
-            draw();
-        };
 
         function appendHotspotView(html) {
             purgeStuckBackdrops();
@@ -3069,35 +3000,9 @@
             if (!dynamic) return;
             dynamic.style.display = 'block';
             dynamic.innerHTML = html;
+            if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup());
             const view = dynamic.querySelector('.hotspot-dynamic-view');
-            const isAddUserView = Boolean(dynamic.querySelector('.hs-create-root'));
-            if (!dynamic.querySelector('.hotspot-subnav')) dynamic.insertAdjacentHTML('afterbegin', hotspotSubnavMarkup(isAddUserView));
-            if (view) {
-                view.style.display = 'block';
-                if (!isAddUserView) {
-                    view.classList.add('hotspot-unified-view');
-                    dynamic.querySelectorAll('.hotspot-unified-view td').forEach(function(cell) {
-                        if (cell.querySelector('.hotspot-cell-copy')) return;
-                        const value=String(cell.textContent||'').trim();
-                        const matchesMac=/^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(value);
-                        const matchesIp=/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(value);
-                        const matchesDomain=/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(value);
-                        if(!matchesMac&&!matchesIp&&!matchesDomain)return;
-                        const button=document.createElement('button');
-                        button.type='button';button.className='hotspot-cell-copy';button.textContent='Copy';button.setAttribute('aria-label','Copy '+value);button.dataset.hotspotCopy=value;
-                        cell.appendChild(button);
-                    });
-                }
-            }
-            if (!dynamic.dataset.hotspotCopyReady) {
-                dynamic.dataset.hotspotCopyReady='1';
-                dynamic.addEventListener('click',async function(event) {
-                    const button=event.target.closest('[data-hotspot-copy]');
-                    if(!button)return;
-                    try{await navigator.clipboard.writeText(button.dataset.hotspotCopy);button.textContent='Copied';setTimeout(()=>{if(button.isConnected)button.textContent='Copy'},900);}
-                    catch(_){button.textContent='Copy failed';}
-                });
-            }
+            if (view) view.style.display = 'block';
             if(window.innerWidth<=768) {
                 closeSidebarMobile();
                 purgeStuckBackdrops();
@@ -8961,7 +8866,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 paymentFilters: ['pending', 'all', 'requests', 'bkash', 'nagad', 'rocket'],
                 paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments', 'PPPoE Payments', 'Hotspot Payments'],
                 paymentServiceTypes: ['pppoe', 'hotspot'],
-                hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales', 'ip-binding', 'walled-garden', 'walled-garden-ip'],
+                hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales'],
                 hotspotFilters: ['all', 'active', 'offline'],
                 hotspotTitles: ['all_user', 'active_user', 'offline_user'],
                 voucherFilters: ['all', 'cleanup'],
@@ -9067,16 +8972,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hotspot/users/active': { view: 'hotspot', section: 'users', filter: 'active', title: 'active_user' },
                     '/admin/hotspot/users/offline': { view: 'hotspot', section: 'users', filter: 'offline', title: 'offline_user' },
                     '/admin/hotspot/profiles': { view: 'hotspot', section: 'profiles' },
-                    '/admin/hotspot/profile': { view: 'hotspot', section: 'profiles' },
                     '/admin/hotspot/vouchers/generate': { view: 'hotspot', section: 'voucher-generator' },
                     '/admin/hotspot/vouchers/manage': { view: 'hotspot', section: 'vouchers', filter: 'all' },
-                    '/admin/hotspot/vouchers/ledger': { view: 'hotspot', section: 'vouchers', filter: 'all' },
                     '/admin/hotspot/vouchers/cleanup': { view: 'hotspot', section: 'vouchers', filter: 'cleanup' },
                     '/admin/hotspot/sales': { view: 'hotspot', section: 'sales' },
-                    '/admin/hotspot/vouchers/sales': { view: 'hotspot', section: 'sales' },
-                    '/admin/hotspot/ip-binding': { view: 'hotspot', section: 'ip-binding' },
-                    '/admin/hotspot/walled-garden': { view: 'hotspot', section: 'walled-garden' },
-                    '/admin/hotspot/walled-garden-ip': { view: 'hotspot', section: 'walled-garden-ip' },
                     '/admin/network/mikrotik-devices': { view: 'devices' },
                     '/admin/packages': { view: 'packages' },
                     '/admin/network/ip-pools': { view: 'ip-pools' },
@@ -9168,11 +9067,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     if (normalized.section === 'dashboard') return '/admin/hotspot/dashboard';
                     if (normalized.section === 'add-user') return '/admin/hotspot/add-user';
                     if (normalized.section === 'users') return '/admin/hotspot/users/' + (normalized.filter || 'all');
-                    if (normalized.section === 'profiles') return '/admin/hotspot/profile';
+                    if (normalized.section === 'profiles') return '/admin/hotspot/profiles';
                     if (normalized.section === 'voucher-generator') return '/admin/hotspot/vouchers/generate';
-                    if (normalized.section === 'vouchers') return '/admin/hotspot/vouchers/' + (normalized.filter === 'cleanup' ? 'cleanup' : 'ledger');
-                    if (normalized.section === 'sales') return '/admin/hotspot/vouchers/sales';
-                    if (['ip-binding','walled-garden','walled-garden-ip'].includes(normalized.section)) return '/admin/hotspot/' + normalized.section;
+                    if (normalized.section === 'vouchers') return '/admin/hotspot/vouchers/' + (normalized.filter === 'cleanup' ? 'cleanup' : 'manage');
+                    if (normalized.section === 'sales') return '/admin/hotspot/sales';
                 }
                 if (normalized.view === 'devices') return '/admin/network/mikrotik-devices';
                 if (normalized.view === 'packages') return '/admin/packages';
@@ -9255,7 +9153,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         if (r.section === 'voucher-generator') return callIfAvailable('loadVoucherGeneratorSection');
                         if (r.section === 'vouchers') return callIfAvailable('loadHotspotVoucherRecords', [r.filter, r.filter === 'cleanup' ? 'Expired & Cleanup' : 'Voucher Management']);
                         if (r.section === 'sales') return callIfAvailable('loadHotspotVoucherSales');
-                        if (['ip-binding','walled-garden','walled-garden-ip'].includes(r.section)) return callIfAvailable('loadHotspotRuleView', [r.section]);
                         break;
                     case 'devices': return callIfAvailable('loadDevices');
                     case 'packages': return callIfAvailable('loadPlanPackages');
