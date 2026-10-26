@@ -95,7 +95,7 @@ function createHotspotExpirationCleanup(deps = {}) {
   let batchContinuationUrgent = false;
   const MAX_EXPIRY_BATCH_SIZE = 5;
 
-  return async function runHotspotExpirationCleanup() {
+  const runHotspotExpirationCleanup = async function runHotspotExpirationCleanup() {
     if (running && !deps.allowConcurrent) return { skipped: true, reason: "already_running" };
     running = true;
     const startedAt = Date.now();
@@ -277,6 +277,11 @@ function createHotspotExpirationCleanup(deps = {}) {
       running = false;
     }
   };
+  runHotspotExpirationCleanup.getBatchContinuationState = () => ({
+    pending: batchContinuation,
+    urgent: batchContinuationUrgent
+  });
+  return runHotspotExpirationCleanup;
 }
 
 async function runHotspotRetentionCleanup(deps = {}) {
@@ -332,6 +337,7 @@ const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
 function startHotspotExpirationCleanup(deps = {}) {
   const database = deps.db || db;
   const logger = deps.logger || console;
+  const runCleanup = createHotspotExpirationCleanup(deps);
   let timer = null;
   let stopped = false;
   const scheduleNext = async () => {
@@ -341,11 +347,12 @@ function startHotspotExpirationCleanup(deps = {}) {
       const next = await database.query("SELECT MIN(CASE WHEN status='active' AND pre_expiry_notified IS NOT TRUE AND expires_at > NOW() THEN expires_at - INTERVAL '5 minutes' ELSE expires_at END) AS next_at, BOOL_OR(status='expired' AND cleanup_status IN ('pending','not_required','failed')) AS retry_due FROM hotspot_vouchers WHERE ((status IN ('unused','active','pending_claim') AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')))");
       const row = next.rows?.[0] || {};
       const nextAt = row.next_at ? new Date(row.next_at).getTime() : Infinity;
-      const delay = batchContinuation
-        ? (batchContinuationUrgent ? 1000 : 30000)
+      const continuation = runCleanup.getBatchContinuationState();
+      const delay = continuation.pending
+        ? (continuation.urgent ? 1000 : 30000)
         : row.retry_due ? 30000 : Math.max(1000, Math.min(2147483647, Number.isFinite(nextAt) ? nextAt - Date.now() : 2147483647));
       timer = setTimeout(async () => {
-        try { await runHotspotExpirationCleanup(); }
+        try { await runCleanup(); }
         catch (error) { logger.error("[HOTSPOT EXPIRY] Scheduled run failed:", error.message); }
         await scheduleNext();
       }, delay);
@@ -356,7 +363,7 @@ function startHotspotExpirationCleanup(deps = {}) {
       if (typeof timer.unref === "function") timer.unref();
     }
   };
-  runHotspotExpirationCleanup().then(scheduleNext).catch(error => {
+  runCleanup().then(scheduleNext).catch(error => {
     logger.error("[HOTSPOT EXPIRY] Startup recovery sweep failed:", error.message);
     scheduleNext().catch(err => logger.error("[HOTSPOT EXPIRY] Scheduler setup failed:", err.message));
   });

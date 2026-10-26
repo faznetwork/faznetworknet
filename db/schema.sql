@@ -742,6 +742,7 @@ CREATE TABLE IF NOT EXISTS router_devices (
   password_encrypted TEXT NOT NULL,
   use_ssl BOOLEAN NOT NULL DEFAULT FALSE,
   timeout_ms INTEGER NOT NULL DEFAULT 8000 CHECK (timeout_ms BETWEEN 1000 AND 30000),
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
   status VARCHAR(20) NOT NULL DEFAULT 'offline' CHECK (status IN ('online','offline','auth_failed')),
   last_synced TIMESTAMPTZ,
   board_model VARCHAR(160),
@@ -751,8 +752,10 @@ CREATE TABLE IF NOT EXISTS router_devices (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE router_devices ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_router_devices_status ON router_devices(status);
 CREATE INDEX IF NOT EXISTS idx_router_devices_host ON router_devices(lower(host));
+CREATE INDEX IF NOT EXISTS idx_router_devices_active_native ON router_devices(id) WHERE is_active=TRUE AND api_type='native_api';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_name ON router_devices(lower(router_name));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_router_devices_host_api ON router_devices(lower(host), api_type);
 

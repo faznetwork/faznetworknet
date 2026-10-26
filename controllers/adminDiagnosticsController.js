@@ -15,34 +15,29 @@ async function withTimeout(promise, ms, message) {
 }
 
 async function getEffectiveTarget() {
-  let saved = {};
-  let source = "render_environment";
   try {
     const result = await withTimeout(
-      db.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port')"),
+      db.query("SELECT host,api_port FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 1"),
       1500,
-      "Database settings lookup timed out"
+      "Router device lookup timed out"
     );
-    saved = Object.fromEntries((result.rows || []).map(row => [row.key, row.value]));
-    if (Object.prototype.hasOwnProperty.call(saved, "mikrotik_host") ||
-        Object.prototype.hasOwnProperty.call(saved, "mikrotik_port")) {
-      source = "database_app_settings";
+    const router = result.rows?.[0];
+    if (!router) {
+      return { host: "", port: 8728, source: "router_devices", settingsWarning: "No router has been manually added through Add Device." };
     }
+    return {
+      host: String(router.host || "").trim(),
+      port: Number.parseInt(String(router.api_port || "8728"), 10),
+      source: "router_devices"
+    };
   } catch (error) {
     return {
-      host: String(process.env.ROUTER_HOST || "").trim(),
-      port: Number.parseInt(String(process.env.ROUTER_PORT || "8728"), 10),
-      source: "render_environment_fallback",
-      settingsWarning: String(error?.message || "Database settings lookup failed")
+      host: "",
+      port: 8728,
+      source: "router_devices_unavailable",
+      settingsWarning: String(error?.message || "Router device lookup failed")
     };
   }
-  const host = String(saved.mikrotik_host ?? process.env.ROUTER_HOST ?? "").trim();
-  const port = Number.parseInt(String(saved.mikrotik_port ?? process.env.ROUTER_PORT ?? "8728"), 10);
-  if (!Object.prototype.hasOwnProperty.call(saved, "mikrotik_host") &&
-      !Object.prototype.hasOwnProperty.call(saved, "mikrotik_port")) {
-    source = "render_environment";
-  }
-  return { host, port, source };
 }
 
 function testTcp(host, port, timeoutMs = 2500) {

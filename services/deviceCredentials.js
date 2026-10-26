@@ -15,4 +15,19 @@ function encrypt(value) {
   const data = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
   return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), data.toString('base64')].join('.');
 }
-module.exports = { encrypt };
+function decrypt(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const parts = String(value).split('.');
+  if (parts.length !== 3) throw new Error('Stored device credential has an invalid format.');
+  const [ivText, tagText, encryptedText] = parts;
+  const iv = Buffer.from(ivText, 'base64');
+  const tag = Buffer.from(tagText, 'base64');
+  const encrypted = Buffer.from(encryptedText, 'base64');
+  if (iv.length !== 12 || tag.length !== 16 || encrypted.length === 0) {
+    throw new Error('Stored device credential has an invalid format.');
+  }
+  const decipher = crypto.createDecipheriv('aes-256-gcm', getKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
+module.exports = { encrypt, decrypt };

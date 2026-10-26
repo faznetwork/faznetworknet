@@ -1,5 +1,6 @@
 const RouterOS = require("node-routeros");
 const { RouterOSAPI } = RouterOS;
+const deviceCredentials = require("./deviceCredentials");
 
 // RouterOS can send "!empty" before its normal "!done" terminator when a
 // query matches no rows. node-routeros treats it as an unknown sentence and
@@ -38,6 +39,8 @@ class MikroTikService {
     // command/reply streams.
     this._connection = null;
     this._connectionKey = null;
+    this._connectionPromise = null;
+    this._connectionPromiseKey = null;
     this._operationQueue = Promise.resolve();
     this._configCache = null;
     this._configCacheUntil = 0;
@@ -51,20 +54,45 @@ class MikroTikService {
 
   async _getConfig(override) {
     const supplied=override&&typeof override==="object"?override:{};
-    let saved={};
     const hasOverride = Object.keys(supplied).length > 0;
     if (!hasOverride && this._configCache && Date.now() < this._configCacheUntil) {
-      saved = this._configCache;
-    } else {
-      try {
-        const db=require("../db");
-        const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
-        saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
-        if (!hasOverride) {
-          this._configCache = saved;
-          this._configCacheUntil = Date.now() + 5000;
-        }
-      } catch(error) { console.warn("[MikroTik Settings] PostgreSQL settings unavailable; using environment fallback:",error.message); }
+      return { ...this._configCache };
+    }
+
+    const database = require("../db");
+    let saved = {};
+    if (!hasOverride) {
+      // A router becomes operational only after an administrator tests and saves
+      // it in the UI. Imported records and legacy settings alone are not active.
+      const result = await database.query(
+        "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl " +
+        "FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 1"
+      );
+      const router = result.rows?.[0];
+      if (!router) {
+        throw new Error("MikroTik configuration error: No router has been manually added. Use Add Device to test and save the router first.");
+      }
+      const host = String(router.host || "").trim();
+      const port = Number.parseInt(String(router.api_port || DEFAULT_PORT), 10);
+      const user = String(router.username || "").trim();
+      const password = deviceCredentials.decrypt(router.password_encrypted);
+      if (!host) throw new Error("MikroTik configuration error: Router Host / IP is not configured in router_devices.");
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("MikroTik configuration error: router_devices API port is invalid.");
+      if (!user) throw new Error("MikroTik configuration error: router_devices API username is not configured.");
+      if (!password) throw new Error("MikroTik configuration error: router_devices API password is not configured.");
+      const config = { host, port, user, password };
+      await this._syncLegacyRouterSettings(database, config);
+      this._configCache = config;
+      this._configCacheUntil = Date.now() + 5000;
+      return { ...config };
+    }
+
+    try {
+      const result=await database.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
+      saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
+    } catch(error) {
+      if (!hasOverride) throw error;
+      console.warn("[MikroTik Settings] PostgreSQL settings unavailable for explicit connection override:",error.message);
     }
     const host=String(supplied.host??saved.mikrotik_host??process.env.ROUTER_HOST??"").trim();
     const port=Number.parseInt(String(supplied.port??saved.mikrotik_port??process.env.ROUTER_PORT??DEFAULT_PORT),10);
@@ -73,7 +101,25 @@ class MikroTikService {
     if(!host)throw new Error("MikroTik configuration error: Router Host / IP is not configured.");
     if(!Number.isInteger(port)||port<1||port>65535)throw new Error("MikroTik configuration error: API Port must be a valid TCP port.");
     if(!user)throw new Error("MikroTik configuration error: API Username is not configured.");
-    return {host,port,user,password};
+    const config={host,port,user,password};
+    if (!hasOverride) {
+      this._configCache = config;
+      this._configCacheUntil = Date.now() + 5000;
+    }
+    return config;
+  }
+  async _syncLegacyRouterSettings(database, config) {
+    await database.query(
+      "INSERT INTO app_settings(key,value) " +
+      "SELECT setting_key,setting_value FROM unnest($1::text[],$2::text[]) AS settings(setting_key,setting_value) " +
+      "ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",
+      [["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"],
+        [config.host,String(config.port),config.user,config.password]]
+    );
+  }
+  invalidateConfigCache() {
+    this._configCache = null;
+    this._configCacheUntil = 0;
   }
   _createConnection(config) {
     const connection = new RouterOSAPI({
@@ -211,34 +257,48 @@ class MikroTikService {
 
   async _getPersistentConnection(config) {
     const key = JSON.stringify({host:config.host,port:config.port,user:config.user,password:config.password});
-    if (this._connection && this._connectionKey !== key) {
-      this._resetPersistentConnection(this._connection, "router configuration changed");
+    if (this._connectionPromise) {
+      if (this._connectionPromiseKey === key) return this._connectionPromise;
+      await this._connectionPromise.catch(() => {});
+      return this._getPersistentConnection(config);
     }
-    if (this._connection) return this._connection;
+    if (this._connection && this._connectionKey === key && this._connection.connected) return this._connection;
+    if (this._connection) {
+      this._resetPersistentConnection(this._connection,
+        this._connectionKey !== key ? "router configuration changed" : "persistent connection is no longer connected");
+    }
 
-    const connection = this._createConnection(config);
-    this._connection = connection;
-    this._connectionKey = key;
+    const connectPromise = (async () => {
+      const connection = this._createConnection(config);
+      this._connection = connection;
+      this._connectionKey = key;
+      try {
+        // Calling connect() synchronously creates connector.socket and initially
+        // applies node-routeros' default 10s socket timeout. Clear that idle timer
+        // immediately; the Promise.race below still caps the connection handshake.
+        const connect = connection.connect();
+        this._disableSocketInactivityTimeout(connection, "initial connect");
+        await this._executeWithTimeout(connect, CONNECTION_TIMEOUT_MS, "MikroTik connection handshake");
+        this._disableSocketInactivityTimeout(connection, "after handshake");
+        this._startHeartbeat(connection);
+        console.log("[MikroTik Connection] persistent session established", {
+          host: config.host, port: config.port, keepalive: "30s API heartbeat"
+        });
+        return connection;
+      } catch (error) {
+        this._resetPersistentConnection(connection, "connect/handshake failed: " + (error?.message || error));
+        throw error;
+      }
+    })();
+    this._connectionPromise = connectPromise;
+    this._connectionPromiseKey = key;
     try {
-      // Calling connect() synchronously creates connector.socket and initially
-      // applies node-routeros' default 10s socket timeout. Clear that idle timer
-      // immediately; the Promise.race below still caps the connection handshake.
-      const connectPromise = connection.connect();
-      this._disableSocketInactivityTimeout(connection, "initial connect");
-      await this._executeWithTimeout(
-        connectPromise,
-        CONNECTION_TIMEOUT_MS,
-        "MikroTik connection handshake"
-      );
-      this._disableSocketInactivityTimeout(connection, "after handshake");
-      this._startHeartbeat(connection);
-      console.log("[MikroTik Connection] persistent session established", {
-        host: config.host, port: config.port, keepalive: "30s API heartbeat"
-      });
-      return connection;
-    } catch (error) {
-      this._resetPersistentConnection(connection, "connect/handshake failed: " + (error?.message || error));
-      throw error;
+      return await connectPromise;
+    } finally {
+      if (this._connectionPromise === connectPromise) {
+        this._connectionPromise = null;
+        this._connectionPromiseKey = null;
+      }
     }
   }
 
