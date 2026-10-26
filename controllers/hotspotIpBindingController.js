@@ -1,5 +1,6 @@
 "use strict";
 const db = require("../db");
+const net = require("net");
 const mikrotikService = require("../services/mikrotikService");
 
 function clean(value, max = 255) { return String(value == null ? "" : value).trim().slice(0, max); }
@@ -89,7 +90,7 @@ async function create(req, res) {
     await audit(req, "hotspot_ip_binding.created", active.rows[0], { binding_type: type, bandwidth_profile: bandwidthProfile, expiry_date: expiryDate });
     return res.status(201).json({ success: true, binding: active.rows[0] });
   } catch (error) {
-    if (inserted) await db.query("UPDATE hotspot_ip_bindings SET router_sync_error=$2,updated_at=NOW() WHERE id=$1", [inserted.id, clean(error.message, 500)]).catch(() => {});
+    if (inserted) { await mikrotikService.removeHotspotIpBinding(inserted.id).catch((cleanupError) => console.error("[Hotspot binding rollback] Router cleanup failed:", cleanupError.message)); await db.query("UPDATE hotspot_ip_bindings SET router_sync_error=$2,updated_at=NOW() WHERE id=$1", [inserted.id, clean(error.message, 500)]).catch(() => {}); }
     return responseError(res, error);
   }
 }
