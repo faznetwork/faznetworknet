@@ -257,7 +257,7 @@ async function claimVoucher(req,res){
             const saleType=claimed.subscriberType==="admin_voucher"?"manual":"scratch_card";
             const auditLabel=saleType==="manual"?"Admin manual voucher redemption":"Scratch-card redemption";
             const trxId=(saleType==="manual"?"ADM-MANUAL-":"SCRATCH-")+claimed.id+"-"+Date.now();
-            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot',$6,NOW(),$7) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,auditLabel+" for voucher "+claimed.id,saleType+":"+claimed.id]);
+            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot',$6,NOW(),$7) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,auditLabel+" for voucher "+claimed.id,saleType+":"+claimed.id,"hotspot_user"]);
             await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,$6::text) ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile,saleType]);
           }catch(auditError){console.error("[Hotspot voucher sales audit] Failed to record sale:",JSON.stringify({voucherId:claimed.id,subscriberType:claimed.subscriberType,error:auditError.message}));body.sale_audit_warning=true;}
         }
