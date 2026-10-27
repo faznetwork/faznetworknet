@@ -570,7 +570,7 @@ samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Bool
   if(!finalizedTx.rows?.length)throw new Error("RouterOS provisioning succeeded but the payment transaction could not be finalized.");
   claimedTransactionId=null;
   const autoAuthReady=Boolean(routerResult?.macAuthEnabled);
-  const message=autoAuthReady?"Hotspot user provisioned; stale active sessions and cookies cleared. MAC auto-auth is enabled and will reconnect on the device’s next traffic.":"Hotspot user provisioned and stale sessions/cookies cleared, but instant MAC auto-auth is not enabled on the applicable Hotspot server profile. Enable login-by=mac there or the client must complete portal login.";
+  const message=autoAuthReady?"Hotspot user provisioned. MAC auto-auth is enabled and will reconnect on the device’s next traffic.":"Hotspot user provisioned. Instant MAC auto-auth is not enabled on the applicable Hotspot server profile. Enable login-by=mac there or the client must complete portal login.";
   return res.json({success:true,status:finalizedTx.rows[0].status,trxId:tx.trx_id,mac,phone,profile:profile.name,amount,autoAuthReady,clearedActiveSessions:Number(routerResult?.clearedActiveSessions||0),clearedCookies:Number(routerResult?.clearedCookies||0),expires_at:expiresAt?new Date(expiresAt).toISOString():null,voucher:finalizedVoucher.rows[0],message});
  }catch(error){
   if(claimedTransactionId!==null&&!routerSucceeded){

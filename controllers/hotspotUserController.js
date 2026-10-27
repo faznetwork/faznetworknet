@@ -2,7 +2,6 @@
 
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
-const notificationDispatcher = require("../services/notificationDispatcher");
 const { deleteHotspotSubscriber } = require("../services/hotspotDeletionService");
 
 const clean = (value, max = 255) => String(value ?? "").trim().slice(0, max);
@@ -21,21 +20,12 @@ function validityMs(value, unit) {
   const raw = String(value ?? "").trim().toLowerCase();
   const match = raw.match(/^(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks|mo|month|months)?$/);
   const n = Number(match ? match[1] : raw);
-  const u = String(unit || (match && match[2]) || "days").toLowerCase();
+  const u = String(unit || (match && match[2]) || "").trim().toLowerCase();
   if (!Number.isFinite(n) || n <= 0) return 0;
+  if (["gb", "data", "quota"].includes(u)) return 0;
   const multiplier = u.startsWith("s") ? 1000 : u.startsWith("m") && !u.startsWith("mo") ? 60000 :
-    u.startsWith("h") ? 3600000 : u.startsWith("w") ? 604800000 : u.startsWith("mo") ? 2592000000 : 86400000;
+    u.startsWith("h") ? 3600000 : u.startsWith("w") ? 604800000 : u.startsWith("mo") ? 2592000000 : u.startsWith("d") ? 86400000 : 0;
   return n * multiplier;
-}
-function stampDhaka(date) {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
-    .formatToParts(date).reduce((out, part) => (out[part.type] = part.value, out), {});
-  return parts.year + "-" + parts.month + "-" + parts.day + " " + parts.hour + ":" + parts.minute + ":" + parts.second;
-}
-function readJson(value) {
-  if (value && typeof value === "object") return value;
-  try { const parsed = JSON.parse(value || "{}"); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; }
-  catch (_) { return {}; }
 }
 function error(res, status, message) { return res.status(status).json({ success: false, message, error: message }); }
 function rowLookup(rows, identifier) {
@@ -44,11 +34,7 @@ function rowLookup(rows, identifier) {
   return rows.find(row => (numeric && String(row.id) === key) || lower(row.username) === key || lower(row.mac_address) === key) || null;
 }
 
-/**
- * All user-management writes in this controller are PostgreSQL-only.
- * RouterOS calls are deliberately read-only: this rebuild must not mutate
- * /ip/hotspot/user, active sessions, cookies, hosts, or configuration.
- */
+/** Subscriber renewal is delegated to the RouterOS + PostgreSQL canonical controller. */
 async function list(req, res) {
   try {
     const [sessionsResult, ledgerResult] = await Promise.all([
@@ -123,8 +109,8 @@ async function list(req, res) {
     const filtered = users.filter(user => {
       if (filter === "online") return user.is_online && user.status !== "expired";
       if (filter === "expired") return user.status === "expired";
-      if (filter === "active") return !user.is_online && user.status !== "expired" &&
-        user.expires_at && new Date(user.expires_at).getTime() > now;
+      if (filter === "active") return !user.is_online && user.db_status === "active" &&
+        (!user.expires_at || new Date(user.expires_at).getTime() > now);
       if (filter === "offline") return !user.is_online;
       return true;
     });
@@ -187,56 +173,8 @@ async function updateProfile(req, res) {
   }
 }
 
-async function renew(req, res) {
-  const identifier = clean(req.params.id, 255);
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const requestedProfile = clean(body.profile_id, 100);
-  if (!identifier || !requestedProfile) return error(res, 400, "Subscriber and package profile are required.");
-  try {
-    const found = await db.query(
-      "SELECT * FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR LOWER(mac_address)=LOWER($2) ORDER BY CASE WHEN ($1::bigint IS NOT NULL AND id=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1",
-      [/^\d+$/.test(identifier) && Number.isSafeInteger(Number(identifier)) ? Number(identifier) : null, identifier]
-    );
-    const voucher = found.rows?.[0];
-    if (!voucher) return error(res, 404, "Subscriber was not found in PostgreSQL.");
-    const settings = await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
-    const metadata = readJson(settings.rows?.[0]?.value);
-    const match = Object.entries(metadata).find(([name, meta]) => {
-      const aliases = [name, meta?.id, meta?.profileId, meta?.profile_id, meta?.packageId, meta?.package_id, meta?.packageName, meta?.package_name, meta?.alias];
-      return aliases.some(alias => alias !== undefined && lower(alias) === lower(requestedProfile));
-    });
-    const profileName = match?.[0] || clean(voucher.profile, 100);
-    const profileMeta = match?.[1] || {};
-    if (!match && lower(profileName) !== lower(requestedProfile)) return error(res, 400, "Selected package could not be mapped to a saved Hotspot package.");
-    const duration = validityMs(profileMeta.validityValue ?? voucher.validity, profileMeta.validityUnit);
-    const quota = Number(profileMeta.limitBytesTotal || voucher.data_limit || 0);
-    if (!duration && !quota) return error(res, 400, "Selected package has no configured time validity or data quota.");
-    const now = new Date();
-    const previous = voucher.expires_at ? new Date(voucher.expires_at) : null;
-    const base = previous && Number.isFinite(previous.getTime()) && previous > now ? previous : now;
-    const expiry = duration ? new Date(base.getTime() + duration) : null;
-    const comment = expiry ? "Exp: " + stampDhaka(expiry) : "FAZ|DATA_ONLY";
-    const saved = await db.query(
-      "UPDATE hotspot_vouchers SET profile=$1,profile_id=$2,validity=$3,price=$4,expires_at=$5,status='active',comment=$6,renewal_stacked=$7,updated_at=NOW() WHERE id=$8 RETURNING id,username,customer_name,phone,mac_address,profile,profile_id,status,expires_at,comment",
-      [profileName, clean(profileMeta.id || profileMeta.profileId || profileMeta.profile_id || profileName, 100), profileMeta.validityValue ? String(profileMeta.validityValue) + " " + String(profileMeta.validityUnit || "days") : String(voucher.validity || ""), Number(profileMeta.price ?? voucher.price ?? 0), expiry, comment, Boolean(previous && previous > now), voucher.id]
-    );
-    if (!saved.rows?.length) return error(res, 503, "PostgreSQL did not confirm the renewal.");
-    if (body.send_notification === true && voucher.phone) {
-      try {
-        notificationDispatcher.dispatchNotification({
-          userType: "hotspot", event: "hotspot_renewal", to: voucher.phone, phone: voucher.phone,
-          username: voucher.username,
-          customer: { username: voucher.username, name: voucher.customer_name || voucher.username, phone: voucher.phone, profile: profileName },
-          variables: { package: profileMeta.packageName || profileMeta.package_name || profileName, profile: profileName, expiry_date: expiry ? stampDhaka(expiry) : "Data quota" },
-          channels: ["sms", "whatsapp"]
-        });
-      } catch (notifyError) { console.warn("[Hotspot Subscriber 360] Notification dispatch failed:", notifyError?.message || notifyError); }
-    }
-    return res.json({ success: true, new_expiry: expiry ? expiry.toISOString() : null, subscriber: saved.rows[0], message: "Renewal saved to PostgreSQL only; RouterOS was not changed." });
-  } catch (e) {
-    console.error("[Hotspot Subscriber 360] Renewal failed:", e?.message || e);
-    return error(res, 503, "Renewal failed. PostgreSQL did not confirm the update.");
-  }
+function renew(req, res) {
+  return require("./hotspotController").manualRenew(req, res);
 }
 
 // Canonical deletion: RouterOS purge + fresh verification precede a financial-safe soft delete.
@@ -267,9 +205,7 @@ async function updateFromBody(req, res) {
   return updateProfile({ params: { id }, body }, res);
 }
 async function renewFromBody(req, res) {
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const id = clean(body.voucher_id || body.username || body.mac_address || body.id);
-  return renew({ params: { id }, body }, res);
+  return require("./hotspotController").manualRenew(req, res);
 }
 async function archiveFromBody(req, res) {
   const body = req.body && typeof req.body === "object" ? req.body : {};

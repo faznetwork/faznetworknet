@@ -1,9 +1,11 @@
-const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
+const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,resolveHotspotPackage,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
 const notificationDispatcher=require("../services/notificationDispatcher");
+const hotspotRenewalOperations=require("../services/hotspotRenewalOperationService");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 const {deleteHotspotSubscriber}=require("../services/hotspotDeletionService");
 const {normalizeSalesCategory,transactionCategorySql}=require("../services/hotspotSalesCategory");
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
+function booleanValue(value){return value===true||value===1||["true","yes","1"].includes(String(value??"").trim().toLowerCase())}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function normalizeHotspotMac(value){const compact=String(value??"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
 function normalizeProfileIdentifier(value){return String(value??"").normalize("NFKC").trim().toLowerCase().replace(/\b(hours?|hrs?)\b/g,"h").replace(/\b(minutes?|mins?)\b/g,"m").replace(/\b(seconds?|secs?)\b/g,"s").replace(/\b(days?)\b/g,"d").replace(/\b(weeks?)\b/g,"w").replace(/\b(months?)\b/g,"mo").replace(/[^a-z0-9]/g,"");}
@@ -40,6 +42,19 @@ async function ensureCalendarProfile(profile, routerProfile, profileValidity) {
 }
 async function writeProfileMetadata(v){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_profile_metadata',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(v)]);}
 async function servers(req,res){try{const data=await mikrotikService.getHotspotServers();return res.json({success:true,servers:data.map(s=>({name:s.name,interface:s.interface,profile:s.profile}))});}catch(e){return errorResponse(res,e);}}
+async function listServerProfiles(req,res){try{const profiles=await mikrotikService.getHotspotServerProfiles();return res.set("Cache-Control","no-store").json({success:true,profiles:profiles.filter(profile=>String(profile.name||"").trim().toLowerCase()!=="default").map(profile=>({...profile,loginBy:String(profile.loginBy||"").split(",").map(value=>value.trim()).filter(Boolean)}))});}catch(e){return errorResponse(res,e);}}
+async function listMikrotikFiles(req,res){try{const directories=await mikrotikService.getMikrotikDirectories();return res.set("Cache-Control","no-store").json({success:true,directories});}catch(e){return errorResponse(res,e);}}
+async function listServerProfileOptions(req,res){try{const options=await mikrotikService.getHotspotServerProfileOptions();return res.set("Cache-Control","no-store").json({success:true,...options});}catch(e){return errorResponse(res,e);}}
+function serverProfilePayload(body={}){
+ const textFields={hotspotAddress:64,dnsName:255,htmlDirectory:255,htmlDirectoryOverride:255,httpProxy:64,smtpServer:64,macAuthPassword:255,httpCookieLifetime:64,sslCertificate:255,trialUptimeLimit:64,trialUptimeReset:64,trialUserProfile:100,radiusDefaultDomain:255,radiusLocationId:255,radiusLocationName:255,radiusMacFormat:64,radiusInterimUpdate:64,nasPortType:64,rateLimit:128};
+ const payload={};
+ for(const [key,max] of Object.entries(textFields)){if(!Object.prototype.hasOwnProperty.call(body,key))continue;const value=key==="macAuthPassword"?String(body[key]??"").slice(0,max):clean(body[key],max);if(value!==""&&!(key==="sslCertificate"&&value.toLowerCase()==="none"))payload[key]=value;}
+ if(Array.isArray(body.loginBy))payload.loginBy=body.loginBy;
+ for(const key of ["splitUserDomain","useRadius","radiusAccounting"])if(Object.prototype.hasOwnProperty.call(body,key))payload[key]=booleanValue(body[key]);
+ return payload;
+}
+async function createServerProfile(req,res){try{const body=req.body&&typeof req.body==="object"?req.body:{},name=clean(body.name,100);if(!name||name.toLowerCase()==="default")return res.status(400).json({success:false,message:"Choose a custom name; the built-in default profile cannot be created."});const profile=await mikrotikService.createHotspotServerProfile({name,...serverProfilePayload(body)});return res.status(201).json({success:true,message:"Hotspot server profile created on MikroTik.",profile});}catch(e){return errorResponse(res,e);}}
+async function updateServerProfile(req,res){try{const id=clean(req.params?.id,100),body=req.body&&typeof req.body==="object"?req.body:{};if(!id)return res.status(400).json({success:false,message:"Hotspot server profile ID is required."});const profile=await mikrotikService.updateHotspotServerProfile(id,serverProfilePayload(body));return res.json({success:true,message:"Hotspot server profile updated on MikroTik.",profile});}catch(e){return errorResponse(res,e);}}
 async function profiles(req,res){try{const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);if(!Array.isArray(routerProfiles))throw new Error("MikroTik returned an invalid Hotspot profile list.");return res.set("Cache-Control","no-store").json({success:true,profiles:routerProfiles.filter(p=>p.name&&String(p.name).toLowerCase()!=="default").map(p=>{const m=meta[p.name]||{};let v;try{v=m.validityValue!==undefined&&m.validityUnit?normalizeProfileValidity(m.validityValue,m.validityUnit):parseStoredValidity(p);}catch(_){v=parseStoredValidity(p);}const quota=Number(m.limitBytesTotal||m.limit_bytes_total||v.limitBytesTotal||0),dataOnly=!v.validity&&quota>0;return {...p,profile_id:String(m.id||m.profileId||m.profile_id||m.packageId||m.package_id||m.packageName||m.package_name||m.alias||p.name),price:Number(m.price||0),validityValue:dataOnly?0:v.value,validityUnit:dataOnly?"gb":v.unit,validityLabel:dataOnly?(v.validityLabel||"Data quota"):m.validityLabel||v.validityLabel,limitBytesTotal:quota};})});}catch(e){return errorResponse(res,e);}}
 function previewProfileScript(req,res){
  try{
@@ -220,7 +235,7 @@ async function pushToMikrotik(req,res) {
  } catch(error) { return errorResponse(res,error); }
 }
 
-async function list(req,res){try{const filter=normalizeFilter(req.query.filter);const c=hotspotListCache.users&&hotspotListCache.expiresAt>Date.now()?hotspotListCache:await refreshHotspotListCache();if(c===hotspotListCache&&c.expiresAt>Date.now())refreshHotspotListCache().catch(e=>console.warn("[Hotspot API] Background refresh failed:",e.message));const users=(c.users||[]).filter(user=>{if(filter==="online")return user.is_online;if(filter==="expired")return user.status==="expired";if(filter==="active")return !user.is_online&&user.status!=="expired"&&user.expires_at&&new Date(user.expires_at).getTime()>Date.now();if(filter==="offline")return !user.is_online;return true;});return res.json({success:true,filter,count:users.length,users,activeUsers:c.activeUsers,cached:Boolean(c.expiresAt>Date.now())});}catch(e){return errorResponse(res,e);}}
+async function list(req,res){try{const filter=normalizeFilter(req.query.filter);const c=hotspotListCache.users&&hotspotListCache.expiresAt>Date.now()?hotspotListCache:await refreshHotspotListCache();if(c===hotspotListCache&&c.expiresAt>Date.now())refreshHotspotListCache().catch(e=>console.warn("[Hotspot API] Background refresh failed:",e.message));const users=(c.users||[]).filter(user=>{if(filter==="online")return user.is_online;if(filter==="expired")return user.status==="expired";if(filter==="active")return !user.is_online&&user.status==="active"&&(!user.expires_at||new Date(user.expires_at).getTime()>Date.now());if(filter==="offline")return !user.is_online;return true;});return res.json({success:true,filter,count:users.length,users,activeUsers:c.activeUsers,cached:Boolean(c.expiresAt>Date.now())});}catch(e){return errorResponse(res,e);}}
 async function active(req,res){
  try{
   const sessions=await mikrotikService.getActiveHotspotSessions();
@@ -752,7 +767,7 @@ async function voucherRecords(req,res){
   else if(filter==="unused")rows=all.filter(row=>row.db_status==="unused");
   else if(filter==="expired")rows=all.filter(row=>row.status==="expired");
   else if(filter==="online")rows=all.filter(row=>row.is_online);
-  else if(filter==="active")rows=all.filter(row=>!row.is_online&&row.status!=="expired"&&row.expires_at&&new Date(row.expires_at).getTime()>now);
+  else if(filter==="active")rows=all.filter(row=>!row.is_online&&row.db_status==="active"&&(!row.expires_at||new Date(row.expires_at).getTime()>now));
   else if(filter==="offline")rows=all.filter(row=>!row.is_online);
   return res.json({success:true,filter,count:rows.length,vouchers:rows,users:rows,activeUsers:sessions.map(row=>({id:row.id||row.sessionId||"",user:row.username,username:row.username,address:row.address||row.ip||"",macAddress:row.macAddress||"",uptime:row.uptime||"",bytesIn:Number(row.bytesIn||0),bytesOut:Number(row.bytesOut||0),profile:row.profile||""}))});
  }catch(e){return errorResponse(res,e);}
@@ -797,36 +812,54 @@ async function deleteHotspotUser({ username: usernameValue, database = db, route
 async function remove(req,res){try{const result=await deleteHotspotUser({username:req.body?.username});hotspotListCache.expiresAt=0;return res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 
 async function manualRenew(req,res){
- const body=req.body&&typeof req.body==="object"?req.body:{},requestedId=clean(body.id||req.params?.id,100),requestedMac=normalizeHotspotMac(body.mac||body.mac_address||""),username=clean(body.username||requestedMac||requestedId,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.send_notification!==false&&body.notify!==false;
+ const body=req.body&&typeof req.body==="object"?req.body:{},requestedId=clean(body.voucherId??body.voucher_id??body.id??req.params?.id,100),requestedMac=normalizeHotspotMac(body.mac||body.mac_address||""),username=clean(body.username||requestedMac||requestedId,100),requestedProfile=clean(body.profile_id||body.profileId||body.profile||"",100),notify=body.send_notification!==false&&body.notify!==false;
  if(!username||!requestedProfile)return res.status(400).json({success:false,message:"Username and package profile are required."});
+ let operationId="";
  try{
-  const renewed=await db.withTransaction(async client=>{
+  const prepared=await db.withTransaction(async client=>{
    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-renew:"+username.toLowerCase()]);
-   const found=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND id::text=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY id DESC LIMIT 1 FOR UPDATE",[requestedId,username,requestedMac]),voucher=found.rows?.[0];
+   const found=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND id::text=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY CASE WHEN ($1<>'' AND id::text=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1 FOR UPDATE",[requestedId,username,requestedMac]),voucher=found.rows?.[0];
    if(!voucher)throw hotspotError("HOTSPOT_VOUCHER_NOT_FOUND",404,"The Hotspot voucher was not found in PostgreSQL.");
+   await hotspotRenewalOperations.cleanupStaleRenewals(client,60);
+   const pending=await client.query("SELECT id FROM hotspot_renewal_operations WHERE voucher_id=$1 AND status='pending' LIMIT 1",[voucher.id]);
+   if(pending.rows?.length)throw hotspotError("HOTSPOT_RENEWAL_PENDING",409,"A previous Hotspot renewal is still being synchronized. Wait for reconciliation before retrying.");
    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
    if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
    if(candidates.length!==1)throw hotspotError("HOTSPOT_PROFILE_INVALID",400,"Selected package could not be mapped to exactly one RouterOS profile.");
-   const selected=candidates[0],profile=String(selected.name||"").trim(),pm=meta[profile]||{},parsed=pm.validityValue?normalizeProfileValidity(pm.validityValue,pm.validityUnit):parseStoredValidity(selected),validity=String(parsed.validity||"").trim(),quota=Number(pm.limitBytesTotal||parsed.limitBytesTotal||0),duration=validityMs(validity);
-   if(!duration&&!quota)throw hotspotError("HOTSPOT_PROFILE_DURATION_INVALID",400,"Selected package has no supported time validity or data quota.");
-   const now=new Date(),oldExpiry=voucher.expires_at?new Date(voucher.expires_at):null,base=oldExpiry&&Number.isFinite(oldExpiry.getTime())&&oldExpiry>now?oldExpiry:now,expiry=duration?new Date(base.getTime()+duration):null;
+   const selected=candidates[0],profile=String(selected.name||"").trim(),pm=meta[profile]||{},packageConfig=resolveHotspotPackage(selected,pm),validity=packageConfig.validity,quota=packageConfig.limitBytesTotal,duration=packageConfig.durationMs;
+   if(packageConfig.type==="INVALID")throw hotspotError("HOTSPOT_PROFILE_DURATION_INVALID",400,"Selected package has no supported time validity or data quota.");
    const stamp=d=>{const p=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(d).map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day+" "+p.hour+":"+p.minute+":"+p.second;};
-   const comment=expiry?"Exp: "+stamp(expiry):"FAZ|DATA_ONLY",phone=normalizeHotspotPhone(voucher.phone||voucher.password||""),mac=normalizeHotspotMac(voucher.mac_address)||normalizeHotspotMac(voucher.username)||"";if(!mac)throw hotspotError("HOTSPOT_MAC_REQUIRED",409,"MAC-based Hotspot renewal requires a bound device MAC. Bind the device before renewing.");
-   if(!/^01\d{9}$/.test(phone))throw hotspotError("HOTSPOT_PHONE_INVALID",400,"Voucher has no valid customer phone number.");
-   await mikrotikService.rechargeHotspotUser({username:mac,password:mac,profile,validity,limitBytesTotal:quota,expiryDate:expiry?stamp(expiry).slice(0,10):"",comment,macAddress:mac,previousUsername:voucher.username!==mac?voucher.username:"",server:voucher.server||"all"});
-   const saved=await client.query("UPDATE hotspot_vouchers SET username=$10,profile=$2,validity=$3,time_limit=$3,data_limit=$11,price=$4,status='active',password=$10,phone=$5,mac_address=$10,customer_name=COALESCE(NULLIF($6,''),customer_name),comment=$7,expires_at=$8,renewal_stacked=$9,first_login_at=COALESCE(first_login_at,NOW()),pre_expiry_notified=false,updated_at=NOW() WHERE id=$1 RETURNING id,username,profile,validity,time_limit,data_limit,price,status,phone,customer_name,mac_address,expires_at,comment,transaction_id",[voucher.id,profile,validity,Number(pm.price??voucher.price??0),phone,clean(body.customer_name||voucher.customer_name,160),comment,expiry,Boolean(oldExpiry&&oldExpiry>now),mac,quota?String(quota):null]);
-   if(!saved.rows?.length)throw new Error("RouterOS was renewed but PostgreSQL could not finalize the voucher.");
-   return {voucher:saved.rows[0],expiryLabel:expiry?stamp(expiry):null,packageName:pm.packageName||pm.package_name||profile,phone};
+   const now=new Date(),currentExpiry=voucher.expires_at?new Date(voucher.expires_at):null,renewalStacked=Boolean(duration&&currentExpiry&&!Number.isNaN(currentExpiry.getTime())&&currentExpiry.getTime()>now.getTime()),expiry=duration?new Date((renewalStacked?currentExpiry:now).getTime()+duration):null;
+   const phoneCandidate=normalizeHotspotPhone(voucher.phone||voucher.password||""),phone=/^01\d{9}$/.test(phoneCandidate)?phoneCandidate:"",mac=normalizeHotspotMac(voucher.mac_address)||normalizeHotspotMac(voucher.username)||"";if(!mac)throw hotspotError("HOTSPOT_MAC_REQUIRED",409,"MAC-based Hotspot renewal requires a bound device MAC. Bind the device before renewing.");
+   let stackedQuota=Math.max(0,Math.floor(Number(quota)||0));
+   if(stackedQuota>0){
+    const snapshot=await mikrotikService.getHotspotExpirationSnapshot(),deviceNames=new Set([mac,voucher.username].map(value=>String(value||"").trim().toUpperCase()).filter(Boolean)),routerUser=(snapshot.users||[]).find(item=>deviceNames.has(String(item.username||"").trim().toUpperCase()));
+    if(routerUser){const currentLimit=Math.max(0,Math.floor(Number(routerUser.limitBytesTotal)||0)),usedBytes=Math.max(0,Math.floor(Number(routerUser.bytesIn)||0))+Math.max(0,Math.floor(Number(routerUser.bytesOut)||0)),remainingBytes=currentLimit>0?Math.max(0,currentLimit-usedBytes):0;stackedQuota+=remainingBytes;}
+   }
+   const comment=expiry?"Exp: "+stamp(expiry):packageConfig.comment;
+   operationId=crypto.randomUUID();
+   const payload={voucherId:voucher.id,mac,profile,validity,limitBytesTotal:stackedQuota,expiryDate:expiry?stamp(expiry).slice(0,10):"",comment,previousUsername:voucher.username!==mac?voucher.username:"",server:voucher.server||"all",phone,customerName:clean(body.customer_name||voucher.customer_name,160),price:Number(pm.price??voucher.price??0),expiresAt:expiry?expiry.toISOString():null,renewalStacked,packageName:pm.packageName||pm.package_name||profile,expiryLabel:expiry?stamp(expiry):null};
+   await client.query("INSERT INTO hotspot_renewal_operations(id,voucher_id,payload,status,next_attempt_at) VALUES($1::uuid,$2::bigint,$3::jsonb,'pending',NOW()+INTERVAL '5 minutes')",[operationId,voucher.id,JSON.stringify(payload)]);
+   return payload;
+  });
+  await hotspotRenewalOperations.applyRouterRenewal(prepared);
+  const routerMarked=await db.query("UPDATE hotspot_renewal_operations SET router_applied=true,attempts=attempts+1,last_error=NULL,next_attempt_at=NOW(),updated_at=NOW() WHERE id=$1::uuid AND status='pending' RETURNING id",[operationId]);
+  if(!routerMarked.rows?.length)throw new Error("RouterOS renewal was applied but its PostgreSQL operation record could not be marked.");
+  const renewed=await db.withTransaction(async client=>{
+   const locked=await client.query("SELECT id FROM hotspot_vouchers WHERE id=$1::bigint FOR UPDATE",[String(prepared.voucherId)]);
+   if(locked.rowCount!==1)throw new Error("Hotspot voucher ID "+prepared.voucherId+" no longer exists during renewal finalization.");
+   const saved=await hotspotRenewalOperations.finalizeRenewal(client,operationId,prepared);
+   return {voucher:saved,expiryLabel:prepared.expiryLabel,packageName:prepared.packageName,phone:prepared.phone};
   });
   hotspotListCache.expiresAt=0;
-  if(notify&&renewed.phone&&renewed.phone!=="Unlinked"){
+  if(notify&&/^01\d{9}$/.test(String(renewed.phone||""))){
    const customerLabel=String(renewed.voucher.customer_name||"গ্রাহক").trim()||"গ্রাহক";
    const newExpiryStr=renewed.expiryLabel||"Data quota";
    notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_renewal",to:renewed.phone,recipient:renewed.phone,phone:renewed.phone,username:renewed.voucher.username,customer:{username:renewed.voucher.username,name:customerLabel,phone:renewed.phone,profile:renewed.voucher.profile},customerName:customerLabel,message:`আসসালামু আলাইকুম ${customerLabel}, আপনার হটস্পট প্যাকেজটি সফলভাবে রিনিউ করা হয়েছে।\nপ্যাকেজ: ${renewed.packageName}\nনতুন মেয়াদ: ${newExpiryStr} পর্যন্ত।\nধন্যবাদ, FAZ NETWORK।`,useMessageDirectly:true,variables:{name:customerLabel,username:renewed.voucher.username,package:renewed.packageName,profile:renewed.voucher.profile,expiry_date:newExpiryStr},channels:["sms","whatsapp"]});
   }
   return res.json({success:true,message:"Hotspot package renewed; RouterOS credentials remain MAC-based.",voucher:renewed.voucher,expiry:renewed.expiryLabel,new_expiry:renewed.expiryLabel});
- }catch(e){return errorResponse(res,e);}
+ }catch(e){if(operationId)await hotspotRenewalOperations.failRenewal(db,operationId,e).catch(()=>{});return errorResponse(res,e);}
 }
 
-module.exports={page,servers,profiles,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,voucherBatches,voucherBatch,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};
+module.exports={page,servers,profiles,listServerProfiles,listMikrotikFiles,listServerProfileOptions,createServerProfile,updateServerProfile,previewProfileScript,createProfile,updateProfile,deleteProfile,syncProfiles,list,active,disconnectActive,generate,voucherBatches,voucherBatch,createUser,manualRenew,dashboardMetrics,voucherStats,voucherRecords,voucherSales,kick,remove,updateUser,deleteHotspotUser,importFromMikrotik,pushToMikrotik,invalidateListCache:()=>{hotspotListCache.expiresAt=0;},refreshHotspotListCache};

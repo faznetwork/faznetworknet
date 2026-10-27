@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="/css/hotspot-server-profiles.css?v=1">
     <style>
         :root {
             --primary-color: #0a3d2e;
@@ -1920,6 +1921,7 @@
                     <li><a href="/admin/hotspot/users/all"><span data-key="hotspot_all_users">All Users</span></a></li>
                     <li><a href="/admin/hotspot/users/active"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="/admin/hotspot/profiles"><span data-key="hotspot_profile">Profile</span></a></li>
+                    <li><a href="/admin/hotspot/server-profiles"><span>Server Profile</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/generate"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/manage"><span>Voucher &amp; Recharge Ledger</span></a></li>
                     <li><a href="/admin/hotspot/vouchers/cleanup"><span>Expired &amp; Cleanup</span></a></li>
@@ -2786,6 +2788,11 @@
             if (typeof window.startNocPolling === 'function') window.startNocPolling();
             return false;
         };
+        window.loadHotspotServerProfiles = function() {
+            if (typeof window.renderHotspotServerProfiles === 'function') return window.renderHotspotServerProfiles();
+            console.error('[Hotspot Server Profiles] UI module did not load.');
+            return false;
+        };
 
         // Bind navigation to the current All Hotspot Users renderer; do not override it with the legacy table loader.
         window.loadHotspotSection = loadHotspotSection;
@@ -2984,6 +2991,7 @@
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'all\',\'all_user\')">▤ All Hotspot Users</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotSection(\'active\',\'active_user\')">◉ Active Sessions</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotProfiles(\'hotspot_profile\')">⚙ Profiles &amp; Packages</button>'+
+              '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotServerProfiles()">☷ Server Profile</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadVoucherGeneratorSection()">＋ Generate / Print</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherRecords(\'all\',\'Voucher & Recharge Ledger\')">▤ Voucher &amp; Recharge Ledger</button>'+
               '<button type="button" class="hotspot-subnav-link" onclick="window.loadHotspotVoucherSales()">৳ Sales History</button>'+
@@ -8871,7 +8879,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 paymentFilters: ['pending', 'all', 'requests', 'bkash', 'nagad', 'rocket'],
                 paymentTitles: ['pending_invoice', 'all_payments', 'payment_request', 'bkash_payments', 'nagad_payments', 'rocket_payments', 'PPPoE Payments', 'Hotspot Payments'],
                 paymentServiceTypes: ['pppoe', 'hotspot'],
-                hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'voucher-generator', 'vouchers', 'sales'],
+                hotspotSections: ['dashboard', 'users', 'add-user', 'profiles', 'server-profiles', 'voucher-generator', 'vouchers', 'sales'],
                 hotspotFilters: ['all', 'active', 'offline'],
                 hotspotTitles: ['all_user', 'active_user', 'offline_user'],
                 voucherFilters: ['all', 'cleanup'],
@@ -8977,6 +8985,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hotspot/users/active': { view: 'hotspot', section: 'users', filter: 'active', title: 'active_user' },
                     '/admin/hotspot/users/offline': { view: 'hotspot', section: 'users', filter: 'offline', title: 'offline_user' },
                     '/admin/hotspot/profiles': { view: 'hotspot', section: 'profiles' },
+                    '/admin/hotspot/server-profiles': { view: 'hotspot', section: 'server-profiles' },
                     '/admin/hotspot/vouchers/generate': { view: 'hotspot', section: 'voucher-generator' },
                     '/admin/hotspot/vouchers/manage': { view: 'hotspot', section: 'vouchers', filter: 'all' },
                     '/admin/hotspot/vouchers/cleanup': { view: 'hotspot', section: 'vouchers', filter: 'cleanup' },
@@ -9073,6 +9082,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     if (normalized.section === 'add-user') return '/admin/hotspot/add-user';
                     if (normalized.section === 'users') return '/admin/hotspot/users/' + (normalized.filter || 'all');
                     if (normalized.section === 'profiles') return '/admin/hotspot/profiles';
+                    if (normalized.section === 'server-profiles') return '/admin/hotspot/server-profiles';
                     if (normalized.section === 'voucher-generator') return '/admin/hotspot/vouchers/generate';
                     if (normalized.section === 'vouchers') return '/admin/hotspot/vouchers/' + (normalized.filter === 'cleanup' ? 'cleanup' : 'manage');
                     if (normalized.section === 'sales') return '/admin/hotspot/sales';
@@ -9155,6 +9165,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         if (r.section === 'users') return callIfAvailable('loadHotspotSection', [r.filter, r.title]);
                         if (r.section === 'add-user') return callIfAvailable('loadAddHotspotUserView');
                         if (r.section === 'profiles') return callIfAvailable('loadHotspotProfiles', ['hotspot_profile']);
+                        if (r.section === 'server-profiles') return callIfAvailable('loadHotspotServerProfiles');
                         if (r.section === 'voucher-generator') return callIfAvailable('loadVoucherGeneratorSection');
                         if (r.section === 'vouchers') return callIfAvailable('loadHotspotVoucherRecords', [r.filter, r.filter === 'cleanup' ? 'Expired & Cleanup' : 'Voucher Management']);
                         if (r.section === 'sales') return callIfAvailable('loadHotspotVoucherSales');
@@ -9276,6 +9287,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     }
                     case 'loadAddHotspotUserView': return { view: 'hotspot', section: 'add-user' };
                     case 'loadHotspotProfiles': return { view: 'hotspot', section: 'profiles' };
+                    case 'loadHotspotServerProfiles': return { view: 'hotspot', section: 'server-profiles' };
                     case 'loadVoucherGeneratorSection': return { view: 'hotspot', section: 'voucher-generator' };
                     case 'loadHotspotVoucherRecords': {
                         const filter = has(allowed.voucherFilters, args[0]) ? args[0] : 'all';
@@ -9330,7 +9342,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             [
                 'switchView', 'showAddCustomerForm', 'loadCustomerSection', 'loadPaymentsSection',
                 'loadHotspotDashboard', 'loadHotspotSection', 'loadAddHotspotUserView',
-                'loadHotspotProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
+                'loadHotspotProfiles', 'loadHotspotServerProfiles', 'loadVoucherGeneratorSection', 'loadHotspotVoucherRecords',
                 'loadHotspotVoucherSales', 'loadDevices', 'loadPlanPackages', 'loadIpPools',
                 'loadOltManagement', 'loadStaffManagement', 'loadAuditLogs',
                 'loadGoogleMapTracking', 'loadSupportTickets', 'loadHRModule', 'loadNetworkDiagram', 'loadNetworkMonitor', 'loadAccountDashboard', 'loadVpnModule', 'loadPortForwarding'
@@ -9680,6 +9692,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/remaining-time.js?v=remaining-time-20261025"></script>
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
+<script src="/js/hotspot-server-profiles.js?v=1" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
 </body>
 </html>

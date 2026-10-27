@@ -53,6 +53,7 @@ function parseValidityMs(value) {
 function routerUserExpired(user, schedulerNames) {
   const comment = String(user?.comment || "");
   const managed = /FAZ\|PROFILE=/i.test(comment);
+  const dataOnly = /^FAZ\|DATA_ONLY$/i.test(comment.trim());
   if (/FAZ\|EXPIRED(?:\||$)/i.test(comment)) return true;
   const expValue = comment.match(/(?:^|\|)EXP(?::|=)\s*([^|]+)/i)?.[1]?.trim();
   if (expValue && !["PENDING","0"].includes(expValue.toUpperCase())) {
@@ -65,7 +66,7 @@ function routerUserExpired(user, schedulerNames) {
     // RouterOS schedulers are not authoritative; expiry is reconciled centrally.
     if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
-  if (!managed) return false;
+  if (!managed && !dataOnly) return false;
 
   const byteLimit = Math.max(0, Number(user.limitBytesTotal) || 0);
   const usedBytes = Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0);
@@ -239,9 +240,12 @@ function createHotspotExpirationCleanup(deps = {}) {
         const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
         if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
 
+        const dataOnlyQuotaExhausted = Boolean(user && /^FAZ\|DATA_ONLY$/i.test(String(user.comment || "").trim()) &&
+          Number(user.limitBytesTotal) > 0 && Number(user.bytesIn || 0) + Number(user.bytesOut || 0) >= Number(user.limitBytesTotal));
+
         await database.query(
-          "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expires_at=COALESCE(expires_at,$2),expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id]
+          "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expires_at=CASE WHEN $4::boolean THEN expires_at ELSE COALESCE(expires_at,$2) END,expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
+          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id, dataOnlyQuotaExhausted]
         );
         expired++;
         const contact=voucher;

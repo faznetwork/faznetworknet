@@ -306,6 +306,25 @@ CREATE TABLE IF NOT EXISTS hotspot_voucher_payments (
   amount NUMERIC(12,2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS hotspot_renewal_operations (
+  id UUID PRIMARY KEY,
+  voucher_id BIGINT NOT NULL REFERENCES hotspot_vouchers(id) ON DELETE RESTRICT,
+  payload JSONB NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed')),
+  router_applied BOOLEAN NOT NULL DEFAULT FALSE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+ALTER TABLE hotspot_renewal_operations DROP CONSTRAINT IF EXISTS hotspot_renewal_operations_status_check;
+ALTER TABLE hotspot_renewal_operations ADD CONSTRAINT hotspot_renewal_operations_status_check CHECK (status IN ('pending','completed','failed'));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hotspot_renewal_pending_voucher
+  ON hotspot_renewal_operations(voucher_id) WHERE status='pending';
+CREATE INDEX IF NOT EXISTS idx_hotspot_renewal_pending
+  ON hotspot_renewal_operations(created_at,id) WHERE status='pending';
 CREATE INDEX IF NOT EXISTS idx_hotspot_voucher_payments_voucher ON hotspot_voucher_payments(voucher_id, created_at DESC);
 -- Backfill historical payment-to-voucher associations using the stable phone key.
 INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,created_at)

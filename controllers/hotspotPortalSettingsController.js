@@ -4,11 +4,11 @@
  const r=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
  let meta={};
  try{const parsed=JSON.parse(r.rows[0]?.value||"{}");if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed))meta=parsed;}catch(error){console.error("[Hotspot Portal Settings] Invalid hotspot profile metadata JSON:",error.message||error);throw new Error("Hotspot profile metadata is invalid.");}
- return [...new Set(names.map(x=>txt(x,128)).filter(Boolean))].map(name=>{
+  return [...new Set(names.map(x=>txt(x,128)).filter(Boolean))].map(name=>{
   const m=meta[name];if(!m||typeof m!=="object")return null;
   const price=Number(m.price),validity=txt(m.validityLabel||m.validity_label||m.validity||"",80);
   if(!Number.isFinite(price)||price<=0)return null;
-  return {profileId:name,profile:name,name,price,validity:validity||"Internet access"};
+  return {profileId:name,profile:name,name,price,validity:validity||"Internet access",limitBytesTotal:Math.max(0,Number(m.limitBytesTotal||m.limit_bytes_total||0))};
  }).filter(Boolean);
 }
 async function publicPortalPayload(){

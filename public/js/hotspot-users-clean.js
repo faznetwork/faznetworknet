@@ -259,24 +259,28 @@
   function openRenew() {
     if (!selected) return;
     const select = $("#freshRenewProfile");
-    select.innerHTML = '<option value="">Choose a package…</option>' + profiles.map(profile => '<option value="'+esc(profile.profile_id||profile.name)+'" data-name="'+esc(profile.name)+'" data-price="'+esc(profile.price||0)+'" data-validity="'+esc(profile.validityValue||0)+'" data-unit="'+esc(profile.validityUnit||"")+'">'+esc(profile.name)+' · ৳'+Number(profile.price||0).toFixed(2)+'</option>').join("");
+    select.innerHTML = '<option value="">Choose a package…</option>' + profiles.map(profile => '<option value="'+esc(profile.profile_id||profile.name)+'" data-name="'+esc(profile.name)+'" data-price="'+esc(profile.price||0)+'" data-validity-value="'+esc(profile.validityValue??0)+'" data-unit="'+esc(profile.validityUnit||"")+'" data-limit-bytes-total="'+esc(profile.limitBytesTotal||profile.limit_bytes_total||0)+'" data-data-only="'+String(profile.dataOnly===true||profile.data_only===true)+'">'+esc(profile.name)+' · ৳'+Number(profile.price||0).toFixed(2)+'</option>').join("");
     select.value = selected.profile_id || "";
     $("#freshRenewNotify").checked = true; $("#freshRenewResult").textContent = "";
     updateRenewPreview(); modalShow("freshRenewModal");
   }
   function unitMs(value, unit) {
     const n = Number(value); if (!Number.isFinite(n) || n <= 0) return 0;
-    unit = String(unit || "").toLowerCase();
+    unit = String(unit || "").trim().toLowerCase();
     if (["gb", "data", "quota"].includes(unit)) return 0;
-    return n * (unit.startsWith("s") ? 1000 : unit.startsWith("m") && !unit.startsWith("mo") ? 60000 : unit.startsWith("h") ? 3600000 : unit.startsWith("w") ? 604800000 : unit.startsWith("mo") ? 2592000000 : 86400000);
+    const factors = { seconds:1000, second:1000, s:1000, minutes:60000, minute:60000, mins:60000, min:60000, m:60000, hours:3600000, hour:3600000, hrs:3600000, hr:3600000, h:3600000, days:86400000, day:86400000, d:86400000, weeks:604800000, week:604800000, w:604800000, months:2592000000, month:2592000000, mo:2592000000 };
+    const factor = factors[unit];
+    return factor ? n * factor : 0;
   }
   function updateRenewPreview() {
     const option = $("#freshRenewProfile")?.selectedOptions?.[0];
     $("#freshRenewPrice").textContent = option?.value ? "৳"+Number(option.dataset.price||0).toFixed(2) : "৳0.00";
-    const duration = option?.value ? unitMs(option.dataset.validity,option.dataset.unit) : 0;
-    const old = selected?.expires_at ? new Date(selected.expires_at) : null, now = new Date();
-    const base = old && Number.isFinite(old.getTime()) && old > now ? old : now;
-    $("#freshRenewExpiry").textContent = option?.value ? (duration ? expiryLabel(new Date(base.getTime()+duration)) : "No Expiry Limit (Data Quota)") : "Choose package";
+    const unit = String(option?.dataset.unit||"").trim().toLowerCase();
+    const quota = Number(option?.dataset.limitBytesTotal||0);
+    const dataOnly = Boolean(option?.value && (option.dataset.dataOnly==="true" || ["gb","data","quota"].includes(unit) || (!unit && quota>0)));
+    const duration = option?.value && !dataOnly ? unitMs(option.dataset.validityValue,unit) : 0;
+    const now = new Date();
+    $("#freshRenewExpiry").textContent = option?.value ? (dataOnly ? "No Expiry Limit (Data Quota)" : duration ? expiryLabel(new Date(now.getTime()+duration)) : "Validity unavailable") : "Choose package";
   }
   async function submitRenew(event) {
     event.preventDefault();
@@ -284,7 +288,18 @@
     const button = $("#freshRenewSubmit"), result = $("#freshRenewResult");
     button.disabled = true; result.className = "small mt-3 text-muted"; result.textContent = "Saving renewal…";
     try {
-      const data = await request(endpoint(selected.id)+"/renew", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({profile_id:$("#freshRenewProfile").value,send_notification:$("#freshRenewNotify").checked})});
+      const option=$("#freshRenewProfile")?.selectedOptions?.[0];
+      if(!option?.value)throw new Error("Select a Hotspot package first.");
+      const validityUnit=String(option.dataset.unit||"").trim().toLowerCase();
+      const limitBytesTotal=Math.max(0,Number(option.dataset.limitBytesTotal||0));
+      let validityValue=Number(option.dataset.validityValue||0);
+      if(["gb","data","quota"].includes(validityUnit)&&validityValue<=0&&limitBytesTotal>0&&limitBytesTotal%1073741824===0)validityValue=limitBytesTotal/1073741824;
+      const voucherIdRaw=selected.voucher_id??selected.id;
+      const voucherId=String(voucherIdRaw??"").trim();
+      if(!/^\d+$/.test(voucherId))throw new Error("Subscriber voucher ID is missing or invalid.");
+      // The API calculates the canonical expiry from profile metadata; do not send a client-estimated expiry timestamp.
+      const payload={voucherId,id:voucherId,username:selected.username||selected.mac_address||selected.macAddress||"",mac:selected.mac_address||selected.macAddress||"",profile_id:option.value,profile:option.dataset.name||"",validityValue,validityUnit,limitBytesTotal,send_notification:$("#freshRenewNotify").checked};
+      const data = await request("/api/hotspot/manual-renew", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       result.className = "small mt-3 text-success fw-semibold"; result.textContent = "Renewal saved.";
       toast("Renewal saved and synchronized with RouterOS.");
       modalHide("freshRenewModal"); await loadUsers(selected.id);

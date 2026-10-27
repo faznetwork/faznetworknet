@@ -71,7 +71,7 @@ app.post("/logout",async(req,res)=>{
     return res.redirect("/");
   });
 });
-app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"];const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);const values=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:values.mfs_bkash_number||"",nagad:values.mfs_nagad_number||"",rocket:values.mfs_rocket_number||"",upay:values.mfs_upay_number||""}});}catch(error){console.warn("[Hotspot Portal] Payment account settings unavailable:",error.message);return res.render("portal",{title:"FAZ NETWORK Hotspot Portal",paymentAccounts:{bkash:"",nagad:"",rocket:"",upay:""}});}});
+app.get("/portal",(_req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Portal"}));
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
 // Normalize the trailing-slash admin entry point before the SPA router reads window.location.pathname.
@@ -111,7 +111,6 @@ app.get("/",async (req,res)=>{
     const helpline=String(process.env.HELPLINE_PHONE||"01339932887");
     const isExcludedPublicPlan=value=>/(expired|ex-|disabled|block|default|vpn)/i.test(String(value??""));
     let packages=[];
-    let hotspotPackages=[];
     try{
       const pkgResult=await db.query("SELECT id,plan_name,pool_name,profile_name,rate_limit,price,duration_months FROM packages WHERE price>0 ORDER BY price ASC");
       packages=(Array.isArray(pkgResult.rows)?pkgResult.rows:[]).filter(pkg=>{
@@ -121,32 +120,7 @@ app.get("/",async (req,res)=>{
     }catch(dbErr){
       console.warn("[Home Route] DB package query warning:",dbErr.message);
     }
-    // Public page rendering must never open a RouterOS socket. Read the last
-    // saved hotspot price/validity metadata from PostgreSQL; live router sync is
-    // reserved for explicit admin actions and background jobs.
-    try{
-      const metadataRows=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
-      let metadata={};
-      try{metadata=JSON.parse(metadataRows.rows[0]?.value||"{}");}catch(_){metadata={};}
-      hotspotPackages=Object.entries(metadata&&typeof metadata==="object"?metadata:{})
-        .map(([name,meta])=>({
-          ...(meta&&typeof meta==="object"?meta:{}),
-          name:String(name||"").trim(),
-          price:Number(meta?.price||0),
-          validityLabel:String(meta?.validityLabel||meta?.validity||""),
-          limitBytesTotal:Number(meta?.limitBytesTotal||0)
-        }))
-        .filter(profile=>profile.name&&!isExcludedPublicPlan(profile.name)&&Number(profile.price)>0);
-    }catch(hotspotErr){
-      console.warn("[Home Route] Saved hotspot metadata unavailable:",hotspotErr.message);
-    }
-    let paymentAccounts={bkash:"",nagad:"",rocket:"",upay:""};
-    try{
-      const accountRows=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"]]);
-      const accountValues=Object.fromEntries((accountRows.rows||[]).map(row=>[row.key,String(row.value||"").trim()]));
-      paymentAccounts={bkash:accountValues.mfs_bkash_number||"",nagad:accountValues.mfs_nagad_number||"",rocket:accountValues.mfs_rocket_number||"",upay:accountValues.mfs_upay_number||""};
-    }catch(paymentSettingsError){console.warn("[Home Route] MFS payment accounts unavailable:",paymentSettingsError.message);}
-    return res.render("index",{title:res.locals.brandSettings?.company_name||"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,paymentAccounts,error:null,success:null});
+    return res.render("index",{title:res.locals.brandSettings?.company_name||"FAZ NETWORK",officeAddress,helpline,packages,error:null,success:null});
   }catch(err){
     console.error("[CRITICAL] Error rendering public homepage:",err);
     return res.status(500).send("Service is initializing. Please refresh in a moment.");
@@ -177,7 +151,7 @@ async function shutdown(signal){
 }
 process.on("SIGTERM",()=>{shutdown("SIGTERM").catch(error=>console.error("[Shutdown] Unexpected SIGTERM handler error:",error.message));});
 process.on("SIGINT",()=>{shutdown("SIGINT").catch(error=>console.error("[Shutdown] Unexpected SIGINT handler error:",error.message));});
-initializeDatabase().then(initResult=>{if(initResult?.skipped)console.warn("[EmailWorker] Not started because database schema initialization was skipped.");else require("./services/emailWorker").startEmailWorker();require("./controllers/broadcastController").resumePendingBroadcasts();startBillingCron();startUsageCollector();startNetworkDiscovery();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotExpirationCleanup();startHotspotRetentionCleanup();require("./jobs/notificationHistoryCleanup").startNotificationHistoryCleanup();require("./services/whatsappService").restoreSession().catch(e=>console.warn("[WhatsApp] Startup restore skipped:",e.message));}).catch(e=>{
+initializeDatabase().then(initResult=>{if(initResult?.skipped)console.warn("[EmailWorker] Not started because database schema initialization was skipped.");else require("./services/emailWorker").startEmailWorker();require("./controllers/broadcastController").resumePendingBroadcasts();startBillingCron();startUsageCollector();startNetworkDiscovery();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotExpirationCleanup();startHotspotRetentionCleanup();require("./jobs/hotspotRenewalReconciliation").start();require("./jobs/notificationHistoryCleanup").startNotificationHistoryCleanup();require("./services/whatsappService").restoreSession().catch(e=>console.warn("[WhatsApp] Startup restore skipped:",e.message));}).catch(e=>{
   console.error("[Database] Startup initialization failed:",e.message);
   startBillingCron();
   startUsageCollector();

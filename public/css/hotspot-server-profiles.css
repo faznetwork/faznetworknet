@@ -1,0 +1,23 @@
+.hs-server-profiles{--hsp-ink:#0f172a;--hsp-muted:#64748b;--hsp-line:#e5eaf0;--hsp-green:#047857;color:var(--hsp-ink)}
+.hs-server-hero{position:relative;overflow:hidden;border:1px solid #dce9e2;border-radius:22px;background:radial-gradient(circle at 92% 12%,rgba(16,185,129,.16),transparent 30%),linear-gradient(135deg,#fff 0%,#f1faf5 100%);box-shadow:0 16px 40px rgba(15,23,42,.06)}
+.hs-server-hero-icon{width:54px;height:54px;display:grid;place-items:center;border-radius:17px;background:#dff7ea;color:#047857;font-size:25px}
+.hs-server-profile-card{height:100%;border:1px solid var(--hsp-line);border-radius:18px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.045);transition:transform .18s ease,box-shadow .18s ease}
+.hs-server-profile-card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,23,42,.09)}
+.hs-server-profile-card.is-protected{border-color:#f1dba7;background:linear-gradient(180deg,#fffdf6,#fff)}
+.hs-server-detail{min-width:0;border:1px solid #edf1f5;border-radius:12px;padding:10px 12px;background:#fbfcfd}
+.hs-server-detail small{display:block;color:var(--hsp-muted);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.hs-server-detail strong{display:block;margin-top:4px;overflow-wrap:anywhere;font-size:13px;font-weight:650}
+.hs-server-auth{display:flex;flex-wrap:wrap;gap:6px}
+.hs-server-auth .badge{padding:7px 9px;border:1px solid #cceedd;border-radius:999px;background:#effaf4;color:#08734f;font-size:10px;font-weight:750}
+.hs-server-auth .badge.is-off{border-color:#e7ebef;background:#f8fafc;color:#94a3b8}
+.hs-server-login-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.hs-server-tabs{gap:7px;border-bottom:1px solid #e5eaf0;padding-bottom:10px}
+.hs-server-tabs .nav-link{border:1px solid transparent;border-radius:10px;color:#64748b;font-size:12px;font-weight:750}
+.hs-server-tabs .nav-link.active{background:#e8f8ef;color:#047857;border-color:#b8e9cc}
+.hs-server-login-option{display:flex;align-items:center;gap:10px;border:1px solid #e5eaf0;border-radius:12px;padding:10px 12px;background:#fff}
+.hs-server-login-option:has(input:checked){border-color:#86ddb4;background:#f0fbf5}
+.hs-server-login-option input{width:17px;height:17px;accent-color:#059669}
+.hs-server-profiles-modal .modal-content{border:0;border-radius:19px;overflow:hidden;box-shadow:0 28px 80px rgba(15,23,42,.25)}
+.hs-server-profiles-modal .modal-header{background:#0f172a;color:#fff;padding:18px 22px}
+.hs-server-profiles-modal .btn-close{filter:invert(1)}
+@media(max-width:575.98px){.hs-server-login-grid{grid-template-columns:1fr}.hs-server-hero{border-radius:17px}}

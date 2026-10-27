@@ -1,6 +1,13 @@
 const RouterOS = require("node-routeros");
 const { RouterOSAPI } = RouterOS;
 const deviceCredentials = require("./deviceCredentials");
+const HOTSPOT_SERVER_PROFILE_PROPERTIES = new Set([
+  "name", "hotspot-address", "dns-name", "html-directory", "html-directory-override",
+  "http-proxy", "smtp-server", "login-by", "mac-auth-password", "http-cookie-lifetime",
+  "ssl-certificate", "split-user-domain", "trial-uptime", "trial-user-profile", "use-radius",
+  "radius-default-domain", "radius-location-id", "radius-location-name", "radius-mac-format",
+  "radius-accounting", "radius-interim-update", "nas-port-type", "rate-limit"
+]);
 
 // RouterOS can send "!empty" before its normal "!done" terminator when a
 // query matches no rows. node-routeros treats it as an unknown sentence and
@@ -1102,9 +1109,156 @@ class MikroTikService {
       const rows = await connection.write("/ip/hotspot/profile/print");
       return (Array.isArray(rows) ? rows : []).map(item => ({
         id: this._str(item[".id"]), name: this._str(item.name),
-        loginBy: this._str(item["login-by"]),
-        macAuthMode: this._str(item["mac-auth-mode"]).toLowerCase(), raw: item
-      })).filter(item => item.name);
+        hotspotAddress: this._str(item["hotspot-address"]), dnsName: this._str(item["dns-name"]),
+        htmlDirectory: this._str(item["html-directory"]), htmlDirectoryOverride: this._str(item["html-directory-override"]),
+        httpProxy: this._str(item["http-proxy"]), smtpServer: this._str(item["smtp-server"]),
+        loginBy: this._str(item["login-by"]), httpCookieLifetime: this._str(item["http-cookie-lifetime"]),
+        splitUserDomain: this._bool(item["split-user-domain"]),
+        macAuthPassword: this._str(item["mac-auth-password"]),
+        sslCertificate: this._str(item["ssl-certificate"]), trialUptime: this._str(item["trial-uptime"]),
+        trialUptimeLimit: this._str(item["trial-uptime"]).split("/")[0] || "", trialUptimeReset: this._str(item["trial-uptime"]).split("/")[1] || "",
+        trialUserProfile: this._str(item["trial-user-profile"]),
+        useRadius: this._bool(item["use-radius"]), radiusAccounting: this._bool(item["radius-accounting"]),
+        radiusDefaultDomain: this._str(item["radius-default-domain"]), radiusLocationId: this._str(item["radius-location-id"]),
+        radiusLocationName: this._str(item["radius-location-name"]), radiusMacFormat: this._str(item["radius-mac-format"]),
+        radiusInterimUpdate: this._str(item["radius-interim-update"]), nasPortType: this._str(item["nas-port-type"]),
+        rateLimit: this._str(item["rate-limit"])
+      })).filter(item => item.name && item.name.trim().toLowerCase() !== "default");
+    });
+  }
+
+  async getMikrotikDirectories() {
+    return this._withConnection("MikroTik directory query", async connection => {
+      const rows = await connection.write("/file/print"), files = Array.isArray(rows) ? rows : [];
+      const directories = files.filter(item => {
+        const type = this._str(item.type).trim().toLowerCase();
+        return ["directory", "disk"].includes(type);
+      }).map(item => this._str(item.name).trim()).filter(Boolean);
+      return [...new Set(directories)].sort((a, b) => a.localeCompare(b));
+    });
+  }
+
+  async getHotspotServerProfileOptions() {
+    return this._withConnection("Hotspot server profile option query", async connection => {
+      const certificates = await connection.write("/certificate/print");
+      const userProfiles = await connection.write("/ip/hotspot/user/profile/print");
+      return {
+        certificates: [...new Set((Array.isArray(certificates) ? certificates : []).map(item => this._str(item.name).trim()).filter(Boolean))].sort(),
+        userProfiles: [...new Set((Array.isArray(userProfiles) ? userProfiles : []).map(item => this._str(item.name).trim()).filter(Boolean))].sort()
+      };
+    });
+  }
+
+  async createHotspotServerProfile(data) {
+    const name=this._str(data?.name).trim();
+    if(!name)throw Object.assign(new Error("Hotspot server profile name is required."),{statusCode:400});
+    if(name.toLowerCase()==="default")throw Object.assign(new Error("The built-in default Hotspot server profile cannot be created."),{statusCode:400});
+      const loginBy=this._normalizeHotspotServerLoginBy(data?.loginBy);
+    return this._withConnection("Hotspot server profile creation",async connection=>{
+      const existing=await connection.write("/ip/hotspot/profile/print");
+      if((Array.isArray(existing)?existing:[]).some(item=>this._str(item.name).trim().toLowerCase()===name.toLowerCase()))throw Object.assign(new Error("A Hotspot server profile with this name already exists."),{statusCode:409});
+      const params=this._hotspotServerProfileParams(data, {name}, {loginBy,useRadius:data.useRadius===true});
+      await connection.write("/ip/hotspot/profile/add",params);
+      return {name,...this._hotspotServerProfileResult(data,loginBy)};
+    });
+  }
+
+  _normalizeHotspotServerLoginBy(value) {
+    const allowed=new Set(["mac","http-pap","http-chap","https","cookie","mac-cookie","trial"]);
+    const values=(Array.isArray(value)?value:this._str(value).split(",")).map(item=>this._str(item).trim().toLowerCase()).filter(Boolean);
+    const unique=[...new Set(values)];
+    if(!unique.length||unique.some(item=>!allowed.has(item)))throw Object.assign(new Error("Select one or more supported Login-By methods."),{statusCode:400});
+    return unique.join(",");
+  }
+
+  _hotspotServerProfileParams(data, identity = {}, context = {}) {
+    const durationPattern = /^(?:(?:\d+(?:\.\d+)?)(?:w|d|h|m|s)\s*)*\d{1,3}:\d{2}:\d{2}$|^(?:\d+(?:\.\d+)?)(?:w|d|h|m|s)$/i;
+    const timeValue = (value, field, allowReceived = false) => {
+      const text=this._str(value).trim();
+      if(!text)return "";
+      if(allowReceived&&text.toLowerCase()==="received")return "received";
+      if(!durationPattern.test(text))throw Object.assign(new Error(field+" must be a RouterOS time value, such as 3d 00:00:00."),{statusCode:400});
+      return text;
+    };
+    const values={};
+    const put=(key,value,allowBlank=false)=>{
+      if(!HOTSPOT_SERVER_PROFILE_PROPERTIES.has(key)&&key!==".id")return;
+      if(value===undefined||value===null)return;
+      const normalized=typeof value==="string"?value.trim():value;
+      if(!allowBlank&&String(normalized).trim()==="")return;
+      values[key]=normalized;
+    };
+    for(const [key,value] of Object.entries(identity))put(key,value);
+
+    const activeLoginBy=String(context.loginBy||data.loginBy||"").split(",").map(value=>value.trim().toLowerCase()).filter(Boolean);
+    if(Object.prototype.hasOwnProperty.call(data,"loginBy"))put("login-by",this._normalizeHotspotServerLoginBy(data.loginBy));
+    const fields={
+      hotspotAddress:"hotspot-address",dnsName:"dns-name",htmlDirectory:"html-directory",
+      htmlDirectoryOverride:"html-directory-override",httpProxy:"http-proxy",smtpServer:"smtp-server",
+      httpCookieLifetime:"http-cookie-lifetime",sslCertificate:"ssl-certificate",
+      trialUserProfile:"trial-user-profile",radiusDefaultDomain:"radius-default-domain",
+      radiusLocationId:"radius-location-id",radiusLocationName:"radius-location-name",
+      radiusMacFormat:"radius-mac-format",radiusInterimUpdate:"radius-interim-update",
+      nasPortType:"nas-port-type",rateLimit:"rate-limit"
+    };
+    for(const [input,key] of Object.entries(fields)){
+      if(["trialUserProfile","radiusDefaultDomain","radiusLocationId","radiusLocationName","radiusMacFormat","radiusInterimUpdate","nasPortType"].includes(input))continue;
+      if(!Object.prototype.hasOwnProperty.call(data,input))continue;
+      const value=this._str(data[input]).trim();
+      if(input==="sslCertificate"&&value.toLowerCase()==="none")continue;
+      if(input==="rateLimit"&&value.length>128)throw Object.assign(new Error("Rate Limit is too long."),{statusCode:400});
+      put(key,value);
+    }
+    if(activeLoginBy.includes("mac")&&Object.prototype.hasOwnProperty.call(data,"macAuthPassword"))put("mac-auth-password",this._str(data.macAuthPassword));
+    if(Object.prototype.hasOwnProperty.call(data,"splitUserDomain"))put("split-user-domain",data.splitUserDomain===true?"yes":"no");
+
+    const useRadius=Object.prototype.hasOwnProperty.call(data,"useRadius")?data.useRadius===true:context.useRadius===true;
+    if(Object.prototype.hasOwnProperty.call(data,"useRadius"))put("use-radius",data.useRadius===true?"yes":"no");
+    if(useRadius){
+      for(const input of ["radiusDefaultDomain","radiusLocationId","radiusLocationName","radiusMacFormat","radiusInterimUpdate","nasPortType"]){
+        if(!Object.prototype.hasOwnProperty.call(data,input))continue;
+        const key=fields[input],value=this._str(data[input]).trim();
+        put(key,input==="radiusInterimUpdate"?timeValue(value,"Interim Update",true):value);
+      }
+      if(Object.prototype.hasOwnProperty.call(data,"radiusAccounting"))put("radius-accounting",data.radiusAccounting===true?"yes":"no");
+    }
+
+    if(activeLoginBy.includes("trial")){
+      const limit=timeValue(data.trialUptimeLimit,"Trial Uptime Limit"),reset=timeValue(data.trialUptimeReset,"Trial Uptime Reset");
+      if(limit&&reset)put("trial-uptime",limit+"/"+reset);
+      if(Object.prototype.hasOwnProperty.call(data,"trialUserProfile"))put("trial-user-profile",data.trialUserProfile);
+    }
+    return this._writeParams(values).filter(parameter=>{
+      const key=/^=([^=]+)=/.exec(parameter)?.[1];
+      return key===".id"||HOTSPOT_SERVER_PROFILE_PROPERTIES.has(key);
+    });
+  }
+
+  _hotspotServerProfileResult(data, loginBy) {
+    return {
+      hotspotAddress:data.hotspotAddress||"",dnsName:data.dnsName||"",htmlDirectory:data.htmlDirectory||"",
+      htmlDirectoryOverride:data.htmlDirectoryOverride||"",loginBy,httpCookieLifetime:data.httpCookieLifetime||"",
+      httpProxy:data.httpProxy||"",smtpServer:data.smtpServer||"",macAuthPassword:data.macAuthPassword||"",
+      sslCertificate:data.sslCertificate||"",trialUptimeLimit:data.trialUptimeLimit||"",trialUptimeReset:data.trialUptimeReset||"",trialUserProfile:data.trialUserProfile||"",
+      splitUserDomain:data.splitUserDomain===true,
+      radiusDefaultDomain:data.radiusDefaultDomain||"",radiusLocationId:data.radiusLocationId||"",radiusLocationName:data.radiusLocationName||"",radiusMacFormat:data.radiusMacFormat||"",
+      useRadius:data.useRadius===true,radiusAccounting:data.radiusAccounting===true,
+      radiusInterimUpdate:data.radiusInterimUpdate||"",nasPortType:data.nasPortType||"",rateLimit:data.rateLimit||""
+    };
+  }
+
+  async updateHotspotServerProfile(identifier,data) {
+    const key=this._str(identifier).trim();
+    if(!key)throw Object.assign(new Error("Hotspot server profile ID is required."),{statusCode:400});
+    return this._withConnection("Hotspot server profile update",async connection=>{
+      const rows=await connection.write("/ip/hotspot/profile/print"),items=Array.isArray(rows)?rows:[];
+      const item=items.find(row=>this._str(row[".id"])===key)||items.find(row=>this._str(row.name).trim().toLowerCase()===key.toLowerCase());
+      if(!item||!item[".id"])throw Object.assign(new Error("Hotspot server profile was not found on MikroTik."),{statusCode:404});
+      if(this._str(item.name).trim().toLowerCase()==="default")throw Object.assign(new Error("The built-in default Hotspot server profile is protected."),{statusCode:400});
+      const loginBy=Object.prototype.hasOwnProperty.call(data||{},"loginBy")?this._normalizeHotspotServerLoginBy(data.loginBy):this._str(item["login-by"]);
+      const params=this._hotspotServerProfileParams(data,{".id":item[".id"]},{loginBy,useRadius:Object.prototype.hasOwnProperty.call(data||{},"useRadius")?data.useRadius===true:this._bool(item["use-radius"])});
+      await connection.write("/ip/hotspot/profile/set",params);
+      return {id:this._str(item[".id"]),name:this._str(item.name),...this._hotspotServerProfileResult(data,loginBy)};
     });
   }
 
@@ -1300,7 +1454,7 @@ class MikroTikService {
   }
 
   async rechargeHotspotUser(data) {
-    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
+    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=Object.prototype.hasOwnProperty.call(data,"password")?this._str(data.password):macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
     if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires a valid device MAC, profile, and time validity or a data quota.");
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress};
     const comment=this._hotspotExpiryComment(data);
@@ -1310,11 +1464,15 @@ class MikroTikService {
       if(!matches.length&&previousUsername&&previousUsername!==username)matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===previousUsername&&item[".id"]);
       if(matches.length){
         const item=matches[0];
-        await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],name:username,password,profile,disabled:false,...limits,comment}));
+        const params=this._writeParams({".id":item[".id"],name:username,password,profile,disabled:false,...limits,comment});
+        if(password==="")params.push("=password=");
+        await connection.write("/ip/hotspot/user/set",params);
         await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
         return {username,password,macAddress,profile,validity,limitBytesTotal,created:false,renamedFrom:previousUsername&&previousUsername!==username?previousUsername:null,credentials:"mac"};
       }
-      await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all",...limits,comment}));
+      const params=this._writeParams({name:username,password,profile,server:data.server||"all",...limits,comment});
+      if(password==="")params.push("=password=");
+      await connection.write("/ip/hotspot/user/add",params);
       return {username,password,macAddress,profile,validity,limitBytesTotal,created:true,credentials:"mac"};
     });
   }
