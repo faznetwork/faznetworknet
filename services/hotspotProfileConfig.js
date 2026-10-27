@@ -3,7 +3,7 @@
 const UNIT_ALIASES = {
   m: "minutes", min: "minutes", minute: "minutes", minutes: "minutes",
   h: "hours", hr: "hours", hour: "hours", hours: "hours",
-  d: "days", day: "days", days: "days", gb: "gb"
+  d: "days", day: "days", days: "days", mo: "months", month: "months", months: "months", gb: "gb", data: "gb", quota: "gb"
 };
 
 function normalizeProfileValidity(value, unit) {
@@ -16,8 +16,9 @@ function normalizeProfileValidity(value, unit) {
     if (!Number.isSafeInteger(bytes)) throw new Error("GB quota is too large.");
     return { value: n, unit: u, validity: "", validityLabel: n + " GB", limitBytesTotal: bytes };
   }
+  if (u === "months") return { value: n, unit: u, validity: String(n * 30) + "d", validityLabel: n + " Month" + (n === 1 ? "" : "s"), limitBytesTotal: 0 };
   const suffix = { minutes: "m", hours: "h", days: "d" }[u];
-  const singular = { minutes: "Minute", hours: "Hour", days: "Day" }[u];
+  const singular = { minutes: "Minute", hours: "Hour", days: "Day", months: "Month" }[u];
   return { value: n, unit: u, validity: String(n) + suffix, validityLabel: n + " " + singular + (n === 1 ? "" : "s"), limitBytesTotal: 0 };
 }
 
@@ -32,12 +33,14 @@ function parseStoredValidity(profile) {
     totalMs += Number(match[1]) * units[match[2]];
   }
   if (!compact || consumed !== compact || !Number.isSafeInteger(totalMs) || totalMs <= 0) {
-    return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
+    const raw = profile?.raw || profile || {};
+    const quota = Number(profile?.limitBytesTotal || profile?.limit_bytes_total || raw["limit-bytes-total"] || 0);
+    return { value: quota > 0 ? quota / 1073741824 : 0, unit: quota > 0 ? "gb" : "", validity: "", validityLabel: quota > 0 ? (quota / 1073741824) + " GB" : "", limitBytesTotal: quota };
   }
   if (totalMs % units.d === 0) return normalizeProfileValidity(totalMs / units.d, "days");
   if (totalMs % units.h === 0) return normalizeProfileValidity(totalMs / units.h, "hours");
   if (totalMs % units.m === 0) return normalizeProfileValidity(totalMs / units.m, "minutes");
-  return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
+  return { value: 0, unit: "", validity: "", validityLabel: "", limitBytesTotal: 0 };
 }
 
 /**
@@ -48,7 +51,7 @@ function parseStoredValidity(profile) {
  */
 function buildHotspotOnLoginScript(config = {}) {
   // Validate package validity centrally, but never create or manage RouterOS schedulers.
-  normalizeProfileValidity(config.validityValue || 1, config.validityUnit || "days");
+  if (config.validityValue !== undefined && config.validityValue !== null && config.validityUnit) normalizeProfileValidity(config.validityValue, config.validityUnit);
   const sharedUsers = Math.max(1, Number(config.sharedUsers) || 1);
   const bindMac = sharedUsers === 1
     ? ':if ([:len $uid] > 0 && [:len $uMac] > 0) do={ /ip hotspot user set $uid mac-address=$uMac; }'

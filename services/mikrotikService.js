@@ -1289,22 +1289,13 @@ class MikroTikService {
         await connection.write("/ip/hotspot/user/add",params);
       }
 
-      // Remove stale login state only after the new MAC-bound account is ready.
-      // Active sessions are dynamic/read-only for creation; RouterOS recreates a
-      // MAC-authenticated session on the device's next traffic when login-by=mac
-      // is enabled on the applicable Hotspot server profile.
+      // Clear stale cookies without disconnecting a customer's live session.
       const identityNames=new Set([macAddress,previousUsername].map(value=>this._str(value).trim().toUpperCase()).filter(Boolean));
-      const [activeRows,cookieRows]=await Promise.all([
-        connection.write("/ip/hotspot/active/print"),
-        connection.write("/ip/hotspot/cookie/print")
-      ]);
-      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress))) {
-        await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
-      }
+      const cookieRows=await connection.write("/ip/hotspot/cookie/print");
       for(const cookie of (Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress))) {
         await connection.write("/ip/hotspot/cookie/remove",["=.id="+cookie[".id"]]);
       }
-      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions:(Array.isArray(activeRows)?activeRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,clearedCookies:(Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,macAuthEnabled};
+      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions:0,clearedCookies:(Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,macAuthEnabled};
     });
   }
 
@@ -1321,8 +1312,6 @@ class MikroTikService {
         const item=matches[0];
         await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],name:username,password,profile,disabled:false,...limits,comment}));
         await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
-        const activeRows=await connection.write("/ip/hotspot/active/print");
-        for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>this._str(item.user).trim().toUpperCase()===username&&item[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
         return {username,password,macAddress,profile,validity,limitBytesTotal,created:false,renamedFrom:previousUsername&&previousUsername!==username?previousUsername:null,credentials:"mac"};
       }
       await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all",...limits,comment}));
