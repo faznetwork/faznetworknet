@@ -12,8 +12,27 @@ jobs:
         shell: powershell
         run: |
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files (x86)\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;$env:APPDATA\npm"
+          $gitExeCandidates = @(
+            "C:\Program Files\Git\cmd\git.exe",
+            "C:\Program Files (x86)\Git\cmd\git.exe",
+            "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
+          )
+          foreach ($registryKey in @("HKLM:\SOFTWARE\GitForWindows", "HKLM:\SOFTWARE\WOW6432Node\GitForWindows", "HKCU:\SOFTWARE\GitForWindows")) {
+            if (Test-Path $registryKey) {
+              $installPath = (Get-ItemProperty -Path $registryKey -Name InstallPath -ErrorAction SilentlyContinue).InstallPath
+              if ($installPath) {
+                $gitExeCandidates += (Join-Path $installPath "cmd\git.exe")
+                $gitExeCandidates += (Join-Path $installPath "bin\git.exe")
+              }
+            }
+          }
+          $gitExeCandidates += Get-ChildItem -Path "C:\Users\*\AppData\Local\Programs\Git\cmd\git.exe" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          $gitExe = $gitExeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if ($gitExe) {
+            $env:Path = (Split-Path $gitExe -Parent) + ";" + $env:Path
+          }
           if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            throw "Git was not found in PATH. Checked standard Git paths: C:\Program Files\Git\cmd, C:\Program Files (x86)\Git\cmd, C:\Program Files\Git\bin. Verify Git is installed on the self-hosted runner."
+            throw "Git was not found in PATH or standard/registered Git for Windows installations. Install Git for Windows or add its cmd directory to the runner service account PATH."
           }
           if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
             throw "PM2 was not found in PATH. Verify Node.js and PM2 are installed for the runner service account, including $env:APPDATA\npm."
