@@ -11,7 +11,7 @@ jobs:
       - name: Update Code and Restart
         shell: powershell
         run: |
-          $env:Path = "D:\Git\cmd;D:\Git\bin;" + [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files (x86)\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;$env:APPDATA\npm"
+          $env:Path = "D:\Git\cmd;D:\Git\bin;C:\Users\RABBI-PC\AppData\Roaming\npm;" + [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files (x86)\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;$env:APPDATA\npm"
           $gitExeCandidates = @(
             "D:\Git\cmd\git.exe",
             "D:\Git\bin\git.exe",
@@ -38,6 +38,7 @@ jobs:
           }
 
           $pm2Candidates = @(
+            "C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd",
             "$env:APPDATA\npm\pm2.cmd",
             "C:\Windows\ServiceProfiles\NetworkService\AppData\Roaming\npm\pm2.cmd",
             "C:\Program Files\nodejs\pm2.cmd"
@@ -48,7 +49,7 @@ jobs:
             $env:Path = (Split-Path $pm2Cmd -Parent) + ";" + $env:Path
           }
           if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-            throw "PM2 was not found in PATH or standard per-user npm global directories. Install PM2 for the runner service account or add its npm global directory to PATH."
+            throw "PM2 was not found in PATH or standard per-user npm global directories. Verify C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd exists on the runner."
           }
 
           cd D:\faznetworknet
