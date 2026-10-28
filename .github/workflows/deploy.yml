@@ -37,19 +37,10 @@ jobs:
             throw "Git was not found in PATH or standard/registered Git for Windows installations. Verify D:\Git\cmd\git.exe exists on the self-hosted runner."
           }
 
-          $pm2Candidates = @(
-            "C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd",
-            "$env:APPDATA\npm\pm2.cmd",
-            "C:\Windows\ServiceProfiles\NetworkService\AppData\Roaming\npm\pm2.cmd",
-            "C:\Program Files\nodejs\pm2.cmd"
-          )
-          $pm2Candidates += Get-ChildItem -Path "C:\Users\*\AppData\Roaming\npm\pm2.cmd" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-          $pm2Cmd = $pm2Candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-          if ($pm2Cmd) {
-            $env:Path = (Split-Path $pm2Cmd -Parent) + ";" + $env:Path
-          }
+          # PM2's verified per-user directory is explicitly on PATH above.
+          # Avoid Test-Path against that user profile: the NetworkService runner may not have permission to inspect it.
           if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-            throw "PM2 was not found in PATH or standard per-user npm global directories. Verify C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd exists on the runner."
+            throw "PM2 was not found in PATH. Verify the runner service account can access C:\Users\RABBI-PC\AppData\Roaming\npm and execute pm2.cmd."
           }
 
           cd D:\faznetworknet
