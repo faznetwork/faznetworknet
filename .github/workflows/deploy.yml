@@ -1,4 +1,4 @@
-﻿name: Auto Deploy to Local Server
+name: Auto Deploy to Local Server
 
 on:
   push:
@@ -11,6 +11,7 @@ jobs:
       - name: Update Code and Restart
         shell: powershell
         run: |
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files\nodejs;$env:APPDATA\npm"
           cd D:\faznetworknet
           git pull origin main
           pm2 restart all
