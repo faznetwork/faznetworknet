@@ -19,7 +19,7 @@ test('live logger redacts common credentials before storing entries', () => {
   const entry = logger.getRecentLogs().at(-1);
   assert.match(entry.message, /password=\[REDACTED\]/i);
   assert.match(entry.message, /session=\[REDACTED\]/i);
-  assert.match(entry.message, /Bearer \[REDACTED\]/i);
+  assert.match(entry.message, /Authorization: \[REDACTED\]/i);
   assert.doesNotMatch(entry.message, /very-secret|abc123|abc\.def/);
 });
 
