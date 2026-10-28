@@ -68,7 +68,7 @@ test("public portal config exposes saved branding, feature flags and only enable
  db.query=async(sql)=>{
   if(sql.startsWith("INSERT INTO hotspot_portal_settings"))return {rows:[]};
   if(sql.includes("SELECT * FROM hotspot_portal_settings"))return {rows:[{display_mode:"banner",portal_logo_url:"/uploads/branding/logo.png",banner_url:"/uploads/branding/banner.png",brand_title:"FAZ Test Portal",enable_online_payment:false,enable_voucher_pin:true,enable_qr_scan:false}]};
-  if(sql.includes("hotspot_public_portal_config"))return {rows:[{value:JSON.stringify({portalTitle:"FAZ Test Portal",enabledProfiles:["Pack 525","Hidden","Free"],mfs:[{enabled:true,number:"01711111111"},{enabled:false,number:"01822222222"}]})}]};
+  if(sql.includes("hotspot_public_portal_config"))return {rows:[{value:JSON.stringify({portalTitle:"FAZ Test Portal",enabledProfiles:["Pack 525","Free"],mfs:[{enabled:true,number:"01711111111"},{enabled:false,number:"01822222222"}]})}]};
   if(sql.includes("hotspot_profile_metadata"))return {rows:[{value:JSON.stringify({"Pack 525":{price:525,validityLabel:"30 days",limitBytesTotal:0},Hidden:{price:650,validityLabel:"30 days"},Free:{price:0,validityLabel:"1 day"}})}]};
   throw new Error("Unexpected portal-config query: "+sql);
  };
