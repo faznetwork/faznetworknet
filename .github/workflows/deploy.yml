@@ -11,7 +11,13 @@ jobs:
       - name: Update Code and Restart
         shell: powershell
         run: |
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files\nodejs;$env:APPDATA\npm"
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files (x86)\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;$env:APPDATA\npm"
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            throw "Git was not found in PATH. Checked standard Git paths: C:\Program Files\Git\cmd, C:\Program Files (x86)\Git\cmd, C:\Program Files\Git\bin. Verify Git is installed on the self-hosted runner."
+          }
+          if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+            throw "PM2 was not found in PATH. Verify Node.js and PM2 are installed for the runner service account, including $env:APPDATA\npm."
+          }
           cd D:\faznetworknet
           git pull origin main
           pm2 restart all
