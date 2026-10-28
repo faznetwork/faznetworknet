@@ -1438,7 +1438,7 @@ class MikroTikService {
   }
 
   async rechargeHotspotUser(data) {
-    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=Object.prototype.hasOwnProperty.call(data,"password")?this._str(data.password):macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
+    const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
     if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires a valid device MAC, profile, and time validity or a data quota.");
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress};
     const comment=this._hotspotExpiryComment(data);
