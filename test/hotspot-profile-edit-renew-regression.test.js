@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const db = require("../db");
 const mikrotik = require("../services/mikrotikService");
 const notifications = require("../services/notificationDispatcher");
+const renewalOperations = require("../services/hotspotRenewalOperationService");
 const controller = require("../controllers/hotspotUserController");
 
 function response() {
@@ -55,28 +56,77 @@ test("Profile edit persists customer_name and phone through PostgreSQL before re
   });
 });
 
-test("Quick Renew stacks expiry from the future expiry rather than from NOW", async () => {
+test("Quick Renew stacks expiry from the future expiry using the canonical transaction workflow", async () => {
   const oldExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000);
-  let savedParams;
-  await withMocks(async getRouterWrites => {
+  const oldWithTransaction = db.withTransaction;
+  const oldGetProfiles = mikrotik.getHotspotProfiles;
+  const oldCleanup = renewalOperations.cleanupStaleRenewals;
+  const oldApply = renewalOperations.applyRouterRenewal;
+  const oldFinalize = renewalOperations.finalizeRenewal;
+  const oldFail = renewalOperations.failRenewal;
+  let preparedPayload = null;
+  let transactionCount = 0;
+  let routerApplyCount = 0;
+
+  await withMocks(async () => {
+    db.withTransaction = async callback => {
+      transactionCount++;
+      const client = {
+        query: async sql => {
+          if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [] };
+          if (sql.startsWith("SELECT pg_advisory_xact_lock")) return { rows: [] };
+          if (sql.startsWith("SELECT * FROM hotspot_vouchers")) {
+            return { rows: [{ id: 52, username: "AA:BB:CC:DD:EE:FF", customer_name: "Test", phone: "01712345678", mac_address: "AA:BB:CC:DD:EE:FF", profile: "Daily", profile_id: "pkg-day", validity: "1 day", price: 10, expires_at: oldExpiry, status: "active" }] };
+          }
+          if (sql.startsWith("SELECT id FROM hotspot_renewal_operations")) return { rows: [] };
+          if (sql.startsWith("INSERT INTO hotspot_renewal_operations")) return { rows: [{ id: "test-operation" }] };
+          if (sql.startsWith("SELECT id FROM hotspot_vouchers")) return { rowCount: 1, rows: [{ id: 52 }] };
+          throw new Error("Unexpected transaction SQL: " + sql);
+        }
+      };
+      return callback(client);
+    };
+    mikrotik.getHotspotProfiles = async () => [{ name: "Daily", sessionTimeout: "1d", sharedUsers: 1, raw: {} }];
+    renewalOperations.cleanupStaleRenewals = async () => ({ rows: [] });
+    renewalOperations.applyRouterRenewal = async payload => {
+      routerApplyCount++;
+      preparedPayload = payload;
+      return { username: payload.mac, credentials: "mac" };
+    };
+    renewalOperations.finalizeRenewal = async (_client, _operationId, payload) => ({
+      id: payload.voucherId,
+      username: payload.mac,
+      profile: payload.profile,
+      expires_at: payload.expiresAt,
+      status: "active"
+    });
+    renewalOperations.failRenewal = async () => ({ rows: [] });
+
     const res = response();
     await controller.renew({ params: { id: "52" }, body: { profile_id: "pkg-day", send_notification: false } }, res);
-    assert.equal(res.statusCode, 200);
+
+    assert.equal(res.statusCode, 200, "Quick Renew must complete through its transactional workflow");
     assert.equal(res.body.success, true);
     assert.ok(res.body.new_expiry, "new_expiry must be returned");
-    const actual = new Date(savedParams[4]).getTime();
+    const actual = new Date(preparedPayload.expiresAt).getTime();
     assert.ok(Math.abs(actual - (oldExpiry.getTime() + 24 * 60 * 60 * 1000)) < 1500, "renewal expiry should stack one day on the existing future expiry");
-    assert.equal(savedParams[6], true, "renewal_stacked should be true for a future existing expiry");
-    assert.equal(getRouterWrites(), 0, "renewal must not mutate RouterOS during this rebuild");
-  }, async (sql, params) => {
-    if (sql.startsWith("SELECT * FROM hotspot_vouchers")) return { rows: [{ id: 52, username: "AA:BB:CC:DD:EE:FF", customer_name: "Test", phone: "01712345678", mac_address: "AA:BB:CC:DD:EE:FF", profile: "Daily", profile_id: "pkg-day", validity: "1 day", price: 10, expires_at: oldExpiry, status: "active" }] };
-    if (sql.startsWith("SELECT value FROM app_settings")) return { rows: [{ value: { Daily: { id: "pkg-day", validityValue: 1, validityUnit: "days", price: 10 } } }] };
-    if (sql.startsWith("UPDATE hotspot_vouchers SET profile=")) {
-      savedParams = params;
-      return { rows: [{ id: 52, username: "AA:BB:CC:DD:EE:FF", profile: params[0], expires_at: params[4], status: "active" }] };
+    assert.equal(preparedPayload.renewalStacked, true, "renewal_stacked should be true for a future existing expiry");
+    assert.equal(routerApplyCount, 1, "the canonical RouterOS renewal operation must be invoked exactly once");
+    assert.equal(transactionCount, 2, "renewal must use separate prepare and finalize transactions");
+  }, async sql => {
+    if (sql.startsWith("SELECT value FROM app_settings")) {
+      return { rows: [{ value: JSON.stringify({ Daily: { id: "pkg-day", validityValue: 1, validityUnit: "days", price: 10 } }) }] };
     }
-    throw new Error("Unexpected SQL: " + sql);
+    if (sql.startsWith("UPDATE hotspot_renewal_operations SET router_applied=true")) return { rows: [{ id: "test-operation" }] };
+    throw new Error("Unexpected non-transaction SQL: " + sql);
   });
+
+  db.withTransaction = oldWithTransaction;
+  mikrotik.getHotspotProfiles = oldGetProfiles;
+  renewalOperations.cleanupStaleRenewals = oldCleanup;
+  renewalOperations.applyRouterRenewal = oldApply;
+  renewalOperations.finalizeRenewal = oldFinalize;
+  renewalOperations.failRenewal = oldFail;
 });
 
 test("Archive delegates to verified canonical deletion and retains financial history", async () => {
