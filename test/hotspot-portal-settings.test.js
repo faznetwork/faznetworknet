@@ -67,7 +67,7 @@ test("public portal config exposes saved branding, feature flags and only enable
  assert.ok(controller.includes("logoUrl:s.portal_logo_url||null"));
  assert.ok(controller.includes("bannerUrl:s.banner_url||null"));
  assert.ok(controller.includes("features:{online_payment:s.enable_online_payment!==false,voucher_pin:s.enable_voucher_pin!==false,qr_scan:s.enable_qr_scan!==false}"));
- assert.ok(controller.includes("return {profileId:name,profile:name,name,price,validity:validity||\"Internet access\"}"));
+ assert.match(controller,/return \{profileId:name,profile:name,name,price,validity:validity\|\|\"Internet access\",limitBytesTotal:/);
  assert.ok(controller.includes("status(503).json({success:false,error:"));
 });
 
