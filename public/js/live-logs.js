@@ -69,7 +69,7 @@
     if (!Array.isArray(entries)) return;
     for (const entry of entries) {
       if (!entry || typeof entry.message !== 'string' || !['log','warn','error'].includes(entry.level)) continue;
-      if (history.length && history[history.length - 1].id === entry.id) continue;
+      if (history.some(existing => existing.id === entry.id)) continue;
       history.push(entry);
     }
     if (history.length > MAX_VISIBLE) history = history.slice(-MAX_VISIBLE);
