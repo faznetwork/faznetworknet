@@ -5,10 +5,11 @@
   const filterInput = document.getElementById('logFilter');
   const pauseButton = document.getElementById('pauseResumeBtn');
   const clearButton = document.getElementById('clearLogsBtn');
+  const deployFilterButton = document.getElementById('deployFilterBtn');
   const statusLabel = document.getElementById('connectionStatus');
   const indicator = document.getElementById('connectionIndicator');
   const countLabel = document.getElementById('logCount');
-  if (!terminal || !linesHost || !filterInput || !pauseButton || !clearButton) return;
+  if (!terminal || !linesHost || !filterInput || !pauseButton || !clearButton || !deployFilterButton) return;
 
   const MAX_VISIBLE = 1000;
   let paused = false;
@@ -87,7 +88,20 @@
   terminal.addEventListener('scroll', () => {
     followingBottom = nearBottom();
   }, {passive:true});
-  filterInput.addEventListener('input', () => renderAll(followingBottom));
+  function updateDeployFilterState() {
+    deployFilterButton.setAttribute('aria-pressed', String(filterInput.value.trim().toLowerCase() === '[deploy]'));
+  }
+  filterInput.addEventListener('input', () => {
+    updateDeployFilterState();
+    renderAll(followingBottom);
+  });
+  deployFilterButton.addEventListener('click', () => {
+    const isActive = filterInput.value.trim().toLowerCase() === '[deploy]';
+    filterInput.value = isActive ? '' : '[DEPLOY]';
+    updateDeployFilterState();
+    renderAll(true);
+    filterInput.focus();
+  });
   pauseButton.addEventListener('click', () => {
     paused = !paused;
     pauseButton.textContent = paused ? 'Resume' : 'Pause';

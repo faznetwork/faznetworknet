@@ -18,9 +18,31 @@
       <a class="back-link" href="/admin/dashboard">← Back to Admin</a>
     </header>
     <section class="console-card" aria-label="Live server logs">
+      <div class="deployment-header" aria-label="Deployment status">
+        <div class="deployment-status">
+          <% if (deploymentInfo && deploymentInfo.status === "Live") { %>
+            <span class="deployment-pill is-live"><span class="live-pulse" aria-hidden="true"></span> Live</span>
+          <% } else { %>
+            <span class="deployment-pill is-unknown">● Deployment unknown</span>
+          <% } %>
+        </div>
+        <div class="deployment-detail">
+          <span class="deployment-label">Active Commit</span>
+          <% if (deploymentInfo) { %>
+            <a class="deployment-commit" href="https://github.com/faznetwork/faznetworknet/commit/<%= encodeURIComponent(deploymentInfo.commitHash) %>" target="_blank" rel="noopener noreferrer" title="<%= deploymentInfo.commitMessage %>"><code><%= deploymentInfo.commitHash.slice(0, 12) %></code><span class="commit-message"><%= deploymentInfo.commitMessage %></span></a>
+          <% } else { %>
+            <span class="deployment-value">Unavailable</span>
+          <% } %>
+        </div>
+        <div class="deployment-detail">
+          <span class="deployment-label">Last Deployed</span>
+          <span class="deployment-value"><%= deploymentInfo ? deploymentInfo.deployedAt : "Unavailable" %><% if (deploymentInfo) { %> <span class="timezone-label">Asia/Dhaka</span><% } %></span>
+        </div>
+      </div>
       <div class="toolbar">
         <label class="filter-label" for="logFilter">Search / Filter</label>
         <input id="logFilter" type="search" placeholder="Search messages or level…" autocomplete="off">
+        <button id="deployFilterBtn" type="button" class="secondary" aria-pressed="false">[DEPLOY] Logs</button>
         <button id="pauseResumeBtn" type="button">Pause</button>
         <button id="clearLogsBtn" type="button" class="secondary">Clear</button>
       </div>
