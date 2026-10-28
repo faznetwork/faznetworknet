@@ -1,3 +1,4 @@
+<% const isSuperAdmin = (r) => String(r || '').toLowerCase().replace(/[\s_-]/g, '') === 'superadmin'; %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1932,7 +1933,7 @@
             <li class="menu-item" data-rbac-roles="super_admin">
                 <a href="/admin/audit-logs"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
-            <% if (String(typeof currentRole !== "undefined" ? currentRole : "").toLowerCase().replace(/[\s_-]/g, "") === "superadmin") { %>
+            <% if (isSuperAdmin(typeof currentRole !== "undefined" ? currentRole : "")) { %>
             <li class="menu-item" data-rbac-roles="super_admin">
                 <a href="/admin/live-logs"><i class="bi bi-terminal"></i><span>Live Server Console</span></a>
             </li>
@@ -5983,7 +5984,7 @@ async function deletePlan(id,name){
         };
 
 
-        const currentAdminCanInvitePrivileged = <%- JSON.stringify(typeof currentRole !== 'undefined' && currentRole === 'super_admin') %>;
+        const currentAdminCanInvitePrivileged = <%- JSON.stringify(isSuperAdmin(typeof currentRole !== 'undefined' ? currentRole : '')) %>;
         let currentStaffMode = 'all';
         window.loadStaffInvitations = async function(mode = currentStaffMode) {
             const body = document.getElementById('rbacInvitationsBody');
@@ -8971,7 +8972,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 return { view: 'not-found', path: String(route.path || window.location.pathname) };
             }
-            function routeFromPath(path) {
+            const isSuperAdmin = (r) => String(r || '').toLowerCase().replace(/[\s_-]/g, '') === 'superadmin';
+                function routeFromPath(path) {
                 const routes = {
                     '/admin/dashboard': { view: 'dashboard' },
                     '/admin/customers/add': { view: 'page', page: 'add-customer' },
@@ -9195,7 +9197,13 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'vpn': return callIfAvailable('loadVpnModule');
                     case 'vpn-port-forwarding': return callIfAvailable('loadPortForwarding');
                     case 'audit': return callIfAvailable('loadAuditLogs');
-                    case 'live-logs': window.location.assign('/admin/live-logs'); return true;
+                    case 'live-logs':
+                        if (!isSuperAdmin(document.body?.dataset?.userRole)) {
+                            console.warn('[Admin Routing] Live Server Console requires SuperAdmin access.');
+                            return showAdminNotFound('/admin/live-logs');
+                        }
+                        window.location.assign('/admin/live-logs');
+                        return true;
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
                     case 'hr': return callIfAvailable('loadHRModule', [r.section]);
