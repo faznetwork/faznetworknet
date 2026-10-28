@@ -36,7 +36,7 @@ function normalizeArgs(args) {
 
 function publish(level, args) {
   const entry = Object.freeze({
-    id: nextId++,
+    id: String(process.pid) + '-' + nextId++,
     timestamp: new Date().toISOString(),
     level,
     message: normalizeArgs(args)
@@ -44,7 +44,15 @@ function publish(level, args) {
   entries.push(entry);
   if (entries.length > BUFFER_LIMIT) entries.splice(0, entries.length - BUFFER_LIMIT);
   // Never log from this broadcast path: console is already wrapped above.
-  stream.emit('entry', entry);
+  for (const listener of stream.listeners('entry')) {
+    try {
+      listener(entry);
+    } catch (error) {
+      // Report subscriber failures through the saved original method, never the wrapped console.
+      const rawError = originalMethods.get('error');
+      if (rawError) rawError('[Live logger] Subscriber failed:', error);
+    }
+  }
 }
 
 function wrapConsole(method, level) {
