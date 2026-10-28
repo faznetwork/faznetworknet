@@ -1932,7 +1932,7 @@
             <li class="menu-item" data-rbac-roles="super_admin">
                 <a href="/admin/audit-logs"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
-            <% if (String(typeof currentRole !== "undefined" ? currentRole : "").toLowerCase() === "super_admin") { %>
+            <% if (String(typeof currentRole !== "undefined" ? currentRole : "").toLowerCase().replace(/[\s_-]/g, "") === "superadmin") { %>
             <li class="menu-item" data-rbac-roles="super_admin">
                 <a href="/admin/live-logs"><i class="bi bi-terminal"></i><span>Live Server Console</span></a>
             </li>
@@ -8907,6 +8907,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
             function has(list, value) {
                 return list.indexOf(String(value || '')) !== -1;
             }
+            function isSuperAdminRole(role) {
+                return String(role || '').toLowerCase().replace(/[\\s_-]/g, '') === 'superadmin';
+            }
             function cleanRoute(route) {
                 if (!route || typeof route !== 'object') return { view: 'not-found', path: window.location.pathname };
                 if (route.view === 'dashboard') return { view: 'dashboard' };
@@ -8949,7 +8952,11 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     return { view: 'hr', section };
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
-                if (route.view === 'live-logs') return { view: 'live-logs' };
+                if (route.view === 'live-logs') {
+                    return isSuperAdminRole(document.body.dataset.userRole)
+                        ? { view: 'live-logs' }
+                        : { view: 'not-found', path: window.location.pathname };
+                }
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
