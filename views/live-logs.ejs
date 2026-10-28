@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Live Server Console | FAZ NETWORK</title>
+  <link rel="stylesheet" href="/css/live-logs.css">
+</head>
+<body>
+  <main class="console-page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">FAZ NETWORK · SUPERADMIN</p>
+        <h1>Live Server Console</h1>
+        <p class="subtitle">Recent in-memory server output and live events. History resets when the process restarts.</p>
+      </div>
+      <a class="back-link" href="/admin/dashboard">← Back to Admin</a>
+    </header>
+    <section class="console-card" aria-label="Live server logs">
+      <div class="toolbar">
+        <label class="filter-label" for="logFilter">Search / Filter</label>
+        <input id="logFilter" type="search" placeholder="Search messages or level…" autocomplete="off">
+        <button id="pauseResumeBtn" type="button">Pause</button>
+        <button id="clearLogsBtn" type="button" class="secondary">Clear</button>
+      </div>
+      <div class="console-status">
+        <span class="connection-indicator" id="connectionIndicator" aria-hidden="true"></span>
+        <span id="connectionStatus" role="status" aria-live="polite">Connecting…</span>
+        <span class="status-spacer"></span>
+        <span id="logCount">0 lines</span>
+      </div>
+      <div id="terminal" class="terminal" tabindex="0" role="log" aria-label="Server log output" aria-live="off">
+        <div id="terminalLines" class="terminal-lines"></div>
+      </div>
+      <p class="footnote">Displayed log lines are redacted for common credential patterns. “Clear” only clears this browser view; it does not alter server logs.</p>
+    </section>
+  </main>
+  <script src="/js/live-logs.js" defer></script>
+</body>
+</html>
