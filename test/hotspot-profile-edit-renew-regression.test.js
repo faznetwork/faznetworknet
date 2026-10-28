@@ -68,7 +68,8 @@ test("Quick Renew stacks expiry from the future expiry using the canonical trans
   let transactionCount = 0;
   let routerApplyCount = 0;
 
-  await withMocks(async () => {
+  try {
+    await withMocks(async () => {
     db.withTransaction = async callback => {
       transactionCount++;
       const client = {
@@ -121,12 +122,15 @@ test("Quick Renew stacks expiry from the future expiry using the canonical trans
     throw new Error("Unexpected non-transaction SQL: " + sql);
   });
 
-  db.withTransaction = oldWithTransaction;
-  mikrotik.getHotspotProfiles = oldGetProfiles;
-  renewalOperations.cleanupStaleRenewals = oldCleanup;
-  renewalOperations.applyRouterRenewal = oldApply;
-  renewalOperations.finalizeRenewal = oldFinalize;
-  renewalOperations.failRenewal = oldFail;
+    });
+  } finally {
+    db.withTransaction = oldWithTransaction;
+    mikrotik.getHotspotProfiles = oldGetProfiles;
+    renewalOperations.cleanupStaleRenewals = oldCleanup;
+    renewalOperations.applyRouterRenewal = oldApply;
+    renewalOperations.finalizeRenewal = oldFinalize;
+    renewalOperations.failRenewal = oldFail;
+  }
 });
 
 test("Archive delegates to verified canonical deletion and retains financial history", async () => {
