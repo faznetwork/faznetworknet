@@ -12,4 +12,4 @@ jobs:
         shell: cmd
         run: |
           "D:\Git\cmd\git.exe" config --system --add safe.directory D:/faznetworknet 2>nul || ver >nul
-          cd /d D:\faznetworknet && "D:\Git\cmd\git.exe" pull origin main && "D:\Git\cmd\git.exe" log -1 --oneline && set "GIT_EXECUTABLE=D:\Git\cmd\git.exe" && node scripts/write-deployment-info.js && call npx --yes pm2 restart faznetworknet
+          set "PM2_HOME=C:\Users\RABBI-PC\.pm2" && cd /d D:\faznetworknet && "D:\Git\cmd\git.exe" pull origin main && "D:\Git\cmd\git.exe" log -1 --oneline && set "GIT_EXECUTABLE=D:\Git\cmd\git.exe" && node scripts/write-deployment-info.js && call "C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd" restart faznetworknet
