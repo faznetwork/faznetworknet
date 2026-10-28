@@ -8,41 +8,9 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Update Code and Restart
-        shell: powershell
+      - name: Deploy and Restart
+        shell: cmd
         run: |
-          $env:Path = "D:\Git\cmd;D:\Git\bin;C:\Users\RABBI-PC\AppData\Roaming\npm;" + [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\Git\cmd;C:\Program Files (x86)\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;$env:APPDATA\npm"
-          $gitExeCandidates = @(
-            "D:\Git\cmd\git.exe",
-            "D:\Git\bin\git.exe",
-            "C:\Program Files\Git\cmd\git.exe",
-            "C:\Program Files (x86)\Git\cmd\git.exe",
-            "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
-          )
-          foreach ($registryKey in @("HKLM:\SOFTWARE\GitForWindows", "HKLM:\SOFTWARE\WOW6432Node\GitForWindows", "HKCU:\SOFTWARE\GitForWindows")) {
-            if (Test-Path $registryKey) {
-              $installPath = (Get-ItemProperty -Path $registryKey -Name InstallPath -ErrorAction SilentlyContinue).InstallPath
-              if ($installPath) {
-                $gitExeCandidates += (Join-Path $installPath "cmd\git.exe")
-                $gitExeCandidates += (Join-Path $installPath "bin\git.exe")
-              }
-            }
-          }
-          $gitExeCandidates += Get-ChildItem -Path "C:\Users\*\AppData\Local\Programs\Git\cmd\git.exe" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-          $gitExe = $gitExeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-          if ($gitExe) {
-            $env:Path = (Split-Path $gitExe -Parent) + ";" + $env:Path
-          }
-          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            throw "Git was not found in PATH or standard/registered Git for Windows installations. Verify D:\Git\cmd\git.exe exists on the self-hosted runner."
-          }
-
-          # PM2's verified per-user directory is explicitly on PATH above.
-          # Avoid Test-Path against that user profile: the NetworkService runner may not have permission to inspect it.
-          if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-            throw "PM2 was not found in PATH. Verify the runner service account can access C:\Users\RABBI-PC\AppData\Roaming\npm and execute pm2.cmd."
-          }
-
-          cd D:\faznetworknet
-          git pull origin main
-          pm2 restart all
+          cd /d D:\faznetworknet
+          "D:\Git\cmd\git.exe" pull origin main
+          call npx --yes pm2 restart all
