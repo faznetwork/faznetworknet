@@ -15,6 +15,49 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Deploy and Restart
-        shell: cmd
+        shell: powershell
         run: |
-          set "GIT_TERMINAL_PROMPT=0" && set "GCM_INTERACTIVE=Never" && set "PM2_HOME=C:\Users\RABBI-PC\.pm2" && cd /d D:\faznetworknet && "D:\Git\cmd\git.exe" config --system --add safe.directory D:/faznetworknet && "D:\Git\cmd\git.exe" -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer %GITHUB_TOKEN%" pull --ff-only origin main && "D:\Git\cmd\git.exe" log -1 --oneline && set "GIT_EXECUTABLE=D:\Git\cmd\git.exe" && node scripts/write-deployment-info.js && call "C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd" restart faznetworknet
+          $ErrorActionPreference = 'Stop'
+          $git = 'D:\Git\cmd\git.exe'
+          $repo = 'D:\faznetworknet'
+          $pm2 = 'C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd'
+
+          $env:GIT_TERMINAL_PROMPT = '0'
+          $env:GCM_INTERACTIVE = 'Never'
+          $env:PM2_HOME = 'C:\Users\RABBI-PC\.pm2'
+
+          & $git config --system --add safe.directory D:/faznetworknet
+          if ($LASTEXITCODE -ne 0) { throw 'Could not configure Git safe.directory for the deployment repository.' }
+
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+            throw 'GITHUB_TOKEN was not provided to the deployment job.'
+          }
+
+          $encodedCredential = [Convert]::ToBase64String(
+            [Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GITHUB_TOKEN")
+          )
+          $env:GIT_CONFIG_COUNT = '1'
+          $env:GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader'
+          $env:GIT_CONFIG_VALUE_0 = "AUTHORIZATION: basic $encodedCredential"
+
+          try {
+            Set-Location $repo
+            & $git pull --ff-only origin main
+            if ($LASTEXITCODE -ne 0) { throw 'Git pull failed; deployment was stopped before metadata write or PM2 restart.' }
+          }
+          finally {
+            Remove-Item Env:GIT_CONFIG_COUNT -ErrorAction SilentlyContinue
+            Remove-Item Env:GIT_CONFIG_KEY_0 -ErrorAction SilentlyContinue
+            Remove-Item Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
+            $encodedCredential = $null
+          }
+
+          & $git log -1 --oneline
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the deployed Git commit.' }
+
+          $env:GIT_EXECUTABLE = $git
+          & node scripts/write-deployment-info.js
+          if ($LASTEXITCODE -ne 0) { throw 'Deployment metadata generation failed; PM2 restart was skipped.' }
+
+          & $pm2 restart faznetworknet
+          if ($LASTEXITCODE -ne 0) { throw 'PM2 restart failed. Verify the named process and PM2_HOME on the runner.' }
