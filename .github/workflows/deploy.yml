@@ -11,6 +11,5 @@ jobs:
       - name: Deploy and Restart
         shell: cmd
         run: |
-          cd /d D:\faznetworknet
-          "D:\Git\cmd\git.exe" pull origin main
-          call npx --yes pm2 restart all
+          "D:\Git\cmd\git.exe" config --system --add safe.directory D:/faznetworknet 2>nul || ver >nul
+          cd /d D:\faznetworknet && "D:\Git\cmd\git.exe" pull origin main && "D:\Git\cmd\git.exe" log -1 --oneline && call npx --yes pm2 restart faznetworknet
