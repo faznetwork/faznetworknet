@@ -12,7 +12,7 @@ let nextId = 1;
 
 function redact(value) {
   return String(value)
-    .replace(/\b(authorization|cookie)\b\s*([=:])\s*[^\r\n,;]+/ig,
+    .replace(/\b(authorization|cookie)\b(\s*[=:]\s*)[^\r\n,;]+/ig,
       (_match, key, separator) => key + separator + '[REDACTED]')
     .replace(/\b(password|passwd|secret|token|api[_-]?key|session)\b\s*([=:])\s*([^\s,;]+)/ig,
       (_match, key, separator) => key + separator + '[REDACTED]')
