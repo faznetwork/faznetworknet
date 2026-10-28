@@ -1932,6 +1932,11 @@
             <li class="menu-item" data-rbac-roles="super_admin">
                 <a href="/admin/audit-logs"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
             </li>
+            <% if (String(typeof currentRole !== "undefined" ? currentRole : "").toLowerCase() === "super_admin") { %>
+            <li class="menu-item" data-rbac-roles="super_admin">
+                <a href="/admin/live-logs"><i class="bi bi-terminal"></i><span>Live Server Console</span></a>
+            </li>
+            <% } %>
 
             <li class="menu-item general-settings-menu">
                 <button class="dropdown-toggle general-settings-toggle" type="button" aria-expanded="false" aria-controls="general-settings-submenu" onclick="toggleSubmenu(event, this); return false;">
