@@ -957,23 +957,7 @@ class MikroTikService {
     if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
     let mac = this._str(macAddressValue).trim().toUpperCase();
     const validMac = value => /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(this._str(value).trim().toUpperCase());
-    if (!validMac(mac)) {
-      mac = "";
-      try {
-        const db = require("../db");
-        const result = await db.query("SELECT mac_address FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) OR LOWER(mac_address)=LOWER($1) ORDER BY id DESC LIMIT 1", [username]);
-        const candidate = this._str(result.rows?.[0]?.mac_address).trim().toUpperCase();
-        if (validMac(candidate)) mac = candidate;
-      } catch (error) {
-        console.warn("[Hotspot expiry] Could not resolve MAC binding:", error.message);
-      }
-    }
-    if (!validMac(mac)) {
-      const error = new Error("A verified MAC address is required to purge and verify all Hotspot host resources.");
-      error.code = "HOTSPOT_MAC_IDENTITY_MISSING";
-      error.statusCode = 409;
-      throw error;
-    }
+    // mac is optional if username is provided
     return this._withConnection("Hotspot hard expiry purge", async connection => {
       const [userRows, activeRows, cookieRows, hostRows, schedulerRows] = await Promise.all([
         connection.write("/ip/hotspot/user/print"),
@@ -1843,3 +1827,4 @@ mikrotikService.ipMatchesPoolRange=ipMatchesPoolRange;
 mikrotikService.resolvePoolFromRanges=resolvePoolFromRanges;
 mikrotikService.normalizeHotspotMac=normalizeHotspotMac;
 module.exports=mikrotikService;
+

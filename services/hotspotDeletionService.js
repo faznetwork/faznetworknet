@@ -43,9 +43,7 @@ async function deleteHotspotSubscriber({
   const username = String(voucher.username || "").trim();
   const macAddress = normalizeMac(voucher.mac_address) || normalizeMac(voucher.last_known_mac) || normalizeMac(requested);
   if (!username) throw deletionError("HOTSPOT_USERNAME_MISSING", 409, "The saved voucher has no username; deletion was stopped safely.");
-  if (!macAddress) {
-    throw deletionError("HOTSPOT_MAC_IDENTITY_MISSING", 409, "A verified MAC address is unavailable. Bind/resolve the device before deletion; no database state was changed.");
-  }
+  // macAddress optional for unused vouchers
 
   let purge;
   try {
@@ -86,3 +84,4 @@ async function deleteHotspotSubscriber({
 }
 
 module.exports = { deleteHotspotSubscriber, normalizeMac };
+
