@@ -120,8 +120,6 @@ test("Quick Renew stacks expiry from the future expiry using the canonical trans
     }
     if (sql.startsWith("UPDATE hotspot_renewal_operations SET router_applied=true")) return { rows: [{ id: "test-operation" }] };
     throw new Error("Unexpected non-transaction SQL: " + sql);
-  });
-
     });
   } finally {
     db.withTransaction = oldWithTransaction;
