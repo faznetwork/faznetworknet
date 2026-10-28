@@ -4,7 +4,7 @@ const ROLES = Object.freeze(['super_admin', 'admin', 'staff']);
 const db = require('../db');
 
 function normalizeRole(role) {
-  const value = String(role || '').toLowerCase().replace(/[\\s_-]/g, '');
+  const value = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
   if (value === 'superadmin') return 'super_admin';
   if (value === 'admin') return 'admin';
   if (value === 'staff') return 'staff';
