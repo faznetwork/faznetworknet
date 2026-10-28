@@ -61,16 +61,34 @@ test("single-tenant hotspot settings schema does not require tenant_id",()=>{
  assert.match(controller,/WHERE id=1/);
 });
 
-test("public portal config exposes saved branding, feature flags and only enabled priced profiles",()=>{
- assert.ok(controller.includes("async function publicPortalPayload(){"));
- assert.ok(controller.includes("display_mode:s.display_mode||defaults.display_mode"));
- assert.ok(controller.includes("logoUrl:s.portal_logo_url||null"));
- assert.ok(controller.includes("bannerUrl:s.banner_url||null"));
- assert.ok(controller.includes("features:{online_payment:s.enable_online_payment!==false,voucher_pin:s.enable_voucher_pin!==false,qr_scan:s.enable_qr_scan!==false}"));
- assert.ok(controller.includes("return {profileId:name,profile:name,name,price,validity:validity||\"Internet access\"}"));
- assert.ok(controller.includes("status(503).json({success:false,error:"));
+test("public portal config exposes saved branding, feature flags and only enabled priced profiles",async()=>{
+ const db=require("../db");
+ const portal=require("../controllers/hotspotPortalSettingsController");
+ const originalQuery=db.query;
+ db.query=async(sql)=>{
+  if(sql.startsWith("INSERT INTO hotspot_portal_settings"))return {rows:[]};
+  if(sql.includes("SELECT * FROM hotspot_portal_settings"))return {rows:[{display_mode:"banner",portal_logo_url:"/uploads/branding/logo.png",banner_url:"/uploads/branding/banner.png",brand_title:"FAZ Test Portal",enable_online_payment:false,enable_voucher_pin:true,enable_qr_scan:false}]};
+  if(sql.includes("hotspot_public_portal_config"))return {rows:[{value:JSON.stringify({portalTitle:"FAZ Test Portal",enabledProfiles:["Pack 525","Free"],mfs:[{enabled:true,number:"01711111111"},{enabled:false,number:"01822222222"}]})}]};
+  if(sql.includes("hotspot_profile_metadata"))return {rows:[{value:JSON.stringify({"Pack 525":{price:525,validityLabel:"30 days",limitBytesTotal:0},Hidden:{price:650,validityLabel:"30 days"},Free:{price:0,validityLabel:"1 day"}})}]};
+  throw new Error("Unexpected portal-config query: "+sql);
+ };
+ const response={headers:{},payload:null,set(key,value){this.headers[key]=value;return this;},status(code){this.statusCode=code;return this;},json(payload){this.payload=payload;return this;}};
+ try {
+  await portal.publicPortalConfig({},response);
+  assert.equal(response.statusCode,undefined);
+  assert.equal(response.payload.success,true);
+  assert.equal(response.payload.display_mode,"banner");
+  assert.equal(response.payload.logoUrl,"/uploads/branding/logo.png");
+  assert.equal(response.payload.bannerUrl,"/uploads/branding/banner.png");
+  assert.deepEqual(response.payload.features,{online_payment:false,voucher_pin:true,qr_scan:false});
+  assert.deepEqual(response.payload.packages.map(item=>item.profileId),["Pack 525"]);
+  assert.equal(response.payload.packages[0].price,525);
+  assert.equal(response.payload.packages[0].validity,"30 days");
+  assert.deepEqual(response.payload.mfs,[{enabled:true,number:"01711111111"}]);
+ } finally {
+  db.query=originalQuery;
+ }
 });
-
 test("hotspot login page uses one script and preserves verified voucher, payment and RouterOS CHAP flows",()=>{
  const scripts=[...login.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
  assert.equal(scripts.length,1,"legacy competing script flows should be consolidated");

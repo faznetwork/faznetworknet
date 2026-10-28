@@ -9,7 +9,10 @@ test("public homepage never opens a live MikroTik connection", () => {
   const server = read("server.js");
   assert.doesNotMatch(server, /publicMikrotikService\.getHotspotProfiles\s*\(/);
   assert.doesNotMatch(server, /require\(["']\.\/services\/mikrotikService["']\)/);
-  assert.match(server, /Saved hotspot metadata unavailable/);
+  const portalSettings = read("controllers/hotspotPortalSettingsController.js");
+  assert.match(portalSettings, /async function publicPortalPayload\(\)/);
+  assert.match(portalSettings, /async function enabledPortalPackages\(config\)/);
+  assert.doesNotMatch(portalSettings.slice(portalSettings.indexOf("async function publicPortalPayload"), portalSettings.indexOf("async function publicBranding")), /getHotspotProfiles|mikrotikService/);
 });
 
 test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {

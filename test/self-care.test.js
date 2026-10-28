@@ -27,15 +27,34 @@ test("public homepage retains customer login and removes deprecated account stat
   assert.doesNotMatch(view, /id="account"/);
 });
 
-test("public hotspot package checkout uses configured MFS accounts and TrxID verification", () => {
+test("public hotspot package checkout uses configured MFS accounts and TrxID verification", async () => {
   const view = read("views/index.ejs");
-  const server = read("server.js");
+  const settings = read("controllers/settingsController.js");
   const controller = read("controllers/paymentController.js");
   assert.match(view, /data-buy-hotspot/);
   assert.match(view, /hotspotPurchaseForm/);
   assert.match(view, /paymentMethod/);
   assert.match(view, /hotspotBuyerTrxId/);
-  assert.match(server, /paymentAccounts/);
+  assert.match(settings, /mfs_bkash_number/);
+  assert.match(settings, /mfs_nagad_number/);
+  assert.match(settings, /activePaymentMethods/);
+  const settingsController = require("../controllers/settingsController");
+  const appSettings = require("../services/appSettings");
+  const originalBrand = appSettings.getBrandSettings;
+  const originalAll = appSettings.getAllSettings;
+  appSettings.getBrandSettings = async () => ({ company_name: "FAZ NETWORK" });
+  appSettings.getAllSettings = async () => ({ mfs_bkash_number: "01711111111", mfs_nagad_number: "", mfs_rocket_number: "01822222222", mfs_upay_number: "" });
+  const response = { headers: {}, payload: null, set(key,value){ this.headers[key]=value; return this; }, status(code){ this.statusCode=code; return this; }, json(payload){ this.payload=payload; return this; } };
+  try {
+    await settingsController.publicSettings({}, response);
+    assert.equal(response.statusCode, undefined);
+    assert.deepEqual(response.payload.settings.active_payment_methods, ["bkash", "rocket"]);
+    assert.equal(response.payload.settings.payment_accounts.bkash, "01711111111");
+    assert.equal(response.payload.settings.payment_accounts.nagad, "");
+  } finally {
+    appSettings.getBrandSettings = originalBrand;
+    appSettings.getAllSettings = originalAll;
+  }
   assert.match(controller, /requestedProfile/);
   assert.match(controller, /const method=String\(body\.paymentMethod\|\|body\.gateway/);
 });

@@ -26,8 +26,15 @@ test("Unified routes direct list, edit, renew and archive to the safe controller
   const routes = read("routes/hotspotRoutes.js");
   assert.match(routes, /router\.get\("\/users",userController\.list\)/);
   assert.match(routes, /router\.put\("\/users\/:id\/profile",userController\.updateProfile\)/);
-  assert.match(routes, /router\.post\("\/users\/:id\/renew",userController\.renew\)/);
+  assert.match(routes, /router\.post\("\/users\/:id\/renew",controller\.manualRenew\)/);
   assert.match(routes, /router\.delete\("\/users\/:id",userController\.archive\)/);
+  const router = require("../routes/hotspotRoutes");
+  const renewRoute = router.stack.find(layer => layer.route?.path === "/users/:id/renew");
+  assert.ok(renewRoute, "renew endpoint is registered");
+  assert.equal(renewRoute.route.methods.post, true);
+  assert.equal(renewRoute.route.stack[0].handle, require("../controllers/hotspotController").manualRenew);
+  const archiveRoute = router.stack.find(layer => layer.route?.path === "/users/:id");
+  assert.equal(archiveRoute.route.stack[0].handle, require("../controllers/hotspotUserController").archive);
   const controller = read("controllers/hotspotUserController.js");
   assert.match(controller, /SELECT id,username,customer_name,phone,mac_address/);
   assert.match(controller, /UPDATE hotspot_vouchers SET customer_name=\$1,phone=\$2/);
@@ -37,7 +44,12 @@ test("Unified routes direct list, edit, renew and archive to the safe controller
 test("Subscriber 360 uses guarded session disconnect and canonical verified deletion", () => {
   const controller = read("controllers/hotspotUserController.js");
   const ui = read("public/js/hotspot-users-clean.js");
-  assert.match(controller, /RouterOS calls are deliberately read-only/);
+  const guardResponse = { statusCode: 200, payload: null, status(code) { this.statusCode = code; return this; }, json(payload) { this.payload = payload; return this; } };
+  const guardResult = require("../controllers/hotspotUserController").blockRouterMutation({}, guardResponse);
+  assert.equal(guardResult, guardResponse);
+  assert.equal(guardResponse.statusCode, 409);
+  assert.equal(guardResponse.payload.success, false);
+  assert.match(guardResponse.payload.message, /RouterOS users and active sessions remain untouched/);
   assert.doesNotMatch(controller, /mikrotikService\.(?:removeHotspotUser|rechargeHotspotUser|kickHotspotUser|deleteHotspotUser|removeHotspotCookie|removeHotspotHost)\s*\(/);
   assert.match(controller, /Network access purged and subscriber soft-deleted/);
   assert.match(ui, /\/api\/hotspot\/active\/disconnect/);
