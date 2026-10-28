@@ -21,27 +21,31 @@ router.get('/', (req, res) => {
   if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
   let closed = false;
+  let unsubscribe = () => {};
   const send = (eventName, payload) => {
     if (closed || res.writableEnded || res.destroyed) return;
-    res.write('event: ' + eventName + '\\n');
-    res.write('data: ' + JSON.stringify(payload) + '\\n\\n');
+    res.write('event: ' + eventName + String.fromCharCode(10));
+    res.write('data: ' + JSON.stringify(payload) + String.fromCharCode(10, 10));
   };
-
-  send('history', logger.getRecentLogs());
-  const unsubscribe = logger.subscribe(entry => send('log', entry));
-  const heartbeat = setInterval(() => {
-    if (!closed && !res.writableEnded && !res.destroyed) res.write(': heartbeat\\n\\n');
-  }, 20000);
-  if (typeof heartbeat.unref === 'function') heartbeat.unref();
-
   const cleanup = () => {
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
     unsubscribe();
+    req.off('aborted', cleanup);
   };
+  const heartbeat = setInterval(() => {
+    if (!closed && !res.writableEnded && !res.destroyed) {
+      res.write(': heartbeat' + String.fromCharCode(10, 10));
+    }
+  }, 20000);
+  if (typeof heartbeat.unref === 'function') heartbeat.unref();
+  unsubscribe = logger.subscribe(entry => send('log', entry));
   req.on('aborted', cleanup);
   res.on('close', cleanup);
+
+  // Subscribe before reading history so entries logged during connection setup are not lost.
+  send('history', logger.getRecentLogs());
 });
 
 module.exports = router;
