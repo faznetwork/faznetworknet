@@ -12,7 +12,9 @@ let nextId = 1;
 
 function redact(value) {
   return String(value)
-    .replace(/\b(password|passwd|secret|token|api[_-]?key|authorization|cookie|session)\b\s*([=:])\s*([^\s,;]+)/ig,
+    .replace(/\b(authorization|cookie)\b\s*([=:])\s*[^\r\n,;]+/ig,
+      (_match, key, separator) => key + separator + '[REDACTED]')
+    .replace(/\b(password|passwd|secret|token|api[_-]?key|session)\b\s*([=:])\s*([^\s,;]+)/ig,
       (_match, key, separator) => key + separator + '[REDACTED]')
     .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/ig, '$1 [REDACTED]')
     .replace(/(https?:\/\/)[^/@\s]+:[^/@\s]+@/ig, '$1[REDACTED]@')
