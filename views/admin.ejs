@@ -8949,6 +8949,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     return { view: 'hr', section };
                 }
                 if (route.view === 'network-diagram') return { view: 'network-diagram' };
+                if (route.view === 'live-logs') return { view: 'live-logs' };
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
                 if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
@@ -9003,6 +9004,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/network/olt/topology': { view: 'olt', mode: 'topology' },
                     '/admin/staff': { view: 'staff' },
                     '/admin/audit-logs': { view: 'audit' },
+                    '/admin/live-logs': { view: 'live-logs' },
                     '/admin/network/maps': { view: 'maps' },
                     '/admin/support/tickets': { view: 'support', category: 'all' },
                     '/admin/settings': { view: 'settings', section: 'brand' },
@@ -9186,6 +9188,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'vpn': return callIfAvailable('loadVpnModule');
                     case 'vpn-port-forwarding': return callIfAvailable('loadPortForwarding');
                     case 'audit': return callIfAvailable('loadAuditLogs');
+                    case 'live-logs': window.location.assign('/admin/live-logs'); return true;
                     case 'maps': return callIfAvailable('loadGoogleMapTracking');
                     case 'support': return callIfAvailable('loadSupportTickets', [r.category || 'all']);
                     case 'hr': return callIfAvailable('loadHRModule', [r.section]);
