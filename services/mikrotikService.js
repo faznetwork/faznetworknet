@@ -1427,13 +1427,24 @@ class MikroTikService {
         await connection.write("/ip/hotspot/user/add",params);
       }
 
-      // Clear stale cookies without disconnecting a customer's live session.
+      // Disconnect only sessions bound to the target MAC/current or previous username.
+      // Force provisioning changes the RouterOS credential/profile, so stale active
+      // sessions must be removed before the voucher is reported ready for MAC auth.
       const identityNames=new Set([macAddress,previousUsername].map(value=>this._str(value).trim().toUpperCase()).filter(Boolean));
-      const cookieRows=await connection.write("/ip/hotspot/cookie/print");
-      for(const cookie of (Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress))) {
-        await connection.write("/ip/hotspot/cookie/remove",["=.id="+cookie[".id"]]);
+      const matchesIdentity=item=>identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress;
+      const activeRows=await connection.write("/ip/hotspot/active/print");
+      let clearedActiveSessions=0;
+      for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(item=>item[".id"]&&matchesIdentity(item))) {
+        await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+        clearedActiveSessions++;
       }
-      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions:0,clearedCookies:(Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&(identityNames.has(this._str(item.user).trim().toUpperCase())||normalizeHotspotMac(item["mac-address"])===macAddress)).length,macAuthEnabled};
+      const cookieRows=await connection.write("/ip/hotspot/cookie/print");
+      let clearedCookies=0;
+      for(const cookie of (Array.isArray(cookieRows)?cookieRows:[]).filter(item=>item[".id"]&&matchesIdentity(item))) {
+        await connection.write("/ip/hotspot/cookie/remove",["=.id="+cookie[".id"]]);
+        clearedCookies++;
+      }
+      return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions,clearedCookies,macAuthEnabled};
     });
   }
 
