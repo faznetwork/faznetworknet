@@ -2,7 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-// Keep test credentials out of CI output; logger capture is still exercised via the wrapper.\nconsole.log = () => {};\nconst logger = require('../services/liveLogger');
+// Keep test credentials out of CI output; logger capture is still exercised via the wrapper.
+console.log = () => {};
+const logger = require('../services/liveLogger');
 
 test('live logger bounds history to the latest 100 entries', () => {
   const marker = 'live-logger-buffer-test-' + Date.now();
@@ -20,7 +22,7 @@ test('live logger redacts common credentials before storing entries', () => {
   assert.match(entry.message, /password=\[REDACTED\]/i);
   assert.match(entry.message, /session=\[REDACTED\]/i);
   assert.match(entry.message, /Authorization:\s*\[REDACTED\]/i);
-  assert.doesNotMatch(entry.message, /very-secret|abc123|abc\.def/);
+  assert.doesNotMatch(entry.message, /very-secret|abc123|abc\.def|json-password|json-token/);
 });
 
 test('live logger subscriptions receive entries and can be removed', () => {
