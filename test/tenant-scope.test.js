@@ -33,6 +33,17 @@ test('customer list and live-session fallback apply reseller POP scoping',()=>{
  assert.match(source,/c\.pop_id\s*=\s*ANY\(\$1::bigint\[\]\)/);
  assert.match(source,/username IN \(SELECT username FROM customers WHERE pop_id=ANY\(\$1::bigint\[\]\)\)/);
 });
+test('Customer 360, live metrics, and usage retrieval carry the authenticated POP predicate',()=>{
+ const source=fs.readFileSync(path.join(root,'controllers/customerController.js'),'utf8');
+ assert.match(source,/async function resolveCustomer360\(idValue,tenantScope\)/);
+ assert.match(source,/AND \(\$2::bigint\[\] IS NULL OR pop_id=ANY\(\$2::bigint\[\]\)\)/);
+ assert.match(source,/resolveCustomer360\(req\.params\.id,req\.tenantScope\)/);
+});
+test('ownership middleware rejects mismatched route and body customer identifiers',()=>{
+ const source=fs.readFileSync(path.join(root,'middleware/tenantScope.js'),'utf8');
+ assert.match(source,/const identifiers=\[req\.params\?\.id,req\.query\?\.username,req\.body\?\.username,req\.body\?\.id\]/);
+ assert.match(source,/Customer identifiers do not refer to the same record/);
+});
 test('customer creation remains administrator-only and assigns the canonical direct POP by default',()=>{
  const routes=fs.readFileSync(path.join(root,'routes/customerRoutes.js'),'utf8');
  const controller=fs.readFileSync(path.join(root,'controllers/customerController.js'),'utf8');
