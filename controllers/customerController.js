@@ -1083,13 +1083,13 @@ async function updateCustomer(req,res){
       // key and identity, so never let a numeric RouterOS username collide with
       // another customer's numeric database ID.
       current=req.auth?.role==="reseller"
-        ? await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int::int) LIMIT 1",[selectedUsername,Number(req.auth.reseller_id)])
+        ? await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int) LIMIT 1",[selectedUsername,Number(req.auth.reseller_id)])
         : await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
     }else{
       // Keep backwards compatibility for other panel screens that still submit
       // a database ID rather than the PPPoE username.
       current=req.auth?.role==="reseller"
-        ? await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int::int) LIMIT 1",[id,Number(req.auth.reseller_id)])
+        ? await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int) LIMIT 1",[id,Number(req.auth.reseller_id)])
         : await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
     }
     // Online Customer rows may exist only in MikroTik. When an admin edits one,
