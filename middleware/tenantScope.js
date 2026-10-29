@@ -35,10 +35,15 @@ async function requireCustomerOwnership(req,res,next){
  const key=String(req.params?.id??req.query?.username??req.body?.id??req.body?.username??'').trim();
  if(!key)return res.status(400).json({success:false,message:'Customer identifier is required.'});
  try{
-  const result=await db.query('SELECT id,username,pop_id FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) LIMIT 1',[key]);
+  const result=await db.query('SELECT id,username,pop_id FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1',[key,scope.global?null:scope.popIds]);
   const customer=result.rows[0];
-  if(!customer)return res.status(404).json({success:false,message:'Customer not found.'});
-  if(!scope.global&&!customerBelongsToScope(customer,scope))return res.status(403).json({success:false,message:'Customer belongs to another reseller or POP.'});
+  if(!customer){
+   if(!scope.global){
+    const exists=await db.query('SELECT 1 FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) LIMIT 1',[key]);
+    if(exists.rows.length)return res.status(403).json({success:false,message:'Customer belongs to another reseller or POP.'});
+   }
+   return res.status(404).json({success:false,message:'Customer not found.'});
+  }
   req.tenantCustomer=customer;
   return next();
  }catch(error){
