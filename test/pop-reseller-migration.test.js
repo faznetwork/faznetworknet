@@ -10,7 +10,7 @@ const migration = fs.readFileSync(
 );
 
 test('migration is transactional and re-runnable without destructive customer operations', () => {
-  assert.match(migration, /^\\s*(?:--[^\\r\\n]*(?:\\r?\\n|$)\\s*)*BEGIN;/i);
+  assert.match(migration, /^\s*(?:--[^\r\n]*(?:\r?\n|$)\s*)*BEGIN;/i);
   assert.match(migration, /COMMIT;\s*$/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS resellers/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS pops/);
