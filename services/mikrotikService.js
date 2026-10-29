@@ -40,7 +40,8 @@ function resolvePoolFromRanges(ip,pools){if(ipv4ToInt(ip)===null||!Array.isArray
 function normalizeHotspotMac(value){const compact=String(value??'').trim().replace(/[:-]/g,'');return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(':').toUpperCase():'';}
 
 class MikroTikService {
-  constructor() {
+  constructor(routerId = null) {
+    this.routerId = routerId == null ? null : String(routerId);
     // One long-lived RouterOS session per Node.js process. Every operation is
     // serialized because a RouterOS API connection must not have overlapping
     // command/reply streams.
@@ -71,10 +72,19 @@ class MikroTikService {
     if (!hasOverride) {
       // A router becomes operational only after an administrator tests and saves
       // it in the UI. Imported records and legacy settings alone are not active.
-      const result = await database.query(
-        "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl " +
-        "FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 1"
-      );
+      const result = this.routerId
+        ? await database.query(
+          "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2",
+          [this.routerId]
+        )
+        : await database.query(
+          "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND is_active=TRUE AND api_type='native_api' LIMIT 2"
+        );
+      if ((result.rows || []).length !== 1) {
+        throw new Error(this.routerId
+          ? `MikroTik configuration error: Active native API router ${this.routerId} was not found uniquely.`
+          : "MikroTik configuration error: Expected exactly one active canonical router at 10.10.10.1:8728.");
+      }
       const router = result.rows?.[0];
       if (!router) {
         throw new Error("MikroTik configuration error: No router has been manually added. Use Add Device to test and save the router first.");
@@ -88,7 +98,6 @@ class MikroTikService {
       if (!user) throw new Error("MikroTik configuration error: router_devices API username is not configured.");
       if (!password) throw new Error("MikroTik configuration error: router_devices API password is not configured.");
       const config = { host, port, user, password };
-      await this._syncLegacyRouterSettings(database, config);
       this._configCache = config;
       this._configCacheUntil = Date.now() + 5000;
       return { ...config };
@@ -114,15 +123,6 @@ class MikroTikService {
       this._configCacheUntil = Date.now() + 5000;
     }
     return config;
-  }
-  async _syncLegacyRouterSettings(database, config) {
-    await database.query(
-      "INSERT INTO app_settings(key,value) " +
-      "SELECT setting_key,setting_value FROM unnest($1::text[],$2::text[]) AS settings(setting_key,setting_value) " +
-      "ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",
-      [["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"],
-        [config.host,String(config.port),config.user,config.password]]
-    );
   }
   invalidateConfigCache() {
     this._configCache = null;
@@ -1818,24 +1818,53 @@ class MikroTikService {
       const normalizedName = name.toLowerCase();
       const matches = (Array.isArray(rows) ? rows : []).filter((item) =>
         this._str(item.name).trim().toLowerCase() === normalizedName &&
-        this._str(item.service).trim().toLowerCase() === "pppoe" &&
-        Boolean(item[".id"])
+        this._str(item.service).trim().toLowerCase() === "pppoe" && Boolean(item[".id"])
       );
-      if (!matches.length) {
-        return { username: name, kicked: false, count: 0, message: "Customer is already offline; no active PPPoE session was found." };
-      }
-      for (const session of matches) {
-        await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
-      }
+      if (!matches.length) return { username: name, kicked: false, count: 0, message: "Customer is already offline; no active PPPoE session was found." };
+      for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
       return { username: name, kicked: true, count: matches.length, message: "Active PPPoE session disconnected. The customer device can reconnect automatically." };
     });
   }
+  async close() {
+    await this._operationQueue;
+    const connection=this._connection;
+    this._connection=null;this._connectionKey=null;this._connectionPromise=null;this._connectionPromiseKey=null;
+    this.invalidateConfigCache();this._ipPoolCache=null;this._activeSessionsCache=null;
+    this._activeSessionsCacheAt=0;this._activeSessionsCacheUntil=0;
+    if(!connection)return;
+    if(typeof connection.close==='function')await connection.close();
+    else if(typeof connection.disconnect==='function')await connection.disconnect();
+    else if(typeof connection.destroy==='function')await connection.destroy();
+    else throw new Error('RouterOS connection does not expose close, disconnect, or destroy.');
+  }
 }
-
-const mikrotikService=new MikroTikService();
-mikrotikService.ipv4ToInt=ipv4ToInt;
-mikrotikService.ipMatchesPoolRange=ipMatchesPoolRange;
-mikrotikService.resolvePoolFromRanges=resolvePoolFromRanges;
-mikrotikService.normalizeHotspotMac=normalizeHotspotMac;
+const RouterRuntimePool=require("./RouterRuntimePool");
+const canonicalRuntime=new MikroTikService();
+canonicalRuntime.ipv4ToInt=ipv4ToInt;canonicalRuntime.ipMatchesPoolRange=ipMatchesPoolRange;
+canonicalRuntime.resolvePoolFromRanges=resolvePoolFromRanges;canonicalRuntime.normalizeHotspotMac=normalizeHotspotMac;
+const runtimePool=new RouterRuntimePool({
+  createRuntime:router=>new MikroTikService(String(router.id)),
+  maxRuntimes:Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES||"100",10)
+});
+async function getMikroTikService(routerId) {
+  const database=require("../db");let result;
+  if(routerId!==undefined&&routerId!==null&&String(routerId).trim()!==""){
+    const id=String(routerId).trim();
+    if(!/^[1-9]\d*$/.test(id))throw new TypeError("A positive integer router ID is required.");
+    result=await database.query("SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",[id]);
+  }else{
+    result=await database.query("SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND api_type='native_api' AND is_active=TRUE LIMIT 2");
+  }
+  if((result.rows||[]).length!==1)throw new Error(routerId?`Active native API router ${String(routerId)} was not found uniquely.`:"Expected exactly one active canonical router at 10.10.10.1:8728.");
+  return runtimePool.getRuntime(result.rows[0]);
+}
+const mikrotikService=new Proxy(canonicalRuntime,{
+  get(target,property,receiver){
+    if(property==="getMikroTikService")return getMikroTikService;
+    if(property==="runtimePool")return runtimePool;
+    if(property==="MikroTikService")return MikroTikService;
+    return Reflect.get(target,property,receiver);
+  }
+});
 module.exports=mikrotikService;
 
