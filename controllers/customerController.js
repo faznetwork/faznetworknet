@@ -627,8 +627,9 @@ async function listCustomers(req,res){
     }
     const sessionMap=createActiveSessionMap(sessions);
 
+    const resolveCustomerZone=row=>clean(row.area_zone,150)||clean(row.pop_name,150)||"FAZ Main";
     const zoneCounts={all:result.rows.length};
-    for(const row of result.rows){const zone=clean(row.area_zone||row.pop_name,150)||"FAZ Main";zoneCounts[zone]=(zoneCounts[zone]||0)+1;}
+    for(const row of result.rows){const zone=resolveCustomerZone(row);zoneCounts[zone]=(zoneCounts[zone]||0)+1;}
     const mapped=result.rows.map(row=>{
       const billing=evaluateCustomerBillingStatus({...row,expiration_date:row.expiration_date||row.pppoe_expiry_date||null});
       const session=sessionMap.get(normalizeUsername(row.username));
@@ -643,6 +644,7 @@ async function listCustomers(req,res){
       const displayName=canonicalName||parsedCommentName;
       return {
         ...row,
+        area_zone:resolveCustomerZone(row),
         full_name:displayName,
         fullName:displayName,
         phone:formatBdPhoneNumber(!isMissingValue(row.phone)?row.phone:commentPhone),
@@ -666,7 +668,7 @@ async function listCustomers(req,res){
         profile:row.profile||row.pppoe_profile||"",
         computed_status:billing.status
       };
-    }).filter(row=>(requestedStatus==="all"||(requestedStatus==="unpaid"?["unpaid","expired"].includes(row.billing_status):row.billing_status===requestedStatus))&&(requestedZone.toLowerCase()==="all"||clean(row.area_zone||row.pop_name,150).toLowerCase()===requestedZone.toLowerCase()||(!clean(row.area_zone||row.pop_name,150)&&requestedZone.toLowerCase()==="faz main")));
+    }).filter(row=>(requestedStatus==="all"||(requestedStatus==="unpaid"?["unpaid","expired"].includes(row.billing_status):row.billing_status===requestedStatus))&&(requestedZone.toLowerCase()==="all"||resolveCustomerZone(row).toLowerCase()===requestedZone.toLowerCase()));
 
     const allMapped=result.rows.map(row=>evaluateCustomerBillingStatus(row).status);
     const counts={
@@ -1288,7 +1290,7 @@ async function resolveCustomer360(idValue){
   const commissionAmount=Number((resellerCommissionType==="percentage"?monthlyBill*resellerCommissionRate/100:resellerCommissionRate).toFixed(2));
   const netBalance=Number((monthlyBill-commissionAmount).toFixed(2));
   return {
-    customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150)||"FAZ Main",resellerCommissionType,resellerCommissionRate,monthlyBill,commissionAmount,netBalance,connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150)||clean(customer.pop_name,150)||"FAZ Main",resellerCommissionType,resellerCommissionRate,monthlyBill,commissionAmount,netBalance,connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
     live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),router_status:routerStatus,ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),routerMac:clean(session?.callerId||storedMac||customer.router_mac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
