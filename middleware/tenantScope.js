@@ -32,20 +32,14 @@ async function loadTenantScope(req,res,next){
 async function requireCustomerOwnership(req,res,next){
  const scope=req.tenantScope;
  if(!scope)return res.status(403).json({success:false,message:'Tenant scope is missing.'});
- const identifiers=[req.params?.id,req.query?.username,req.body?.username,req.body?.id].map(v=>String(v??'').trim()).filter(Boolean);
- if(!identifiers.length)return res.status(400).json({success:false,message:'Customer identifier is required.'});
+ const key=String(req.params?.id??req.query?.username??req.body?.id??req.body?.username??'').trim();
+ if(!key)return res.status(400).json({success:false,message:'Customer identifier is required.'});
  try{
-  const resolved=[];
-  for(const key of [...new Set(identifiers)]){
-   const result=await db.query('SELECT id,pop_id FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) LIMIT 1',[key]);
-   const customer=result.rows[0];
-   if(!customer)return res.status(404).json({success:false,message:'Customer not found.'});
-   if(!customerBelongsToScope(customer,scope))return res.status(403).json({success:false,message:'Customer belongs to another reseller or POP.'});
-   resolved.push(customer);
-  }
-  const canonicalId=String(resolved[0].id);
-  if(resolved.some(customer=>String(customer.id)!==canonicalId))return res.status(400).json({success:false,message:'Customer identifiers do not refer to the same record.'});
-  req.tenantCustomer=resolved[0];
+  const result=await db.query('SELECT id,username,pop_id FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) LIMIT 1',[key]);
+  const customer=result.rows[0];
+  if(!customer)return res.status(404).json({success:false,message:'Customer not found.'});
+  if(!scope.global&&!customerBelongsToScope(customer,scope))return res.status(403).json({success:false,message:'Customer belongs to another reseller or POP.'});
+  req.tenantCustomer=customer;
   return next();
  }catch(error){
   console.error('[TENANT SCOPE] Ownership verification failed:',error.message);

@@ -7,6 +7,7 @@ router.use(loadTenantScope);
 function requireExactDeleteUsername(req,res,next){
  const username=String(req.body?.username||'').trim();
  if(!username)return res.status(400).json({success:false,code:'CUSTOMER_DELETE_USERNAME_REQUIRED',message:'Exact PPPoE username is required. No customer records were changed.'});
+ if(req.tenantCustomer?.username && String(req.tenantCustomer.username).toLowerCase()!==username.toLowerCase())return res.status(400).json({success:false,code:'CUSTOMER_DELETE_IDENTITY_MISMATCH',message:'The route customer ID and exact PPPoE username do not match. No records were changed.'});
  return next();
 }
 router.get('/packages',controller.packages);
@@ -24,7 +25,7 @@ router.get('/:id/usage-records',requireCustomerOwnership,controller.getCustomerU
 router.get('/:id/profile',requireCustomerOwnership,controller.getCustomerProfileById);
 router.post('/:id/sync-mikrotik',requireCustomerOwnership,controller.syncSingleCustomerToMikroTik);
 router.put('/:id',requireCustomerOwnership,controller.updateCustomer);
-router.delete('/:id',requireExactDeleteUsername,requireCustomerOwnership,controller.removeCustomer);
+router.delete('/:id',requireCustomerOwnership,requireExactDeleteUsername,controller.removeCustomer);
 router.post('/:id/kick',requireCustomerOwnership,controller.kickCustomerById);
 router.post('/:id/toggle-status',requireCustomerOwnership,controller.toggleCustomerStatus);
 router.post('/:id/renew',requireCustomerOwnership,controller.renewCustomerById);
@@ -34,7 +35,7 @@ router.put('/customers/:id',requireCustomerOwnership,controller.updateCustomer);
 router.post('/update',requireCustomerOwnership,(req,res)=>{req.params.id=String(req.body?.id||req.body?.username||'').trim();return controller.updateCustomer(req,res);});
 router.post('/renew',requireCustomerOwnership,controller.renew);
 router.post('/mark-paid',requireCustomerOwnership,controller.markPaid);
-router.post('/delete',requireExactDeleteUsername,requireCustomerOwnership,controller.removeCustomer);
+router.post('/delete',requireCustomerOwnership,requireExactDeleteUsername,controller.removeCustomer);
 router.post('/kick',requireCustomerOwnership,async(req,res)=>{
  const username=String(req.body?.username||'').trim();
  if(!username)return res.status(400).json({success:false,message:'Username is required.'});

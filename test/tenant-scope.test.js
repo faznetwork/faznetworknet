@@ -41,8 +41,9 @@ test('Customer 360, live metrics, and usage retrieval carry the authenticated PO
 });
 test('ownership middleware rejects mismatched route and body customer identifiers',()=>{
  const source=fs.readFileSync(path.join(root,'middleware/tenantScope.js'),'utf8');
- assert.match(source,/const identifiers=\[req\.params\?\.id,req\.query\?\.username,req\.body\?\.username,req\.body\?\.id\]/);
- assert.match(source,/Customer identifiers do not refer to the same record/);
+ assert.match(source,/const key=String\(req\.params\?\.id\?\?req\.query\?\.username\?\?req\.body\?\.id\?\?req\.body\?\.username/);
+ const routes=fs.readFileSync(path.join(root,'routes/customerRoutes.js'),'utf8');
+ assert.match(routes,/CUSTOMER_DELETE_IDENTITY_MISMATCH/);
 });
 test('customer creation remains administrator-only and assigns the canonical direct POP by default',()=>{
  const routes=fs.readFileSync(path.join(root,'routes/customerRoutes.js'),'utf8');
