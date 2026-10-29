@@ -617,8 +617,12 @@ async function listCustomers(req,res){
                   caller_id AS "callerId",received_at AS "receivedAt"
            FROM pppoe_live_sessions
            WHERE received_at >= NOW() - INTERVAL '3 minutes'
-           ORDER BY username ASC`
-        );
+             AND ($1::int IS NULL OR LOWER(username) IN (
+               SELECT LOWER(c.username) FROM customers c
+               JOIN pops p ON p.id=c.pop_id
+               WHERE p.reseller_id=$1::int
+             ))
+           ORDER BY username ASC`,[resellerId]);
         if(!snapshot.rows.length){
           return res.status(503).json({
             success:false,
