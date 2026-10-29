@@ -9,33 +9,36 @@ const hotspotSource = fs.readFileSync(path.join(__dirname, "../controllers/hotsp
 
 function functionBody(source, signature, nextSignature) {
   const start = source.indexOf(signature);
-  assert.notEqual(start, -1, `Missing function: ${signature}`);
+  assert.notEqual(start, -1, "Missing function: " + signature);
   const end = source.indexOf(nextSignature, start + signature.length);
-  assert.notEqual(end, -1, `Missing function boundary: ${nextSignature}`);
+  assert.notEqual(end, -1, "Missing function boundary: " + nextSignature);
   return source.slice(start, end);
 }
 
-test("profile sync rebuilds metadata only from the successfully fetched live RouterOS profiles", () => {
+test("profile sync resolves the router runtime and scopes profile upserts and metadata by router ID", () => {
   const body = functionBody(
     settingsSource,
-    "async function syncMikrotikProfilesInternal()",
+    "async function syncMikrotikProfilesInternal(routerId)",
     "async function saveMikrotik("
   );
-  assert.match(body, /await Promise\.all\(\[mikrotikService\.fetchExistingProfiles\(\),mikrotikService\.getHotspotProfiles\(\)\]\)/);
-  assert.match(body, /const liveMetadata=\{\}/);
-  assert.match(body, /liveMetadata\[name\]=/);
-  assert.match(body, /upsertSetting\("hotspot_profile_metadata",JSON\.stringify\(liveMetadata\)\)/);
-  assert.doesNotMatch(body, /for\(const p of hotspotProfiles\)\{const name=String\(p\.name\|\|""\);if\(!metadata\[name\]\)metadata\[name\]=\{\};\}/);
+  assert.match(body, /mikrotikService\.getMikroTikService\(routerId\)/);
+  assert.match(body, /runtime\.fetchExistingProfiles\(\),runtime\.getHotspotProfiles\(\)/);
+  assert.match(body, /ON CONFLICT\(router_id,name\) DO UPDATE/);
+  assert.match(body, /String\(routerId\)/);
+  assert.match(body, /const metadataKey="hotspot_profile_metadata_"\+String\(routerId\)/);
+  assert.match(body, /upsertSetting\(metadataKey,JSON\.stringify\(liveMetadata\)\)/);
+  assert.doesNotMatch(body, /ON CONFLICT\(name\) DO UPDATE/);
+  assert.doesNotMatch(body, /upsertSetting\("hotspot_profile_metadata",/);
 });
 
-test("profile sync does not swallow RouterOS API failure or purge metadata before a successful profile fetch", () => {
+test("profile sync does not swallow RouterOS API failure or write metadata before a successful profile fetch", () => {
   const body = functionBody(
     settingsSource,
-    "async function syncMikrotikProfilesInternal()",
+    "async function syncMikrotikProfilesInternal(routerId)",
     "async function saveMikrotik("
   );
-  const routerFetch = body.indexOf("mikrotikService.getHotspotProfiles()");
-  const metadataWrite = body.indexOf('upsertSetting("hotspot_profile_metadata"');
+  const routerFetch = body.indexOf("runtime.getHotspotProfiles()");
+  const metadataWrite = body.indexOf("await upsertSetting(metadataKey");
   assert.ok(routerFetch >= 0 && metadataWrite > routerFetch, "metadata write must follow the awaited RouterOS fetch");
   assert.doesNotMatch(body, /getHotspotProfiles\(\)\.catch\(/);
 });
