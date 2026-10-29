@@ -195,9 +195,7 @@ async function createCustomer(req, res) {
     nid: clean(body.nid, 100),
     installationAddress: clean(body.installationAddress || body.address, 500),
     fiberBox: clean(body.fiberBox, 150),
-    areaZone: clean(body.areaZone || body.area_zone, 150) || "FAZ Main",
-    resellerCommissionType: String(body.resellerCommissionType || body.reseller_commission_type || "percentage").trim().toLowerCase(),
-    resellerCommissionRateRaw: body.resellerCommissionRate ?? body.reseller_commission_rate ?? 0,
+    areaZone: clean(body.areaZone || body.area_zone, 150),
     onuMac: null,
     alternativePhone: clean(body.alternativePhone || body.alternative_phone, 40),
     oltPonPort: null,
@@ -216,11 +214,6 @@ async function createCustomer(req, res) {
     remarks: clean(body.remarks || body.note, 1000)
   };
   if(!/^[1-9]\d*$/.test(customer.routerId))return res.status(400).json({success:false,message:"A valid router ID is required."});
-  if(!["percentage","fixed"].includes(customer.resellerCommissionType))return res.status(400).json({success:false,message:"Commission type must be Percentage or Fixed Amount."});
-  const commissionRateText=String(customer.resellerCommissionRateRaw ?? "").trim();
-  if(!/^(?:\d+)(?:\.\d{1,2})?$/.test(commissionRateText))return res.status(400).json({success:false,message:"Commission value must be a non-negative number with up to two decimal places."});
-  customer.resellerCommissionRate=Number(commissionRateText);
-  if(!Number.isFinite(customer.resellerCommissionRate)||customer.resellerCommissionRate<0||(customer.resellerCommissionType==="percentage"&&customer.resellerCommissionRate>100))return res.status(400).json({success:false,message:customer.resellerCommissionType==="percentage"?"Percentage commission must be between 0 and 100.":"Fixed commission must be a non-negative amount."});
   if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
   if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
   if(customer.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
@@ -247,7 +240,6 @@ async function createCustomer(req, res) {
     const packageDefinition = await resolvePackageDefinition(customer.profile, customer.packageName);
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
-    if(customer.resellerCommissionType==="fixed"&&customer.resellerCommissionRate>Number(customer.monthlyBill||0))return res.status(400).json({success:false,message:"Fixed commission cannot exceed the customer monthly bill."});
     customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
     // Resolve the effective RouterOS profile only after the package profile is canonicalized.
     customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
@@ -273,8 +265,8 @@ async function createCustomer(req, res) {
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
         billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
-        email, whatsapp_phone, telegram_link, facebook_link, reseller_commission_type, reseller_commission_rate, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,$31,NOW(),NOW())
+        email, whatsapp_phone, telegram_link, facebook_link, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -284,8 +276,7 @@ async function createCustomer(req, res) {
         customer.alternativePhone || null, null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
         customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
         (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
-        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null,
-        customer.resellerCommissionType,customer.resellerCommissionRate
+        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null
       ]
     );
 
@@ -572,7 +563,6 @@ async function getCustomerSyncDiagnostics(req,res){
 async function listCustomers(req,res){
   try{
     const requestedStatus=clean(req.query?.status||"all",20).toLowerCase();
-    const requestedZone=clean(req.query?.zone||req.query?.pop||"all",150);
     const allowed=new Set(["all","paid","due","unpaid"]);
     if(!allowed.has(requestedStatus))return res.status(400).json({success:false,message:"Invalid billing status filter.",allowedStatuses:Array.from(allowed)});
 
@@ -627,9 +617,6 @@ async function listCustomers(req,res){
     }
     const sessionMap=createActiveSessionMap(sessions);
 
-    const resolveCustomerZone=row=>clean(row.area_zone,150)||clean(row.pop_name,150)||"FAZ Main";
-    const zoneCounts={all:result.rows.length};
-    for(const row of result.rows){const zone=resolveCustomerZone(row);zoneCounts[zone]=(zoneCounts[zone]||0)+1;}
     const mapped=result.rows.map(row=>{
       const billing=evaluateCustomerBillingStatus({...row,expiration_date:row.expiration_date||row.pppoe_expiry_date||null});
       const session=sessionMap.get(normalizeUsername(row.username));
@@ -644,7 +631,6 @@ async function listCustomers(req,res){
       const displayName=canonicalName||parsedCommentName;
       return {
         ...row,
-        area_zone:resolveCustomerZone(row),
         full_name:displayName,
         fullName:displayName,
         phone:formatBdPhoneNumber(!isMissingValue(row.phone)?row.phone:commentPhone),
@@ -668,7 +654,7 @@ async function listCustomers(req,res){
         profile:row.profile||row.pppoe_profile||"",
         computed_status:billing.status
       };
-    }).filter(row=>(requestedStatus==="all"||(requestedStatus==="unpaid"?["unpaid","expired"].includes(row.billing_status):row.billing_status===requestedStatus))&&(requestedZone.toLowerCase()==="all"||resolveCustomerZone(row).toLowerCase()===requestedZone.toLowerCase()));
+    }).filter(row=>requestedStatus==="all"||(requestedStatus==="unpaid"?["unpaid","expired"].includes(row.billing_status):row.billing_status===requestedStatus));
 
     const allMapped=result.rows.map(row=>evaluateCustomerBillingStatus(row).status);
     const counts={
@@ -678,7 +664,7 @@ async function listCustomers(req,res){
       unpaid:allMapped.filter(s=>s==="unpaid"||s==="expired").length
     };
 
-    return res.json({success:true,count:mapped.length,total:result.rows.length,status:requestedStatus,zone:requestedZone,zoneCounts,counts,users:mapped,customers:mapped});
+    return res.json({success:true,count:mapped.length,total:result.rows.length,status:requestedStatus,counts,users:mapped,customers:mapped});
   }catch(error){return errorResponse(res,error);}
 }
 
@@ -1168,14 +1154,7 @@ async function updateCustomer(req,res){
     if(requestedAccountStatus==="active"&&dateStatus(expirationDate)==="expired")return res.status(409).json({success:false,message:"This expiry date is in the past. Update the expiry date before reactivating the account."});
     const disabled=requestedAccountStatus?requestedAccountStatus==="suspended":body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
-    const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150)||"FAZ Main";
-    const commissionType=String(body.resellerCommissionType??body.reseller_commission_type??row.reseller_commission_type??"percentage").trim().toLowerCase();
-    const commissionRateText=String(body.resellerCommissionRate??body.reseller_commission_rate??row.reseller_commission_rate??0).trim();
-    if(!["percentage","fixed"].includes(commissionType))return res.status(400).json({success:false,message:"Commission type must be Percentage or Fixed Amount."});
-    if(!/^(?:\d+)(?:\.\d{1,2})?$/.test(commissionRateText))return res.status(400).json({success:false,message:"Commission value must be a non-negative number with up to two decimal places."});
-    const commissionRate=Number(commissionRateText);
-    if(!Number.isFinite(commissionRate)||commissionRate<0||(commissionType==="percentage"&&commissionRate>100))return res.status(400).json({success:false,message:commissionType==="percentage"?"Percentage commission must be between 0 and 100.":"Fixed commission must be a non-negative amount."});
-    if(commissionType==="fixed"&&commissionRate>Number(packageDefinition.price||0))return res.status(400).json({success:false,message:"Fixed commission cannot exceed the customer monthly bill."});
+    const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150);
     const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),routerMac=clean(body.routerMac||row.router_mac,100);
     const remoteAddressInput=String(body.remoteAddress??body.remote_address??"").trim();
     if((hasOwn("remoteAddress")||hasOwn("remote_address"))&&remoteAddressInput){
@@ -1209,7 +1188,7 @@ async function updateCustomer(req,res){
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const nextStatus=expired?"expired":effectiveDisabled?(requestedAccountStatus==="suspended"?"suspended":"inactive"):"active";
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30,reseller_commission_type=$31,reseller_commission_rate=$32 WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null,commissionType,commissionRate]);
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30 WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,remote_address,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NULLIF($12,''),NOW(),NOW())
@@ -1284,13 +1263,8 @@ async function resolveCustomer360(idValue){
   const bytesIn=session?String(session.bytesIn??0):"0";
   const bytesOut=session?String(session.bytesOut??0):"0";
   const liveStatus=session?"online":"offline";
-  const monthlyBill=Number(customer.monthly_bill||0);
-  const resellerCommissionType=["percentage","fixed"].includes(String(customer.reseller_commission_type||"percentage").toLowerCase())?String(customer.reseller_commission_type||"percentage").toLowerCase():"percentage";
-  const resellerCommissionRate=Math.max(0,Number(customer.reseller_commission_rate||0));
-  const commissionAmount=Number((resellerCommissionType==="percentage"?monthlyBill*resellerCommissionRate/100:resellerCommissionRate).toFixed(2));
-  const netBalance=Number((monthlyBill-commissionAmount).toFixed(2));
   return {
-    customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150)||clean(customer.pop_name,150)||"FAZ Main",resellerCommissionType,resellerCommissionRate,monthlyBill,commissionAmount,netBalance,connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
     live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),router_status:routerStatus,ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),routerMac:clean(session?.callerId||storedMac||customer.router_mac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
