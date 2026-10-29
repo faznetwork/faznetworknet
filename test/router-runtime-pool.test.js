@@ -1,0 +1,95 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const RouterRuntimePool = require('../services/RouterRuntimePool');
+
+test('coalesces concurrent initialization for the same persisted router', async () => {
+  let creates = 0;
+  const runtime = { close: async () => {} };
+  const pool = new RouterRuntimePool({
+    createRuntime: async router => {
+      creates += 1;
+      await Promise.resolve();
+      assert.equal(String(router.id), '11');
+      return runtime;
+    }
+  });
+  const results = await Promise.all(Array.from({ length: 12 }, () => pool.getRuntime({ id: 11 })));
+  assert.equal(creates, 1);
+  assert.ok(results.every(item => item === runtime));
+});
+
+test('isolates runtime instances by router ID and enforces capacity', async () => {
+  const created = [];
+  const pool = new RouterRuntimePool({
+    maxRuntimes: 2,
+    createRuntime: async router => {
+      const runtime = { routerId: String(router.id), close: async () => {} };
+      created.push(runtime);
+      return runtime;
+    }
+  });
+  const first = await pool.getRuntime({ id: 1 });
+  const second = await pool.getRuntime({ id: 2 });
+  assert.notEqual(first, second);
+  assert.equal(await pool.getRuntime({ id: 1 }), first);
+  await assert.rejects(pool.getRuntime({ id: 3 }), /capacity reached \(2\)/);
+  assert.deepEqual(created.map(runtime => runtime.routerId), ['1', '2']);
+});
+
+test('requires a persisted router ID and a valid runtime factory result', async () => {
+  const pool = new RouterRuntimePool({ createRuntime: async () => null });
+  await assert.rejects(pool.getRuntime({ host: '192.0.2.1' }), /persisted router ID is required/);
+  await assert.rejects(pool.getRuntime({ id: 5 }), /Invalid runtime returned for router 5/);
+  assert.equal(pool.runtimes.size, 0);
+  assert.equal(pool.pending.size, 0);
+});
+
+test('failed initialization is not cached and can be retried', async () => {
+  let attempts = 0;
+  const runtime = { close: async () => {} };
+  const pool = new RouterRuntimePool({
+    createRuntime: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('initialization failed');
+      return runtime;
+    }
+  });
+  await assert.rejects(pool.getRuntime({ id: 9 }), /initialization failed/);
+  assert.equal(await pool.getRuntime({ id: 9 }), runtime);
+  assert.equal(attempts, 2);
+});
+
+test('closeAll closes every runtime once and rejects future lookups', async () => {
+  const closed = [];
+  const pool = new RouterRuntimePool({
+    createRuntime: async router => ({
+      routerId: String(router.id),
+      close: async () => { closed.push(String(router.id)); }
+    })
+  });
+  await Promise.all([pool.getRuntime({ id: 1 }), pool.getRuntime({ id: 2 })]);
+  await Promise.all([pool.closeAll(), pool.closeAll()]);
+  assert.deepEqual(closed.sort(), ['1', '2']);
+  await assert.rejects(pool.getRuntime({ id: 3 }), /shutting down/);
+  assert.equal(pool.runtimes.size, 0);
+});
+
+test('shutdown waits for in-flight initialization and closes the created runtime', async () => {
+  let finishCreation;
+  const closed = [];
+  const pool = new RouterRuntimePool({
+    createRuntime: () => new Promise(resolve => {
+      finishCreation = () => resolve({ close: async () => { closed.push('router-4'); } });
+    })
+  });
+  const pending = pool.getRuntime({ id: 4 });
+  await Promise.resolve();
+  const shutdown = pool.closeAll();
+  finishCreation();
+  await assert.rejects(pending, /Pool closed while router 4 was initializing/);
+  await shutdown;
+  assert.deepEqual(closed, ['router-4']);
+  assert.equal(pool.runtimes.size, 0);
+});
