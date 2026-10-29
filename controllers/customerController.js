@@ -587,7 +587,7 @@ async function listCustomers(req,res){
              u.profile AS pppoe_profile
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
-      WHERE ($1::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$1))
+      WHERE ($1::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$1::int))
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `,[resellerId]);
 
@@ -700,11 +700,11 @@ async function profile(req,res){
     const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
     let dbUser=null,pppoeRow=null,mtSecret=null,session=null;
     try{
-      const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) ORDER BY c.updated_at DESC NULLS LAST, c.id DESC LIMIT 1",[username,resellerId]);
+      const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) ORDER BY c.updated_at DESC NULLS LAST, c.id DESC LIMIT 1",[username,resellerId]);
       dbUser=q.rows[0]||null;
     }catch(error){
       console.warn("[Customer 360] Sorted customer lookup failed; retrying basic lookup:",error.message);
-      try{const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,resellerId]);dbUser=q.rows[0]||null;}
+      try{const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[username,resellerId]);dbUser=q.rows[0]||null;}
       catch(fallbackError){console.error("[Customer 360] Customer lookup failed:",fallbackError.message);}
     }
     try{
@@ -909,7 +909,7 @@ async function markPaid(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
+    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     const customer=customerResult.rows[0]||null,routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
@@ -935,7 +935,7 @@ async function renew(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
+    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     const customer=customerResult.rows[0]||null, routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
@@ -977,8 +977,8 @@ async function removeCustomer(req,res){
     const tenantId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
     if(tenantId!==null&&!requestedUsername)return res.status(403).json({success:false,message:"Forbidden: reseller deletions require an exact owned customer username."});
     const customerResult=requestedUsername
-      ? await db.query("SELECT c.id,c.username FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[requestedUsername,tenantId])
-      : await db.query("SELECT c.id,c.username FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[target,tenantId]);
+      ? await db.query("SELECT c.id,c.username FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[requestedUsername,tenantId])
+      : await db.query("SELECT c.id,c.username FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[target,tenantId]);
     if(customerResult.rows.length){
       customerId=customerResult.rows[0].id;
       username=clean(customerResult.rows[0].username,100)||null;
@@ -1082,11 +1082,15 @@ async function updateCustomer(req,res){
       // The Online Customer editor sends the PPPoE username as both the route
       // key and identity, so never let a numeric RouterOS username collide with
       // another customer's numeric database ID.
-      current=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[selectedUsername,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
+      current=req.auth?.role==="reseller"
+        ? await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int::int) LIMIT 1",[selectedUsername,Number(req.auth.reseller_id)])
+        : await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
     }else{
       // Keep backwards compatibility for other panel screens that still submit
       // a database ID rather than the PPPoE username.
-      current=await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[id,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
+      current=req.auth?.role==="reseller"
+        ? await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int::int) LIMIT 1",[id,Number(req.auth.reseller_id)])
+        : await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
     }
     // Online Customer rows may exist only in MikroTik. When an admin edits one,
     // import its edited identity into billing first instead of returning 404 or
@@ -1130,7 +1134,7 @@ async function updateCustomer(req,res){
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'provisioned',$15,NOW(),NOW())
         ON CONFLICT (username) DO NOTHING RETURNING id`,
         [fullName,phone,connectionDate,username,clean(body.password||secret.password,255),packageDefinition.name,packageDefinition.profileName||requestedProfile,packageDefinition.price,clean(body.installationAddress||body.address,1000)||null,clean(body.areaZone||body.area_zone,150)||null,clean(body.fiberBox||body.distributionBox,150)||null,null,clean(body.remarks||body.note,1000)||null,expirationDate,dateStatus(expirationDate)]);
-      current=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
+      current=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
       if(!current.rows.length)return res.status(409).json({success:false,message:"Could not create the Billing Panel record for this MikroTik customer. Check for a duplicate username or database constraint."});
     }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
@@ -1227,7 +1231,7 @@ async function updateCustomer(req,res){
 
 async function resolveCustomer360(idValue,resellerId=null){
   const key=clean(idValue,100);
-  const customerResult=await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
+  const customerResult=await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[key,resellerId]);
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
@@ -1303,7 +1307,7 @@ async function getCustomerLiveSession(req,res){
   try{
     const key=clean(req.params.id,100);
     const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
-    const result=await db.query("SELECT c.id,c.username,c.router_id FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
+    const result=await db.query("SELECT c.id,c.username,c.router_id FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[key,resellerId]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
@@ -1352,7 +1356,7 @@ async function getCustomerUsageRecords(req,res){
   try{
     const key=clean(req.params.id,100);
     const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
-    const result=await db.query("SELECT c.id,c.username,c.expiration_date,c.billing_cycle,c.billing_duration_days,c.connection_date FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
+    const result=await db.query("SELECT c.id,c.username,c.expiration_date,c.billing_cycle,c.billing_duration_days,c.connection_date FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2::int)) LIMIT 1",[key,resellerId]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const todayParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
