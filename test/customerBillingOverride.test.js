@@ -155,12 +155,14 @@ test("billing cron does not mark a subscriber expired when RouterOS session remo
 });
 
 test("single-customer sync preserves an overridden past-due line when no local PPPoE row exists",async()=>{
-  const originalQuery=db.query,originalSync=mikrotik.syncPanelCustomerSecrets;
+  const originalQuery=db.query,originalSync=mikrotik.syncPanelCustomerSecrets,originalGetRuntime=mikrotik.runtimePool.getRuntime;
   let syncedCustomers=[];
   try{
+    mikrotik.runtimePool.getRuntime=()=>mikrotik;
     db.query=async(sql)=>{
+      if(sql.includes("FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2"))return {rows:[{id:3,router_name:"Test Router",host:"127.0.0.1",api_type:"native_api",api_port:8728,is_active:true}]};
       if(sql.includes("FROM customers c LEFT JOIN pppoe_users"))return {rows:[{
-        id:42,username:"01712345678",password:"secret",profile:"HOME30",full_name:"Migration Customer",
+        id:42,router_id:3,username:"01712345678",password:"secret",profile:"HOME30",full_name:"Migration Customer",
         phone:"01712345678",onu_mac:"AA:BB:CC:DD:EE:FF",expiration_date:"2020-02-29",
         remarks:"existing note",status:"active",billing_expiry_override:true,router_disabled:null
       }]};
@@ -180,6 +182,7 @@ test("single-customer sync preserves an overridden past-due line when no local P
   }finally{
     db.query=originalQuery;
     mikrotik.syncPanelCustomerSecrets=originalSync;
+    mikrotik.runtimePool.getRuntime=originalGetRuntime;
   }
 });
 

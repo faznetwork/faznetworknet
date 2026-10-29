@@ -37,6 +37,15 @@ function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+function resolveCustomerRouterId(customer) {
+  const value = String(customer?.router_id ?? "").trim();
+  return /^[1-9]\d*$/.test(value) ? value : "3";
+}
+
+async function getCustomerRouterService(customer) {
+  return require("../services/mikrotikService").getMikroTikService(resolveCustomerRouterId(customer));
+}
+
 function formatBdPhoneNumber(phone) {
   if (!phone) return "—";
   let cleanPhone = String(phone).replace(/[^0-9]/g, "");
@@ -174,6 +183,7 @@ async function createCustomer(req, res) {
   const body = req.body || {};
   const customer = {
     fullName: clean(body.fullName || body.name, 200),
+    routerId: clean(body.routerId ?? body.router_id ?? "3", 20) || "3",
     phone: formatBdPhoneNumber(body.phone),
     connectionDate: normalizeDate(body.activationDate || body.activation_date || body.connectionDate || body.connection_date),
     username: clean(body.username, 100),
@@ -203,6 +213,7 @@ async function createCustomer(req, res) {
     disabled: [true,"true",1,"1","yes","on"].includes(body.disabled),
     remarks: clean(body.remarks || body.note, 1000)
   };
+  if(!/^[1-9]\d*$/.test(customer.routerId))return res.status(400).json({success:false,message:"A valid router ID is required."});
   if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
   if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
   if(customer.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
@@ -270,15 +281,19 @@ async function createCustomer(req, res) {
     );
 
     const customerId = inserted.rows[0].id;
+    // Persist the selected router before attempting network provisioning. An
+    // offline router must not erase the customer's intended router assignment.
+    await db.query("UPDATE customers SET router_id=$1 WHERE id=$2", [customer.routerId, customerId]);
     // A new admin-created customer explicitly revives its username, so clear
     // any previous deletion tombstone before router synchronization.
     await db.query("DELETE FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1)",[customer.username]);
     let provisioning = "pending";
 
     try {
-      const routerReady = await require("../services/mikrotikService").testConnection();
+      const routerService = await getCustomerRouterService({router_id: customer.routerId});
+      const routerReady = await routerService.testConnection();
       if (routerReady) {
-        await require("../services/mikrotikService").createSecret({
+        await routerService.createSecret({
           username: customer.username,
           password: customer.password,
           profile: customer.effectiveProfile,
@@ -289,7 +304,7 @@ async function createCustomer(req, res) {
         provisioning = "provisioned";
         await db.query(
           `UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3`,
-          [String(process.env.ROUTER_HOST || ""), (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active", customerId]
+          [customer.routerId, (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active", customerId]
         );
         await db.query(
           `INSERT INTO pppoe_users
@@ -306,7 +321,7 @@ async function createCustomer(req, res) {
             (dateStatus(customer.expirationDate) === "expired" && !customer.billingExpiryOverride) || customer.disabled,
             buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
             customer.phone,
-            String(process.env.ROUTER_HOST || ""),
+            customer.routerId,
             customer.expirationDate,
             dateStatus(customer.expirationDate)==="expired"?"expired":customer.disabled?"inactive":"active",
             customer.routerMac || null
@@ -415,7 +430,7 @@ async function syncPanelCustomersToMikroTik(req,res){
 async function syncSingleCustomerToMikroTik(req,res){
   try{
     const key=clean(req.params.id,100);
-    const found=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.router_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled,u.caller_id AS stored_caller_id
+    const found=await db.query(`SELECT c.id,c.router_id,c.username,c.password,c.profile,c.full_name,c.phone,c.router_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled,u.caller_id AS stored_caller_id
       FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1))
       LIMIT 1`,[key]);
@@ -423,6 +438,7 @@ async function syncSingleCustomerToMikroTik(req,res){
     if(!row)return res.status(404).json({success:false,message:"Customer not found or is marked deleted."});
     const username=clean(row.username,100),password=clean(row.password,255),expiry=normalizeDate(row.expiration_date);
     if(!username||!password)return res.status(400).json({success:false,message:"Panel PPPoE username and password are required before syncing."});
+    const routerService=await getCustomerRouterService(row);
     const expired=Boolean(expiry&&dateStatus(expiry)==="expired"),preservePastDue=Boolean(row.billing_expiry_override);
     const customerState=String(row.status||"").toLowerCase();
     let profile=preservePastDue?clean(row.profile,120):effectiveProfile(clean(row.profile,120),expiry);
@@ -430,7 +446,7 @@ async function syncSingleCustomerToMikroTik(req,res){
     // installations use EXPIRED-PROFILE rather than EXPIRED; never create or
     // modify a RouterOS profile as a side effect of this customer sync.
     if(expired&&!preservePastDue&&String(profile).toLowerCase()==="expired"){
-      const availableProfiles=await mikrotikService.fetchExistingProfiles();
+      const availableProfiles=await routerService.fetchExistingProfiles();
       const names=new Set((Array.isArray(availableProfiles)?availableProfiles:[]).map(item=>String(item.name||"").trim().toLowerCase()).filter(Boolean));
       if(!names.has("expired")){
         if(names.has("expired-profile"))profile="EXPIRED-PROFILE";
@@ -446,10 +462,10 @@ async function syncSingleCustomerToMikroTik(req,res){
         : Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
     const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
     const callerId=clean(row.router_mac||row.stored_caller_id,100);
-    const sync=await mikrotikService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
+    const sync=await routerService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
     const result=(sync.results||[]).find(item=>String(item.username||"").toLowerCase()===username.toLowerCase());
     if(!result||!["updated","created"].includes(result.status))return res.status(502).json({success:false,message:result?.reason||"MikroTik did not confirm the PPPoE secret update.",result});
-    const routerId=String(process.env.ROUTER_HOST||"");
+    const routerId=resolveCustomerRouterId(row);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,caller_id,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,NOW(),NOW())
       ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,service='pppoe',disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=COALESCE(NULLIF(EXCLUDED.phone,''),pppoe_users.phone),router_id=EXCLUDED.router_id,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),synced_at=NOW(),updated_at=NOW()`,
@@ -1194,9 +1210,9 @@ async function resolveCustomer360(idValue){
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
-  // Customer 360 must never open a MikroTik API socket. Recent PPPoE session
-  // snapshots remain available independently of the retired OLT telemetry pipeline.
-  const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult]=await Promise.allSettled([
+  // Database failures remain visible as profile failures; only router failures
+  // are downgraded to an explicitly unavailable live-status result.
+  const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult]=await Promise.all([
     db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
                     caller_id AS "callerId",received_at AS "receivedAt"
@@ -1207,13 +1223,31 @@ async function resolveCustomer360(idValue){
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username])
   ]);
-  const secret=routerRecordResult.status==="fulfilled"?routerRecordResult.value.rows?.[0]||null:null;
-  const candidateSession=sessionResult.status==="fulfilled"?sessionResult.value.rows?.[0]||null:null;
+  const secret=routerRecordResult.rows?.[0]||null;
+  const candidateSession=sessionResult.rows?.[0]||null;
   const receivedAtMs=candidateSession?.receivedAt?new Date(candidateSession.receivedAt).getTime():NaN;
-  const session=candidateSession&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000?candidateSession:null;
-  const plans=packageResult.status==="fulfilled"?packageResult.value.rows:[];
-  const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
-  const storedMac=callerIdResult.status==="fulfilled"?clean(callerIdResult.value.rows[0]?.caller_id,100):"";
+  let session=candidateSession&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000?candidateSession:null;
+  const plans=packageResult.rows||[];
+  const payments=paymentResult.rows||[];
+  const storedMac=clean(callerIdResult.rows?.[0]?.caller_id,100);
+  let routerStatus="unreachable";
+  try {
+    const routerService=await getCustomerRouterService(customer);
+    const liveResult=await routerService.getActiveSessionsSafe();
+    if (Array.isArray(liveResult?.sessions)) {
+      session=findActiveSession(liveResult.sessions,username.toLowerCase())||null;
+      routerStatus="reachable";
+    } else {
+      session=null;
+    }
+  } catch(routerError) {
+    session=null;
+    console.warn("[Customer 360] Target router live status unavailable:", {
+      routerId:resolveCustomerRouterId(customer),
+      username,
+      message:routerError?.message||String(routerError)
+    });
+  }
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
   const billing=evaluateCustomerBillingStatus({expiration_date:expiration});
@@ -1225,8 +1259,8 @@ async function resolveCustomer360(idValue){
   const bytesOut=session?String(session.bytesOut??0):"0";
   const liveStatus=session?"online":"offline";
   return {
-    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
-    live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),routerMac:clean(session?.callerId||storedMac||customer.router_mac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
+    customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),router_status:routerStatus,ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),routerMac:clean(session?.callerId||storedMac||customer.router_mac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
     payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
@@ -1234,57 +1268,39 @@ async function resolveCustomer360(idValue){
 }
 async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
 async function getCustomerLiveSession(req,res){
-  const offlineLive=(mac="",reason="",sync="offline")=>({
-    status:"offline",isLive:false,online:false,ip:"",mac:clean(mac,100),uptime:"",
+  const offlineLive=(mac="",reason="",sync="offline",routerStatus="unreachable")=>({
+    status:"offline",isLive:false,online:false,router_status:routerStatus,ip:"",mac:clean(mac,100),uptime:"",
     bytesIn:"0",bytesOut:"0",traffic:{bytesIn:0,bytesOut:0},stale:false,
-    source:"mikrotik-active-list",checkedAt:new Date().toISOString(),live_sync:sync,
+    source:"target-router-active-list",checkedAt:new Date().toISOString(),live_sync:sync,
     ...(reason?{diagnostic:reason}: {})
   });
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+    const result=await db.query("SELECT id,username,router_id FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
-
-    let storedMac="";
-    try{
-      const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
-      storedMac=clean(q.rows?.[0]?.caller_id,100);
-    }catch(error){console.warn("[Customer 360 live status] Stored caller-id lookup failed:",error.message);}
-
-    const liveResult=await mikrotikService.getActiveSessionsSafe();
-    if(liveResult.live_sync==="timeout"||liveResult.live_sync==="unavailable"){
-      return res.json({success:true,live:offlineLive(storedMac,"Live router status temporarily unavailable.",liveResult.live_sync),liveStatusAvailable:false,statusSource:"mikrotik-active-list-unavailable"});
+    const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
+    const storedMac=clean(q.rows?.[0]?.caller_id,100);
+    try {
+      const routerService=await getCustomerRouterService(customer);
+      const liveResult=await routerService.getActiveSessionsSafe();
+      if(liveResult?.live_sync==="timeout"||liveResult?.live_sync==="unavailable"||!Array.isArray(liveResult?.sessions)){
+        return res.json({success:true,live:offlineLive(storedMac,"Target router live status is temporarily unavailable.",liveResult?.live_sync||"unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
+      }
+      const session=findActiveSession(liveResult.sessions,String(customer.username||"").trim().toLowerCase());
+      if(!session)return res.json({success:true,live:{...offlineLive(storedMac,"","offline","reachable"),live_sync:liveResult.live_sync},liveStatusAvailable:true,statusSource:"target-router-active-list"});
+      const liveIp=clean(session.address,100);
+      let livePoolName=null;
+      try{livePoolName=await routerService.getPoolNameForIp(liveIp);}catch(poolError){console.warn("[Customer 360] Live IP pool resolution failed:",poolError.message);}
+      const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
+      return res.json({success:true,live:{status:"online",isLive:true,online:true,router_status:"reachable",ip:liveIp,mac:clean(session.callerId||session.caller_id||storedMac,100),poolName:livePoolName,uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:new Date().toISOString(),checkedAt:liveResult.checkedAt||new Date().toISOString(),stale:liveResult.live_sync==="cached",live_sync:liveResult.live_sync,source:"target-router-active-list"},liveStatusAvailable:true,statusSource:"target-router-active-list"});
+    } catch(routerError) {
+      console.warn("[Customer 360 live status] Target router unavailable:",{routerId:resolveCustomerRouterId(customer),username:customer.username,message:routerError?.message||String(routerError)});
+      return res.json({success:true,live:offlineLive(storedMac,"Target router is unreachable.","unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
     }
-    const sessions=liveResult.sessions;
-    if(!Array.isArray(sessions)){
-      return res.json({success:true,live:offlineLive(storedMac,"Invalid active-session response.","unavailable"),liveStatusAvailable:false,statusSource:"mikrotik-active-list-unavailable"});
-    }
-    const target=String(customer.username||"").trim().toLowerCase();
-    const session=findActiveSession(sessions,target);
-    if(!session){
-      return res.json({success:true,live:{...offlineLive(storedMac),live_sync:liveResult.live_sync},liveStatusAvailable:true,statusSource:"mikrotik-active-list"});
-    }
-    const liveIp=clean(session.address,100);
-    let livePoolName=null;
-    try{livePoolName=await mikrotikService.getPoolNameForIp(liveIp);}catch(poolError){console.warn("[Customer 360] Live IP pool resolution failed:",poolError.message);}
-    const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
-    return res.json({
-      success:true,
-      live:{
-        status:"online",isLive:true,online:true,ip:liveIp,
-        mac:clean(session.callerId||session.caller_id||storedMac,100),poolName:livePoolName,
-        uptime:clean(session.uptime,100),bytesIn,bytesOut,
-        traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},
-        service:clean(session.service,50),receivedAt:new Date().toISOString(),
-        checkedAt:liveResult.checkedAt||new Date().toISOString(),
-        stale:liveResult.live_sync==="cached",live_sync:liveResult.live_sync,source:"mikrotik-active-list"
-      },
-      liveStatusAvailable:true,statusSource:"mikrotik-active-list"
-    });
   }catch(error){
-    console.error("[Customer 360 live status] Handler error:",error.message);
-    return res.status(500).json({success:false,message:"Unable to determine live customer status.",code:"CUSTOMER_LIVE_STATUS_ERROR"});
+    console.error("[Customer 360 live status] Database/handler error:",error.message);
+    return res.status(500).json({success:false,message:"Unable to determine live customer status.",code:"CUSTOMER_LIVE_STATUS_DATABASE_ERROR"});
   }
 }
 
@@ -1330,15 +1346,16 @@ async function getCustomerUsageRecords(req,res){
   }catch(error){console.warn("[Customer usage records] Failed:",error.message);return res.status(500).json({success:false,message:"Unable to load usage records."});}
 }
 
-async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const result=await mikrotikService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from MikroTik",username:payload.customer.username,sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
-async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);await mikrotikService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await mikrotikService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?"Account suspended. Moved to EXPIRED profile in MikroTik":`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
+async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
+async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?"Account suspended. Moved to EXPIRED profile in MikroTik":`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
 async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
     // Always restore the configured package profile, never EXPIRED.
     const activeProfile=clean(payload.package?.profileName||payload.customer.profile,100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED")throw new Error("Customer package profile is missing or invalid.");
     const comment=buildExpirationComment(payload.customer.name,payload.customer.phone,newExpDate,"Renewed via "+method);
-    await mikrotikService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:activeProfile,comment,disabled:false});
-    await mikrotikService.kickActiveUser(payload.customer.username);await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET expiry_date=$1,status='active',disabled=FALSE,comment=$2,billing_status='paid',last_paid_at=NOW(),paid_until=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'PAID',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${amount.toFixed(2)} via ${method} (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount,method,trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
+    const routerService=await getCustomerRouterService(payload.customer);
+    await routerService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:activeProfile,comment,disabled:false});
+    await routerService.kickActiveUser(payload.customer.username);await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET expiry_date=$1,status='active',disabled=FALSE,comment=$2,billing_status='paid',last_paid_at=NOW(),paid_until=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'PAID',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${amount.toFixed(2)} via ${method} (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount,method,trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
     const notificationName=payload.customer.name||payload.customer.fullName||payload.customer.username;
     const packageName=payload.package?.name||payload.package?.planName||payload.customer.packageName||payload.customer.profile||"";
     const notificationDispatch=require("../services/notificationDispatcher").dispatchNotification({
