@@ -1234,11 +1234,16 @@ async function resolveCustomer360(idValue){
   try {
     const routerService=await getCustomerRouterService(customer);
     const liveResult=await routerService.getActiveSessionsSafe();
-    if (Array.isArray(liveResult?.sessions)) {
-      session=findActiveSession(liveResult.sessions,username.toLowerCase())||null;
-      routerStatus="reachable";
+    if (
+      liveResult &&
+      !["timeout", "unavailable"].includes(liveResult.live_sync) &&
+      Array.isArray(liveResult.sessions)
+    ) {
+      routerStatus = "reachable";
+      session = findActiveSession(liveResult.sessions, username);
     } else {
-      session=null;
+      routerStatus = "unreachable";
+      session = null;
     }
   } catch(routerError) {
     session=null;
