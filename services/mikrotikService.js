@@ -1847,15 +1847,20 @@ const runtimePool=new RouterRuntimePool({
   maxRuntimes:Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES||"100",10)
 });
 async function getMikroTikService(routerId) {
-  const database=require("../db");let result;
-  if(routerId!==undefined&&routerId!==null&&String(routerId).trim()!==""){
-    const id=String(routerId).trim();
-    if(!/^[1-9]\d*$/.test(id))throw new TypeError("A positive integer router ID is required.");
-    result=await database.query("SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",[id]);
-  }else{
-    result=await database.query("SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND api_type='native_api' AND is_active=TRUE LIMIT 2");
+  const database = require("../db");
+  const suppliedId = routerId === undefined || routerId === null || String(routerId).trim() === ""
+    ? "3"
+    : String(routerId).trim();
+  if (!/^[1-9]\d*$/.test(suppliedId)) {
+    throw new TypeError("A positive integer router ID is required.");
   }
-  if((result.rows||[]).length!==1)throw new Error(routerId?`Active native API router ${String(routerId)} was not found uniquely.`:"Expected exactly one active canonical router at 10.10.10.1:8728.");
+  const result = await database.query(
+    "SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",
+    [suppliedId]
+  );
+  if ((result.rows || []).length !== 1) {
+    throw new Error(`Active native API router ${suppliedId} was not found uniquely.`);
+  }
   return runtimePool.getRuntime(result.rows[0]);
 }
 const mikrotikService=new Proxy(canonicalRuntime,{
