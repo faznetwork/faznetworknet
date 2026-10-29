@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS customers (
   package_name VARCHAR(100) NOT NULL,
   profile VARCHAR(100) NOT NULL,
   monthly_bill NUMERIC(12,2) NOT NULL CHECK (monthly_bill >= 0),
+  reseller_commission_type VARCHAR(20) NOT NULL DEFAULT 'percentage',
+  reseller_commission_rate NUMERIC(12,2) NOT NULL DEFAULT 0.00,
   nid VARCHAR(100),
   installation_address TEXT,
   fiber_box VARCHAR(150),
