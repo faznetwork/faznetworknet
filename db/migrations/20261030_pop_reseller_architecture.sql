@@ -144,14 +144,35 @@ WHERE reseller_id IS NULL
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS pop_id BIGINT;
 
 DO $faz_customer_pop_fk$
+DECLARE
+  existing_delete_action "char";
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'customers'::regclass
-      AND conname = 'customers_pop_id_fkey'
+  -- Refuse to inherit orphaned references from any prior partial/manual schema.
+  IF EXISTS (
+    SELECT 1
+    FROM customers c
+    LEFT JOIN pops p ON p.id = c.pop_id
+    WHERE c.pop_id IS NOT NULL AND p.id IS NULL
   ) THEN
+    RAISE EXCEPTION
+      'POP migration aborted: customers.pop_id contains orphaned references; reconcile them before retrying';
+  END IF;
+
+  SELECT confdeltype INTO existing_delete_action
+  FROM pg_constraint
+  WHERE conrelid = 'customers'::regclass
+    AND conname = 'customers_pop_id_fkey';
+
+  -- Customer-to-POP references must be protected from hard deletion.
+  -- Soft-deactivate a POP with status='inactive' instead.
+  IF existing_delete_action IS NOT NULL AND existing_delete_action <> 'r' THEN
+    ALTER TABLE customers DROP CONSTRAINT customers_pop_id_fkey;
+    existing_delete_action := NULL;
+  END IF;
+
+  IF existing_delete_action IS NULL THEN
     ALTER TABLE customers ADD CONSTRAINT customers_pop_id_fkey
-      FOREIGN KEY (pop_id) REFERENCES pops(id) ON DELETE SET NULL NOT VALID;
+      FOREIGN KEY (pop_id) REFERENCES pops(id) ON DELETE RESTRICT NOT VALID;
   END IF;
 END;
 $faz_customer_pop_fk$;
