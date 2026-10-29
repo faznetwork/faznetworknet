@@ -12,7 +12,7 @@ function restoreEnv(name, value) {
   else process.env[name] = value;
 }
 
-test('MikroTik config prefers and decrypts the active native router, then bridges legacy settings', async () => {
+test('MikroTik config reads only the active canonical router record and decrypts its credential', async () => {
   const originalQuery = db.query;
   const oldKey = process.env.DEVICE_CREDENTIALS_ENCRYPTION_KEY;
   const oldCache = mikrotikService._configCache;
@@ -22,22 +22,23 @@ test('MikroTik config prefers and decrypts the active native router, then bridge
   const calls = [];
   db.query = async (sql, params) => {
     calls.push({ sql, params });
-    if (sql.includes('COUNT(*)::int AS count FROM router_devices')) return { rows: [{ count: 1 }] };
-    if (sql.includes('FROM router_devices WHERE is_active=TRUE')) {
+    if (sql.includes('FROM router_devices WHERE host=') && sql.includes("host='10.10.10.1'")) {
       return { rows: [{ id: 7, host: '10.10.10.1', api_type: 'native_api', api_port: 8728, username: 'smsbot', password_encrypted: credentials.encrypt('router-secret'), status: 'online', is_active: true }] };
     }
-    if (sql.includes('INSERT INTO app_settings(key,value)')) return { rows: [] };
-    throw new Error('Unexpected SQL in router config test.');
+    if (sql.includes('app_settings')) throw new Error('Router configuration must not read or mirror legacy plaintext settings.');
+    throw new Error('Unexpected SQL in router config test: ' + sql);
   };
   mikrotikService.invalidateConfigCache();
   try {
     assert.deepEqual(await mikrotikService._getConfig(), {
       host: '10.10.10.1', port: 8728, user: 'smsbot', password: 'router-secret'
     });
-    assert.equal(calls.some(call => call.sql.includes('INSERT INTO app_settings(key,value)')), true);
-    const bridge = calls.find(call => call.sql.includes('INSERT INTO app_settings(key,value)'));
-    assert.deepEqual(bridge.params[0], ['mikrotik_host', 'mikrotik_port', 'mikrotik_user', 'mikrotik_password']);
-    assert.deepEqual(bridge.params[1], ['10.10.10.1', '8728', 'smsbot', 'router-secret']);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].sql, /FROM router_devices/);
+    assert.match(calls[0].sql, /password_encrypted/);
+    assert.match(calls[0].sql, /LIMIT 2/);
+    assert.equal(calls.some(call => call.sql.includes('app_settings')), false);
+    assert.equal(calls[0].params, undefined);
   } finally {
     db.query = originalQuery;
     restoreEnv('DEVICE_CREDENTIALS_ENCRYPTION_KEY', oldKey);
@@ -46,21 +47,23 @@ test('MikroTik config prefers and decrypts the active native router, then bridge
   }
 });
 
-test('MikroTik is unavailable until a router is manually activated, even if legacy settings exist', async () => {
+test('MikroTik remains unavailable when no canonical router is active; legacy settings cannot activate one', async () => {
   const originalQuery = db.query;
   const oldCache = mikrotikService._configCache;
   const oldCacheUntil = mikrotikService._configCacheUntil;
   const calls = [];
-  db.query = async (sql) => {
-    calls.push(sql);
-    if (sql.includes('FROM router_devices WHERE is_active=TRUE')) return { rows: [] };
-    throw new Error('Legacy settings must not activate an unregistered router.');
+  db.query = async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes('FROM router_devices WHERE host=') && sql.includes("host='10.10.10.1'")) return { rows: [] };
+    if (sql.includes('app_settings')) throw new Error('Legacy settings must not activate an unregistered router.');
+    throw new Error('Unexpected SQL in router config test: ' + sql);
   };
   mikrotikService.invalidateConfigCache();
   try {
-    await assert.rejects(mikrotikService._getConfig(), /No router has been manually added/);
-    assert.equal(calls.some(sql => sql.includes('FROM router_devices WHERE is_active=TRUE')), true);
-    assert.equal(calls.some(sql => sql.includes('app_settings')), false);
+    await assert.rejects(mikrotikService._getConfig(), /Expected exactly one active canonical router at 10\.10\.10\.1:8728/);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].sql.includes('FROM router_devices'), true);
+    assert.equal(calls.some(call => call.sql.includes('app_settings')), false);
   } finally {
     db.query = originalQuery;
     mikrotikService._configCache = oldCache;
