@@ -36,7 +36,7 @@ test('lifecycle flags and foreign-key behavior avoid hard deletion cascades', ()
   assert.match(migration, /status VARCHAR\(20\) NOT NULL DEFAULT 'inactive'/);
   assert.match(migration, /CHECK \(status IN \('active', 'inactive'\)\)/);
   assert.match(migration, /REFERENCES resellers\(id\) ON DELETE SET NULL/);
-  assert.match(migration, /REFERENCES pops\(id\) ON DELETE SET NULL/);
+  assert.match(migration, /REFERENCES pops\(id\) ON DELETE RESTRICT/);
   assert.doesNotMatch(migration, /ON DELETE CASCADE/i);
 });
 
