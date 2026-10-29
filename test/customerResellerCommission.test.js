@@ -81,3 +81,32 @@ test("updateCustomer rejects percentage commission above 100 before writing", as
     mock.restore();
   }
 });
+
+
+test("listCustomers filters by zone server-side and returns all-zone counts", async () => {
+  const originalQuery = db.query;
+  const originalSessions = mikrotik.getActiveSessions;
+  const rows = [
+    { id: 1, full_name: "North Customer", phone: "01711111111", username: "north-user", area_zone: "North POP", expiration_date: "2099-12-31", billing_status: "paid", status: "active", created_at: "2026-01-01" },
+    { id: 2, full_name: "South Customer", phone: "01722222222", username: "south-user", area_zone: "South POP", expiration_date: "2099-12-31", billing_status: "paid", status: "active", created_at: "2026-01-02" },
+    { id: 3, full_name: "Direct Customer", phone: "01733333333", username: "direct-user", area_zone: null, expiration_date: "2099-12-31", billing_status: "unpaid", status: "active", created_at: "2026-01-03" }
+  ];
+  try {
+    db.query = async sql => sql.includes("FROM customers c") ? { rows } : { rows: [] };
+    mikrotik.getActiveSessions = async () => [];
+    const res = responseRecorder();
+    await customerController.listCustomers({ query: { status: "all", zone: "North POP" } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.count, 1);
+    assert.equal(res.body.total, 3);
+    assert.equal(res.body.zone, "North POP");
+    assert.deepEqual(res.body.users.map(user => user.username), ["north-user"]);
+    assert.equal(res.body.zoneCounts.all, 3);
+    assert.equal(res.body.zoneCounts["North POP"], 1);
+    assert.equal(res.body.zoneCounts["South POP"], 1);
+    assert.equal(res.body.zoneCounts["FAZ Main"], 1);
+  } finally {
+    db.query = originalQuery;
+    mikrotik.getActiveSessions = originalSessions;
+  }
+});
