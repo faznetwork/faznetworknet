@@ -195,7 +195,7 @@ async function createCustomer(req, res) {
     nid: clean(body.nid, 100),
     installationAddress: clean(body.installationAddress || body.address, 500),
     fiberBox: clean(body.fiberBox, 150),
-    areaZone: clean((String(body.areaZone || body.area_zone || "").trim() === "__add_new__" ? body.newAreaZone : (body.areaZone || body.area_zone)), 150) || "FAZ Main",
+    areaZone: clean(body.areaZone || body.area_zone, 150) || "FAZ Main",
     resellerCommissionType: String(body.resellerCommissionType || body.reseller_commission_type || "percentage").trim().toLowerCase(),
     resellerCommissionRateRaw: body.resellerCommissionRate ?? body.reseller_commission_rate ?? 0,
     onuMac: null,
