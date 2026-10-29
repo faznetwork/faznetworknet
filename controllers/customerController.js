@@ -258,11 +258,19 @@ async function createCustomer(req, res) {
       else{const selected=await db.query("SELECT id FROM pops WHERE id=$1 AND status='active' LIMIT 1",[assignedPopId]);if(!selected.rows.length)return res.status(400).json({success:false,message:"Selected POP does not exist or is inactive."});}
       if(assignedPopId===null)return res.status(503).json({success:false,message:"Primary POP is not configured. Apply the POP/reseller migration first."});
     }
-    const existing = await db.query(
-      `SELECT id, username, phone FROM customers
-       WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1`,
-      [customer.username, customer.phone]
-    );
+    const existing = resellerId===null
+      ? await db.query(
+          `SELECT id, username, phone FROM customers
+           WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1`,
+          [customer.username, customer.phone]
+        )
+      : await db.query(
+          `SELECT c.id,c.username,c.phone FROM customers c
+           WHERE (LOWER(c.username)=LOWER($1) OR c.phone=$2)
+             AND c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$3::int)
+           LIMIT 1`,
+          [customer.username, customer.phone, resellerId]
+        );
     if (existing.rows.length) {
       const match = existing.rows[0];
       return res.status(409).json({
@@ -370,6 +378,7 @@ async function createCustomer(req, res) {
       }
     });
   } catch (error) {
+    if (error?.code === "23505") return res.status(409).json({success:false,code:"CUSTOMER_USERNAME_OR_PHONE_EXISTS",message:"A customer with this username or phone number already exists."});
     return errorResponse(res, error);
   }
 }
