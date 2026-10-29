@@ -1241,7 +1241,7 @@ async function resolveCustomer360(idValue,resellerId=null){
              WHERE LOWER(username)=LOWER($1)
              ORDER BY received_at DESC LIMIT 1`,[username]),
     db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
-    db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
+    db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE (LOWER(COALESCE(matched_username,''))=LOWER($1) OR ($3::int IS NULL AND COALESCE(sender_phone,'')=$2)) ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40),resellerId]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username])
   ]);
   const secret=routerRecordResult.rows?.[0]||null;
