@@ -91,22 +91,6 @@ exports.addDevice = async (req, res) => {
           routerValues
         );
 
-      if (apiType === 'native_api') {
-        const primary = await client.query(
-          "SELECT id FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 1"
-        );
-        if (String(primary.rows?.[0]?.id || '') === String(routerResult.rows[0].id)) {
-          // Legacy settings consumers are bridged from the selected canonical router.
-          await client.query(
-            "INSERT INTO app_settings(key,value) " +
-            "SELECT setting_key,setting_value FROM unnest($1::text[],$2::text[]) AS settings(setting_key,setting_value) " +
-            "ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",
-            [['mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password'],
-              [handshake.host,String(handshake.api_port),input.username,input.password]]
-          );
-        }
-      }
-
       // Keep the existing MikroTik Management inventory in sync with the connection record.
       // FQDNs are valid router hosts but cannot be stored in PostgreSQL's INET column, so use NULL there.
       const managementIp = isIPv4(handshake.host) ? handshake.host : null;

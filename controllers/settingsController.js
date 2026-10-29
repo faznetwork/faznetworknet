@@ -1,5 +1,7 @@
 const db=require("../db");
 const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
+const credentials=require("../services/deviceCredentials");
+const routerDeviceService=require("../services/routerDeviceService");
 function errorResponse(res,error,status=400){const message=String(error?.message||"Settings operation failed.");return res.status(status).json({success:false,error:message,message});}
 function parseBool(value){return value===true||String(value||"").toLowerCase()==="true"||String(value||"")==="1";}
 function validateUrl(value){
@@ -71,16 +73,32 @@ const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_pas
 const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
 async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);try{require("../services/appSettings").invalidate();}catch(_){}}
 async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
+async function resolveSettingsRouter(routerId) {
+ const fail=(message,statusCode)=>Object.assign(new Error(message),{statusCode});
+ let id=null;
+ if(routerId!==undefined&&routerId!==null&&String(routerId).trim()!==""){
+  id=String(routerId).trim();
+  if(!/^[1-9]\d*$/.test(id))throw fail("Invalid routerId. A positive integer ID is required.",400);
+ }
+ const query=id
+  ? await db.query("SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,timeout_ms,use_ssl FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",[id])
+  : await db.query("SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,timeout_ms,use_ssl FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND api_type='native_api' AND is_active=TRUE LIMIT 2");
+ const rows=query.rows||[];
+ if(rows.length===0)throw fail(id?"Selected router was not found, is inactive, or is not a native API router.":"No active canonical router was found at 10.10.10.1:8728.",id?404:503);
+ if(rows.length!==1)throw fail(id?"Selected router ID did not resolve uniquely.":"Multiple active canonical routers match 10.10.10.1:8728.",409);
+ return rows[0];
+}
 async function generalSettings(req,res){
  try{
-  const keys=[...ROUTER_KEYS,"personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(MFS_KEYS)];
+  const keys=["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(MFS_KEYS)];
   const s=await getSettingsMap(keys);
+  const router=await resolveSettingsRouter(req.query?.router_id);
   return res.set("Cache-Control","no-store").json({success:true,settings:{
-   router:{host:s.mikrotik_host||process.env.ROUTER_HOST||"",port:Number(s.mikrotik_port||process.env.ROUTER_PORT||8728),user:s.mikrotik_user||process.env.ROUTER_USER||"",passwordConfigured:Boolean(s.mikrotik_password||process.env.ROUTER_PASS),passwordSource:s.mikrotik_password?"database":process.env.ROUTER_PASS?"environment":"unset"},
+   router:{id:String(router.id),router_name:router.router_name,host:router.host,port:Number(router.api_port||8728),user:router.username,passwordConfigured:Boolean(router.password_encrypted),passwordSource:router.password_encrypted?"encrypted_router_record":"unset"},
    webhook:{url:s.personal_payment_webhook_url||"/api/webhooks/macrodroid-sms",enabled:parseBool(s.personal_payment_webhook_enabled),secretConfigured:Boolean(s.personal_payment_webhook_secret)},
    mfs:Object.fromEntries(Object.entries(MFS_KEYS).map(([name,key])=>[name,String(s[key]||"")]))
   }});
- }catch(error){return errorResponse(res,error,503);}
+ }catch(error){return errorResponse(res,error,Number(error?.statusCode)||503);}
 }
 async function testMikrotik(req,res){
  try{
@@ -90,41 +108,48 @@ async function testMikrotik(req,res){
   return res.set("Cache-Control","no-store").json({success:true,message:"Router connection successful.",router});
  }catch(error){const message=String(error?.message||"MikroTik connection failed.");return res.status(502).json({success:false,message,error:message});}
 }
-async function syncMikrotikProfilesInternal(){
- const [pppoeProfiles,hotspotProfiles]=await Promise.all([mikrotikService.fetchExistingProfiles(),mikrotikService.getHotspotProfiles()]);
+async function syncMikrotikProfilesInternal(routerId){
+ const runtime=await mikrotikService.getMikroTikService(routerId);
+ const [pppoeProfiles,hotspotProfiles]=await Promise.all([runtime.fetchExistingProfiles(),runtime.getHotspotProfiles()]);
  for(const p of pppoeProfiles){
-  await db.query("INSERT INTO pppoe_profiles(name,rate_limit,local_address,remote_address,session_timeout,idle_timeout,only_one,change_tcp_mss,comment,router_id,raw_config,synced_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW(),NOW()) ON CONFLICT(name) DO UPDATE SET rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,session_timeout=EXCLUDED.session_timeout,idle_timeout=EXCLUDED.idle_timeout,only_one=EXCLUDED.only_one,change_tcp_mss=EXCLUDED.change_tcp_mss,comment=EXCLUDED.comment,router_id=EXCLUDED.router_id,raw_config=EXCLUDED.raw_config,synced_at=NOW(),updated_at=NOW()",[p.name,p.rateLimit,p.localAddress,p.remoteAddress,p.sessionTimeout,p.idleTimeout,Boolean(p.onlyOne),String(p.changeTcpMss||"").toLowerCase()==="yes",p.comment||"",p.id||null,JSON.stringify(p.raw||p)]);
+  await db.query("INSERT INTO pppoe_profiles(name,rate_limit,local_address,remote_address,session_timeout,idle_timeout,only_one,change_tcp_mss,comment,router_id,raw_config,synced_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW(),NOW()) ON CONFLICT(router_id,name) DO UPDATE SET rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,session_timeout=EXCLUDED.session_timeout,idle_timeout=EXCLUDED.idle_timeout,only_one=EXCLUDED.only_one,change_tcp_mss=EXCLUDED.change_tcp_mss,comment=EXCLUDED.comment,raw_config=EXCLUDED.raw_config,synced_at=NOW(),updated_at=NOW()",[p.name,p.rateLimit,p.localAddress,p.remoteAddress,p.sessionTimeout,p.idleTimeout,Boolean(p.onlyOne),String(p.changeTcpMss||"").toLowerCase()==="yes",p.comment||"",String(routerId),JSON.stringify(p.raw||p)]);
  }
- // Do not mutate metadata until the RouterOS profile query above has completed successfully.
- // Rebuild from the live RouterOS list so metadata for removed profiles cannot survive sync.
- const current=await getSettingsMap(["hotspot_profile_metadata"]);let existingMetadata={};
- try{existingMetadata=JSON.parse(current.hotspot_profile_metadata||"{}");}catch(error){console.error("[MikroTik profile sync] Invalid hotspot_profile_metadata JSON; rebuilding from live profiles.",error);}
+ const metadataKey="hotspot_profile_metadata_"+String(routerId);
+ const current=await getSettingsMap([metadataKey]);let existingMetadata={};
+ try{existingMetadata=JSON.parse(current[metadataKey]||"{}");}catch(error){console.error("[MikroTik profile sync] Invalid router-scoped metadata JSON; rebuilding from live profiles.",{routerId,message:error?.message||String(error)});}
  if(!existingMetadata||typeof existingMetadata!=="object"||Array.isArray(existingMetadata))existingMetadata={};
  const liveMetadata={};
- for(const p of hotspotProfiles){
-  const name=String(p.name||"").trim();
-  if(!name)continue;
-  liveMetadata[name]=Object.prototype.hasOwnProperty.call(existingMetadata,name)&&existingMetadata[name]&&typeof existingMetadata[name]==="object"&&!Array.isArray(existingMetadata[name])?existingMetadata[name]:{};
- }
- await upsertSetting("hotspot_profile_metadata",JSON.stringify(liveMetadata));
- return {pppoeProfiles:pppoeProfiles.length,hotspotProfiles:hotspotProfiles.length,message:"Live MikroTik profiles synced; metadata for profiles absent from RouterOS was purged."};
+ for(const p of hotspotProfiles){const name=String(p.name||"").trim();if(!name)continue;liveMetadata[name]=Object.prototype.hasOwnProperty.call(existingMetadata,name)&&existingMetadata[name]&&typeof existingMetadata[name]==="object"&&!Array.isArray(existingMetadata[name])?existingMetadata[name]:{};}
+ await upsertSetting(metadataKey,JSON.stringify(liveMetadata));
+ return {routerId:String(routerId),pppoeProfiles:pppoeProfiles.length,hotspotProfiles:hotspotProfiles.length,message:"Live MikroTik profiles synced for the selected router."};
 }
 async function saveMikrotik(req,res){
+ let credentialsSaved=false;
  try{
-  const body=req.body||{},host=String(body.host||"").trim(),user=String(body.user||"").trim(),port=Number(body.port),password=String(body.password||"");
-  if(!host||host.length>253)throw new Error("Enter a valid Router Host / IP.");
-  if(!Number.isInteger(port)||port<1||port>65535)throw new Error("API Port must be between 1 and 65535.");
-  if(!user||user.length>128)throw new Error("Enter a valid API Username.");
-  const existing=await getSettingsMap(ROUTER_KEYS),resolvedPassword=password||String(existing.mikrotik_password||process.env.ROUTER_PASS||"");
-  if(!resolvedPassword)throw new Error("API Password is required for the first save.");
-  const router=await mikrotikService.testConnection({host,port,user,password:resolvedPassword});
-  for(const [key,value] of [["mikrotik_host",host],["mikrotik_port",port],["mikrotik_user",user],["mikrotik_password",resolvedPassword]])await upsertSetting(key,value);
-  const sync=await syncMikrotikProfilesInternal();
-  return res.json({success:true,message:"Router credentials saved and profile sync completed.",router,sync,passwordConfigured:true});
- }catch(error){return errorResponse(res,error,400);}
+  const body=req.body||{},selected=await resolveSettingsRouter(body.router_id);
+  const routerName=String(body.router_name??selected.router_name??"").trim();
+  const host=String(body.host??selected.host??"").trim(),user=String(body.user??selected.username??"").trim(),port=Number(body.port??selected.api_port??8728);
+  if(!routerName||routerName.length>120)throw Object.assign(new Error("Enter a valid router name."),{statusCode:400});
+  if(!host||host.length>253)throw Object.assign(new Error("Enter a valid Router Host / IP."),{statusCode:400});
+  if(!Number.isInteger(port)||port<1||port>65535)throw Object.assign(new Error("API Port must be between 1 and 65535."),{statusCode:400});
+  if(!user||user.length>160)throw Object.assign(new Error("Enter a valid API Username."),{statusCode:400});
+  const password=String(body.password||"")||credentials.decrypt(selected.password_encrypted);
+  if(!password)throw Object.assign(new Error("API Password is required for the first save."),{statusCode:400});
+  const handshake=await routerDeviceService.testConnection({router_name:routerName,host,api_port:port,username:user,password,timeout:selected.timeout_ms||8000});
+  const savedResult=await db.query("UPDATE router_devices SET router_name=$1,host=$2,api_port=$3,username=$4,password_encrypted=$5,status='online',last_synced=NOW(),updated_at=NOW() WHERE id=$6 AND api_type='native_api' AND is_active=TRUE RETURNING id,router_name,host,api_port,username,password_encrypted",[routerName,handshake.host||host,Number(handshake.api_port||port),user,credentials.encrypt(password),String(selected.id)]);
+  const saved=savedResult.rows?.[0];if(!saved)throw Object.assign(new Error("Selected active router no longer exists."),{statusCode:409});
+  credentialsSaved=true;
+  const runtime=await mikrotikService.getMikroTikService(saved.id);runtime.invalidateConfigCache();
+  const sync=await syncMikrotikProfilesInternal(String(saved.id));
+  return res.set("Cache-Control","no-store").json({success:true,credentialsSaved:true,profileSync:"completed",message:"Router credentials saved and profiles synchronized.",router:{id:String(saved.id),router_name:saved.router_name,host:saved.host,port:saved.api_port,user:saved.username,passwordConfigured:true},sync});
+ }catch(error){
+  console.error("[MikroTik Settings] Save operation failed",{credentialsSaved,message:error?.message||String(error)});
+  if(credentialsSaved)return res.status(502).json({success:false,credentialsSaved:true,profileSync:"failed",message:"Router credentials were saved, but profile synchronization failed.",error:String(error?.message||"Profile synchronization failed.")});
+  return errorResponse(res,error,Number(error?.statusCode)||400);
+ }
 }
 async function syncMikrotik(req,res){
- try{return res.json({success:true,message:"MikroTik profile synchronization completed.",sync:await syncMikrotikProfilesInternal()});}
+ try{const router=await resolveSettingsRouter(req.body?.router_id||req.query?.router_id);return res.json({success:true,message:"MikroTik profile synchronization completed.",sync:await syncMikrotikProfilesInternal(String(router.id))});}
  catch(error){return errorResponse(res,error,502);}
 }
 async function saveGeneralSettings(req,res){
