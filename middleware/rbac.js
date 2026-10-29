@@ -22,7 +22,8 @@ function requireRole(allowedRoles) {
   const allowed = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles])
     .map(normalizeRole).filter(Boolean);
   return async function roleGuard(req, res, next) {
-    if (!req.session?.isAdmin) {
+    const resellerSession = req.session?.isReseller === true && currentRole(req) === 'reseller';
+    if (!req.session?.isAdmin && !resellerSession) {
       const api = String(req.originalUrl || '').startsWith('/api/');
       return api
         ? res.status(401).json({ success: false, message: 'Authentication required' })

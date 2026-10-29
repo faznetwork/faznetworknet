@@ -238,6 +238,17 @@ async function createCustomer(req, res) {
 
   try {
     const packageDefinition = await resolvePackageDefinition(customer.profile, customer.packageName);
+    const requestedPopId = body.pop_id === undefined || body.pop_id === null || body.pop_id === "" ? null : Number(body.pop_id);
+    if (requestedPopId !== null && (!Number.isSafeInteger(requestedPopId) || requestedPopId < 1)) {
+      return res.status(400).json({ success: false, message: "A valid POP ID is required." });
+    }
+    const selectedPopResult = requestedPopId === null
+      ? await db.query("SELECT id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' LIMIT 1")
+      : await db.query("SELECT id FROM pops WHERE id=$1 AND status='active' LIMIT 1", [requestedPopId]);
+    if (!selectedPopResult.rows.length) {
+      return res.status(400).json({ success: false, message: requestedPopId === null ? "Canonical active POP FAZ Main (Direct) is unavailable. No customer was created." : "Selected POP does not exist or is inactive." });
+    }
+    customer.popId = selectedPopResult.rows[0].id;
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
     customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
@@ -265,8 +276,8 @@ async function createCustomer(req, res) {
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
         billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
-        email, whatsapp_phone, telegram_link, facebook_link, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,NOW(),NOW())
+        email, whatsapp_phone, telegram_link, facebook_link, pop_id, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -276,7 +287,7 @@ async function createCustomer(req, res) {
         customer.alternativePhone || null, null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
         customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
         (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
-        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null
+        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null,customer.popId
       ]
     );
 
@@ -572,8 +583,9 @@ async function listCustomers(req,res){
              u.profile AS pppoe_profile
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      WHERE ($1::bigint[] IS NULL OR c.pop_id = ANY($1::bigint[]))
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
-    `);
+    `, [req.tenantScope?.global ? null : (req.tenantScope?.popIds || [])]);
 
     let sessions=[];
     let sessionSource="mikrotik-live";
@@ -592,7 +604,9 @@ async function listCustomers(req,res){
                   caller_id AS "callerId",received_at AS "receivedAt"
            FROM pppoe_live_sessions
            WHERE received_at >= NOW() - INTERVAL '3 minutes'
-           ORDER BY username ASC`
+             AND ($1::bigint[] IS NULL OR username IN (SELECT username FROM customers WHERE pop_id=ANY($1::bigint[])))
+           ORDER BY username ASC`,
+          [req.tenantScope?.global ? null : (req.tenantScope?.popIds || [])]
         );
         if(!snapshot.rows.length){
           return res.status(503).json({

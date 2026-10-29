@@ -1,0 +1,10 @@
+'use strict';
+const express=require('express'),router=express.Router();
+const controller=require('../controllers/popController');
+const {requireRole}=require('../middleware/rbac');
+router.use(requireRole(['super_admin','admin','reseller']));
+router.get('/',controller.list);
+router.post('/',requireRole(['super_admin','admin']),controller.create);
+router.put('/:id',requireRole(['super_admin','admin']),controller.update);
+router.patch('/:id/status',requireRole(['super_admin','admin']),controller.updateStatus);
+module.exports=router;
