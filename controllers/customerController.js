@@ -244,6 +244,20 @@ async function createCustomer(req, res) {
     // Resolve the effective RouterOS profile only after the package profile is canonicalized.
     customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
 
+    const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
+    const requestedPopRaw=body.pop_id ?? body.popId ?? null;
+    let assignedPopId=requestedPopRaw==null||String(requestedPopRaw).trim()===""?null:Number(requestedPopRaw);
+    if(assignedPopId!==null&&(!Number.isSafeInteger(assignedPopId)||assignedPopId<1))return res.status(400).json({success:false,message:"A valid POP id is required."});
+    if(resellerId!==null){
+      if(assignedPopId===null){const own=await db.query("SELECT id FROM pops WHERE reseller_id=$1 AND status='active' ORDER BY id LIMIT 1",[resellerId]);assignedPopId=own.rows[0]?.id==null?null:Number(own.rows[0].id);}
+      if(assignedPopId===null)return res.status(409).json({success:false,code:"RESELLER_POP_REQUIRED",message:"Create or activate a POP before provisioning customers."});
+      const own=await db.query("SELECT id FROM pops WHERE id=$1 AND reseller_id=$2 AND status='active' LIMIT 1",[assignedPopId,resellerId]);
+      if(!own.rows.length)return res.status(403).json({success:false,code:"RESELLER_POP_SCOPE",message:"Forbidden: selected POP is outside your reseller scope."});
+    }else{
+      if(assignedPopId===null){const primary=await db.query("SELECT id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id LIMIT 1");assignedPopId=primary.rows[0]?.id==null?null:Number(primary.rows[0].id);}
+      else{const selected=await db.query("SELECT id FROM pops WHERE id=$1 AND status='active' LIMIT 1",[assignedPopId]);if(!selected.rows.length)return res.status(400).json({success:false,message:"Selected POP does not exist or is inactive."});}
+      if(assignedPopId===null)return res.status(503).json({success:false,message:"Primary POP is not configured. Apply the POP/reseller migration first."});
+    }
     const existing = await db.query(
       `SELECT id, username, phone FROM customers
        WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1`,
@@ -265,8 +279,8 @@ async function createCustomer(req, res) {
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
         billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
-        email, whatsapp_phone, telegram_link, facebook_link, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,NOW(),NOW())
+        email, whatsapp_phone, telegram_link, facebook_link, pop_id, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -276,7 +290,7 @@ async function createCustomer(req, res) {
         customer.alternativePhone || null, null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
         customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
         (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
-        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null
+        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null,assignedPopId
       ]
     );
 
@@ -566,14 +580,16 @@ async function listCustomers(req,res){
     const allowed=new Set(["all","paid","due","unpaid"]);
     if(!allowed.has(requestedStatus))return res.status(400).json({success:false,message:"Invalid billing status filter.",allowedStatuses:Array.from(allowed)});
 
+    const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
     const result=await db.query(`
       SELECT c.*,u.disabled AS pppoe_disabled,u.remote_address AS pppoe_remote_address,
              u.caller_id AS pppoe_caller_id,u.comment AS pppoe_comment,u.expiry_date AS pppoe_expiry_date,
              u.profile AS pppoe_profile
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      WHERE ($1::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$1))
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
-    `);
+    `,[resellerId]);
 
     let sessions=[];
     let sessionSource="mikrotik-live";
@@ -681,13 +697,14 @@ async function profile(req,res){
   try{
     const username=clean(req.query.username,100);
     if(!username)return res.status(400).json({success:false,message:"Username is required."});
+    const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
     let dbUser=null,pppoeRow=null,mtSecret=null,session=null;
     try{
-      const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);
+      const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) ORDER BY c.updated_at DESC NULLS LAST, c.id DESC LIMIT 1",[username,resellerId]);
       dbUser=q.rows[0]||null;
     }catch(error){
       console.warn("[Customer 360] Sorted customer lookup failed; retrying basic lookup:",error.message);
-      try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);dbUser=q.rows[0]||null;}
+      try{const q=await db.query("SELECT c.* FROM customers c WHERE LOWER(BTRIM(c.username))=LOWER(BTRIM($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,resellerId]);dbUser=q.rows[0]||null;}
       catch(fallbackError){console.error("[Customer 360] Customer lookup failed:",fallbackError.message);}
     }
     try{
@@ -892,7 +909,7 @@ async function markPaid(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     const customer=customerResult.rows[0]||null,routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
@@ -918,7 +935,7 @@ async function renew(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+    const customerResult=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     const customer=customerResult.rows[0]||null, routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
@@ -957,13 +974,16 @@ async function removeCustomer(req,res){
 
   try{
     // Username is the durable join key across customers and pppoe_users.
+    const tenantId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
+    if(tenantId!==null&&!requestedUsername)return res.status(403).json({success:false,message:"Forbidden: reseller deletions require an exact owned customer username."});
     const customerResult=requestedUsername
-      ? await db.query("SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[requestedUsername])
-      : await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[target]);
+      ? await db.query("SELECT c.id,c.username FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[requestedUsername,tenantId])
+      : await db.query("SELECT c.id,c.username FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[target,tenantId]);
     if(customerResult.rows.length){
       customerId=customerResult.rows[0].id;
       username=clean(customerResult.rows[0].username,100)||null;
     }else{
+      if(tenantId!==null)return res.status(403).json({success:false,message:"Forbidden: this customer is outside your reseller scope."});
       const pppoeResult=requestedUsername
         ? await db.query("SELECT id,username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[requestedUsername])
         : await db.query("SELECT id,username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[target]);
@@ -1062,16 +1082,17 @@ async function updateCustomer(req,res){
       // The Online Customer editor sends the PPPoE username as both the route
       // key and identity, so never let a numeric RouterOS username collide with
       // another customer's numeric database ID.
-      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
+      current=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[selectedUsername,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     }else{
       // Keep backwards compatibility for other panel screens that still submit
       // a database ID rather than the PPPoE username.
-      current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
+      current=await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[id,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
     }
     // Online Customer rows may exist only in MikroTik. When an admin edits one,
     // import its edited identity into billing first instead of returning 404 or
     // accidentally matching an unrelated customer by numeric RouterOS ID.
     if(!current.rows.length){
+      if(req.auth?.role==="reseller")return res.status(403).json({success:false,message:"Forbidden: reseller access is limited to customers assigned to your POPs."});
       const username=clean(body.username||id,100);
       if(username.toLowerCase()!==id.toLowerCase())return res.status(409).json({success:false,message:"Change the PPPoE username only after the original customer has been imported into billing."});
 
@@ -1109,7 +1130,7 @@ async function updateCustomer(req,res){
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'provisioned',$15,NOW(),NOW())
         ON CONFLICT (username) DO NOTHING RETURNING id`,
         [fullName,phone,connectionDate,username,clean(body.password||secret.password,255),packageDefinition.name,packageDefinition.profileName||requestedProfile,packageDefinition.price,clean(body.installationAddress||body.address,1000)||null,clean(body.areaZone||body.area_zone,150)||null,clean(body.fiberBox||body.distributionBox,150)||null,null,clean(body.remarks||body.note,1000)||null,expirationDate,dateStatus(expirationDate)]);
-      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+      current=await db.query("SELECT c.* FROM customers c WHERE LOWER(c.username)=LOWER($1) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[username,req.auth?.role==="reseller"?Number(req.auth.reseller_id):null]);
       if(!current.rows.length)return res.status(409).json({success:false,message:"Could not create the Billing Panel record for this MikroTik customer. Check for a duplicate username or database constraint."});
     }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
@@ -1204,9 +1225,9 @@ async function updateCustomer(req,res){
 }
 
 
-async function resolveCustomer360(idValue){
+async function resolveCustomer360(idValue,resellerId=null){
   const key=clean(idValue,100);
-  const customerResult=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+  const customerResult=await db.query("SELECT c.* FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
@@ -1271,7 +1292,7 @@ async function resolveCustomer360(idValue){
     payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
   };
 }
-async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
+async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.auth?.role==='reseller'?Number(req.auth.reseller_id):null);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
 async function getCustomerLiveSession(req,res){
   const offlineLive=(mac="",reason="",sync="offline",routerStatus="unreachable")=>({
     status:"offline",isLive:false,online:false,router_status:routerStatus,ip:"",mac:clean(mac,100),uptime:"",
@@ -1281,7 +1302,8 @@ async function getCustomerLiveSession(req,res){
   });
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query("SELECT id,username,router_id FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+    const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
+    const result=await db.query("SELECT c.id,c.username,c.router_id FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
@@ -1329,7 +1351,8 @@ function previousCycleStart(expiryDate,cycle,durationDays){
 async function getCustomerUsageRecords(req,res){
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query("SELECT id,username,expiration_date,billing_cycle,billing_duration_days,connection_date FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+    const resellerId=req.auth?.role==="reseller"?Number(req.auth.reseller_id):null;
+    const result=await db.query("SELECT c.id,c.username,c.expiration_date,c.billing_cycle,c.billing_duration_days,c.connection_date FROM customers c WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1)) AND ($2::int IS NULL OR c.pop_id IN (SELECT p.id FROM pops p WHERE p.reseller_id=$2)) LIMIT 1",[key,resellerId]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const todayParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -1351,9 +1374,9 @@ async function getCustomerUsageRecords(req,res){
   }catch(error){console.warn("[Customer usage records] Failed:",error.message);return res.status(500).json({success:false,message:"Unable to load usage records."});}
 }
 
-async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
-async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?"Account suspended. Moved to EXPIRED profile in MikroTik":`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
-async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
+async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.auth?.role==='reseller'?Number(req.auth.reseller_id):null);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
+async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id,req.auth?.role==='reseller'?Number(req.auth.reseller_id):null);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?"Account suspended. Moved to EXPIRED profile in MikroTik":`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
+async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.auth?.role==='reseller'?Number(req.auth.reseller_id):null);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
     // Always restore the configured package profile, never EXPIRED.
     const activeProfile=clean(payload.package?.profileName||payload.customer.profile,100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED")throw new Error("Customer package profile is missing or invalid.");
@@ -1376,7 +1399,7 @@ async function renewCustomerById(req,res){try{const payload=await resolveCustome
     return res.json({success:true,newExpDate,trxId,amount,method,message:"Payment recorded and customer renewed. Notification delivery is tracked separately."});}catch(error){return errorResponse(res,error);}}
 async function changeCustomerPackage(req,res){
   try{
-    const payload=await resolveCustomer360(req.params.id);
+    const payload=await resolveCustomer360(req.params.id,req.auth?.role==='reseller'?Number(req.auth.reseller_id):null);
     if(!payload)return res.status(404).json({success:false,message:"Customer not found."});
     const packageId=clean(req.body?.packageId,50);
     const p=await db.query("SELECT id,plan_name,profile_name,pool_name,price,duration_months,rate_limit,remote_address FROM packages WHERE id::text=$1 LIMIT 1",[packageId]);
