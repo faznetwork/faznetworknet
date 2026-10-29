@@ -127,15 +127,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_pops_primary_direct_name ON pops(name)
 INSERT INTO pops (name,area_zone,commission_type,commission_rate,status)
 VALUES ('FAZ Main (Direct)','Central','percentage',0.00,'active')
 ON CONFLICT (name) WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' DO NOTHING;
-DO $faz_schema_pop_backfill$
-DECLARE primary_pop_id INT;
-BEGIN
-  SELECT id INTO primary_pop_id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' ORDER BY id LIMIT 1;
-  IF primary_pop_id IS NULL THEN RAISE EXCEPTION 'Default POP FAZ Main (Direct) could not be created or located'; END IF;
-  UPDATE customers SET pop_id=primary_pop_id WHERE pop_id IS NULL;
-END;
-$faz_schema_pop_backfill$;
-
 -- Customer contact channels are optional and independent from sender configuration.
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(40);
