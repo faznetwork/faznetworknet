@@ -1,6 +1,6 @@
 'use strict';
 
-const ROLES = Object.freeze(['super_admin', 'admin', 'staff']);
+const ROLES = Object.freeze(['super_admin', 'admin', 'staff', 'reseller']);
 const db = require('../db');
 
 function normalizeRole(role) {
@@ -8,6 +8,7 @@ function normalizeRole(role) {
   if (value === 'superadmin') return 'super_admin';
   if (value === 'admin') return 'admin';
   if (value === 'staff') return 'staff';
+  if (value === 'reseller') return 'reseller';
   return null;
 }
 
@@ -22,6 +23,22 @@ function requireRole(allowedRoles) {
   const allowed = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles])
     .map(normalizeRole).filter(Boolean);
   return async function roleGuard(req, res, next) {
+    const principalRole = normalizeRole(req.user?.role || req.session?.role);
+    if (principalRole === 'reseller') {
+      const resellerId = Number(req.user?.reseller_id || req.user?.resellerId || req.session?.resellerId || req.session?.reseller_id || 0);
+      if (!req.user?.role && req.session?.resellerAuthenticated !== true) return res.status(401).json({ success: false, message: 'Reseller authentication required' });
+      if (!Number.isSafeInteger(resellerId) || resellerId < 1) return res.status(403).json({ success: false, message: 'Forbidden: reseller identity is missing' });
+      if (!allowed.includes('reseller')) return res.status(403).json({ success: false, message: 'Forbidden: insufficient role permissions' });
+      try {
+        const result = await db.query("SELECT id FROM resellers WHERE id=$1 AND status='active' LIMIT 1", [resellerId]);
+        if (!result.rows.length) return res.status(403).json({ success: false, message: 'Reseller account is inactive or unavailable' });
+      } catch (error) {
+        console.error('[RBAC] Could not verify reseller status:', error.message);
+        return res.status(503).json({ success: false, message: 'Authorization service unavailable' });
+      }
+      req.auth = { ...(req.auth || {}), role: 'reseller', reseller_id: resellerId, userId: resellerId, username: String(req.user?.username || req.session?.resellerUsername || '') };
+      return next();
+    }
     if (!req.session?.isAdmin) {
       const api = String(req.originalUrl || '').startsWith('/api/');
       return api
