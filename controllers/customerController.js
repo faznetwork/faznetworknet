@@ -1170,7 +1170,7 @@ async function updateCustomer(req,res){
     const commissionType=String(body.resellerCommissionType??body.reseller_commission_type??row.reseller_commission_type??"percentage").trim().toLowerCase();
     const commissionRateText=String(body.resellerCommissionRate??body.reseller_commission_rate??row.reseller_commission_rate??0).trim();
     if(!["percentage","fixed"].includes(commissionType))return res.status(400).json({success:false,message:"Commission type must be Percentage or Fixed Amount."});
-    if(!/^(?:\\d+)(?:\\.\\d{1,2})?$/.test(commissionRateText))return res.status(400).json({success:false,message:"Commission value must be a non-negative number with up to two decimal places."});
+    if(!/^(?:\d+)(?:\.\d{1,2})?$/.test(commissionRateText))return res.status(400).json({success:false,message:"Commission value must be a non-negative number with up to two decimal places."});
     const commissionRate=Number(commissionRateText);
     if(!Number.isFinite(commissionRate)||commissionRate<0||(commissionType==="percentage"&&commissionRate>100))return res.status(400).json({success:false,message:commissionType==="percentage"?"Percentage commission must be between 0 and 100.":"Fixed commission must be a non-negative amount."});
     if(commissionType==="fixed"&&commissionRate>Number(packageDefinition.price||0))return res.status(400).json({success:false,message:"Fixed commission cannot exceed the customer monthly bill."});
