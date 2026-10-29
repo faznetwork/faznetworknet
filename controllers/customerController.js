@@ -33,6 +33,8 @@ async function withTimeout(task, timeoutMs = 2500) {
   }
 }
 
+function tenantPopIds(req) { return req.tenantScope?.global ? null : (req.tenantScope?.popIds || []); }
+
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -444,7 +446,8 @@ async function syncSingleCustomerToMikroTik(req,res){
     const found=await db.query(`SELECT c.id,c.router_id,c.username,c.password,c.profile,c.full_name,c.phone,c.router_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled,u.caller_id AS stored_caller_id
       FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1))
-      LIMIT 1`,[key]);
+        AND ($2::bigint[] IS NULL OR c.pop_id=ANY($2::bigint[]))
+      LIMIT 1`,[key,tenantPopIds(req)]);
     const row=found.rows[0];
     if(!row)return res.status(404).json({success:false,message:"Customer not found or is marked deleted."});
     const username=clean(row.username,100),password=clean(row.password,255),expiry=normalizeDate(row.expiration_date);
@@ -685,7 +688,7 @@ async function listCustomers(req,res){
 async function getCustomer(req, res) {
   try {
     const id = clean(req.params.id, 50);
-    const result = await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1", [id]);
+    const result = await db.query("SELECT * FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1", [id,tenantPopIds(req)]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Customer not found." });
     return res.json({ success: true, customer: result.rows[0] });
   } catch (error) { return errorResponse(res, error); }
@@ -697,11 +700,11 @@ async function profile(req,res){
     if(!username)return res.status(400).json({success:false,message:"Username is required."});
     let dbUser=null,pppoeRow=null,mtSecret=null,session=null;
     try{
-      const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);
+      const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username,tenantPopIds(req)]);
       dbUser=q.rows[0]||null;
     }catch(error){
       console.warn("[Customer 360] Sorted customer lookup failed; retrying basic lookup:",error.message);
-      try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);dbUser=q.rows[0]||null;}
+      try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[username,tenantPopIds(req)]);dbUser=q.rows[0]||null;}
       catch(fallbackError){console.error("[Customer 360] Customer lookup failed:",fallbackError.message);}
     }
     try{
@@ -897,7 +900,7 @@ async function publicCustomerLogin(req,res){
 async function getAuditLogs(req,res){
   try{
     const id=clean(req.params.id,50);
-    const result=await db.query(`SELECT id,customer_id,admin_id,action,details,ip_address,created_at FROM audit_logs WHERE customer_id::text=$1 ORDER BY created_at DESC LIMIT 30`,[id]);
+    const result=await db.query(`SELECT id,customer_id,admin_id,action,details,ip_address,created_at FROM audit_logs WHERE customer_id::text=$1 AND ($2::bigint[] IS NULL OR customer_id IN (SELECT id FROM customers WHERE pop_id=ANY($2::bigint[]))) ORDER BY created_at DESC LIMIT 30`,[id,tenantPopIds(req)]);
     return res.json({success:true,logs:result.rows});
   }catch(error){return errorResponse(res,error);}
 }
@@ -906,7 +909,7 @@ async function markPaid(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
   try{
-    const customerResult=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+    const customerResult=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[username,tenantPopIds(req)]);
     const pppoeResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     const customer=customerResult.rows[0]||null,routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
@@ -972,8 +975,8 @@ async function removeCustomer(req,res){
   try{
     // Username is the durable join key across customers and pppoe_users.
     const customerResult=requestedUsername
-      ? await db.query("SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[requestedUsername])
-      : await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[target]);
+      ? await db.query("SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[requestedUsername,tenantPopIds(req)])
+      : await db.query("SELECT id,username FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[target,tenantPopIds(req)]);
     if(customerResult.rows.length){
       customerId=customerResult.rows[0].id;
       username=clean(customerResult.rows[0].username,100)||null;
@@ -984,8 +987,8 @@ async function removeCustomer(req,res){
       if(pppoeResult.rows.length){
         username=clean(pppoeResult.rows[0].username,100)||null;
         const linkedCustomer=await db.query(
-          "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
-          [username]
+          "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",
+          [username,tenantPopIds(req)]
         );
         if(linkedCustomer.rows.length){
           customerId=linkedCustomer.rows[0].id;
@@ -1076,11 +1079,11 @@ async function updateCustomer(req,res){
       // The Online Customer editor sends the PPPoE username as both the route
       // key and identity, so never let a numeric RouterOS username collide with
       // another customer's numeric database ID.
-      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
+      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[selectedUsername,tenantPopIds(req)]);
     }else{
       // Keep backwards compatibility for other panel screens that still submit
       // a database ID rather than the PPPoE username.
-      current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
+      current=await db.query("SELECT * FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[id,tenantPopIds(req)]);
     }
     // Online Customer rows may exist only in MikroTik. When an admin edits one,
     // import its edited identity into billing first instead of returning 404 or
@@ -1218,9 +1221,10 @@ async function updateCustomer(req,res){
 }
 
 
-async function resolveCustomer360(idValue){
+async function resolveCustomer360(idValue,tenantScope){
   const key=clean(idValue,100);
-  const customerResult=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+  const popIds=tenantScope?.global ? null : (tenantScope?.popIds || []);
+  const customerResult=await db.query("SELECT * FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[key,popIds]);
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
@@ -1295,7 +1299,7 @@ async function getCustomerLiveSession(req,res){
   });
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query("SELECT id,username,router_id FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+    const result=await db.query("SELECT id,username,router_id FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[key,tenantPopIds(req)]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
@@ -1343,7 +1347,7 @@ function previousCycleStart(expiryDate,cycle,durationDays){
 async function getCustomerUsageRecords(req,res){
   try{
     const key=clean(req.params.id,100);
-    const result=await db.query("SELECT id,username,expiration_date,billing_cycle,billing_duration_days,connection_date FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+    const result=await db.query("SELECT id,username,expiration_date,billing_cycle,billing_duration_days,connection_date FROM customers WHERE (id::text=$1 OR LOWER(username)=LOWER($1)) AND ($2::bigint[] IS NULL OR pop_id=ANY($2::bigint[])) LIMIT 1",[key,tenantPopIds(req)]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const todayParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
