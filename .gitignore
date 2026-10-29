@@ -1,3 +1,7 @@
 # Runtime-generated local deployment metadata; do not commit server state.
 /deployment-info.json
 /deployment-info.json.tmp
+
+.env
+cloudflared.exe
+clean_data.sql
