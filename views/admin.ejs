@@ -2545,7 +2545,7 @@
                                         <div class="col-md-6"><label for="nidNumber" class="form-label">NID / Smart Card Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person-vcard"></i></span><input type="text" class="form-control" id="nidNumber" placeholder="Optional"></div></div>
                                         <div class="col-md-6"><label for="alternativePhone" class="form-label">Alternative / Emergency Phone</label><input type="tel" class="form-control" id="alternativePhone" placeholder="Optional"></div>
                                         <div class="col-md-6"><label for="installationAddress" class="form-label">Installation Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><input type="text" class="form-control" id="installationAddress" placeholder="House, road, area or zone"></div></div>
-                                        <div class="col-md-6"><label for="areaZone" class="form-label">Assigned POP / Reseller</label><select class="form-select" id="areaZone" name="areaZone"><option value="FAZ Main" selected>FAZ Main (Direct)</option></select><div class="form-text">Select the POP / zone responsible for this customer.</div></div>
+                                        <div class="col-md-6"><label for="areaZone" class="form-label">Assigned POP / Reseller</label><select class="form-select" id="areaZone" name="areaZone" onchange="toggleNewCustomerZone(this.value)"><option value="FAZ Main" selected>FAZ Main (Direct)</option><option value="__add_new__">+ Add New POP / Zone</option></select><div id="newCustomerZoneWrap" class="mt-2" hidden><label for="newCustomerZone" class="form-label">New POP / Zone name</label><input type="text" class="form-control" id="newCustomerZone" maxlength="150" placeholder="e.g. Rahim POP, Market POP" autocomplete="off"></div><div class="form-text">Select an existing POP or define a new zone for this customer.</div></div>
                                         <div class="col-md-3"><label for="resellerCommissionType" class="form-label">Commission Type</label><select class="form-select" id="resellerCommissionType" name="resellerCommissionType"><option value="percentage" selected>Percentage (%)</option><option value="fixed">Fixed Amount (৳)</option></select></div>
                                         <div class="col-md-3"><label for="resellerCommissionRate" class="form-label">Commission Value</label><input type="number" class="form-control" id="resellerCommissionRate" name="resellerCommissionRate" min="0" max="100" step="0.01" value="0.00" required><div class="form-text" id="resellerCommissionHint">0–100% of monthly bill</div></div>
                                         <div class="col-md-4"><label for="oltPonPort" class="form-label">OLT / PON Port</label><input type="text" class="form-control" id="oltPonPort" placeholder="Optional — OLT-1 / PON-3"></div>
@@ -6890,19 +6890,34 @@ async function deletePlan(id,name){
             if (customerSearchDebounceTimer) clearTimeout(customerSearchDebounceTimer);
             customerSearchDebounceTimer = setTimeout(() => filterCustomerRows(query), 180);
         }
+        function setCustomerZoneFilter(zone) {
+            currentCustomerZone = String(zone || 'all').trim() || 'all';
+            const select = document.getElementById('customerPopFilter');
+            if (select && select.value !== currentCustomerZone) select.value = currentCustomerZone;
+            filterCustomerRows(document.getElementById('customerLiveSearch')?.value || '');
+        }
         function filterCustomerRows(query) {
             const q = String(query || '').trim().toLowerCase();
-            const activeTab = document.querySelector('#customerBillingTabs button[data-billing-filter].active');
-            const wanted = String(activeTab?.getAttribute('data-billing-filter') || 'all').toLowerCase();
+            const wanted = String(document.querySelector('#customerBillingTabs button[data-billing-filter].active')?.getAttribute('data-billing-filter') || currentBillingFilter || 'all').toLowerCase();
+            const zone = String(currentCustomerZone || 'all').trim().toLowerCase();
+            const counts = {all:0,paid:0,due:0,unpaid:0,offline:0,online:0};
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
+                const rowZone = String(row.getAttribute('data-area-zone') || 'FAZ Main').trim().toLowerCase();
+                const matchesZone = zone === 'all' || rowZone === zone;
                 const rowStatus = String(row.getAttribute('data-billing-status') || 'unpaid').toLowerCase();
                 const isOnline = String(row.getAttribute('data-online') || 'false') === 'true';
-                const matchesStatus = wanted === 'all' ||
-                    (wanted === 'online' ? isOnline : wanted === 'offline' ? !isOnline : rowStatus === wanted);
+                if (matchesZone) { counts.all++; if (rowStatus === 'paid') counts.paid++; else if (rowStatus === 'due') counts.due++; else counts.unpaid++; if (isOnline) counts.online++; else counts.offline++; }
+                const matchesStatus = wanted === 'all' || (wanted === 'online' ? isOnline : wanted === 'offline' ? !isOnline : rowStatus === wanted);
                 const searchIndex = String(row.dataset.search || row.innerText || '').toLowerCase();
-                const matchesSearch = !q || searchIndex.includes(q);
-                row.style.display = matchesStatus && matchesSearch ? '' : 'none';
+                row.style.display = matchesZone && matchesStatus && (!q || searchIndex.includes(q)) ? '' : 'none';
             });
+            ['all','paid','due','unpaid','offline','online'].forEach(key => {
+                const button = document.querySelector('#customerBillingTabs [data-billing-filter="'+key+'"]');
+                const countNode = button?.querySelector('.customer-filter-count') || button?.querySelector('span');
+                if (countNode) countNode.textContent = String(counts[key] || 0);
+            });
+            const total = document.getElementById('customerPopFilterCount');
+            if (total) total.textContent = counts.all + ' customers';
         }
 
         async function openCustomerEditModal(customerId, usernameFallback) {
@@ -7212,6 +7227,12 @@ async function deletePlan(id,name){
             input.value = '';
         }
 
+        function toggleNewCustomerZone(value) {
+            const wrap = document.getElementById('newCustomerZoneWrap'), input = document.getElementById('newCustomerZone');
+            const active = String(value || '') === '__add_new__';
+            if (wrap) wrap.hidden = !active;
+            if (input) { input.required = active; if (active) input.focus(); else input.value = ''; }
+        }
         function renderCustomerTable(users, zoneCounts) {
             const sourceUsers = Array.isArray(users) ? users : [];
             currentCustomerZoneCounts = zoneCounts && typeof zoneCounts === 'object' ? zoneCounts : {all:sourceUsers.length};
@@ -7219,7 +7240,7 @@ async function deletePlan(id,name){
             if (zoneSelect) {
                 const selectedZone = zoneSelect.value || 'FAZ Main';
                 const availableZones = Object.keys(currentCustomerZoneCounts).filter(zone => zone !== 'all' && String(zone).trim() && String(zone).toLowerCase() !== 'faz main').sort((a,b) => a.localeCompare(b));
-                zoneSelect.innerHTML = '<option value="FAZ Main">FAZ Main (Direct)</option>' + availableZones.map(zone => '<option value="' + escapeHtml(zone) + '">' + escapeHtml(zone) + '</option>').join('');
+                zoneSelect.innerHTML = '<option value="FAZ Main">FAZ Main (Direct)</option>' + availableZones.map(zone => '<option value="' + escapeHtml(zone) + '">' + escapeHtml(zone) + '</option>').join('') + '<option value="__add_new__">+ Add New POP / Zone</option>';
                 zoneSelect.value = availableZones.some(zone => zone.toLowerCase() === selectedZone.toLowerCase()) ? availableZones.find(zone => zone.toLowerCase() === selectedZone.toLowerCase()) : 'FAZ Main';
             }
             const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
@@ -7263,16 +7284,20 @@ async function deletePlan(id,name){
                             </div>
                         </div>
                         <div id="customerBillingTabs" class="customer-filter-tabs px-3 pt-3 d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary ${currentBillingFilter === 'all' ? 'active' : ''}" data-billing-filter="all" aria-pressed="${currentBillingFilter === 'all' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('all',this)">All Customers (<span>${counts.all}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-success ${currentBillingFilter === 'paid' ? 'active' : ''}" data-billing-filter="paid" aria-pressed="${currentBillingFilter === 'paid' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('paid',this)">Paid / Active (<span>${counts.paid}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-warning ${currentBillingFilter === 'due' ? 'active' : ''}" data-billing-filter="due" aria-pressed="${currentBillingFilter === 'due' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('due',this)">Due Soon (<span>${counts.due}</span>)</button>
-                            <button type="button" class="btn btn-sm btn-outline-danger ${currentBillingFilter === 'unpaid' ? 'active' : ''}" data-billing-filter="unpaid" aria-pressed="${currentBillingFilter === 'unpaid' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('unpaid',this)">Unpaid / Expired (<span>${counts.unpaid}</span>)</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ${currentBillingFilter === 'all' ? 'active' : ''}" data-billing-filter="all" aria-pressed="${currentBillingFilter === 'all' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('all',this)">All Customers (<span class="customer-filter-count">${counts.all}</span>)</button>
+                            <button type="button" class="btn btn-sm btn-outline-success ${currentBillingFilter === 'paid' ? 'active' : ''}" data-billing-filter="paid" aria-pressed="${currentBillingFilter === 'paid' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('paid',this)">Paid / Active (<span class="customer-filter-count">${counts.paid}</span>)</button>
+                            <button type="button" class="btn btn-sm btn-outline-warning ${currentBillingFilter === 'due' ? 'active' : ''}" data-billing-filter="due" aria-pressed="${currentBillingFilter === 'due' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('due',this)">Due Soon (<span class="customer-filter-count">${counts.due}</span>)</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger ${currentBillingFilter === 'unpaid' ? 'active' : ''}" data-billing-filter="unpaid" aria-pressed="${currentBillingFilter === 'unpaid' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('unpaid',this)">Unpaid / Expired (<span class="customer-filter-count">${counts.unpaid}</span>)</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary customer-offline-filter ${currentBillingFilter === 'offline' ? 'active' : ''}" data-billing-filter="offline" aria-pressed="${currentBillingFilter === 'offline' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('offline',this)">Offline <span class="customer-filter-count customer-filter-count-offline">${counts.offline}</span></button>
                             <button type="button" class="btn btn-sm btn-outline-success customer-online-filter ${currentBillingFilter === 'online' ? 'active' : ''}" data-billing-filter="online" aria-pressed="${currentBillingFilter === 'online' ? 'true' : 'false'}" onclick="setCustomerBillingFilter('online',this)">Online <span class="customer-filter-count customer-filter-count-online">${counts.online}</span></button>
                         </div>
-                        <div id="customerZoneTabs" class="customer-filter-tabs px-3 pt-2 d-flex flex-wrap gap-2" aria-label="Filter customers by POP or zone">
-                            <button type="button" class="btn btn-sm btn-outline-secondary ${currentCustomerZone.toLowerCase() === 'all' ? 'active' : ''}" data-zone-filter="all" aria-pressed="${currentCustomerZone.toLowerCase() === 'all' ? 'true' : 'false'}" onclick="setCustomerZoneFilter('all',this)">All (Total) <span class="badge bg-secondary ms-1">${Number(currentCustomerZoneCounts.all || 0)}</span></button>
-                            ${Object.entries(currentCustomerZoneCounts).filter(([zone]) => zone !== 'all').sort(([a],[b]) => a.localeCompare(b)).map(([zone,count]) => '<button type="button" class="btn btn-sm btn-outline-secondary ' + (String(currentCustomerZone).toLowerCase() === String(zone).toLowerCase() ? 'active' : '') + '" data-zone-filter="' + escapeHtml(zone) + '" aria-pressed="' + (String(currentCustomerZone).toLowerCase() === String(zone).toLowerCase() ? 'true' : 'false') + '" onclick="setCustomerZoneFilter(this.dataset.zoneFilter,this)">' + escapeHtml(zone) + ' <span class="badge bg-secondary ms-1">' + Number(count || 0) + '</span></button>').join('')}
+                        <div class="px-3 pt-2 d-flex flex-wrap align-items-center gap-2">
+                            <label for="customerPopFilter" class="form-label mb-0 small fw-semibold text-secondary">Filter by POP / Reseller</label>
+                            <select id="customerPopFilter" class="form-select form-select-sm" style="width:auto;min-width:240px;max-width:100%" aria-label="Filter customers by POP or reseller" onchange="setCustomerZoneFilter(this.value)">
+                                <option value="all" ${String(currentCustomerZone).toLowerCase()==='all'?'selected':''}>All POPs (Total)</option>
+                                ${Array.from(new Set(sourceUsers.map(user=>String(user?.area_zone||user?.areaZone||'FAZ Main').trim()||'FAZ Main'))).sort((a,b)=>a.localeCompare(b)).map(zone=>'<option value="'+escapeHtml(zone)+'" '+(String(currentCustomerZone).toLowerCase()===zone.toLowerCase()?'selected':'')+'>'+escapeHtml(zone==='FAZ Main'?'FAZ Main (Direct)':zone)+'</option>').join('')}
+                            </select>
+                            <span class="small text-muted" id="customerPopFilterCount">${visibleUsers.length} customers</span>
                         </div>
                         <div class="card-body p-0 mt-2 table-responsive">
                             <table class="table table-hover mb-0 customer-live-table">
@@ -7352,7 +7377,7 @@ async function deletePlan(id,name){
             const statusLabel = isExpired ? 'Expired' : 'Active';
             const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
-            return '<tr data-search="' + escapeHtml([metadata.displayName, metadata.displayPhone, user.username || '', ip, caller, user.package_name || user.profile || ''].join(' ')) + '" data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-online="' + (networkStatus.online ? 'true' : 'false') + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
+            return '<tr data-search="' + escapeHtml([metadata.displayName, metadata.displayPhone, user.username || '', ip, caller, user.package_name || user.profile || ''].join(' ')) + '" data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-area-zone="' + escapeHtml(String(user.area_zone || user.areaZone || 'FAZ Main').trim() || 'FAZ Main') + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-online="' + (networkStatus.online ? 'true' : 'false') + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
                 '<td class="ps-3 px-4 py-4 customer-serial-cell"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
                 '<td class="customer-identity-cell px-4 py-4"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
                     '<a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link fw-semibold text-decoration-none d-inline-flex align-items-center" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a>' +
@@ -7607,7 +7632,7 @@ async function deletePlan(id,name){
                 // Use the billing panel's canonical customers table for every customer
                 // submenu. The PPPoE-only endpoint can include orphaned, old RouterOS
                 // records and omit current panel customers without a matching secret.
-                const data = await jsonFetch('/api/customers?status=all&zone=' + encodeURIComponent(currentCustomerZone), { cache: 'no-store', timeout: 20000 });
+                const data = await jsonFetch('/api/customers?status=all&zone=all', { cache: 'no-store', timeout: 20000 });
                 if (!data || data.success === false || !Array.isArray(data.users || data.customers)) {
                     throw new Error(data?.message || data?.error || 'Unable to load current customer records.');
                 }
@@ -8171,7 +8196,7 @@ async function deletePlan(id,name){
                     package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
-                    areaZone: String(valueOf('areaZone') || 'FAZ Main').trim(),
+                    areaZone: String(valueOf('areaZone') === '__add_new__' ? valueOf('newCustomerZone') : valueOf('areaZone') || 'FAZ Main').trim(),
                     resellerCommissionType: String(valueOf('resellerCommissionType') || 'percentage').trim(),
                     resellerCommissionRate: String(valueOf('resellerCommissionRate') || '0').trim(),
                     fiberBox: String(valueOf('fiberBox')).trim(),
