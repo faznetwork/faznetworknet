@@ -8147,6 +8147,7 @@ async function deletePlan(id,name){
             setTimeout(function(){
                 const dateInput=document.getElementById('connectionDate');
                 if(dateInput) setCustomerDateValue(dateInput,localDateValue());
+                toggleNewCustomerZone(document.getElementById('areaZone')?.value || 'FAZ Main');
                 applyCustomerPackagePrice();
             },0);
         });
