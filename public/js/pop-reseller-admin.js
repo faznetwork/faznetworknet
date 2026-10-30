@@ -1,4 +1,4 @@
-console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
+console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
 (function () {
   'use strict';
 
