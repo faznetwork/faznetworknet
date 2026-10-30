@@ -98,8 +98,14 @@ function requireRole(allowedRoles) {
 
 function requireStaffReadOnly(req, res, next) {
   const role = currentRole(req);
-  if (role === 'staff' && !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase())) {
-    return res.status(403).json({ success: false, message: 'Staff accounts are read-only for this resource' });
+  if (['staff', 'reseller'].includes(role) &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase())) {
+    const accountType = role === 'reseller' ? 'Reseller' : 'Staff';
+    return res.status(403).json({
+      success: false,
+      code: 'READ_ONLY_ACCESS',
+      message: accountType + ' accounts are read-only for this resource'
+    });
   }
   return next();
 }
