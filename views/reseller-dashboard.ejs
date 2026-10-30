@@ -87,11 +87,12 @@
           <label for="voucherPop" class="form-label fw-semibold">Assigned POP</label>
           <select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select>
         </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 2 · CHOOSE A HOTSPOT PACKAGE</div></div>
         <div class="col-12 col-lg-6">
           <label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label>
           <select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select>
         </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 2 · REVIEW PACKAGE PRICE & MARGIN</div></div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · REVIEW PACKAGE PRICE & MARGIN</div></div>
         <div class="col-12 col-md-8">
           <div class="p-3 rounded-3 border bg-light h-100" aria-live="polite">
             <div class="small text-secondary fw-semibold mb-2">Selected package pricing</div>
@@ -106,19 +107,19 @@
             </div>
           </div>
         </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · SET BATCH QUANTITY</div></div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 4 · SET BATCH QUANTITY</div></div>
         <div class="col-12 col-md-4">
           <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
           <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
           <div class="form-text">Minimum 1 · Maximum 500 vouchers per batch</div>
         </div>
 
-        <div class="col-12"><div class="small fw-bold text-success">STEP 4 · CONFIRM WALLET / CREDIT IMPACT</div></div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 5 · CONFIRM WALLET / CREDIT IMPACT</div></div>
         <div class="col-12">
           <div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div>
           <div id="voucherImpact" class="small p-3 mt-2 border rounded-3 bg-light" aria-live="polite">Select a package and quantity to preview the billing impact.</div>
         </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 5 · ISSUE YOUR VOUCHER BATCH</div></div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 6 · ISSUE YOUR VOUCHER BATCH</div></div>
         <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap">
           <div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices, account eligibility and reseller identity are recalculated and verified by the server at issue time.</div>
           <button id="generateVouchersButton" class="btn btn-fzn px-4" type="button" disabled><i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch</button>
