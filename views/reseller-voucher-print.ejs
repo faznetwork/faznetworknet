@@ -33,6 +33,7 @@
     .credential span{color:#64748b}.credential b{font-family:Consolas,monospace;overflow-wrap:anywhere;text-align:right}
     .footer{margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px}
     @media(max-width:700px){body{padding:8px}.sheet{padding:14px}.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @page thermal{size:80mm auto;margin:3mm}
     @media print{
       @page{size:A4;margin:10mm}
       body{background:#fff;padding:0}
@@ -41,13 +42,26 @@
       .voucher-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
       .voucher{min-height:112px;padding:10px}
       .meta{margin:12px 0}
+      body.print-thermal{page:thermal;padding:0}
+      body.print-thermal .sheet{width:74mm;max-width:74mm;padding:0;margin:0}
+      body.print-thermal .heading{display:block;text-align:center;border-bottom:1px dashed #64748b;padding-bottom:8px;margin-bottom:8px}
+      body.print-thermal .heading>div:last-child{text-align:center!important;margin-top:8px}
+      body.print-thermal .brand{font-size:16px}
+      body.print-thermal h1{font-size:15px}
+      body.print-thermal .meta{grid-template-columns:1fr 1fr;gap:5px;margin:8px 0}
+      body.print-thermal .meta div{padding:6px}
+      body.print-thermal .voucher-grid{grid-template-columns:1fr;gap:6px}
+      body.print-thermal .voucher{min-height:0;padding:8px;border-radius:0}
+      body.print-thermal .voucher-head{margin-bottom:5px;padding-bottom:5px}
+      body.print-thermal .credential{font-size:11px;margin:4px 0}
+      body.print-thermal .footer{margin-top:10px}
     }
   </style>
 </head>
 <body>
   <nav class="toolbar">
     <a href="/reseller/dashboard">← Back to Reseller Portal</a>
-    <button type="button" onclick="window.print()">Print vouchers</button>
+    <div class="d-flex gap-2"><button type="button" onclick="printVoucher('a4')">Print A4 sheet</button><button type="button" onclick="printVoucher('thermal')">Print 80mm receipt</button></div>
   </nav>
   <main class="sheet">
     <header class="heading">
@@ -73,5 +87,12 @@
     </section>
     <footer class="footer">Please keep voucher credentials secure. Voucher lifecycle is managed by FAZ NETWORK.</footer>
   </main>
+  <script>
+    function printVoucher(format){
+      document.body.classList.toggle('print-thermal',format==='thermal');
+      window.print();
+    }
+    window.addEventListener('afterprint',()=>document.body.classList.remove('print-thermal'));
+  </script>
 </body>
 </html>
