@@ -1,4 +1,4 @@
-console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
+console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
 (function () {
   'use strict';
 
