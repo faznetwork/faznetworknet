@@ -258,12 +258,13 @@ async function update(req, res) {
         .some(field => Object.prototype.hasOwnProperty.call(data, field));
       if (hotspotConfigChanged) {
         const enabled = data.hotspot_enabled === undefined ? binding.status === 'active' : data.hotspot_enabled;
+        const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
         const config = {
           enabled,
-          server: data.hotspot_server ?? binding.hotspot_server,
-          interface: data.hotspot_interface ?? binding.hotspot_interface,
-          vlanId: data.hotspot_vlan_id ?? binding.vlan_id,
-          pool: data.hotspot_ip_pool ?? binding.ip_pool
+          server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
+          interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
+          vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
+          pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
         };
         await upsertHotspotBinding(client, id, config);
       }
