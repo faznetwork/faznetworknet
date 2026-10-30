@@ -239,7 +239,7 @@
       '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><input class="form-control" name="mikrotik_ip_pool" maxlength="150"></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
-      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprPopSave">Save POP</button></div></form></div></div></div>';
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
   }
 
   function renderResellerAccess(section, error) {
@@ -317,10 +317,32 @@
       }
     });
 
-    section.addEventListener('submit', async function (event) {
-      const form = event.target;
-      if (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm') return;
+
+  }
+
+
+  function bindGlobalFormLifecycle() {
+    document.addEventListener('click', function (event) {
+      const button = event.target && event.target.closest ? event.target.closest('#fprPopSave, [data-action="save-pop"]') : null;
+      if (!button || button.disabled) return;
+      const form = button.form || button.closest('form');
+      if (!form || form.id !== 'fprPopForm') return;
       event.preventDefault();
+      console.info('[POP DEBUG] Save button fallback requested form submission');
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit(button);
+      } else {
+        console.error('[POP DEBUG] HTMLFormElement.requestSubmit is unavailable; native validation-safe fallback cannot run.');
+        showToast('Your browser cannot submit this form safely. Please update the browser and try again.', 'danger');
+      }
+    });
+  }
+
+    document.addEventListener('submit', async function (event) {
+      const form = event.target;
+      if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) return;
+      event.preventDefault();
+      console.info('[POP DEBUG] Form Submit Intercepted', { formId: form.id, action: form.action, method: form.method });
       if (form.dataset.submitting === '1') return;
 
       const isPop = form.id === 'fprPopForm';
@@ -359,10 +381,15 @@
             commission_rate: Number(data.get('commission_rate') || 0)
           };
           try {
-            await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), {
+            console.info('[POP DEBUG] Payload dispatched', { method: id ? 'PUT' : 'POST', endpoint: '/api/pops' + (id ? '/' + encodeURIComponent(id) : ''), payload: payload });
+            const response = await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), {
               method: id ? 'PUT' : 'POST',
               body: payload
             });
+            console.info('[POP DEBUG] Response received', { success: response && response.success, status: id ? 'updated' : 'created', pop: response && response.pop });
+            if (!response || response.success !== true || !response.pop || typeof response.pop !== 'object' || !response.pop.id || !response.pop.name) {
+              throw new Error('The server did not confirm a valid POP save. The form remains open; verify the POP directory before retrying.');
+            }
           } catch (saveError) {
             if (saveError.field) {
               const field = form.elements.namedItem(saveError.field);
@@ -414,8 +441,6 @@
         }
       }
     });
-  }
-
   function modalInstance(id) {
     const element = document.getElementById(id);
     if (!element || !window.bootstrap || !window.bootstrap.Modal) throw new Error('Bootstrap modal support is unavailable.');
@@ -506,6 +531,8 @@
     }
     return true;
   }
+
+  bindGlobalFormLifecycle();
 
   window.loadPopManagement = loadPopManagement;
   window.loadResellerAccess = loadResellerAccess;
