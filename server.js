@@ -64,7 +64,8 @@ app.get("/login",(req,res)=>{
 app.post("/login",rbacAuthController.login);
 app.get("/reseller/accept-invite",resellerAuthController.showAcceptInvite);
 app.get("/reseller/login",(req,res)=>res.set("Cache-Control","no-store").render("reseller-login",{title:"FAZ NETWORK Reseller Sign In",error:null}));
-app.get("/reseller/dashboard",requireRole(["reseller"]),(req,res)=>res.set("Cache-Control","no-store").render("reseller-dashboard",{title:"FAZ NETWORK Reseller Portal",resellerName:req.session.auth.name}));
+app.get("/reseller/dashboard",requireRole(["reseller"]),(req,res)=>res.set("Cache-Control","no-store, no-cache, must-revalidate, private").render("reseller-dashboard",{title:"FAZ NETWORK Reseller Portal",resellerName:req.session.auth?.name||req.session.resellerName||"Reseller"}));
+app.get("/reseller/customers/:id",requireRole(["reseller"]),(req,res)=>res.set("Cache-Control","no-store, no-cache, must-revalidate, private").render("reseller-customer-profile",{title:"FAZ NETWORK Reseller Customer Profile",customerId:String(req.params.id||"")}));
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
