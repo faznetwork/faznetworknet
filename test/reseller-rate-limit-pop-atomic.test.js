@@ -134,10 +134,24 @@ test('real PostgreSQL integration: shared counters, cooldown, and POP row locks 
     assert.deepEqual(counts.map(result => Number(result.rows[0].request_count)).sort((a,b)=>a-b),
       Array.from({ length: 12 }, (_, index) => index + 1));
 
-    const cooldown = await first.query(
+    // The first resend after an expired cooldown claims the reseller row;
+    // a concurrent resend waits and then observes the refreshed invited_at.
+    await first.query("UPDATE resellers SET invited_at=NOW()-INTERVAL '61 seconds' WHERE id=1");
+    await first.query('BEGIN');
+    const firstCooldown = await first.query(
       "SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (invited_at + INTERVAL '60 seconds' - NOW()))))::int AS remaining FROM resellers WHERE id=1 FOR UPDATE"
     );
-    assert.ok(Number(cooldown.rows[0].remaining) > 0);
+    assert.equal(Number(firstCooldown.rows[0].remaining), 0);
+    await second.query('BEGIN');
+    const secondCooldownPromise = second.query(
+      "SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (invited_at + INTERVAL '60 seconds' - NOW()))))::int AS remaining FROM resellers WHERE id=1 FOR UPDATE"
+    );
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await first.query("UPDATE resellers SET invited_at=NOW() WHERE id=1");
+    await first.query('COMMIT');
+    const secondCooldown = await secondCooldownPromise;
+    assert.ok(Number(secondCooldown.rows[0].remaining) > 0);
+    await second.query('COMMIT');
 
     await first.query('BEGIN');
     await first.query("SELECT id FROM pops WHERE id=1 AND status='active' FOR UPDATE");
