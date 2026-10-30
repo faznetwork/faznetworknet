@@ -8214,6 +8214,7 @@ async function deletePlan(id,name){
                 select.add(new Option('Current assignment · POP #' + selected, selected, true, true));
                 setCustomerPopStatus('Current POP is not in the active options list; its assignment is preserved unless an administrator selects another POP.', 'error');
             }
+            select.dataset.initialValue = selected;
         }
 
         async function ensureCustomerPopOptions() {
@@ -8392,7 +8393,7 @@ async function deletePlan(id,name){
                 const editId = String(valueOf('customerEditId')).trim();
 
                 const payload = {
-                    ...(isCustomerAdmin && String(valueOf('customerPopSelect')).trim() ? { pop_id: String(valueOf('customerPopSelect')).trim() } : {}),
+                    ...(isCustomerAdmin && String(valueOf('customerPopSelect')).trim() && (!editId || String(valueOf('customerPopSelect')).trim() !== String(document.getElementById('customerPopSelect')?.dataset.initialValue || '').trim()) ? { pop_id: String(valueOf('customerPopSelect')).trim() } : {}),
                     name: String(valueOf('fullName')).trim(),
                     fullName: String(valueOf('fullName')).trim(),
                     phone: String(valueOf('phoneNumber')).trim(),
