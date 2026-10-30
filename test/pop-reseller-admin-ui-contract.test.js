@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-direct-v4"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-ip-pool-v5"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -160,8 +160,8 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-direct-v4"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');"));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-ip-pool-v5"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
@@ -187,4 +187,18 @@ test('POP save resolves a form from the clicked button and falls back to open mo
   assert.ok(ui.includes("container.querySelector('[name=\"name\"]')"));
   assert.ok(ui.includes("container.querySelector('[name=\"id\"]')"));
   assert.ok(ui.includes('mapPopFieldErrors(error, container)'));
+});
+
+test('POP IP Pool editor loads configured MikroTik pools dynamically and preserves the current assignment', () => {
+  assert.ok(ui.includes('id="fprPopIpPool"'));
+  assert.ok(ui.includes('name="mikrotik_ip_pool" id="fprPopIpPool"'));
+  assert.ok(!ui.includes('name="mikrotik_ip_pool" maxlength="150"'));
+  assert.ok(ui.includes("const pools = await apiRequest('/ip-pools');"));
+  assert.ok(ui.includes("select.innerHTML = '<option value=\"\">None / Unassigned</option>';"));
+  assert.ok(ui.includes("await loadPopIpPools(form, pop);"));
+  assert.ok(ui.includes("select.value = selectedName;"));
+  assert.ok(ui.includes('current assignment (not in active pool list)'));
+  assert.ok(ui.includes('Existing POP assignment was preserved.'));
+  assert.ok(ui.includes('mikrotik_ip_pool: poolInput && poolInput.value ? poolInput.value : null'));
+  assert.ok(admin.includes('pop-ip-pool-v5'));
 });
