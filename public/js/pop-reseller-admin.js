@@ -245,7 +245,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
       '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><input class="form-control" name="mikrotik_ip_pool" maxlength="150"></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
-      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
   }
 
   function renderResellerAccess(section, error) {
@@ -328,6 +328,14 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
 
 
 
+  // Block native navigation for dynamically-rendered POP/reseller forms while allowing the async bubble handler to run.
+  document.addEventListener('submit', function (event) {
+    const form = event.target;
+    if (form && (form.id === 'fprPopForm' || form.id === 'fprResellerForm')) {
+      event.preventDefault();
+    }
+  }, true);
+
   document.addEventListener('click', function (event) {
     console.log('[POP DEBUG CLICK] Document click observed:', event.target);
     const target = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
@@ -377,7 +385,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
       if (form.dataset.submitting === '1') return;
 
       const isPop = form.id === 'fprPopForm';
-      const submit = form.querySelector('[type="submit"]');
+      const submit = isPop ? form.querySelector('#fprPopSave') : form.querySelector('[type="submit"]');
       const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
       const originalLabel = submit ? submit.textContent : '';
       if (errorHost) errorHost.innerHTML = '';
