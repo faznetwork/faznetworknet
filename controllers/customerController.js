@@ -265,12 +265,13 @@ async function createCustomer(req, res) {
     // starts after commit so network latency never extends the database lock.
     const creation = await db.withTransaction(async client => {
       const selectedPopResult = requestedPopId === null
-        ? await client.query("SELECT id,reseller_id,status FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id ASC LIMIT 1 FOR UPDATE")
-        : await client.query("SELECT id,reseller_id,status FROM pops WHERE id=$1 AND status='active' FOR UPDATE", [requestedPopId]);
+        ? await client.query("SELECT id,reseller_id,status,pppoe_enabled,pppoe_ip_pool FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id ASC LIMIT 1 FOR UPDATE")
+        : await client.query("SELECT id,reseller_id,status,pppoe_enabled,pppoe_ip_pool FROM pops WHERE id=$1 AND status='active' FOR UPDATE", [requestedPopId]);
       if (!selectedPopResult.rows.length) return { kind: "inactive_pop" };
       const selectedPop = selectedPopResult.rows[0];
       if (String(selectedPop.status).toLowerCase() !== 'active') return { kind: "inactive_pop" };
       if (isReseller && Number(selectedPop.reseller_id) !== Number(req.auth.resellerId)) return { kind: "forbidden_pop" };
+      if (isReseller && (selectedPop.pppoe_enabled !== true || !String(selectedPop.pppoe_ip_pool || '').trim())) return { kind: "pppoe_not_configured" };
       customer.popId = selectedPopResult.rows[0].id;
       const existing = await client.query(
         `SELECT id, username, phone FROM customers
@@ -312,6 +313,7 @@ async function createCustomer(req, res) {
       });
     }
     if (creation.kind === "forbidden_pop") return res.status(403).json({ success: false, message: "The selected POP is not assigned to your reseller account." });
+    if (creation.kind === "pppoe_not_configured") return res.status(409).json({ success: false, code: 'PPPOE_SERVICE_NOT_CONFIGURED', message: "The selected POP does not have an active PPPoE service and PPPoE IP Pool. Contact your administrator before creating this subscriber." });
     if (creation.kind === "duplicate") {
       const match = creation.match;
       return res.status(409).json({
