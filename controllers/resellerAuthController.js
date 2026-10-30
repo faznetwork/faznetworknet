@@ -54,6 +54,9 @@ async function invite(req, res) {
   try {
     const reseller = await db.withTransaction(async client => {
       if (assignedPopIds.length) {
+        // Prevent a concurrent customer insert from racing the empty-POP check.
+        // The lock is held only for this short assignment transaction.
+        await client.query('LOCK TABLE customers IN SHARE ROW EXCLUSIVE MODE');
         const pops = await client.query(
           'SELECT p.id,p.name,p.reseller_id,EXISTS(SELECT 1 FROM customers c WHERE c.pop_id=p.id) AS has_customers FROM pops p WHERE p.id=ANY($1::bigint[]) FOR UPDATE',
           [assignedPopIds]
