@@ -192,3 +192,14 @@ test('POP save click falls back to a bubbling submit event when requestSubmit is
   assert.ok(ui.includes("form.dispatchEvent(fallbackSubmitEvent);"));
   assert.ok(ui.includes("form.dataset.fprSubmitIntercepted = '1';"));
 });
+
+test('POP save button cannot trigger native navigation and capture guard preserves async submit handling', () => {
+  assert.ok(ui.includes('<button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button>'));
+  assert.ok(ui.includes("document.addEventListener('submit', function (event) {"));
+  assert.ok(ui.includes("}, true);"));
+  const captureGuard = ui.slice(ui.indexOf("Block native navigation for dynamically-rendered POP/reseller forms"), ui.indexOf("document.addEventListener('click', function (event) {"));
+  assert.ok(captureGuard.includes("event.preventDefault();"));
+  assert.ok(!captureGuard.includes("stopImmediatePropagation"));
+  assert.ok(ui.includes("const submit = isPop ? form.querySelector('#fprPopSave') : form.querySelector('[type=\"submit\"]');"));
+  assert.ok(ui.includes("document.addEventListener('submit', async function (event) {"));
+});
