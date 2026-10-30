@@ -37,6 +37,15 @@ test('package catalog is mounted behind the reseller authentication and tenant-s
   assert.match(portalController, /FROM packages/);
 });
 
+test('customer creation is launched in a Bootstrap modal and uses toast feedback after HTTP 201', () => {
+  assert.match(view, /data-bs-target="#customerCreateModal"/);
+  assert.match(view, /new bootstrap\.Modal|bootstrap\.Modal\.getOrCreateInstance/);
+  assert.match(view, /customerCreateSuccessToast/);
+  assert.match(view, /customerCreateErrorToast/);
+  assert.match(view, /response\.status!==201/);
+  assert.match(view, /customerCreateModal\.hide\(\)/);
+  assert.match(view, /await loadDashboard\(\)/);
+});
 test('customer creation UI exposes validation and user-visible result feedback', () => {
   assert.match(view, /form\.reportValidity\(\)/);
   assert.match(view, /customerCreateError/);
