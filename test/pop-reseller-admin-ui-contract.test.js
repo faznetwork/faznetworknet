@@ -134,7 +134,7 @@ test('POP save uses a direct click handler and preserves the reseller submit lif
   assert.ok(ui.includes('async function savePopForm(form, saveBtn)'));
   assert.ok(ui.includes("const response = await apiRequest(endpoint, { method: method, body: payload });"));
   assert.ok(ui.includes("const refreshed = await window.loadPopManagement();") || ui.includes("const refreshed = await window.loadPopManagement();"));
-  assert.ok(ui.includes("if (!form || form.id !== 'fprPopForm')"));
+  assert.ok(ui.includes("saveBtn.closest('form')"));
   assert.ok(ui.includes("if (form.id === 'fprPopForm')"));
   assert.ok(ui.includes("event.stopImmediatePropagation();"));
   assert.ok(ui.includes("document.addEventListener('submit', async function (event) {"));
@@ -153,7 +153,7 @@ test('POP modal closes only after an explicit successful API response with a val
 
 test('POP modal disables native focus-blocking validation and validates its required name explicitly', () => {
   assert.ok(ui.includes('<form id="fprPopForm" novalidate>'));
-  assert.ok(ui.includes("const nameInput = form.querySelector('[name=\"name\"]');"));
+  assert.ok(ui.includes("const nameInput = container.querySelector('[name=\"name\"]');"));
   assert.ok(ui.includes("if (!name)"));
   assert.ok(ui.includes("nameInput.classList.add('is-invalid')"));
   assert.ok(ui.includes("showToast('POP Name is required', 'danger')"));
@@ -166,11 +166,25 @@ test('POP admin asset uses the direct-save cache version and announces the loade
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
   for (const selector of ["[name=\"name\"]", "[name=\"area_zone\"]", "[name=\"reseller_id\"]", "[name=\"vlan_id\"]", "[name=\"mikrotik_ip_pool\"]", "[name=\"commission_type\"]", "[name=\"commission_rate\"]", "[name=\"id\"]"]) {
-    assert.ok(ui.includes("form.querySelector('" + selector + "')"), selector + ' is read directly');
+    assert.ok(ui.includes("container.querySelector('" + selector + "')"), selector + ' is read from the resolved editor container');
   }
   assert.ok(ui.includes("const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');"));
   assert.ok(ui.includes("const method = popId ? 'PUT' : 'POST';"));
   assert.ok(ui.includes("await window.loadPopManagement();"));
   assert.ok(!ui.includes('location.reload()'));
   assert.ok(!ui.includes('loadPopDirectory'));
+});
+
+test('POP save resolves a form from the clicked button and falls back to open modal fields', () => {
+  assert.ok(ui.includes("saveBtn.closest('form')"));
+  assert.ok(ui.includes('|| saveBtn.form'));
+  assert.ok(ui.includes("|| document.getElementById('fprPopForm')"));
+  assert.ok(ui.includes("|| document.querySelector('.modal.show form')"));
+  assert.ok(ui.includes("|| document.querySelector('#fprPopModal form')"));
+  assert.ok(ui.includes("document.querySelector('.modal.show .modal-body')"));
+  assert.ok(ui.includes("document.querySelector('#fprPopModal .modal-body')"));
+  assert.ok(ui.includes('savePopForm(form, saveBtn, container)'));
+  assert.ok(ui.includes("container.querySelector('[name=\"name\"]')"));
+  assert.ok(ui.includes("container.querySelector('[name=\"id\"]')"));
+  assert.ok(ui.includes('mapPopFieldErrors(error, container)'));
 });
