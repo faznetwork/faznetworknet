@@ -28,7 +28,7 @@ test('role normalization recognizes administrator role spellings', () => {
 
 test('POP options use one shared role-scoped async loader and visible retry fallback', () => {
   assert.match(adminView, /async function ensureCustomerPopOptions\(\)/);
-  assert.match(adminView, /fetch\('\\/api\\/pops\\/options'/);
+  assert.ok(adminView.includes("fetch('/api/pops/options'"));
   assert.match(adminView, /id="customerPopRetry"/);
   assert.match(adminView, /id="cpPopRetry"/);
   assert.match(adminView, /customerPopOptionsPromise = null/);
@@ -62,5 +62,5 @@ test('shared customer edit payload omits unchanged POP while customer creation c
 });
 
 test('customer creation route protection remains unchanged', () => {
-  assert.match(customerRoutes, /router\.post\('\\/',\s*requireAdminOnly,\s*controller\.createCustomer\)/);
+  assert.ok(customerRoutes.includes("router.post('/', requireAdminOnly, controller.createCustomer)"));
 });
