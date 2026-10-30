@@ -180,7 +180,7 @@
       '<div class="modal-body"><div id="fprResellerFormError"></div><div class="mb-3"><label class="form-label">Name *</label><input class="form-control" name="name" maxlength="100" required></div>' +
       '<div class="mb-3"><label class="form-label">Email *</label><input class="form-control" type="email" name="email" maxlength="254" required></div>' +
       '<div class="mb-3"><label class="form-label">Phone *</label><input class="form-control" name="phone" maxlength="40" required></div>' +
-      '<div class="mb-2"><label class="form-label">Assign POP(s)</label><select class="form-select" name="assigned_pop_ids" id="fprInvitePops" multiple size="Math.min(5, eligible.length || 1)">' +
+      '<div class="mb-2"><label class="form-label">Assign POP(s)</label><select class="form-select" name="assigned_pop_ids" id="fprInvitePops" multiple size="5">' +
       eligible.map(function (pop) { return '<option value="' + escapeHtml(pop.id) + '">' + escapeHtml(pop.name) + (pop.area_zone ? ' — ' + escapeHtml(pop.area_zone) : '') + '</option>'; }).join('') +
       '</select><div class="form-text">Only active, unassigned, customer-free POPs are selectable. FAZ Main (Direct) is excluded. Leave empty to invite without POP assignment.</div></div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprResellerSave">Queue Invitation</button></div></form></div></div></div>';
