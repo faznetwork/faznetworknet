@@ -21,6 +21,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Syntax checks
         run: |
+          node --check middleware/postgresRateLimiter.js
+          node --check test/reseller-rate-limit-pop-atomic.test.js
           node --check controllers/paymentController.js
           node --check controllers/customerSelfCareController.js
           node --check services/paymentWebhookParser.js
