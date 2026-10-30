@@ -63,7 +63,7 @@ test('Customer 360 administrators load active POPs and preselect the current pop
 test('Customer 360 update only sends a changed active pop_id for administrators', () => {
   assert.match(customerProfileView, /delete payload\.pop_id/);
   assert.match(customerProfileView, /if\(isCustomerAdmin&&selectedPopId&&selectedPopId!==initialPopId&&activePopOptions\.some\(pop=>String\(pop\.id\)===selectedPopId\)\)payload\.pop_id=selectedPopId/);
-  assert.match(customerProfileView, /await api\('\\/api\\/customers\\/'\+id,\{method:'PUT'/);
+  assert.ok(customerProfileView.includes("await api('/api/customers/'+id,{method:'PUT'"));
 });
 
 test('customer creation route protection remains unchanged', () => {
