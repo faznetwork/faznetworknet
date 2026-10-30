@@ -173,3 +173,74 @@ test('administrator status change cannot activate an invitation without a passwo
   assert.equal(res.statusCode, 409);
   assert.match(res.payload.message, /accept the email invitation/i);
 });
+
+test('resend invitation replaces the token and queues the replacement in one transaction', async t => {
+  const statements = [];
+  t.mock.method(db, 'withTransaction', async callback => callback({
+    async query(sql) {
+      statements.push(sql);
+      if (sql.startsWith('SELECT id,name,email,phone,status')) {
+        return { rows: [{ id: 707, name: 'Resend Partner', email: 'resend@example.com', phone: '01700000000', status: 'inactive' }] };
+      }
+      return { rows: [{ id: 707, name: 'Resend Partner', email: 'resend@example.com', phone: '01700000000', status: 'inactive' }] };
+    }
+  }));
+  t.mock.method(invitationService, 'queueInvitation', async payload => {
+    assert.equal(payload.reseller.id, 707);
+    assert.ok(payload.token);
+    return { accepted: true };
+  });
+  const res = responseRecorder();
+
+  await controller.resendInvite({ params: { id: '707' } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  assert.equal(statements.length, 2);
+  assert.match(statements[1], /invite_token_hash=\$1/);
+});
+
+test('cancel invitation invalidates the stored token hash', async t => {
+  t.mock.method(db, 'query', async (sql, values) => {
+    assert.match(sql, /invite_token_hash=NULL/);
+    assert.match(sql, /status='inactive'/);
+    assert.equal(values[0], 708);
+    return { rows: [{ id: 708 }] };
+  });
+  const res = responseRecorder();
+
+  await controller.cancelInvite({ params: { id: '708' } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+});
+
+test('legacy username login is used only when no email address matches', async t => {
+  const password = strongPassword();
+  const passwordHash = await bcrypt.hash(password, 4);
+  let calls = 0;
+  t.mock.method(db, 'query', async (sql, values) => {
+    calls += 1;
+    if (calls === 1) {
+      assert.match(sql, /lower\(email\)=lower\(\$1\)/);
+      return { rows: [] };
+    }
+    assert.match(sql, /lower\(username\)=lower\(\$1\)/);
+    assert.equal(values[0], 'legacy-partner');
+    return { rows: [{
+      id: 709, name: 'Legacy Partner', email: null,
+      username: 'legacy-partner', password_hash: passwordHash, status: 'active'
+    }] };
+  });
+  const session = {
+    regenerate(callback) { callback(null); },
+    save(callback) { callback(null); }
+  };
+  const res = responseRecorder();
+
+  await controller.login({ body: { username: 'legacy-partner', password }, session }, res);
+
+  assert.equal(calls, 2);
+  assert.equal(res.statusCode, 200);
+  assert.equal(session.auth.resellerId, 709);
+});
