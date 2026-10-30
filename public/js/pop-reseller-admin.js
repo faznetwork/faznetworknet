@@ -1,3 +1,4 @@
+console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
 (function () {
   'use strict';
 
@@ -338,11 +339,24 @@
       console.log('[POP DEBUG CLICK] Target form found:', form);
       if (form) {
         event.preventDefault();
+        delete form.dataset.fprSubmitIntercepted;
         if (typeof form.requestSubmit === 'function') {
-          form.requestSubmit();
+          try {
+            form.requestSubmit();
+          } catch (requestSubmitError) {
+            console.error('[POP DEBUG CLICK] requestSubmit() failed; attempting explicit submit-event fallback:', requestSubmitError);
+          }
         } else {
-          console.error('[POP DEBUG CLICK] HTMLFormElement.requestSubmit is unavailable.');
-          showToast('Your browser cannot submit this form safely. Please update the browser and try again.', 'danger');
+          console.warn('[POP DEBUG CLICK] requestSubmit() is unavailable; attempting explicit submit-event fallback.');
+        }
+        if (form.dataset.fprSubmitIntercepted !== '1') {
+          console.warn('[POP DEBUG CLICK] Submit listener did not confirm interception; dispatching a bubbling submit event.');
+          const fallbackSubmitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          form.dispatchEvent(fallbackSubmitEvent);
+          if (form.dataset.fprSubmitIntercepted !== '1') {
+            console.error('[POP DEBUG CLICK] The document submit handler did not intercept the fallback event.');
+            showToast('The POP form handler is unavailable. Reload the page and try again.', 'danger');
+          }
         }
       } else {
         console.error('[POP DEBUG CLICK] Could not find #fprPopForm!');
@@ -358,6 +372,7 @@
         return;
       }
       event.preventDefault();
+      form.dataset.fprSubmitIntercepted = '1';
       console.log('[POP DEBUG SUBMIT] Handling POP Form submission now!', form);
       if (form.dataset.submitting === '1') return;
 
