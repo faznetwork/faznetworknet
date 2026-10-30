@@ -46,10 +46,13 @@ if ([string]::IsNullOrWhiteSpace($databaseFromUri) -or $databaseFromUri -cne $Ex
     throw "Database URL database name does not exactly match ExpectedDatabaseName. No migrations were executed."
 }
 
-$userInfo = $connectionUri.UserInfo.Split(':', 2)
-if ($userInfo.Count -ne 2) {
+$userInfoRaw = $connectionUri.UserInfo
+$credentialSeparator = $userInfoRaw.IndexOf(':')
+if ($credentialSeparator -lt 1) {
     throw "DatabaseUrl must include an explicit PostgreSQL username and password."
 }
+$userNameEncoded = $userInfoRaw.Substring(0, $credentialSeparator)
+$passwordEncoded = $userInfoRaw.Substring($credentialSeparator + 1)
 
 $pgNames = @('PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD', 'PGSSLMODE', 'PGAPPNAME')
 $previousPgValues = @{}
