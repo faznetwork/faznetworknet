@@ -25,7 +25,7 @@ test('reseller workspace pages use the shared shell and separated page assets', 
     assert.match(source, /partials\/reseller-sidebar/);
     assert.match(source, /partials\/reseller-topbar/);
     assert.match(source, /partials\/reseller-scripts/);
-    assert.doesNotMatch(source, /id="voucherPop"/, 'Dashboard and payments must not render voucher controls');
+    if (view === 'reseller-dashboard.ejs' || view === 'reseller-payments.ejs') assert.doesNotMatch(source, /id="voucherPop"/, 'Dashboard and payments must not render voucher controls');
   }
   assert.match(read('public/css/reseller-workspace.css'), /--fzn-green:#0a3d2e/);
 });

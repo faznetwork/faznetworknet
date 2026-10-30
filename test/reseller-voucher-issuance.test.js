@@ -236,13 +236,14 @@ test('reseller history SQL is always scoped by the authenticated reseller id', (
 });
 
 test('reseller dashboard contains bounded generation and read-only reprint controls', () => {
-  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
   assert.match(dashboard, /id="voucherQuantity"[^>]*min="1"[^>]*max="500"/);
-  assert.match(dashboard, /retail_price|retailPrice/);
+  assert.match(script, /retailPrice/);
   assert.match(dashboard, /wholesale_price|wholesalePrice/);
   assert.match(dashboard, /voucherHistoryRows/);
   assert.match(dashboard, /\/reseller\/hotspot\/voucher-batches\//);
-  assert.match(dashboard, /Idempotency-Key/);
+  assert.match(script, /Idempotency-Key/);
 });
 
 
@@ -316,12 +317,16 @@ test('reseller workspace and printable voucher EJS templates compile; dashboard 
   const ejs = require('ejs');
   const vm = require('node:vm');
   const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const vouchers = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const customers = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-customers.ejs'), 'utf8');
+  const payments = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-payments.ejs'), 'utf8');
+  const partials = ['reseller-sidebar.ejs','reseller-topbar.ejs','reseller-scripts.ejs'].map(name => fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', name), 'utf8'));
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
-  ejs.compile(dashboard);
-  ejs.compile(printView);
-  const scriptMatch = dashboard.match(/<script>([\s\S]*?)<\/script>/);
-  assert.ok(scriptMatch, 'reseller dashboard script block must exist');
-  new vm.Script(scriptMatch[1]);
+  [dashboard,vouchers,customers,payments,...partials,printView].forEach(source => ejs.compile(source));
+  for (const name of ['reseller-workspace.js','reseller-dashboard.js','reseller-vouchers.js','reseller-customers.js','reseller-payments.js']) {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', name), 'utf8');
+    new vm.Script(source);
+  }
 });
 
 
