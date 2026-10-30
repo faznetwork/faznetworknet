@@ -19,7 +19,7 @@ const activePath=String(currentPath||'');
 <div class="reseller-main"><%- include('partials/reseller-topbar',{brandName,safeResellerName,title,activePath}) %>
 <main class="reseller-content">
 <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
-<% if(pageMode==='directory'){ %>
+<% if (pageMode === 'directory'){ %>
 <section class="reseller-panel">
 <div class="reseller-section-heading"><div><h2>All Subscribers</h2><p>PPPoE customers assigned to your reseller POPs only</p></div><a class="btn btn-fzn btn-sm" href="/reseller/customers/add"><i class="bi bi-person-plus me-1"></i>Add New Customer</a></div>
 <div class="d-flex gap-2 flex-wrap mb-3"><input id="customerSearch" class="form-control form-control-sm" style="width:min(280px,70vw)" type="search" placeholder="Search name, username or package" aria-label="Search customers"><select id="popFilter" class="form-select form-select-sm" style="width:auto;min-width:170px" aria-label="Filter by POP"><option value="">All assigned POPs</option></select></div>
