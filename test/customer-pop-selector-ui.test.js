@@ -32,7 +32,7 @@ test('administrator Add Customer selector is visible and defaults to FAZ Main Di
   assert.match(adminView, /id="customerPopAdminControls"/);
   assert.match(adminView, /faz main \(direct\)/);
   assert.match(adminView, /loadCustomerPopOptions\('', false\)/);
-  assert.match(adminView, /customerPopAdminControls'\)\?\.classList\.remove\('d-none'\)/);
+  assert.match(adminView, /adminControls\?\.classList\.remove\('d-none'\)/);
 });
 
 test('shared customer edit omits unchanged POP and reseller payloads omit pop_id', () => {
