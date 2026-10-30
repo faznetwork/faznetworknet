@@ -2710,25 +2710,8 @@
                 <div class="col-12"><div id="cpNotificationReadiness" class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>Contact details are stored independently of sender configuration. Unconfigured channels will not send messages.</div></div>
               </div></div></div>
               <div class="col-md-4"><label class="form-label fw-semibold">Alternative / Emergency Phone</label><input id="cpAltPhone" class="form-control"></div>
-              <div class="col-md-8"><label class="form-label fw-semibold" for="cpAddress">Installation Address</label><input id="cpAddress" class="form-control"></div>
-              <div class="col-md-4"><label class="form-label fw-semibold" for="cpAreaZone">Area / Zone</label><input id="cpAreaZone" class="form-control" placeholder="Customer service area / zone"></div>
-              <div class="col-12" id="cpPopAssignment">
-                <div id="cpPopAdminControls" class="d-none">
-                  <label class="form-label fw-semibold" for="cpPopSelect">Network POP Assignment</label>
-                  <div class="row g-2">
-                    <div class="col-md-4"><input id="cpPopSearch" type="search" class="form-control" placeholder="Search active POPs…" autocomplete="off" aria-label="Search active POPs"></div>
-                    <div class="col-md-8"><select id="cpPopSelect" class="form-select" aria-describedby="cpPopStatus"><option value="">Loading active POPs…</option></select></div>
-                  </div>
-                  <div id="cpPopStatus" class="form-text mt-2" role="status" aria-live="polite"></div>
-                  <button type="button" id="cpPopRetry" class="btn btn-sm btn-outline-secondary mt-2"><i class="bi bi-arrow-clockwise me-1"></i>Retry POP list</button>
-                </div>
-                <div id="cpPopResellerView" class="d-none">
-                  <label class="form-label fw-semibold">Network POP Assignment</label>
-                  <div><span id="cpPopLockedLabel" class="badge rounded-pill text-bg-success-subtle border border-success-subtle text-success-emphasis px-3 py-2">Loading assigned POP…</span></div>
-                  <div class="form-text">Your assigned POP is read-only. Contact an administrator to change this assignment.</div>
-                </div>
-              </div>
-              <div class="col-md-4"><label class="form-label fw-semibold" for="cpOltPon">OLT / PON Port</label><input id="cpOltPon" class="form-control" placeholder="OLT-1 / PON-3"></div>
+              <div class="col-md-8"><label class="form-label fw-semibold">Installation Address</label><input id="cpAddress" class="form-control"></div>
+              <div class="col-md-4"><label class="form-label fw-semibold">OLT / PON Port</label><input id="cpOltPon" class="form-control" placeholder="OLT-1 / PON-3"></div>
               <div class="col-md-4"><label class="form-label fw-semibold">Distribution Box / Splitter</label><input id="cpDistribution" class="form-control" placeholder="TJ Box #4 / 1:8 Splitter"></div>
               <div class="col-md-4"><label class="form-label fw-semibold">ONU MAC</label><input id="cpOnuMac" class="form-control"></div>
               <div class="col-md-6"><label class="form-label fw-semibold">ONU Serial</label><input id="cpOnuSerial" class="form-control"></div>
@@ -7513,7 +7496,7 @@ async function deletePlan(id,name){
                 const accountStatus=modalEl.querySelector('#cpAccountStatus');if(accountStatus)accountStatus.value=['active','suspended','expired'].includes(String(customer.status||'').toLowerCase())?String(customer.status).toLowerCase():(disabled?'suspended':(safeDate&&safeDate<today?'expired':'active'));
                 setVal('cpFullName',customer.fullName||customer.full_name||'');setVal('cpPhone',customer.phone||'');setVal('cpEmail',customer.email||'');setVal('cpWhatsappNumber',customer.whatsapp_phone||customer.whatsappPhone||'');setVal('cpAltPhone',customer.alternative_phone||'');
                 const contactStatus=modalEl.querySelector('#cpNotificationReadiness');if(contactStatus){const validPhone=/^(?:\+?8801[3-9]\d{8}|01[3-9]\d{8})$/.test(String(customer.whatsapp_phone||customer.phone||'').replace(/[\s()-]/g,''));contactStatus.className='alert '+((customer.email||validPhone)?'alert-success':'alert-info')+' py-2 mb-0 small';contactStatus.innerHTML='<i class="bi '+((customer.email||validPhone)?'bi-check-circle':'bi-info-circle')+' me-1"></i>'+((customer.email||validPhone)?'Contact details saved. Actual delivery still depends on the corresponding sender being configured.':'Add a valid email or phone number. Sender configuration is managed separately.');}
-                setVal('cpAddress',customer.installation_address||'');setVal('cpAreaZone',customer.area_zone||customer.areaZone||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
+                setVal('cpAddress',customer.installation_address||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
                 setVal('cpOnuMac',customer.onu_mac||'');setVal('cpOnuSerial',customer.onu_serial||'');setVal('cpFiberCore',customer.fiber_drop_core||'');
                 setVal('cpUsername',customer.username||name);const savedRemoteAddress=String(customer.remoteAddress||customer.remote_address||'');setVal('cpRemoteAddress',/^(?:\d{1,3}\.){3}\d{1,3}$/.test(savedRemoteAddress)?savedRemoteAddress:'');setVal('cpPassword',customer.password||'');setVal('cpRemarks',customer.remarks||'');
                 setVal('cpExpiration',formatDateForInput(safeDate));
@@ -7542,10 +7525,6 @@ async function deletePlan(id,name){
                 const paymentBody=modalEl.querySelector('#cpPaymentsBody');if(paymentBody)paymentBody.innerHTML=payments.length?payments.map(p=>'<tr><td>'+escapeHtml(p.date?FazDate.formatDate(p.date):'—')+'</td><td>৳'+Number(p.amount||0).toFixed(2)+'</td><td>'+escapeHtml(p.gateway||'—')+'</td><td>'+escapeHtml(p.trxId||'—')+'</td></tr>').join(''):'<tr><td colspan="4" class="text-center text-muted py-3">No recent payments.</td></tr>';
                 modalEl.dataset.username=customer.username||name;
                 modalEl.dataset.customerId=customer.id||'';
-                modalEl.dataset.popId=customer.pop_id==null?'':String(customer.pop_id);
-                modalEl.dataset.popName=customer.pop_name||customer.popName||'';
-                await loadCustomerHubPopOptions(customer);
-                bindCustomerHubPopSearch();
                 modalEl.dataset.loaded='1';
                 if(loading)loading.classList.add('d-none');
             }catch(error){
@@ -7631,7 +7610,7 @@ async function deletePlan(id,name){
             expiryInput?.addEventListener('change',()=>{if(autoExpire&&expiryInput.value!==expiryInput.dataset.initialValue)autoExpire.checked=false;});
             daysInput?.addEventListener('input',()=>{if(autoExpire&&daysInput.value!==daysInput.dataset.initialValue)autoExpire.checked=false;});
             hub()?.querySelector('#cpSyncBtn')?.addEventListener('click',async()=>{const m=hub(),id=m?.dataset.customerId||m?.dataset.username;if(!m||!id)return;if(!confirm('Sync '+(m.dataset.username||'this customer')+' credentials, expiry and Caller ID/MAC from the panel to MikroTik?'))return;const b=m.querySelector('#cpSyncBtn');hubLoading(b,true,'Syncing Customer...');try{const d=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/sync-mikrotik',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});alert(d.message||'Customer synced to MikroTik.');await openCustomerProfile(m.dataset.username||id);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to sync this customer.');}finally{hubLoading(b,false,'Sync Customer to MikroTik');}});
-             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire'),accountStatus=m.querySelector('#cpAccountStatus');const requestedStatus=String(accountStatus?.value||'active').toLowerCase();const expiryIso=dateInputToIso(expiry.value)||'';const todayDhaka=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());if(requestedStatus==='expired'&&(!expiryIso||expiryIso>=todayDhaka))throw new Error('To mark this account Expired, set its expiry date to a date before today.');if(requestedStatus==='active'&&expiryIso&&expiryIso<todayDhaka)throw new Error('This expiry date is already past. Update the expiry date before marking the account Active.');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const rawPhone=m.querySelector('#cpPhone').value.trim(),phoneDigits=rawPhone.replace(/\D/g,'').replace(/^880(?=1[3-9]\d{8}$)/,'');if(!/^01[3-9]\d{8}$/.test(phoneDigits))throw new Error('Enter a valid 11-digit Bangladesh mobile number (01XXXXXXXXX).');const cpPopSelect=m.querySelector('#cpPopSelect'),selectedPopId=String(cpPopSelect?.value||'').trim(),initialPopId=String(cpPopSelect?.dataset.initialValue||'').trim();const popAssignmentChanged=isCustomerAdmin&&selectedPopId!==initialPopId&&customerPopOptions.some(pop=>String(pop.id)===selectedPopId);const payload={...(popAssignmentChanged?{pop_id:selectedPopId}:{}),id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:phoneDigits,email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),areaZone:m.querySelector('#cpAreaZone').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,remoteAddress:m.querySelector('#cpRemoteAddress').value.trim(),expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,accountStatus:requestedStatus,disabled:requestedStatus==='suspended'||(requestedStatus==='expired'?false:!m.querySelector('#cpSecretToggle').checked)};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(typeof showCustomerActionToast==='function')showCustomerActionToast(d.message||'Customer profile saved.');else alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
+             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire'),accountStatus=m.querySelector('#cpAccountStatus');const requestedStatus=String(accountStatus?.value||'active').toLowerCase();const expiryIso=dateInputToIso(expiry.value)||'';const todayDhaka=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());if(requestedStatus==='expired'&&(!expiryIso||expiryIso>=todayDhaka))throw new Error('To mark this account Expired, set its expiry date to a date before today.');if(requestedStatus==='active'&&expiryIso&&expiryIso<todayDhaka)throw new Error('This expiry date is already past. Update the expiry date before marking the account Active.');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const rawPhone=m.querySelector('#cpPhone').value.trim(),phoneDigits=rawPhone.replace(/\D/g,'').replace(/^880(?=1[3-9]\d{8}$)/,'');if(!/^01[3-9]\d{8}$/.test(phoneDigits))throw new Error('Enter a valid 11-digit Bangladesh mobile number (01XXXXXXXXX).');const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:phoneDigits,email:m.querySelector('#cpEmail').value.trim(),whatsappPhone:m.querySelector('#cpWhatsappNumber').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,remoteAddress:m.querySelector('#cpRemoteAddress').value.trim(),expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,accountStatus:requestedStatus,disabled:requestedStatus==='suspended'||(requestedStatus==='expired'?false:!m.querySelector('#cpSecretToggle').checked)};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(typeof showCustomerActionToast==='function')showCustomerActionToast(d.message||'Customer profile saved.');else alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for the configured billing cycle?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
@@ -8273,80 +8252,6 @@ async function deletePlan(id,name){
                 return false;
             }
         }
-
-        async function loadCustomerHubPopOptions(customer) {
-            const adminControls = document.getElementById('cpPopAdminControls');
-            const resellerView = document.getElementById('cpPopResellerView');
-            const select = document.getElementById('cpPopSelect');
-            const status = document.getElementById('cpPopStatus');
-            const locked = document.getElementById('cpPopLockedLabel');
-            const selectedId = customer?.pop_id == null ? '' : String(customer.pop_id);
-            const popName = String(customer?.pop_name || customer?.popName || '').trim();
-
-            if (!isCustomerAdmin) {
-                adminControls?.classList.add('d-none');
-                resellerView?.classList.remove('d-none');
-                if (locked) locked.textContent = popName || (selectedId ? 'Assigned POP #' + selectedId : 'No assigned POP') + ' · Locked';
-                return;
-            }
-
-            adminControls?.classList.remove('d-none');
-            resellerView?.classList.add('d-none');
-            if (!select) throw new Error('Customer 360 POP selector is missing.');
-            if (status) status.textContent = 'Loading active POPs…';
-            select.disabled = true;
-            try {
-                await ensureCustomerPopOptions();
-                const sorted = [...customerPopOptions].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-                select.replaceChildren(new Option('Select an active POP…', ''));
-                sorted.forEach(pop => {
-                    select.add(new Option(
-                        String(pop.name || ('POP #' + pop.id)) + (pop.area_zone ? ' · ' + pop.area_zone : ''),
-                        String(pop.id)
-                    ));
-                });
-                if (selectedId && sorted.some(pop => String(pop.id) === selectedId)) {
-                    select.value = selectedId;
-                } else if (selectedId) {
-                    select.add(new Option(popName || ('Current assignment · POP #' + selectedId), selectedId, true, true));
-                    select.value = selectedId;
-                }
-                select.dataset.initialValue = selectedId;
-                select.disabled = false;
-                if (status) status.textContent = 'Active POPs loaded. The current assignment is selected; save only sends a POP change when you choose a different active POP.';
-            } catch (error) {
-                select.replaceChildren(new Option('POP options unavailable — existing assignment will be preserved', ''));
-                select.disabled = true;
-                if (status) status.textContent = (error.message || 'POP options could not be loaded.') + ' Retry when the service is available.';
-                console.error('[CUSTOMER 360 POP UI] Unable to load POP options:', error);
-            }
-        }
-
-        function bindCustomerHubPopSearch() {
-            const search = document.getElementById('cpPopSearch');
-            const select = document.getElementById('cpPopSelect');
-            if (!search || !select || search.dataset.bound) return;
-            search.dataset.bound = '1';
-            search.addEventListener('input', () => {
-                const term = search.value.trim().toLowerCase();
-                Array.from(select.options).forEach(option => {
-                    const pop = customerPopOptions.find(item => String(item.id) === option.value);
-                    option.hidden = Boolean(term) && Boolean(option.value) &&
-                        !(String(pop?.name || '').toLowerCase().includes(term) ||
-                          String(pop?.area_zone || '').toLowerCase().includes(term));
-                });
-            });
-        }
-
-        document.getElementById('cpPopRetry')?.addEventListener('click', async () => {
-            customerPopOptionsLoaded = false;
-            customerPopOptionsPromise = null;
-            const modal = document.getElementById('editCustomerModal');
-            await loadCustomerHubPopOptions({
-                pop_id: modal?.dataset.popId || '',
-                pop_name: modal?.dataset.popName || ''
-            });
-        });
 
         function bindCustomerPopSearch() {
             const search = document.getElementById('customerPopSearch'), select = document.getElementById('customerPopSelect');
