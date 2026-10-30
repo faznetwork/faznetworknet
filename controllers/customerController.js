@@ -38,7 +38,7 @@ function tenantPopIds(req) { return req.tenantScope?.global ? null : (req.tenant
 function parseRequestedPopId(value) {
   if (value === undefined || value === null || value === '') return null;
   const raw = String(value).trim();
-  if (!/^[1-9]\\d*$/.test(raw)) return { invalid: true };
+  if (!/^[1-9]\d*$/.test(raw)) return { invalid: true };
   const id = Number(raw);
   return Number.isSafeInteger(id) && id > 0 ? id : { invalid: true };
 }
@@ -1268,6 +1268,7 @@ async function updateCustomer(req,res){
     }
     const nextStatus=expired?"expired":effectiveDisabled?(requestedAccountStatus==="suspended"?"suspended":"inactive"):"active";
     const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30,pop_id=$31 WHERE id=$24 AND ($32::boolean=FALSE OR EXISTS (SELECT 1 FROM pops WHERE id=$31 AND status='active')) RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null,nextPopId,hasPopAssignment]);
+    if(!result.rows.length)return res.status(409).json({success:false,message:'Customer or selected POP changed during the update. Reload and try again.'});
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,remote_address,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NULLIF($12,''),NOW(),NOW())
