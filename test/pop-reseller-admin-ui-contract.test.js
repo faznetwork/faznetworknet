@@ -56,3 +56,31 @@ test('UI exposes API failures and prevents activation before invitation acceptan
   assert.ok(ui.includes("This invitation must be accepted and a password set before activation."));
   assert.ok(ui.includes('spinner-border'));
 });
+
+
+test('Admin customer directory exposes composable POP and reseller filters and badges', () => {
+  assert.ok(admin.includes('id="customerPopFilter"'));
+  assert.ok(admin.includes('id="customerResellerFilter"'));
+  assert.ok(admin.includes('data-pop-id='));
+  assert.ok(admin.includes('data-reseller-id='));
+  assert.ok(admin.includes('matchesStatus&&matchesSearch&&matchesPop&&matchesReseller'));
+  assert.ok(admin.includes('networkBadges'));
+});
+
+test('Admin Customer 360 network card is informational and uses the POP projection', () => {
+  for (const field of ['cpPopName', 'cpResellerName', 'cpVlanId', 'cpMikrotikPool', 'cpCommissionType', 'cpCommissionRate']) {
+    assert.ok(admin.includes('id="' + field + '"'), field + ' card field exists');
+  }
+  assert.ok(admin.includes('Informational only'));
+  assert.ok(admin.includes('customer.commission_rate'));
+  assert.ok(admin.includes('customer.pop_name'));
+});
+
+test('Customer directory and Customer 360 add only read-only POP/reseller joins', () => {
+  const controller = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'customerController.js'), 'utf8');
+  assert.ok(controller.includes('LEFT JOIN pops pop ON pop.id=c.pop_id'));
+  assert.ok(controller.includes('LEFT JOIN resellers reseller ON reseller.id=pop.reseller_id'));
+  assert.ok(controller.includes('FROM pops p LEFT JOIN resellers r ON r.id=p.reseller_id'));
+  assert.ok(controller.includes('commission_type'));
+  assert.ok(controller.includes('mikrotik_ip_pool'));
+});
