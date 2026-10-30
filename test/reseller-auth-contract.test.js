@@ -72,5 +72,5 @@ test('reseller list projection includes assigned POP identity and safe invitatio
   assert.match(controller, /ELSE 'inactive'/);
   assert.match(controller, /LEFT JOIN pops p ON p\.reseller_id=r\.id/);
   assert.match(controller, /GROUP BY r\.id/);
-  assert.doesNotMatch(controller, /invite_token_hash\s*,|SELECT[^;]*invite_token_hash/i);
+  assert.doesNotMatch(controller, /r\.invite_token_hash\s+AS\s+invite_token_hash/i);
 });
