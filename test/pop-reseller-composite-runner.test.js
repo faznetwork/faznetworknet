@@ -31,10 +31,28 @@ test('composite runner removes only standalone migration transaction markers and
 
   for (const name of [
     '20261030_pop_reseller_architecture.sql',
-    '20261030_reseller_email_invitations.sql'
+    '20261030_reseller_email_invitations.sql',
+    '20261030_rate_limits.sql'
   ]) {
     const sql = fs.readFileSync(path.join(root, 'db/migrations', name), 'utf8');
     assert.match(sql, /^\s*BEGIN\s*;/m, name + ' must retain its standalone BEGIN');
     assert.match(sql, /^\s*COMMIT\s*;/m, name + ' must retain its standalone COMMIT');
   }
+});
+
+test('composite runner includes all three migrations in the approved order', () => {
+  const runner = fs.readFileSync(path.join(root, 'scripts/apply-pop-reseller-migrations.ps1'), 'utf8');
+  const orderedMigrations = [
+    '20261030_pop_reseller_architecture.sql',
+    '20261030_reseller_email_invitations.sql',
+    '20261030_rate_limits.sql'
+  ];
+  let previousIndex = -1;
+  for (const migration of orderedMigrations) {
+    const index = runner.indexOf(migration);
+    assert.ok(index > previousIndex, migration + ' must be present in execution order');
+    previousIndex = index;
+  }
+  assert.match(runner, /Applying all three POP\/reseller migrations in one PostgreSQL transaction/);
+  assert.match(runner, /SUCCESS: all three migrations committed atomically/);
 });
