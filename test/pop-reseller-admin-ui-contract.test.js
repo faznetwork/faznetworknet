@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=milestone4-20261030"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-fix-v3"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -177,4 +177,18 @@ test('POP modal event fallback targets the active modal and stale modal instance
   assert.ok(ui.includes("document.querySelectorAll('#fprPopModal').forEach"));
   assert.ok(ui.includes("if (instance) instance.dispose();"));
   assert.ok(ui.includes("element.remove();"));
+});
+
+test('POP admin asset uses a new cache-busting version and announces the loaded build', () => {
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-fix-v3"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');"));
+});
+
+test('POP save click falls back to a bubbling submit event when requestSubmit is unavailable or not intercepted', () => {
+  assert.ok(ui.includes("delete form.dataset.fprSubmitIntercepted;"));
+  assert.ok(ui.includes("form.requestSubmit();"));
+  assert.ok(ui.includes("if (form.dataset.fprSubmitIntercepted !== '1')"));
+  assert.ok(ui.includes("new Event('submit', { bubbles: true, cancelable: true })"));
+  assert.ok(ui.includes("form.dispatchEvent(fallbackSubmitEvent);"));
+  assert.ok(ui.includes("form.dataset.fprSubmitIntercepted = '1';"));
 });
