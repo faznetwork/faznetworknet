@@ -40,23 +40,20 @@ function parse(body = {}, partial = false) {
       }
     } else if (field === 'pppoe_enabled' || field === 'hotspot_enabled') {
       data[field] = parseBoolean(value, field);
-    } else if (field === 'pppoe_ip_pool' || field === 'hotspot_ip_pool') {
-      data[field] = String(value || '').trim() || null;
+    } else if (field === 'pppoe_ip_pool') {
+      const supplied = Object.prototype.hasOwnProperty.call(body, 'pppoe_ip_pool')
+        ? body.pppoe_ip_pool
+        : body.mikrotik_ip_pool;
+      if (!partial || Object.prototype.hasOwnProperty.call(body, 'pppoe_ip_pool') || Object.prototype.hasOwnProperty.call(body, 'mikrotik_ip_pool')) {
+        data.pppoe_ip_pool = String(supplied || '').trim() || null;
+      }
+    } else if (field === 'hotspot_ip_pool') {
+      data.hotspot_ip_pool = String(value || '').trim() || null;
     } else if (field === 'commission_type') {
       data[field] = String(value || 'percentage').trim().toLowerCase();
     } else if (field === 'commission_rate') {
       data[field] = Number(value ?? 0);
     }
-  }
-
-  // Backward-compatible request adapter. New UI/API consumers must use pppoe_ip_pool.
-  if (!partial && !Object.prototype.hasOwnProperty.call(data, 'pppoe_ip_pool') &&
-      Object.prototype.hasOwnProperty.call(body, 'mikrotik_ip_pool')) {
-    data.pppoe_ip_pool = String(body.mikrotik_ip_pool || '').trim() || null;
-  }
-  if (partial && !Object.prototype.hasOwnProperty.call(data, 'pppoe_ip_pool') &&
-      Object.prototype.hasOwnProperty.call(body, 'mikrotik_ip_pool')) {
-    data.pppoe_ip_pool = String(body.mikrotik_ip_pool || '').trim() || null;
   }
 
   if (data.name !== undefined && (!data.name || data.name.length > 100)) throw serviceError('POP name is required and limited to 100 characters.');
