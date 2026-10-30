@@ -212,7 +212,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
         '<td>' + escapeHtml(owner) + '</td>' +
         '<td>' + escapeHtml(pop.pppoe_ip_pool || '—') + '</td>' +
         '<td>' + escapeHtml(pop.hotspot_ip_pool || '—') + '</td>' +
-        '<td><div class="fpr-badges">' + (pop.pppoe_enabled ? '<span class="fpr-badge">PPPoE</span>' : '') + (pop.hotspot_enabled ? '<span class="fpr-badge">Hotspot</span>' : '') + ((!pop.pppoe_enabled && !pop.hotspot_enabled) ? '<span class="small fpr-muted">No service enabled</span>' : '') + '</div></td>
+        '<td><div class="fpr-badges">' + (pop.pppoe_enabled ? '<span class="fpr-badge">PPPoE</span>' : '') + (pop.hotspot_enabled ? '<span class="fpr-badge">Hotspot</span>' : '') + ((!pop.pppoe_enabled && !pop.hotspot_enabled) ? '<span class="small fpr-muted">No service enabled</span>' : '') + '</div></td>' +
         '<td>' + escapeHtml(commission) + '</td>' +
         '<td><strong>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</strong></td>' +
         '<td>' + statusPill(pop.status) + '</td>' +
