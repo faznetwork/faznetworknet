@@ -8208,20 +8208,28 @@ async function deletePlan(id,name){
             if (customerPopOptionsLoaded) { renderCustomerPopOptions(selectedId, isEdit); return true; }
             if (!customerPopOptionsPromise) {
                 setCustomerPopStatus('Loading active POPs…');
-                customerPopOptionsPromise = fetch('/api/pops/options', {credentials:'include',headers:{Accept:'application/json'}})
-                    .then(async response => {
+                customerPopOptionsPromise = (async () => {
+                    try {
+                        const response = await fetch('/api/pops/options', {
+                            credentials: 'include',
+                            headers: { Accept: 'application/json' }
+                        });
                         const data = await response.json();
-                        if (!response.ok || data.success === false) throw new Error(data.message || 'POP options request failed (HTTP ' + response.status + ').');
-                        if (!Array.isArray(data.pops)) throw new Error('POP options response is invalid.');
+                        if (!response.ok || data.success === false) {
+                            throw new Error(data.message || 'POP options request failed (HTTP ' + response.status + ').');
+                        }
+                        if (!Array.isArray(data.pops)) {
+                            throw new Error('POP options response is invalid.');
+                        }
                         customerPopOptions = data.pops;
                         customerPopOptionsLoaded = true;
                         return customerPopOptions;
-                    })
-                    .catch(error => {
+                    } catch (error) {
                         console.error('[CUSTOMER POP UI] Unable to load active POP options:', error);
                         customerPopOptionsPromise = null;
                         throw error;
-                    });
+                    }
+                })();
             }
             try {
                 await customerPopOptionsPromise;
