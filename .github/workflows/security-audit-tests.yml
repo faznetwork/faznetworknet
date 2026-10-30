@@ -36,6 +36,8 @@ jobs:
           node --check middleware/rbac.js
           node --check middleware/tenantScope.js
           node --check test/reseller-customer-ownership.integration.test.js
+          node --check test/reseller-session-revocation.test.js
+          node --check test/pop-reseller-composite-runner.test.js
           node --check controllers/resellerPortalController.js
           node --check controllers/customerController.js
           node --check routes/resellerPortalRoutes.js
