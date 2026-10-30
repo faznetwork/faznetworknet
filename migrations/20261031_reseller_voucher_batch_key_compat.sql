@@ -56,6 +56,7 @@ BEGIN
     WHERE i.indrelid='public.reseller_voucher_batches'::regclass
       AND i.indisunique AND i.indisvalid
       AND i.indnkeyatts=1
+      AND i.indpred IS NULL
       AND i.indkey[0]=v_batch_key_attnum
   ) THEN
     EXECUTE 'CREATE UNIQUE INDEX uq_reseller_voucher_batches_batch_key_compat ON public.reseller_voucher_batches(batch_key)';
@@ -88,6 +89,7 @@ BEGIN
     WHERE i.indrelid='public.reseller_voucher_batches'::regclass
       AND i.indisunique AND i.indisvalid
       AND i.indnkeyatts=1
+      AND i.indpred IS NULL
       AND i.indkey[0]=v_batch_key_attnum
   ) THEN
     RAISE EXCEPTION 'Compatibility migration verification failed: unique batch_key index is missing.';
