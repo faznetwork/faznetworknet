@@ -538,7 +538,6 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
     }
     owner.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
     form.elements.vlan_id.value = pop && pop.vlan_id ? pop.vlan_id : '';
-    await loadPopIpPools(form, pop);
     form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
     form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
     const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
@@ -546,6 +545,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
     form.querySelector('#fprPopOwnerHelp').textContent = direct ? 'FAZ Main (Direct) is permanently protected from third-party reseller assignment.' :
       (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
     form.querySelector('#fprPopFormError').innerHTML = '';
+    await loadPopIpPools(form, pop);
     section.querySelector('#fprPopModalTitle').textContent = pop ? 'Edit POP' : 'Create POP';
     modalInstance('fprPopModal').show();
   }
