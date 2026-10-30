@@ -19,7 +19,7 @@ test('shared customer form exposes a POP selector and locked reseller assignment
 });
 
 test('role normalization recognizes administrator role spellings', () => {
-  assert.ok(adminView.includes(".replace(/[\s-]+/g, '_');"));
+  assert.ok(adminView.includes(".replace(/[\\s-]+/g, '_');"));
   const normalizeRole = role => String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   for (const role of ['admin', 'super_admin', 'super admin', 'super-admin']) {
     assert.ok(['admin', 'super_admin'].includes(normalizeRole(role)), role + ' must be recognized');
