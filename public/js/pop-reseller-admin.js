@@ -194,6 +194,11 @@
   }
 
   function renderPopManagement(section, error) {
+    document.querySelectorAll('#fprPopModal').forEach(function (element) {
+      const instance = window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance(element);
+      if (instance) instance.dispose();
+      element.remove();
+    });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
     const rows = state.pops.map(function (pop) {
       const owner = pop.reseller_name || (pop.name === DIRECT_POP_NAME ? 'FAZ Direct' : 'FAZ Direct');
@@ -228,7 +233,7 @@
 
   function popModalHtml() {
     return '<div class="modal fade" id="fprPopModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">' +
-      '<form id="fprPopForm"><div class="modal-header"><h5 class="modal-title fw-bold" id="fprPopModalTitle">Create POP</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+      '<form id="fprPopForm" novalidate><div class="modal-header"><h5 class="modal-title fw-bold" id="fprPopModalTitle">Create POP</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
       '<div class="modal-body"><div id="fprPopFormError"></div><input type="hidden" name="id">' +
       '<div class="row g-3"><div class="col-12 col-md-6"><label class="form-label">POP Name *</label><input class="form-control" name="name" maxlength="100" required></div>' +
       '<div class="col-12 col-md-6"><label class="form-label">Area / Zone</label><input class="form-control" name="area_zone" maxlength="150"></div>' +
@@ -328,7 +333,8 @@
     const button = target && target.closest ? target.closest('#fprPopSave, [data-action="save-pop"]') : null;
     if (button) {
       console.log('[POP DEBUG CLICK] Save button clicked directly!', button);
-      const form = button.closest('form') || document.getElementById('fprPopForm');
+      const activeModal = document.querySelector('#fprPopModal.show, #fprPopModal');
+      const form = button.closest('form') || (activeModal ? activeModal.querySelector('form#fprPopForm') : document.getElementById('fprPopForm'));
       console.log('[POP DEBUG CLICK] Target form found:', form);
       if (form) {
         event.preventDefault();
@@ -359,14 +365,33 @@
       const submit = form.querySelector('[type="submit"]');
       const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
       const originalLabel = submit ? submit.textContent : '';
+      if (errorHost) errorHost.innerHTML = '';
+      if (isPop) clearFieldErrors(form);
+      if (isPop) {
+        const nameField = form.elements.namedItem('name');
+        if (!nameField || !String(nameField.value || '').trim()) {
+          const message = 'POP Name is required. Please enter a name before saving.';
+          if (nameField && nameField.classList) {
+            nameField.classList.add('is-invalid');
+            nameField.setAttribute('aria-invalid', 'true');
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback d-block';
+            feedback.dataset.fprFieldError = '1';
+            feedback.textContent = message;
+            nameField.insertAdjacentElement('afterend', feedback);
+            nameField.focus();
+          }
+          if (errorHost) errorHost.innerHTML = errorBanner(message);
+          showToast(message, 'danger');
+          return;
+        }
+      }
       form.dataset.submitting = '1';
       if (submit) {
         submit.disabled = true;
         submit.setAttribute('aria-busy', 'true');
         submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
       }
-      if (errorHost) errorHost.innerHTML = '';
-      if (isPop) clearFieldErrors(form);
 
       try {
         const data = new FormData(form);
