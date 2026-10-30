@@ -39,7 +39,8 @@ test('package catalog is mounted behind the reseller authentication and tenant-s
 });
 
 test('customer creation is an isolated page and uses explicit HTTP 201 handling', () => {
-  assert.match(view, /pageMode === 'add'/);
+  assert.match(view, /pageMode === 'directory'/);
+  assert.match(view, /id="customerCreateForm"/);
   assert.match(script, /response\.status!==201/);
   assert.match(script, /customerCreateSuccess/);
   assert.match(script, /customerCreateError/);
