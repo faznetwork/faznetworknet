@@ -91,12 +91,7 @@
           <label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label>
           <select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select>
         </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · SET BATCH QUANTITY</div></div>
-        <div class="col-12 col-md-4">
-          <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
-          <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
-          <div class="form-text">Minimum 1 · Maximum 500 vouchers per batch</div>
-        </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 2 · REVIEW PACKAGE PRICE & MARGIN</div></div>
         <div class="col-12 col-md-8">
           <div class="p-3 rounded-3 border bg-light h-100" aria-live="polite">
             <div class="small text-secondary fw-semibold mb-2">Selected package pricing</div>
@@ -111,6 +106,13 @@
             </div>
           </div>
         </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · SET BATCH QUANTITY</div></div>
+        <div class="col-12 col-md-4">
+          <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
+          <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
+          <div class="form-text">Minimum 1 · Maximum 500 vouchers per batch</div>
+        </div>
+
         <div class="col-12"><div class="small fw-bold text-success">STEP 4 · CONFIRM WALLET / CREDIT IMPACT</div></div>
         <div class="col-12">
           <div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div>
