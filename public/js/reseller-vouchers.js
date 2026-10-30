@@ -74,7 +74,7 @@
       if(!response.ok||!result.success)throw new Error(result.message||'Voucher issuance failed.');
       state.pendingIdempotencyKey=null;renderIssued(result);alertBox('voucherSuccess',result.message||'Voucher batch issued successfully.');
       if(result.account&&state.catalog?.account)Object.assign(state.catalog.account,{walletBalance:result.account.walletBalance,receivableBalance:result.account.receivableBalance,creditLimit:result.account.creditLimit});
-      renderAccount();await loadHistory();
+      renderAccount();
     } catch(error) { alertBox('voucherError',error.message); }
     finally { button.innerHTML='<i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch';updatePricing(); }
   }
