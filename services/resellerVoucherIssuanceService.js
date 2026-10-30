@@ -344,7 +344,7 @@ async function listBatches(resellerIdValue, limitValue = 50) {
   const resellerId = resellerKey(resellerIdValue);
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(Number(limitValue)) ? Number(limitValue) : 50));
   const result = await db.query(
-    `SELECT b.id,b.batch_key,b.pop_id,b.package_id,b.profile_key,b.validity,
+    `SELECT b.id,b.batch_key AS batch_key,b.pop_id,b.package_id,b.profile_key,b.validity,
             b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
             b.billing_mode,b.status,b.created_at,
             COUNT(i.id)::int AS issued_count
