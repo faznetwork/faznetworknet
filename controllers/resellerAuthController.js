@@ -42,8 +42,12 @@ async function invite(req, res) {
   const name = String(req.body?.name || '').trim();
   const email = normalizeEmail(req.body?.email);
   const phone = String(req.body?.phone || '').trim();
-  const assignedPopIds = Array.isArray(req.body?.assigned_pop_ids)
-    ? [...new Set(req.body.assigned_pop_ids.map(validId))]
+  const rawAssignedPopIds = req.body?.assigned_pop_ids;
+  if (rawAssignedPopIds !== undefined && rawAssignedPopIds !== null && !Array.isArray(rawAssignedPopIds)) {
+    return res.status(400).json({ success: false, message: 'assigned_pop_ids must be an array of POP IDs.' });
+  }
+  const assignedPopIds = Array.isArray(rawAssignedPopIds)
+    ? [...new Set(rawAssignedPopIds.map(validId))]
     : [];
   if (!name || name.length > 100 || !email || !phone || phone.length > 40 || assignedPopIds.some(id => id === null)) {
     return res.status(400).json({ success: false, message: 'Provide a valid name, email, phone, and POP ID list.' });
@@ -191,8 +195,14 @@ async function login(req, res) {
   const password = String(req.body?.password || '');
   if (!identifier || !password) return res.status(400).json({ success: false, message: 'Email/username and password are required.' });
   try {
-    const result = await db.query(
-      'SELECT id,name,email,username,password_hash,status FROM resellers WHERE lower(email)=lower($1) OR lower(username)=lower($1) LIMIT 1',
+    // Email is the canonical identifier. Only fall back to a legacy username
+    // when no reseller email matches, avoiding ambiguous cross-namespace matches.
+    const byEmail = await db.query(
+      'SELECT id,name,email,username,password_hash,status FROM resellers WHERE lower(email)=lower($1) LIMIT 1',
+      [identifier]
+    );
+    const result = byEmail.rows[0] ? byEmail : await db.query(
+      'SELECT id,name,email,username,password_hash,status FROM resellers WHERE lower(username)=lower($1) LIMIT 1',
       [identifier]
     );
     const reseller = result.rows[0];
