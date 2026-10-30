@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-fix-v3"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-direct-v4"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -132,14 +132,19 @@ test('POP API errors retain HTTP status and structured validation details for UI
   assert.ok(ui.includes("['commission_rate', /commission_rate|commission rate|commission.*rate/i]"));
 });
 
-test('POP and reseller form submissions use stable document-level delegation with a native-validation-safe button fallback', () => {
+test('POP save uses a direct click handler and preserves the reseller submit lifecycle', () => {
+  assert.ok(ui.includes("document.addEventListener('click', function (event) {"));
+  assert.ok(ui.includes("target.closest ? target.closest('#fprPopSave') : null"));
+  assert.ok(ui.includes('async function savePopForm(form, saveBtn)'));
+  assert.ok(ui.includes("const response = await apiRequest(endpoint, { method: method, body: payload });"));
+  assert.ok(ui.includes("const refreshed = await window.loadPopManagement();") || ui.includes("const refreshed = await window.loadPopManagement();"));
+  assert.ok(ui.includes("if (!form || form.id !== 'fprPopForm')"));
+  assert.ok(ui.includes("if (form.id === 'fprPopForm')"));
+  assert.ok(ui.includes("event.stopImmediatePropagation();"));
   assert.ok(ui.includes("document.addEventListener('submit', async function (event) {"));
-  assert.ok(!ui.includes("section.addEventListener('submit'"));
-  assert.ok(ui.includes("document.addEventListener('click', function (event)"));
-  assert.ok(ui.includes("closest('#fprPopSave, [data-action=\"save-pop\"]')"));
-  assert.ok(ui.includes("form.requestSubmit()"));
-  assert.ok(ui.includes("event.preventDefault();"));
-  assert.ok(ui.includes("id=\"fprPopSave\" data-action=\"save-pop\""));
+  assert.ok(ui.includes("if (!form || form.id !== 'fprResellerForm') return;"));
+  assert.ok(!ui.includes('requestSubmit()'));
+  assert.ok(!ui.includes('fprSubmitIntercepted'));
 });
 
 test('POP modal closes only after an explicit successful API response with a valid POP record', () => {
@@ -148,58 +153,28 @@ test('POP modal closes only after an explicit successful API response with a val
   const responseGate = ui.indexOf("if (!response || response.success !== true");
   const closeModal = ui.indexOf("closeModal('fprPopModal')");
   assert.ok(responseGate >= 0 && closeModal > responseGate);
-  for (const trace of ['[POP DEBUG] Form Submit Intercepted', '[POP DEBUG] Payload dispatched', '[POP DEBUG] Response received']) {
-    assert.ok(ui.includes(trace), trace + ' trace exists');
-  }
-});
-
-test('Raw POP diagnostics execute before selector guards in top-level document listeners', () => {
-  const clickListener = ui.indexOf("document.addEventListener('click', function (event) {");
-  const submitListener = ui.indexOf("document.addEventListener('submit', async function (event) {");
-  assert.ok(clickListener >= 0 && submitListener > clickListener);
-  assert.ok(ui.indexOf("console.log('[POP DEBUG CLICK] Document click observed:") > clickListener);
-  assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") > submitListener);
-  assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") < ui.indexOf("if (!form || (form.id !== 'fprPopForm'"));
-  assert.ok(!ui.includes('function bindGlobalFormLifecycle'));
 });
 
 test('POP modal disables native focus-blocking validation and validates its required name explicitly', () => {
   assert.ok(ui.includes('<form id="fprPopForm" novalidate>'));
-  assert.ok(ui.includes("const nameField = form.elements.namedItem('name');"));
-  assert.ok(ui.includes("!String(nameField.value || '').trim()"));
-  assert.ok(ui.includes("nameField.classList.add('is-invalid')"));
-  assert.ok(ui.includes("showToast(message, 'danger')"));
+  assert.ok(ui.includes("const nameInput = form.querySelector('[name=\"name\"]');"));
+  assert.ok(ui.includes("if (!name)"));
+  assert.ok(ui.includes("nameInput.classList.add('is-invalid')"));
+  assert.ok(ui.includes("showToast('POP Name is required', 'danger')"));
 });
 
-test('POP modal event fallback targets the active modal and stale modal instances are removed before rendering', () => {
-  assert.ok(ui.includes("document.querySelector('#fprPopModal.show, #fprPopModal')"));
-  assert.ok(ui.includes("activeModal.querySelector('form#fprPopForm')"));
-  assert.ok(ui.includes("document.querySelectorAll('#fprPopModal').forEach"));
-  assert.ok(ui.includes("if (instance) instance.dispose();"));
-  assert.ok(ui.includes("element.remove();"));
-});
-
-test('POP admin asset uses a new cache-busting version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-fix-v3"></script>'));
+test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-direct-v4"></script>'));
   assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');"));
 });
 
-test('POP save click falls back to a bubbling submit event when requestSubmit is unavailable or not intercepted', () => {
-  assert.ok(ui.includes("delete form.dataset.fprSubmitIntercepted;"));
-  assert.ok(ui.includes("form.requestSubmit();"));
-  assert.ok(ui.includes("if (form.dataset.fprSubmitIntercepted !== '1')"));
-  assert.ok(ui.includes("new Event('submit', { bubbles: true, cancelable: true })"));
-  assert.ok(ui.includes("form.dispatchEvent(fallbackSubmitEvent);"));
-  assert.ok(ui.includes("form.dataset.fprSubmitIntercepted = '1';"));
-});
-
-test('POP save button cannot trigger native navigation and capture guard preserves async submit handling', () => {
-  assert.ok(ui.includes('<button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button>'));
-  assert.ok(ui.includes("document.addEventListener('submit', function (event) {"));
-  assert.ok(ui.includes("}, true);"));
-  const captureGuard = ui.slice(ui.indexOf("Block native navigation for dynamically-rendered POP/reseller forms"), ui.indexOf("document.addEventListener('click', function (event) {"));
-  assert.ok(captureGuard.includes("event.preventDefault();"));
-  assert.ok(!captureGuard.includes("stopImmediatePropagation"));
-  assert.ok(ui.includes("const submit = isPop ? form.querySelector('#fprPopSave') : form.querySelector('[type=\"submit\"]');"));
-  assert.ok(ui.includes("document.addEventListener('submit', async function (event) {"));
+test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
+  for (const selector of ["[name=\"name\"]", "[name=\"area_zone\"]", "[name=\"reseller_id\"]", "[name=\"vlan_id\"]", "[name=\"mikrotik_ip_pool\"]", "[name=\"commission_type\"]", "[name=\"commission_rate\"]", "[name=\"id\"]"]) {
+    assert.ok(ui.includes("form.querySelector('" + selector + "')"), selector + ' is read directly');
+  }
+  assert.ok(ui.includes("const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');"));
+  assert.ok(ui.includes("const method = popId ? 'PUT' : 'POST';"));
+  assert.ok(ui.includes("await window.loadPopManagement();"));
+  assert.ok(!ui.includes('location.reload()'));
+  assert.ok(!ui.includes('loadPopDirectory'));
 });
