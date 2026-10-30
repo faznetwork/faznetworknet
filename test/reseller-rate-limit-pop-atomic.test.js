@@ -58,8 +58,9 @@ test('PostgreSQL rate limiter allows requests through the configured limit and r
 test('rate limiter fails closed with explicit 503 when PostgreSQL counter is unavailable', async t => {
   t.mock.method(db, 'query', async () => { throw new Error('database unavailable'); });
   const originalError = console.error;
+  let loggedError = null;
   t.after(() => { console.error = originalError; });
-  console.error = () => {};
+  console.error = (...args) => { loggedError = args; };
   const limiter = createRateLimiter({ name: 'test-fail-closed', windowMs: 60_000, max: 2 });
   const res = response();
   let nextCalls = 0;
@@ -67,6 +68,8 @@ test('rate limiter fails closed with explicit 503 when PostgreSQL counter is una
   assert.equal(res.statusCode, 503);
   assert.equal(res.body.code, 'RATE_LIMIT_UNAVAILABLE');
   assert.equal(nextCalls, 0);
+  assert.equal(loggedError[0], '[RATE LIMIT] PostgreSQL counter failed:');
+  assert.match(loggedError[1], /database unavailable/);
 });
 
 test('resend cooldown is checked under the reseller row lock before outbox enqueue', () => {
