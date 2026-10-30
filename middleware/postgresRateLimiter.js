@@ -18,17 +18,22 @@ function createRateLimiter({ name, windowMs, max, message }) {
   return async function postgresRateLimit(req, res, next) {
     const key = name + ':' + clientIdentity(req);
     try {
-      const result = await db.query(
+      // Bound table growth without deleting the current key in the same SQL
+      // statement as its UPSERT (PostgreSQL cannot safely modify one row twice
+      // in a single command).
+      await db.query(
         `WITH expired AS (
            SELECT key FROM rate_limits
-           WHERE expires_at < NOW()
+           WHERE expires_at < NOW() AND key <> $1
            ORDER BY expires_at ASC
            LIMIT 100
            FOR UPDATE SKIP LOCKED
-         ), cleanup AS (
-           DELETE FROM rate_limits WHERE key IN (SELECT key FROM expired)
          )
-         INSERT INTO rate_limits (key, window_started_at, request_count, expires_at)
+         DELETE FROM rate_limits WHERE key IN (SELECT key FROM expired)`,
+        [key]
+      );
+      const result = await db.query(
+        `INSERT INTO rate_limits (key, window_started_at, request_count, expires_at)
          VALUES ($1, NOW(), 1, NOW() + ($2::bigint * INTERVAL '1 millisecond'))
          ON CONFLICT (key) DO UPDATE SET
            window_started_at = CASE
