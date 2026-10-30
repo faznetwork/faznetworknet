@@ -2,7 +2,7 @@
 <%
   const brand = typeof brandSettings !== 'undefined' && brandSettings ? brandSettings : {};
   const brandName = String(brand.company_name || 'FAZ NETWORK');
-  const customerId = String(typeof customerId !== 'undefined' ? customerId : '');
+  const profileCustomerId = String(typeof customerId !== 'undefined' ? customerId : '');
 %>
 <html lang="en">
 <head>
@@ -65,7 +65,7 @@
   </main>
   <script>
     const api='/api/reseller-portal';
-    const customerKey=<%- JSON.stringify(customerId) %>;
+    const customerKey=<%- JSON.stringify(profileCustomerId) %>;
     const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const money=value=>'৳'+Number(value||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
     const date=value=>{if(!value)return '—';const raw=String(value).slice(0,10);const match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return match?match[3]+'/'+match[2]+'/'+match[1]:escapeHtml(raw)};
