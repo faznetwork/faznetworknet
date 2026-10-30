@@ -34,6 +34,8 @@ jobs:
           node --check services/paymentWebhookParser.js
           node --check services/mikrotikService.js
           node --check middleware/rbac.js
+          node --check controllers/resellerPortalController.js
+          node --check routes/resellerPortalRoutes.js
           node --check controllers/rbacAuthController.js
           node --check controllers/adminSecurityController.js
           node --check routes/adminUserRoutes.js
@@ -43,7 +45,7 @@ jobs:
           node --check public/js/rbac-sidebar.js
           node --check public/js/pop-reseller-admin.js
           node --check test/pop-reseller-admin-ui-contract.test.js
-          node -e "const fs=require('fs'),ejs=require('ejs'); ejs.compile(fs.readFileSync('views/admin.ejs','utf8')); ejs.compile(fs.readFileSync('views/verify-otp.ejs','utf8')); console.log('RBAC EJS templates compile')"
+          node -e "const fs=require('fs'),ejs=require('ejs'); for (const file of ['views/admin.ejs','views/verify-otp.ejs','views/reseller-dashboard.ejs','views/reseller-customer-profile.ejs']) ejs.compile(fs.readFileSync(file,'utf8')); console.log('Admin, RBAC and reseller EJS templates compile')"
       - name: Hotspot calendar validity syntax and build
         run: |
           node --check controllers/hotspotController.js
