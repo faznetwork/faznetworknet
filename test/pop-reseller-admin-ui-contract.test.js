@@ -165,7 +165,7 @@ test('POP admin asset uses the direct-save cache version and announces the loade
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
-  for (const selector of ["[name=\"name\"]", "[name=\"area_zone\"]", "[name=\"reseller_id\"]", "[name=\"vlan_id\"]", "[name=\"mikrotik_ip_pool\"]", "[name=\"commission_type\"]", "[name=\"commission_rate\"]", "[name=\"id\"]"]) {
+  for (const selector of ["[name=\"name\"]", "[name=\"area_zone\"]", "[name=\"reseller_id\"]", "[name=\"vlan_id\"]", "[name=\"pppoe_ip_pool\"]", "[name=\"commission_type\"]", "[name=\"commission_rate\"]", "[name=\"id\"]"]) {
     assert.ok(ui.includes("container.querySelector('" + selector + "')"), selector + ' is read from the resolved editor container');
   }
   assert.ok(ui.includes("const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');"));
@@ -208,7 +208,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-ip-pool-v5'));
+  assert.ok(admin.includes('pop-dual-pool-v6'));
 });
 
 
