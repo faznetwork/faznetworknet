@@ -35,7 +35,7 @@ test('POP UI uses stable POP totals, direct POP protection and soft status toggl
   assert.ok(ui.includes("const DIRECT_POP_NAME = 'FAZ Main (Direct)'"));
   assert.ok(ui.includes("pop.name !== DIRECT_POP_NAME"));
   assert.ok(ui.includes("method: 'PATCH', body: { status: nextStatus }"));
-  assert.ok(ui.includes("if (!id || String(current.reseller_id || '') !== String(owner || '')) payload.reseller_id = owner;"));
+  assert.ok(ui.includes("if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(resellerId || ''))"));
   assert.ok(ui.includes("option.textContent = (currentOwner ? currentOwner.name : (pop.reseller_name || 'Current reseller')) + ' — current owner';"));
   assert.ok(!/method\s*:\s*['"]DELETE['"]/i.test(ui));
   assert.ok(!/api\/pops\/[^'"]+['"]\s*,\s*\{\s*method\s*:\s*['"]DELETE/i.test(ui));
@@ -91,12 +91,12 @@ test('POP create serializes every API contract field, including an explicit rese
   for (const field of fields) {
     assert.match(ui, new RegExp('\\b' + field + ':'));
   }
-  assert.ok(ui.includes("method: id ? 'PUT' : 'POST'"));
-  assert.ok(ui.includes("apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : '')"));
+  assert.ok(ui.includes("const method = popId ? 'PUT' : 'POST';"));
+  assert.ok(ui.includes("apiRequest(endpoint, { method: method, body: payload })"));
 });
 
 test('POP save failures preserve the modal and expose field-level and toast feedback', () => {
-  assert.ok(ui.includes("mapPopFieldErrors(error, form)"));
+  assert.ok(ui.includes("mapPopFieldErrors(error, container)"));
   assert.ok(ui.includes("field.classList.add('is-invalid')"));
   assert.ok(ui.includes("showToast(error.message || 'Unable to save POP. Please try again.', 'danger')"));
   assert.ok(ui.includes("closeModal('fprPopModal')"));
@@ -131,7 +131,7 @@ test('POP API errors retain HTTP status and structured validation details for UI
 test('POP save uses a direct click handler and preserves the reseller submit lifecycle', () => {
   assert.ok(ui.includes("document.addEventListener('click', function (event) {"));
   assert.ok(ui.includes("target.closest ? target.closest('#fprPopSave') : null"));
-  assert.ok(ui.includes('async function savePopForm(form, saveBtn)'));
+  assert.ok(ui.includes('async function savePopForm(form, saveBtn, container)'));
   assert.ok(ui.includes("const response = await apiRequest(endpoint, { method: method, body: payload });"));
   assert.ok(ui.includes("const refreshed = await window.loadPopManagement();") || ui.includes("const refreshed = await window.loadPopManagement();"));
   assert.ok(ui.includes("saveBtn.closest('form')"));
