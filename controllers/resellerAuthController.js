@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('../db');
 const invitationService = require('../services/resellerInvitationService');
+const { isResellerSession } = require('../middleware/rbac');
 
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
@@ -215,7 +216,9 @@ async function login(req, res) {
 }
 
 function logout(req, res) {
-  if (!req.session) return res.json({ success: true });
+  if (!req.session || !isResellerSession(req)) {
+    return res.status(401).json({ success: false, message: 'An authenticated reseller session is required.' });
+  }
   req.session.destroy(error => {
     if (error) {
       console.error('[RESELLER AUTH] Session destruction failed:', error.message);
