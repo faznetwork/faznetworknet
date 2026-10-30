@@ -24,7 +24,18 @@ async function updateStatus(req,res){
  const id=validId(req.params.id),status=String(req.body?.status||'').toLowerCase();
  if(!id)return res.status(400).json({success:false,message:'Invalid reseller ID.'});
  if(!['active','inactive'].includes(status))return res.status(400).json({success:false,message:'Status must be active or inactive.'});
- try{const r=await db.query('UPDATE resellers SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',[status,id]);if(!r.rows.length)return res.status(404).json({success:false,message:'Reseller not found.'});return res.json({success:true,reseller:r.rows[0],message:'Reseller status updated; POP and customer records were preserved.'});}
- catch(e){return fail(res,e,'Status update');}
+ try{
+  const r=await db.query(
+   "UPDATE resellers SET status=$1,updated_at=NOW() WHERE id=$2 AND ($1 <> 'active' OR password_hash IS NOT NULL) RETURNING id,name,status",
+   [status,id]
+  );
+  if(!r.rows.length){
+   const existing=await db.query('SELECT id,password_hash FROM resellers WHERE id=$1 LIMIT 1',[id]);
+   if(!existing.rows.length)return res.status(404).json({success:false,message:'Reseller not found.'});
+   if(status==='active'&&!existing.rows[0].password_hash)return res.status(409).json({success:false,message:'This reseller must accept the email invitation and set a password before activation.'});
+   return res.status(404).json({success:false,message:'Reseller not found or status was not changed.'});
+  }
+  return res.json({success:true,reseller:r.rows[0],message:'Reseller status updated; POP and customer records were preserved.'});
+ }catch(e){return fail(res,e,'Status update');}
 }
 module.exports={list,update,updateStatus};
