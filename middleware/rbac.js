@@ -12,8 +12,18 @@ function normalizeRole(role) {
   return null;
 }
 
+function isResellerSession(req) {
+  const nested = req.session?.auth?.isReseller === true && normalizeRole(req.session?.auth?.role) === 'reseller';
+  const legacy = req.session?.isReseller === true && normalizeRole(req.session?.role) === 'reseller';
+  return nested || legacy;
+}
+
+function resellerSessionId(req) {
+  return Number(req.session?.auth?.resellerId??req.session?.resellerId??req.session?.reseller_id);
+}
+
 function currentRole(req) {
-  if (req.session?.auth?.isReseller === true && normalizeRole(req.session.auth.role) === 'reseller') return 'reseller';
+  if (isResellerSession(req)) return 'reseller';
   if (req.session?.legacySuperAdmin === true) return 'super_admin';
   if (req.session?.isAdmin === true && !req.session?.role && !req.session?.userId) return 'super_admin';
   return normalizeRole(req.session?.role);
@@ -23,7 +33,7 @@ function requireRole(allowedRoles) {
   const allowed = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]).map(normalizeRole).filter(Boolean);
   return async function roleGuard(req, res, next) {
     const roleFromSession = currentRole(req);
-    const resellerSession = req.session?.auth?.isReseller === true && roleFromSession === 'reseller';
+    const resellerSession = isResellerSession(req);
     if (!req.session?.isAdmin && !resellerSession) {
       const api = String(req.originalUrl || '').startsWith('/api/');
       return api
@@ -55,7 +65,7 @@ function requireRole(allowedRoles) {
     }
 
     if (role === 'reseller') {
-      const resellerId = Number(req.session?.auth?.resellerId ?? req.session?.resellerId ?? req.session?.reseller_id);
+      const resellerId = resellerSessionId(req);
       if (!Number.isSafeInteger(resellerId) || resellerId < 1) {
         return res.status(403).json({ success: false, message: 'Forbidden: verified reseller identity is required' });
       }
@@ -80,9 +90,7 @@ function requireRole(allowedRoles) {
       role,
       userId: req.session.userId || null,
       username: req.session.adminUser || '',
-      ...(role === 'reseller'
-        ? { resellerId: Number(req.session?.auth?.resellerId ?? req.session.resellerId ?? req.session.reseller_id) }
-        : {})
+      ...(role === 'reseller' ? { resellerId: resellerSessionId(req) } : {})
     };
     return next();
   };
@@ -96,4 +104,4 @@ function requireStaffReadOnly(req, res, next) {
   return next();
 }
 
-module.exports = { ROLES, normalizeRole, currentRole, requireRole, requireStaffReadOnly };
+module.exports = { ROLES, normalizeRole, currentRole, requireRole, requireStaffReadOnly, isResellerSession };
