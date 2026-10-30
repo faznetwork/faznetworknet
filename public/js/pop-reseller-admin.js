@@ -1,0 +1,363 @@
+(function () {
+  'use strict';
+
+  const API = '/api';
+  const DIRECT_POP_NAME = 'FAZ Main (Direct)';
+  const state = { pops: [], resellers: [], activeView: null, busy: false };
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  async function apiRequest(path, options) {
+    const opts = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {});
+    opts.headers = Object.assign({ Accept: 'application/json' }, opts.headers || {});
+    if (opts.body && typeof opts.body !== 'string') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(opts.body);
+    }
+    const response = await fetch(API + path, opts);
+    let payload;
+    try { payload = await response.json(); }
+    catch (error) { throw new Error('The server returned an unreadable response (' + response.status + ').'); }
+    if (!response.ok || payload.success === false) {
+      throw new Error(payload.message || payload.error || ('Request failed with HTTP ' + response.status + '.'));
+    }
+    return payload;
+  }
+
+  function formatMoney(value, type) {
+    const amount = Number(value || 0);
+    return (type === 'fixed' ? '৳' : '') + amount.toLocaleString('en-BD', { maximumFractionDigits: 2 }) + (type === 'percentage' ? '%' : '');
+  }
+
+  function statusPill(status) {
+    const key = String(status || 'inactive').toLowerCase();
+    const map = {
+      pending: ['warning', 'Pending'],
+      active: ['success', 'Active'],
+      expired: ['danger', 'Expired'],
+      inactive: ['secondary', 'Inactive']
+    };
+    const item = map[key] || map.inactive;
+    return '<span class="badge rounded-pill text-bg-' + item[0] + '">' + item[1] + '</span>';
+  }
+
+  function statusButton(status, id, kind) {
+    const active = String(status).toLowerCase() === 'active';
+    return '<button type="button" class="btn btn-sm ' + (active ? 'btn-outline-warning' : 'btn-outline-success') +
+      '" data-action="toggle-' + kind + '" data-id="' + escapeHtml(id) + '" data-status="' + (active ? 'inactive' : 'active') + '">' +
+      (active ? 'Set Inactive' : 'Set Active') + '</button>';
+  }
+
+  function rootView(id, title) {
+    const host = document.getElementById('dynamicPageContent');
+    if (!host) throw new Error('Admin content container #dynamicPageContent is unavailable.');
+    let section = document.getElementById(id);
+    if (!section) {
+      section = document.createElement('section');
+      section.id = id;
+      section.className = 'admin-view faz-pop-reseller-view';
+      host.appendChild(section);
+    }
+    state.activeView = id;
+    if (typeof window.switchView === 'function') window.switchView(id.replace(/^view-/, ''));
+    if (typeof window.setPageTitleSafe === 'function') window.setPageTitleSafe(title);
+    return section;
+  }
+
+  function errorBanner(message) {
+    return '<div class="alert alert-danger d-flex align-items-start gap-2" role="alert"><i class="bi bi-exclamation-triangle-fill mt-1"></i><div>' +
+      escapeHtml(message) + '</div></div>';
+  }
+
+  function sharedStyles() {
+    return '<style id="fazPopResellerStyles">' +
+      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a}' +
+      '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
+      '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
+      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}' +
+      '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}' +
+      '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:800;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
+      '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
+      '.faz-pop-reseller-view .fpr-card-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}' +
+      '.faz-pop-reseller-view .fpr-table{margin:0;min-width:980px;font-size:13px}' +
+      '.faz-pop-reseller-view .fpr-table th{font-size:11px;text-transform:uppercase;letter-spacing:.035em;color:#64748b;white-space:nowrap;background:#f8fafc}' +
+      '.faz-pop-reseller-view .fpr-table td{vertical-align:middle}' +
+      '.faz-pop-reseller-view .fpr-actions{display:flex;gap:6px;flex-wrap:wrap;min-width:145px}' +
+      '.faz-pop-reseller-view .fpr-badges{display:flex;gap:5px;flex-wrap:wrap;max-width:260px}' +
+      '.faz-pop-reseller-view .fpr-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#065f46;font-size:11px;font-weight:700;max-width:100%;overflow-wrap:anywhere}' +
+      '.faz-pop-reseller-view .fpr-muted{color:#64748b}' +
+      '.faz-pop-reseller-view .modal-content{border:0;border-radius:16px;overflow:hidden}' +
+      '.faz-pop-reseller-view .modal-header{background:#f8fafc}' +
+      '.faz-pop-reseller-view .form-label{font-size:13px;font-weight:700;color:#334155}' +
+      '.faz-pop-reseller-view .form-control,.faz-pop-reseller-view .form-select{min-height:42px}' +
+      '.faz-pop-reseller-view .fpr-loading{padding:40px 16px;text-align:center;color:#64748b}' +
+      '@media(max-width:767.98px){.faz-pop-reseller-view .fpr-metrics{grid-template-columns:1fr;gap:9px}.faz-pop-reseller-view .fpr-metric{padding:12px}.faz-pop-reseller-view .fpr-heading .btn{width:100%}.faz-pop-reseller-view .modal-dialog{margin:10px auto;max-width:calc(100% - 20px)}.faz-pop-reseller-view .modal-footer .btn{flex:1;min-height:42px}}' +
+      '</style>';
+  }
+
+  function renderPopManagement(section, error) {
+    const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
+    const rows = state.pops.map(function (pop) {
+      const owner = pop.reseller_name || (pop.name === DIRECT_POP_NAME ? 'FAZ Direct' : 'FAZ Direct');
+      const commission = formatMoney(pop.commission_rate, pop.commission_type);
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(pop.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
+        '<td>' + escapeHtml(pop.area_zone || '—') + '</td>' +
+        '<td>' + escapeHtml(owner) + '</td>' +
+        '<td>' + escapeHtml(pop.vlan_id || '—') + '</td>' +
+        '<td>' + escapeHtml(pop.mikrotik_ip_pool || '—') + '</td>' +
+        '<td>' + escapeHtml(commission) + '</td>' +
+        '<td><strong>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</strong></td>' +
+        '<td>' + statusPill(pop.status) + '</td>' +
+        '<td><div class="fpr-actions"><button class="btn btn-sm btn-outline-primary" type="button" data-action="edit-pop" data-id="' + escapeHtml(pop.id) + '"><i class="bi bi-pencil me-1"></i>Edit</button>' +
+        statusButton(pop.status, pop.id, 'pop') + '</div></td></tr>';
+    }).join('');
+    section.innerHTML = sharedStyles() +
+      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage Points of Presence, ownership, VLAN and commission settings.</p></div>' +
+      '<button class="btn btn-success" type="button" data-action="new-pop"><i class="bi bi-plus-lg me-2"></i>Create POP</button></div>' +
+      (error ? errorBanner(error) : '') +
+      '<div class="fpr-metrics">' +
+      '<article class="fpr-metric"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
+      '<article class="fpr-metric"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
+      '<section class="fpr-card"><div class="fpr-card-head"><div class="fw-bold">POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
+      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>VLAN</th><th>IP Pool</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="9" class="text-center text-muted py-4">No POP records found.</td></tr>') +
+      '</tbody></table></div></section>' +
+      popModalHtml();
+    bindSection(section, 'pop');
+  }
+
+  function popModalHtml() {
+    return '<div class="modal fade" id="fprPopModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">' +
+      '<form id="fprPopForm"><div class="modal-header"><h5 class="modal-title fw-bold" id="fprPopModalTitle">Create POP</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+      '<div class="modal-body"><div id="fprPopFormError"></div><input type="hidden" name="id">' +
+      '<div class="row g-3"><div class="col-12 col-md-6"><label class="form-label">POP Name *</label><input class="form-control" name="name" maxlength="100" required></div>' +
+      '<div class="col-12 col-md-6"><label class="form-label">Area / Zone</label><input class="form-control" name="area_zone" maxlength="150"></div>' +
+      '<div class="col-12 col-md-6"><label class="form-label">Assign Reseller</label><select class="form-select" name="reseller_id" id="fprPopReseller"><option value="">FAZ Direct / Unassigned</option>' +
+      state.resellers.filter(function (r) { return r.status === 'active'; }).map(function (r) { return '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + ' — ' + escapeHtml(r.email || r.username || '') + '</option>'; }).join('') +
+      '</select><div class="form-text" id="fprPopOwnerHelp">FAZ Main (Direct) is protected from third-party assignment.</div></div>' +
+      '<div class="col-12 col-md-6"><label class="form-label">VLAN ID</label><input class="form-control" type="number" name="vlan_id" min="1" max="4094"></div>' +
+      '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><input class="form-control" name="mikrotik_ip_pool" maxlength="150"></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprPopSave">Save POP</button></div></form></div></div></div>';
+  }
+
+  function renderResellerAccess(section, error) {
+    const rows = state.resellers.map(function (reseller) {
+      const pops = Array.isArray(reseller.assigned_pops) ? reseller.assigned_pops : [];
+      const badges = pops.length ? pops.map(function (pop) { return '<span class="fpr-badge">' + escapeHtml(pop.name) + '</span>'; }).join('') : '<span class="small fpr-muted">No POP assigned</span>';
+      const status = String(reseller.invite_status || 'inactive').toLowerCase();
+      const resend = reseller.status !== 'active' ? '<button type="button" class="btn btn-sm btn-outline-primary" data-action="resend-invite" data-id="' + escapeHtml(reseller.id) + '">Resend Invite</button>' : '';
+      const cancel = (status === 'pending' || status === 'expired') ? '<button type="button" class="btn btn-sm btn-outline-danger" data-action="cancel-invite" data-id="' + escapeHtml(reseller.id) + '">Cancel Invite</button>' : '';
+      return '<tr><td><strong>' + escapeHtml(reseller.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(reseller.id) + '</div></td>' +
+        '<td><div>' + escapeHtml(reseller.email || reseller.username || '—') + '</div><div class="small fpr-muted">' + escapeHtml(reseller.phone || '') + '</div></td>' +
+        '<td><div class="fpr-badges">' + badges + '</div></td><td>' + statusPill(status) + '</td>' +
+        '<td><div class="fpr-actions">' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller') + '</div></td></tr>';
+    }).join('');
+    section.innerHTML = sharedStyles() +
+      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Access & Invitations</div><h1 class="h4 fw-bold mb-1">Reseller Accounts &amp; Access</h1><p class="text-muted small mb-0">Review reseller access, assigned POPs and invitation lifecycle.</p></div>' +
+      '<button class="btn btn-success" type="button" data-action="new-reseller"><i class="bi bi-person-plus me-2"></i>Invite Reseller</button></div>' +
+      (error ? errorBanner(error) : '') +
+      '<section class="fpr-card"><div class="fpr-card-head"><div class="fw-bold">Reseller Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-resellers"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
+      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Email / Login ID &amp; Phone</th><th>Assigned POPs</th><th>Invite Status</th><th>Actions</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="5" class="text-center text-muted py-4">No reseller accounts found.</td></tr>') +
+      '</tbody></table></div></section>' + resellerModalHtml();
+    bindSection(section, 'reseller');
+  }
+
+  function resellerModalHtml() {
+    const eligible = state.pops.filter(function (pop) {
+      return pop.name !== DIRECT_POP_NAME && pop.status === 'active' && pop.reseller_id == null && Number(pop.customer_count || 0) === 0;
+    });
+    return '<div class="modal fade" id="fprResellerModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
+      '<form id="fprResellerForm"><div class="modal-header"><h5 class="modal-title fw-bold">Invite Reseller</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+      '<div class="modal-body"><div id="fprResellerFormError"></div><div class="mb-3"><label class="form-label">Name *</label><input class="form-control" name="name" maxlength="100" required></div>' +
+      '<div class="mb-3"><label class="form-label">Email *</label><input class="form-control" type="email" name="email" maxlength="254" required></div>' +
+      '<div class="mb-3"><label class="form-label">Phone *</label><input class="form-control" name="phone" maxlength="40" required></div>' +
+      '<div class="mb-2"><label class="form-label">Assign POP(s)</label><select class="form-select" name="assigned_pop_ids" id="fprInvitePops" multiple size="Math.min(5, eligible.length || 1)">' +
+      eligible.map(function (pop) { return '<option value="' + escapeHtml(pop.id) + '">' + escapeHtml(pop.name) + (pop.area_zone ? ' — ' + escapeHtml(pop.area_zone) : '') + '</option>'; }).join('') +
+      '</select><div class="form-text">Only active, unassigned, customer-free POPs are selectable. FAZ Main (Direct) is excluded. Leave empty to invite without POP assignment.</div></div></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprResellerSave">Queue Invitation</button></div></form></div></div></div>';
+  }
+
+  function bindSection(section, kind) {
+    if (section.dataset.fprBound === '1') return;
+    section.dataset.fprBound = '1';
+    section.addEventListener('click', async function (event) {
+      const button = event.target.closest('[data-action]');
+      if (!button || !section.contains(button)) return;
+      const action = button.dataset.action;
+      const id = button.dataset.id;
+      try {
+        if (action === 'new-pop') return openPopModal(null);
+        if (action === 'edit-pop') return openPopModal(state.pops.find(function (item) { return String(item.id) === String(id); }));
+        if (action === 'new-reseller') return openResellerModal();
+        if (action === 'refresh-pops') return window.loadPopManagement();
+        if (action === 'refresh-resellers') return window.loadResellerAccess();
+        if (action === 'toggle-pop') return toggleRecord('pop', id, button.dataset.status);
+        if (action === 'toggle-reseller') return toggleRecord('reseller', id, button.dataset.status);
+        if (action === 'resend-invite') {
+          if (!window.confirm('Send a replacement invitation? The previous invitation link will be invalidated.')) return;
+          button.disabled = true;
+          await apiRequest('/resellers/' + encodeURIComponent(id) + '/resend-invite', { method: 'POST', body: {} });
+          await window.loadResellerAccess();
+          return;
+        }
+        if (action === 'cancel-invite') {
+          if (!window.confirm('Cancel this reseller invitation? Its link will no longer work.')) return;
+          button.disabled = true;
+          await apiRequest('/resellers/' + encodeURIComponent(id) + '/cancel-invite', { method: 'POST', body: {} });
+          await window.loadResellerAccess();
+          return;
+        }
+      } catch (error) {
+        const alertHost = section.querySelector('.fpr-heading');
+        if (alertHost) alertHost.insertAdjacentHTML('afterend', errorBanner(error.message || 'The requested action failed.'));
+        console.error('[POP/Reseller Admin UI] Action failed:', error);
+      }
+    });
+
+    section.addEventListener('submit', async function (event) {
+      const form = event.target;
+      if (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm') return;
+      event.preventDefault();
+      const isPop = form.id === 'fprPopForm';
+      const submit = form.querySelector('[type="submit"]');
+      const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
+      if (submit) { submit.disabled = true; submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…'; }
+      if (errorHost) errorHost.innerHTML = '';
+      try {
+        const data = new FormData(form);
+        if (isPop) {
+          const id = String(data.get('id') || '');
+          const name = String(data.get('name') || '').trim();
+          const ownerSelect = form.querySelector('[name="reseller_id"]');
+          const current = id ? state.pops.find(function (item) { return String(item.id) === id; }) : null;
+          const owner = current && current.name === DIRECT_POP_NAME ? null : (ownerSelect.value || null);
+          if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(owner || '')) {
+            throw new Error('Ownership cannot be changed while this POP has customer records.');
+          }
+          const payload = {
+            name: name,
+            area_zone: String(data.get('area_zone') || '').trim(),
+            reseller_id: owner,
+            vlan_id: data.get('vlan_id') ? Number(data.get('vlan_id')) : null,
+            mikrotik_ip_pool: String(data.get('mikrotik_ip_pool') || '').trim() || null,
+            commission_type: String(data.get('commission_type') || 'percentage'),
+            commission_rate: Number(data.get('commission_rate') || 0)
+          };
+          await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body: payload });
+          closeModal('fprPopModal');
+          await window.loadPopManagement();
+        } else {
+          const payload = {
+            name: String(data.get('name') || '').trim(),
+            email: String(data.get('email') || '').trim(),
+            phone: String(data.get('phone') || '').trim(),
+            assigned_pop_ids: Array.from(form.querySelector('#fprInvitePops').selectedOptions).map(function (option) { return Number(option.value); })
+          };
+          await apiRequest('/resellers/invite', { method: 'POST', body: payload });
+          closeModal('fprResellerModal');
+          await window.loadResellerAccess();
+        }
+      } catch (error) {
+        if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
+        console.error('[POP/Reseller Admin UI] Form submission failed:', error);
+      } finally {
+        if (submit) { submit.disabled = false; submit.textContent = isPop ? 'Save POP' : 'Queue Invitation'; }
+      }
+    });
+  }
+
+  function modalInstance(id) {
+    const element = document.getElementById(id);
+    if (!element || !window.bootstrap || !window.bootstrap.Modal) throw new Error('Bootstrap modal support is unavailable.');
+    return window.bootstrap.Modal.getOrCreateInstance(element);
+  }
+
+  function closeModal(id) {
+    const element = document.getElementById(id);
+    if (element && window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(element).hide();
+  }
+
+  function openPopModal(pop) {
+    const section = document.getElementById('view-pop-management');
+    const form = section && section.querySelector('#fprPopForm');
+    if (!form) throw new Error('POP editor is not ready. Refresh the view and try again.');
+    form.reset();
+    form.elements.id.value = pop ? pop.id : '';
+    form.elements.name.value = pop ? pop.name || '' : '';
+    form.elements.area_zone.value = pop ? pop.area_zone || '' : '';
+    form.elements.reseller_id.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
+    form.elements.vlan_id.value = pop && pop.vlan_id ? pop.vlan_id : '';
+    form.elements.mikrotik_ip_pool.value = pop ? pop.mikrotik_ip_pool || '' : '';
+    form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
+    form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
+    const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
+    const owner = form.querySelector('#fprPopReseller');
+    owner.disabled = direct || Boolean(pop && Number(pop.customer_count || 0) > 0);
+    form.querySelector('#fprPopOwnerHelp').textContent = direct ? 'FAZ Main (Direct) is permanently protected from third-party reseller assignment.' :
+      (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
+    form.querySelector('#fprPopFormError').innerHTML = '';
+    section.querySelector('#fprPopModalTitle').textContent = pop ? 'Edit POP' : 'Create POP';
+    modalInstance('fprPopModal').show();
+  }
+
+  function openResellerModal() {
+    const section = document.getElementById('view-reseller-accounts');
+    const form = section && section.querySelector('#fprResellerForm');
+    if (!form) throw new Error('Reseller invitation form is not ready. Refresh the view and try again.');
+    form.reset();
+    form.querySelector('#fprResellerFormError').innerHTML = '';
+    modalInstance('fprResellerModal').show();
+  }
+
+  async function toggleRecord(kind, id, nextStatus) {
+    const label = kind === 'pop' ? 'POP' : 'reseller account';
+    if (!window.confirm('Set this ' + label + ' to ' + nextStatus + '? Existing customer, POP and transaction records will be preserved.')) return;
+    await apiRequest('/' + (kind === 'pop' ? 'pops' : 'resellers') + '/' + encodeURIComponent(id) + '/status', {
+      method: 'PATCH', body: { status: nextStatus }
+    });
+    if (kind === 'pop') await window.loadPopManagement();
+    else await window.loadResellerAccess();
+  }
+
+  async function loadPopManagement() {
+    const section = rootView('view-pop-management', 'POP Management');
+    section.innerHTML = sharedStyles() + '<div class="fpr-loading"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading POP and reseller data…</div>';
+    try {
+      const results = await Promise.all([apiRequest('/pops'), apiRequest('/resellers')]);
+      state.pops = Array.isArray(results[0].pops) ? results[0].pops : [];
+      state.resellers = Array.isArray(results[1].resellers) ? results[1].resellers : [];
+      renderPopManagement(section, '');
+    } catch (error) {
+      renderPopManagement(section, error.message || 'Unable to load POP data.');
+      console.error('[POP Admin UI] Initial data load failed:', error);
+    }
+    return true;
+  }
+
+  async function loadResellerAccess() {
+    const section = rootView('view-reseller-accounts', 'Reseller Accounts & Access');
+    section.innerHTML = sharedStyles() + '<div class="fpr-loading"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading reseller and POP data…</div>';
+    try {
+      const results = await Promise.all([apiRequest('/resellers'), apiRequest('/pops')]);
+      state.resellers = Array.isArray(results[0].resellers) ? results[0].resellers : [];
+      state.pops = Array.isArray(results[1].pops) ? results[1].pops : [];
+      renderResellerAccess(section, '');
+    } catch (error) {
+      renderResellerAccess(section, error.message || 'Unable to load reseller data.');
+      console.error('[Reseller Admin UI] Initial data load failed:', error);
+    }
+    return true;
+  }
+
+  window.loadPopManagement = loadPopManagement;
+  window.loadResellerAccess = loadResellerAccess;
+})();
