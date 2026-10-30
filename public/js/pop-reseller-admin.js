@@ -147,7 +147,9 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
         ['area_zone', /area.?zone/i],
         ['reseller_id', /reseller/i],
         ['vlan_id', /vlan/i],
-        ['mikrotik_ip_pool', /ip pool|mikrotik.*pool/i],
+        ['pppoe_ip_pool', /pppoe.*pool|ip pool/i],
+        ['hotspot_ip_pool', /hotspot.*pool/i],
+        ['hotspot_server', /hotspot server/i],
         ['commission_type', /commission_type|commission type/i],
         ['commission_rate', /commission_rate|commission rate|commission.*rate/i]
       ];
@@ -208,8 +210,9 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
         '<td><strong>' + escapeHtml(pop.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
         '<td>' + escapeHtml(pop.area_zone || '—') + '</td>' +
         '<td>' + escapeHtml(owner) + '</td>' +
-        '<td>' + escapeHtml(pop.vlan_id || '—') + '</td>' +
-        '<td>' + escapeHtml(pop.mikrotik_ip_pool || '—') + '</td>' +
+        '<td>' + escapeHtml(pop.pppoe_ip_pool || '—') + '</td>' +
+        '<td>' + escapeHtml(pop.hotspot_ip_pool || '—') + '</td>' +
+        '<td><div class="fpr-badges">' + (pop.pppoe_enabled ? '<span class="fpr-badge">PPPoE</span>' : '') + (pop.hotspot_enabled ? '<span class="fpr-badge">Hotspot</span>' : '') + ((!pop.pppoe_enabled && !pop.hotspot_enabled) ? '<span class="small fpr-muted">No service enabled</span>' : '') + '</div></td>
         '<td>' + escapeHtml(commission) + '</td>' +
         '<td><strong>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</strong></td>' +
         '<td>' + statusPill(pop.status) + '</td>' +
@@ -217,7 +220,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
         statusButton(pop.status, pop.id, 'pop') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
-      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage Points of Presence, ownership, VLAN and commission settings.</p></div>' +
+      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage POP ownership, PPPoE broadband pools, Hotspot wireless bindings and commission settings.</p></div>' +
       '<button class="btn btn-success" type="button" data-action="new-pop"><i class="bi bi-plus-lg me-2"></i>Create POP</button></div>' +
       (error ? errorBanner(error) : '') +
       '<div class="fpr-metrics">' +
@@ -225,8 +228,8 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
       '<article class="fpr-metric"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
       '<article class="fpr-metric"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
       '<section class="fpr-card"><div class="fpr-card-head"><div class="fw-bold">POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
-      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>VLAN</th><th>IP Pool</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="9" class="text-center text-muted py-4">No POP records found.</td></tr>') +
+      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="10" class="text-center text-muted py-4">No POP records found.</td></tr>') +
       '</tbody></table></div></section>' +
       popModalHtml();
     bindSection(section, 'pop');
@@ -241,8 +244,8 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
       '<div class="col-12 col-md-6"><label class="form-label">Assign Reseller</label><select class="form-select" name="reseller_id" id="fprPopReseller"><option value="">FAZ Direct / Unassigned</option>' +
       state.resellers.filter(function (r) { return r.status === 'active'; }).map(function (r) { return '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + ' — ' + escapeHtml(r.email || r.username || '') + '</option>'; }).join('') +
       '</select><div class="form-text" id="fprPopOwnerHelp">FAZ Main (Direct) is protected from third-party assignment.</div></div>' +
-      '<div class="col-12 col-md-6"><label class="form-label">VLAN ID</label><input class="form-control" type="number" name="vlan_id" min="1" max="4094"></div>' +
-      '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><select class="form-select" name="mikrotik_ip_pool" id="fprPopIpPool"><option value="">None / Unassigned</option></select><div class="form-text">Select an existing active MikroTik IP Pool. The current assignment is preserved when editing.</div></div>' +
+      '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="pppoe_enabled" id="fprPppoeEnabled" checked><label class="form-check-label fw-semibold" for="fprPppoeEnabled">Enable PPPoE Broadband</label></div><label class="form-label" for="fprPppoeIpPool">PPPoE IP Pool</label><select class="form-select" name="pppoe_ip_pool" id="fprPppoeIpPool"><option value="">None / Unassigned</option></select><div class="form-text">Used only for PPPoE subscriber address assignment. Existing legacy POP pool values are migrated into this field.</div><label class="form-label mt-3" for="fprPopVlan">Legacy / PPPoE VLAN ID</label><input class="form-control" type="number" name="vlan_id" id="fprPopVlan" min="1" max="4094"></div></div>' +
+      '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="hotspot_enabled" id="fprHotspotEnabled"><label class="form-check-label fw-semibold" for="fprHotspotEnabled">Enable Hotspot Wireless / Vouchers</label></div><div class="row g-3"><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotServer">Hotspot Server *</label><input class="form-control" name="hotspot_server" id="fprHotspotServer" maxlength="100" placeholder="hotspot1"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotInterface">Hotspot Interface</label><input class="form-control" name="hotspot_interface" id="fprHotspotInterface" maxlength="100" placeholder="bridge-hotspot"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotIpPool">Hotspot IP Pool *</label><select class="form-select" name="hotspot_ip_pool" id="fprHotspotIpPool"><option value="">None / Unassigned</option></select></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotVlan">Hotspot VLAN ID</label><input class="form-control" type="number" name="hotspot_vlan_id" id="fprHotspotVlan" min="1" max="4094"></div></div><div class="form-text mt-2">Hotspot pool is stored on the existing POP Hotspot binding and is never reused for PPPoE.</div></div></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
@@ -357,7 +360,13 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
     const areaInput = container.querySelector('[name="area_zone"]');
     const resellerSelect = container.querySelector('[name="reseller_id"]');
     const vlanInput = container.querySelector('[name="vlan_id"]');
-    const poolInput = container.querySelector('[name="mikrotik_ip_pool"]');
+    const pppoeEnabledInput = container.querySelector('[name="pppoe_enabled"]');
+    const pppoePoolInput = container.querySelector('[name="pppoe_ip_pool"]');
+    const hotspotEnabledInput = container.querySelector('[name="hotspot_enabled"]');
+    const hotspotServerInput = container.querySelector('[name="hotspot_server"]');
+    const hotspotInterfaceInput = container.querySelector('[name="hotspot_interface"]');
+    const hotspotVlanInput = container.querySelector('[name="hotspot_vlan_id"]');
+    const hotspotPoolInput = container.querySelector('[name="hotspot_ip_pool"]');
     const commTypeSelect = container.querySelector('[name="commission_type"]');
     const commRateInput = container.querySelector('[name="commission_rate"]');
     const idInput = container.querySelector('[name="id"]');
@@ -383,7 +392,13 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
       area_zone: areaInput ? areaInput.value.trim() : '',
       reseller_id: resellerId,
       vlan_id: vlanInput && vlanInput.value ? Number(vlanInput.value) : null,
-      mikrotik_ip_pool: poolInput && poolInput.value ? poolInput.value : null,
+      pppoe_enabled: Boolean(pppoeEnabledInput && pppoeEnabledInput.checked),
+      pppoe_ip_pool: pppoePoolInput && pppoePoolInput.value ? pppoePoolInput.value : null,
+      hotspot_enabled: Boolean(hotspotEnabledInput && hotspotEnabledInput.checked),
+      hotspot_server: hotspotServerInput ? hotspotServerInput.value.trim() : '',
+      hotspot_interface: hotspotInterfaceInput ? hotspotInterfaceInput.value.trim() : '',
+      hotspot_vlan_id: hotspotVlanInput && hotspotVlanInput.value ? Number(hotspotVlanInput.value) : null,
+      hotspot_ip_pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null,
       commission_type: commTypeSelect ? commTypeSelect.value : 'percentage',
       commission_rate: commRateInput ? Number(commRateInput.value || 0) : 0
     };
@@ -538,6 +553,13 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
     }
     owner.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
     form.elements.vlan_id.value = pop && pop.vlan_id ? pop.vlan_id : '';
+    form.elements.pppoe_enabled.checked = pop ? pop.pppoe_enabled !== false : true;
+    form.elements.pppoe_ip_pool.value = pop ? pop.pppoe_ip_pool || '' : '';
+    form.elements.hotspot_enabled.checked = Boolean(pop && pop.hotspot_enabled);
+    form.elements.hotspot_server.value = pop ? pop.hotspot_server || '' : '';
+    form.elements.hotspot_interface.value = pop ? pop.hotspot_interface || '' : '';
+    form.elements.hotspot_vlan_id.value = pop && pop.hotspot_vlan_id ? pop.hotspot_vlan_id : '';
+    form.elements.hotspot_ip_pool.value = pop ? pop.hotspot_ip_pool || '' : '';
     form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
     form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
     const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
@@ -546,51 +568,62 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
       (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
     form.querySelector('#fprPopFormError').innerHTML = '';
     await loadPopIpPools(form, pop);
+    const syncServiceFields = function () {
+      form.elements.pppoe_ip_pool.disabled = !form.elements.pppoe_enabled.checked;
+      ['hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'].forEach(function (name) { form.elements[name].disabled = !form.elements.hotspot_enabled.checked; });
+    };
+    form.elements.pppoe_enabled.onchange = syncServiceFields;
+    form.elements.hotspot_enabled.onchange = syncServiceFields;
+    syncServiceFields();
     section.querySelector('#fprPopModalTitle').textContent = pop ? 'Edit POP' : 'Create POP';
     modalInstance('fprPopModal').show();
   }
 
   async function loadPopIpPools(form, pop) {
-    const select = form && form.querySelector('#fprPopIpPool');
-    if (!select) throw new Error('POP IP Pool selector is unavailable.');
-    const selectedName = String(pop && pop.mikrotik_ip_pool || '').trim();
-    select.disabled = true;
-    select.innerHTML = '<option value="">None / Unassigned</option>';
+    const selectors = [
+      { element: form && form.querySelector('#fprPppoeIpPool'), value: String(pop && pop.pppoe_ip_pool || '').trim() },
+      { element: form && form.querySelector('#fprHotspotIpPool'), value: String(pop && pop.hotspot_ip_pool || '').trim() }
+    ];
+    if (selectors.some(function (item) { return !item.element; })) throw new Error('Service-specific POP IP Pool selectors are unavailable.');
+    selectors.forEach(function (item) { item.element.disabled = true; item.element.innerHTML = '<option value="">None / Unassigned</option>'; });
     try {
       const pools = await apiRequest('/ip-pools');
       if (!Array.isArray(pools)) throw new Error('The IP Pool endpoint returned an invalid pool list.');
-      state.ipPools = pools
-        .filter(function (pool) { return pool && String(pool.name || '').trim() && !/^default(?:[-_].*)?$/i.test(String(pool.name).trim()); })
-        .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
-      state.ipPools.forEach(function (pool) {
-        const option = document.createElement('option');
-        option.value = String(pool.name);
-        option.textContent = String(pool.name) + (pool.ranges ? ' — ' + String(pool.ranges) : '');
-        select.appendChild(option);
+      state.ipPools = pools.filter(function (pool) {
+        return pool && String(pool.name || '').trim() && !/^default(?:[-_].*)?$/i.test(String(pool.name).trim());
+      }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      selectors.forEach(function (item) {
+        state.ipPools.forEach(function (pool) {
+          const option = document.createElement('option');
+          option.value = String(pool.name);
+          option.textContent = String(pool.name) + (pool.ranges ? ' — ' + String(pool.ranges) : '');
+          item.element.appendChild(option);
+        });
+        if (item.value && !state.ipPools.some(function (pool) { return String(pool.name).toLowerCase() === item.value.toLowerCase(); })) {
+          const existing = document.createElement('option');
+          existing.value = item.value;
+          existing.textContent = item.value + ' — current assignment (not in active pool list)';
+          existing.dataset.currentAssignment = 'true';
+          item.element.appendChild(existing);
+        }
+        item.element.value = item.value;
       });
-      if (selectedName && !state.ipPools.some(function (pool) { return String(pool.name).toLowerCase() === selectedName.toLowerCase(); })) {
-        const existing = document.createElement('option');
-        existing.value = selectedName;
-        existing.textContent = selectedName + ' — current assignment (not in active pool list)';
-        existing.dataset.currentAssignment = 'true';
-        select.appendChild(existing);
-      }
-      select.value = selectedName;
     } catch (error) {
       console.error('[POP Admin UI] Could not load configured MikroTik IP Pools:', error);
-      if (selectedName) {
+      selectors.forEach(function (item) {
+        if (!item.value) return;
         const existing = document.createElement('option');
-        existing.value = selectedName;
-        existing.textContent = selectedName + ' — current assignment (pool list unavailable)';
+        existing.value = item.value;
+        existing.textContent = item.value + ' — current assignment (pool list unavailable)';
         existing.dataset.currentAssignment = 'true';
-        select.appendChild(existing);
-        select.value = selectedName;
-      }
+        item.element.appendChild(existing);
+        item.element.value = item.value;
+      });
       const errorHost = form.querySelector('#fprPopFormError');
-      if (errorHost) errorHost.innerHTML = errorBanner('Configured IP Pools could not be loaded. The existing assignment has been preserved. You may keep it or choose None / Unassigned; retry the pool list before selecting another pool.');
-      showToast('IP Pool list is unavailable. Existing POP assignment was preserved.', 'warning');
+      if (errorHost) errorHost.innerHTML = errorBanner('Configured MikroTik IP Pools could not be loaded. Existing PPPoE and Hotspot assignments were preserved. Retry before selecting a different pool.');
+      showToast('IP Pool list is unavailable. Existing service assignments were preserved.', 'warning');
     } finally {
-      select.disabled = false;
+      selectors.forEach(function (item) { item.element.disabled = false; });
     }
   }
 
