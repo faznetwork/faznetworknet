@@ -31,6 +31,9 @@ function mockTenantDatabase(t) {
       const key = String(values[0]);
       return { rows: key === 'other-customer' ? [{ '?column?': 1 }] : [] };
     }
+    if (sql.includes('FROM packages') && sql.includes('profile_name')) {
+      return { rows: [{ id: 7, name: 'Home 30 Mbps', profile_name: 'HOME_30', price: '525.00', duration_months: 1 }] };
+    }
     if (sql.includes('SELECT c.id, c.full_name, c.username')) {
       return { rows: [] };
     }
@@ -131,6 +134,24 @@ test('reseller customer API returns HTTP 403 for a customer owned by another res
   assert.match(payload.message, /another reseller or POP/i);
 });
 
+test('reseller package catalog is read-only and returns the customer form contract', async t => {
+  mockTenantDatabase(t);
+  const baseUrl = await createHttpApp(t);
+  const response = await fetch(baseUrl + '/api/reseller-portal/packages');
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.deepEqual(payload.packages, [{ id: '7', name: 'Home 30 Mbps', profileName: 'HOME_30', price: 525, durationMonths: 1 }]);
+});
+
+test('reseller package catalog rejects unauthenticated requests', async t => {
+  mockTenantDatabase(t);
+  const app = express(); app.use(express.json()); app.use('/api/reseller-portal', resellerPortalRoutes);
+  const server = await new Promise((resolve, reject) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); listener.once('error', reject); });
+  t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/reseller-portal/packages');
+  assert.equal(response.status, 401);
+});
 test('reseller customer creation delegates only after verified identity and assigned POP scope', async t => {
   mockTenantDatabase(t);
   let receivedBody = null;
