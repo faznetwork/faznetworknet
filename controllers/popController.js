@@ -26,7 +26,12 @@ function parse(body = {}, partial = false) {
     'commission_type', 'commission_rate'
   ];
   for (const field of fields) {
-    if (partial && !Object.prototype.hasOwnProperty.call(body, field)) continue;
+    const supplied = Object.prototype.hasOwnProperty.call(body, field);
+    if (partial && !supplied) continue;
+    if (!partial && !supplied && (field === 'pppoe_enabled' || field === 'hotspot_enabled')) {
+      data[field] = field === 'pppoe_enabled';
+      continue;
+    }
     const value = body[field];
     if (field === 'name' || field === 'area_zone' || field === 'hotspot_server' || field === 'hotspot_interface') {
       data[field] = String(value || '').trim();
