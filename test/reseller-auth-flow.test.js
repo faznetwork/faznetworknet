@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const controller = require('../controllers/resellerAuthController');
+const resellerController = require('../controllers/resellerController');
 const invitationService = require('../services/resellerInvitationService');
 
 function responseRecorder() {
@@ -152,4 +153,23 @@ test('logout rejects non-reseller sessions and destroys an authenticated reselle
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.success, true);
   assert.equal(res.cookies[0].name, 'connect.sid');
+});
+
+test('administrator status change cannot activate an invitation without a password', async t => {
+  let calls = 0;
+  t.mock.method(db, 'query', async (sql, values) => {
+    calls += 1;
+    if (calls === 1) {
+      assert.match(sql, /password_hash IS NOT NULL/);
+      assert.equal(values[0], 'active');
+      return { rows: [] };
+    }
+    return { rows: [{ id: 706, password_hash: null }] };
+  });
+  const res = responseRecorder();
+
+  await resellerController.updateStatus({ params: { id: '706' }, body: { status: 'active' } }, res);
+
+  assert.equal(res.statusCode, 409);
+  assert.match(res.payload.message, /accept the email invitation/i);
 });
