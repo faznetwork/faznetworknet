@@ -20,10 +20,19 @@
     }
     const response = await fetch(API + path, opts);
     let payload;
-    try { payload = await response.json(); }
-    catch (error) { throw new Error('The server returned an unreadable response (' + response.status + ').'); }
+    try {
+      payload = await response.json();
+    } catch (error) {
+      const parseError = new Error('The server returned an unreadable response (' + response.status + ').');
+      parseError.status = response.status;
+      parseError.cause = error;
+      throw parseError;
+    }
     if (!response.ok || payload.success === false) {
-      throw new Error(payload.message || payload.error || ('Request failed with HTTP ' + response.status + '.'));
+      const requestError = new Error(payload.message || payload.error || ('Request failed with HTTP ' + response.status + '.'));
+      requestError.status = response.status;
+      requestError.payload = payload;
+      throw requestError;
     }
     return payload;
   }
@@ -73,6 +82,89 @@
   function errorBanner(message) {
     return '<div class="alert alert-danger d-flex align-items-start gap-2" role="alert"><i class="bi bi-exclamation-triangle-fill mt-1"></i><div>' +
       escapeHtml(message) + '</div></div>';
+  }
+
+  function showToast(message, type) {
+    const tone = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'danger');
+    let host = document.getElementById('fprToastContainer');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'fprToastContainer';
+      host.className = 'toast-container position-fixed top-0 end-0 p-3';
+      host.style.zIndex = '1090';
+      document.body.appendChild(host);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-bg-' + tone + ' border-0';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
+    const row = document.createElement('div');
+    row.className = 'd-flex';
+    const body = document.createElement('div');
+    body.className = 'toast-body';
+    body.textContent = message;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn-close btn-close-white me-2 m-auto';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', function () { toast.remove(); });
+    row.appendChild(body);
+    row.appendChild(close);
+    toast.appendChild(row);
+    host.appendChild(toast);
+    if (window.bootstrap && window.bootstrap.Toast) {
+      window.bootstrap.Toast.getOrCreateInstance(toast, { delay: 5000 }).show();
+    } else {
+      toast.classList.add('show');
+      window.setTimeout(function () { toast.remove(); }, 5000);
+    }
+  }
+
+  function clearFieldErrors(form) {
+    form.querySelectorAll('.is-invalid').forEach(function (field) {
+      field.classList.remove('is-invalid');
+      field.removeAttribute('aria-invalid');
+    });
+    form.querySelectorAll('[data-fpr-field-error="1"]').forEach(function (node) { node.remove(); });
+  }
+
+  function mapPopFieldErrors(error, form) {
+    const payload = error && error.payload ? error.payload : {};
+    const supplied = payload.errors || payload.validationErrors || payload.details;
+    const mapped = {};
+    if (supplied && typeof supplied === 'object' && !Array.isArray(supplied)) {
+      Object.keys(supplied).forEach(function (key) {
+        const item = supplied[key];
+        mapped[key] = Array.isArray(item) ? item.join(' ') : String(item && item.message ? item.message : item);
+      });
+    }
+    const message = String(error && error.message || '');
+    if (!Object.keys(mapped).length) {
+      const rules = [
+        ['name', /pop name|name is required|name.*100 characters/i],
+        ['area_zone', /area.?zone/i],
+        ['reseller_id', /reseller/i],
+        ['vlan_id', /vlan/i],
+        ['mikrotik_ip_pool', /ip pool|mikrotik.*pool/i],
+        ['commission_type', /commission_type|commission type/i],
+        ['commission_rate', /commission_rate|commission rate|commission.*rate/i]
+      ];
+      const match = rules.find(function (rule) { return rule[1].test(message); });
+      if (match) mapped[match[0]] = message;
+    }
+    Object.keys(mapped).forEach(function (name) {
+      const field = form.elements.namedItem(name);
+      if (!field || !field.classList) return;
+      field.classList.add('is-invalid');
+      field.setAttribute('aria-invalid', 'true');
+      const feedback = document.createElement('div');
+      feedback.className = 'invalid-feedback d-block';
+      feedback.dataset.fprFieldError = '1';
+      feedback.textContent = mapped[name];
+      field.insertAdjacentElement('afterend', feedback);
+    });
+    return Object.keys(mapped).length > 0;
   }
 
   function sharedStyles() {
@@ -229,11 +321,21 @@
       const form = event.target;
       if (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm') return;
       event.preventDefault();
+      if (form.dataset.submitting === '1') return;
+
       const isPop = form.id === 'fprPopForm';
       const submit = form.querySelector('[type="submit"]');
       const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
-      if (submit) { submit.disabled = true; submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…'; }
+      const originalLabel = submit ? submit.textContent : '';
+      form.dataset.submitting = '1';
+      if (submit) {
+        submit.disabled = true;
+        submit.setAttribute('aria-busy', 'true');
+        submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+      }
       if (errorHost) errorHost.innerHTML = '';
+      if (isPop) clearFieldErrors(form);
+
       try {
         const data = new FormData(form);
         if (isPop) {
@@ -243,20 +345,51 @@
           const current = id ? state.pops.find(function (item) { return String(item.id) === id; }) : null;
           const owner = current && current.name === DIRECT_POP_NAME ? null : (ownerSelect.value || null);
           if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(owner || '')) {
-            throw new Error('Ownership cannot be changed while this POP has customer records.');
+            const ownershipError = new Error('Ownership cannot be changed while this POP has customer records.');
+            ownershipError.field = 'reseller_id';
+            throw ownershipError;
           }
           const payload = {
             name: name,
             area_zone: String(data.get('area_zone') || '').trim(),
+            reseller_id: owner,
             vlan_id: data.get('vlan_id') ? Number(data.get('vlan_id')) : null,
             mikrotik_ip_pool: String(data.get('mikrotik_ip_pool') || '').trim() || null,
-            commission_type: String(data.get('commission_type') || 'percentage'),
+            commission_type: String(data.get('commission_type') || 'percentage').trim(),
             commission_rate: Number(data.get('commission_rate') || 0)
           };
-          if (!id || String(current.reseller_id || '') !== String(owner || '')) payload.reseller_id = owner;
-          await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body: payload });
+          try {
+            await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), {
+              method: id ? 'PUT' : 'POST',
+              body: payload
+            });
+          } catch (saveError) {
+            if (saveError.field) {
+              const field = form.elements.namedItem(saveError.field);
+              if (field) {
+                field.classList.add('is-invalid');
+                field.setAttribute('aria-invalid', 'true');
+                const feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback d-block';
+                feedback.dataset.fprFieldError = '1';
+                feedback.textContent = saveError.message;
+                field.insertAdjacentElement('afterend', feedback);
+              }
+            } else {
+              mapPopFieldErrors(saveError, form);
+            }
+            if (errorHost) errorHost.innerHTML = errorBanner(saveError.message || 'Unable to save POP. Please try again.');
+            showToast(saveError.message || 'Unable to save POP. Please try again.', 'danger');
+            console.error('[POP Admin UI] POP save failed:', saveError);
+            return;
+          }
+
           closeModal('fprPopModal');
-          await window.loadPopManagement();
+          showToast(id ? 'POP updated successfully.' : 'POP created successfully.', 'success');
+          const reloaded = await window.loadPopManagement();
+          if (reloaded === false) {
+            showToast('POP was saved, but the POP table could not be refreshed. Use Refresh to reload the latest records.', 'warning');
+          }
         } else {
           const payload = {
             name: String(data.get('name') || '').trim(),
@@ -270,9 +403,15 @@
         }
       } catch (error) {
         if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
+        showToast(error.message || 'Unable to save changes.', 'danger');
         console.error('[POP/Reseller Admin UI] Form submission failed:', error);
       } finally {
-        if (submit) { submit.disabled = false; submit.textContent = isPop ? 'Save POP' : 'Queue Invitation'; }
+        delete form.dataset.submitting;
+        if (submit) {
+          submit.disabled = false;
+          submit.removeAttribute('aria-busy');
+          submit.textContent = originalLabel || (isPop ? 'Save POP' : 'Queue Invitation');
+        }
       }
     });
   }
@@ -348,6 +487,7 @@
     } catch (error) {
       renderPopManagement(section, error.message || 'Unable to load POP data.');
       console.error('[POP Admin UI] Initial data load failed:', error);
+      return false;
     }
     return true;
   }
