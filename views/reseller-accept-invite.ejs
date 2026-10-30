@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Accept Reseller Invitation | FAZ NETWORK</title>
+  <style>
+    :root{color-scheme:light;--green:#0a3d2e;--accent:#10b981;--muted:#64748b}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f1f5f9;font-family:Inter,Arial,sans-serif;color:#0f172a}
+    main{width:min(100%,460px);padding:32px;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 18px 50px #0f172a12}
+    h1{margin:0 0 8px;color:var(--green);font-size:25px}p{color:var(--muted);line-height:1.6}
+    label{display:block;margin:18px 0 7px;font-weight:600;font-size:14px}input{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}
+    button,.link{display:block;width:100%;margin-top:22px;padding:13px;border:0;border-radius:9px;background:var(--green);color:#fff;text-align:center;font-weight:700;text-decoration:none;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}.message{margin-top:16px;padding:12px;border-radius:8px;background:#f1f5f9;color:#334155}.message.error{background:#fff1f2;color:#9f1239}
+    .email{font-weight:700;color:#334155;overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>FAZ NETWORK</h1>
+    <p>Complete your reseller account setup.</p>
+    <% if (error) { %>
+      <div class="message error" role="alert"><%= error %></div>
+    <% } else { %>
+      <p>Invitation for <span class="email"><%= email %></span></p>
+      <form id="acceptForm">
+        <input type="hidden" name="token" value="<%= token %>">
+        <label for="password">Create password</label>
+        <input id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <label for="confirm_password">Confirm password</label>
+        <input id="confirm_password" name="confirm_password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <p>Password must be 12–128 characters and include uppercase, lowercase, number, and symbol.</p>
+        <button id="submitButton" type="submit">Activate reseller account</button>
+      </form>
+      <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+    <% } %>
+  </main>
+  <script>
+    const form=document.getElementById('acceptForm');
+    if(form){
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();
+        const button=document.getElementById('submitButton');
+        const message=document.getElementById('message');
+        button.disabled=true;
+        message.hidden=false;
+        message.className='message';
+        message.textContent='Activating your account…';
+        try{
+          const response=await fetch('/api/resellers/accept-invite',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))
+          });
+          const result=await response.json();
+          if(!response.ok||!result.success)throw new Error(result.message||'Invitation could not be accepted.');
+          message.textContent=result.message+' You can now sign in.';
+          form.hidden=true;
+          const link=document.createElement('a');
+          link.className='link';link.href='/reseller/login';link.textContent='Go to reseller sign in';
+          message.after(link);
+        }catch(error){
+          message.className='message error';
+          message.textContent=error.message;
+          button.disabled=false;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -13,4 +13,5 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      - run: node --check middleware/postgresRateLimiter.js && node --check test/reseller-rate-limit-pop-atomic.test.js
       - run: npm test

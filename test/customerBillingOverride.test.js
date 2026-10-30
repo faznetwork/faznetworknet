@@ -19,13 +19,13 @@ test("updateCustomer accepts past next_billing_date and preserves line under exp
     mikrotik.testConnection=async()=>false;
     db.query=async(sql,params=[])=>{
       sqlSeen.push(sql);paramsSeen.push(params);
-      if(sql.includes("SELECT * FROM customers WHERE id::text=$1"))return {rows:[baseCustomer()]};
+      if(sql.includes("SELECT * FROM customers WHERE (id::text=$1"))return {rows:[baseCustomer()]};
       if(sql.startsWith("SELECT id FROM customers WHERE id<>"))return {rows:[]};
       if(sql.includes("SELECT id,plan_name,pool_name,rate_limit,price,duration_months,profile_name FROM packages"))return {rows:[{id:7,plan_name:"Home 30",profile_name:"HOME30",price:500,duration_months:1,pool_name:"",rate_limit:"30M"}]};
       if(sql.startsWith("UPDATE customers SET"))return {rows:[{...baseCustomer(),expiration_date:"2020-02-29",billing_cycle:"custom_days",billing_duration_days:45,billing_expiry_override:true,status:"expired"}]};
       return {rows:[]};
     };
-    const req={params:{id:"42"},body:{id:"42",username:"01712345678",billing_expiry_date:"2020-02-29",billing_cycle:"custom_days",billing_duration_days:"45",billing_expiry_override:true},ip:"test"};
+    const req={params:{id:"42"},tenantScope:{global:true},body:{id:"42",username:"01712345678",billing_expiry_date:"2020-02-29",billing_cycle:"custom_days",billing_duration_days:"45",billing_expiry_override:true},ip:"test"};
     const res=responseRecorder();
     await customerController.updateCustomer(req,res);
     assert.equal(res.statusCode,200);
@@ -57,13 +57,13 @@ test("updateCustomer rejects invalid calendar dates and invalid custom durations
   const originalQuery=db.query;
   try{
     let customerQueries=0;
-    db.query=async(sql)=>{customerQueries++;if(sql.includes("SELECT * FROM customers WHERE id::text=$1"))return {rows:[baseCustomer()]};return {rows:[]};};
+    db.query=async(sql)=>{customerQueries++;if(sql.includes("SELECT * FROM customers WHERE (id::text=$1"))return {rows:[baseCustomer()]};return {rows:[]};};
     const invalidDate=responseRecorder();
-    await customerController.updateCustomer({params:{id:"42"},body:{billing_expiry_date:"2026-02-31"}},invalidDate);
+    await customerController.updateCustomer({params:{id:"42"},tenantScope:{global:true},body:{billing_expiry_date:"2026-02-31"}},invalidDate);
     assert.equal(invalidDate.statusCode,400);
     assert.match(invalidDate.body.message,/valid DD\/MM\/YYYY.*legacy YYYY-MM-DD/i);
     const invalidDuration=responseRecorder();
-    await customerController.updateCustomer({params:{id:"42"},body:{billing_cycle:"custom_days",billing_duration_days:"0"}},invalidDuration);
+    await customerController.updateCustomer({params:{id:"42"},tenantScope:{global:true},body:{billing_cycle:"custom_days",billing_duration_days:"0"}},invalidDuration);
     assert.equal(invalidDuration.statusCode,400);
     assert.match(invalidDuration.body.message,/between 1 and 3650/i);
     assert.equal(customerQueries,2);
