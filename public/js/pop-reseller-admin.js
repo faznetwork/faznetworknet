@@ -332,8 +332,8 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     container = container || form || (saveBtn && saveBtn.closest('.modal') ? saveBtn.closest('.modal').querySelector('.modal-body') : null) || document.querySelector('.modal.show .modal-body') || document.querySelector('#fprPopModal .modal-body');
     const lockTarget = form || container;
     if (!container) {
-      console.error('[POP UI] #fprPopForm not found');
-      showToast('POP form is unavailable. Close and reopen the POP editor.', 'danger');
+      console.error('[POP UI] POP editor container not found from Save button or open modal.');
+      showToast('POP editor fields are unavailable. Close and reopen the POP editor.', 'danger');
       return;
     }
     if (lockTarget.dataset.submitting === '1') return;
