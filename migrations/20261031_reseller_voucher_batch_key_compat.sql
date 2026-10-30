@@ -42,11 +42,35 @@ ALTER TABLE public.reseller_voucher_batches
   ALTER COLUMN batch_key SET NOT NULL;
 
 -- Fail closed on duplicate pre-existing UUID values; the transaction rolls back.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_reseller_voucher_batches_batch_key_compat
-  ON public.reseller_voucher_batches(batch_key);
+-- Reuse the v1.3 unique constraint/index when present; create only if absent.
+DO $ensure_unique$
+DECLARE
+  v_batch_key_attnum SMALLINT;
+BEGIN
+  SELECT attnum INTO v_batch_key_attnum
+  FROM pg_attribute
+  WHERE attrelid='public.reseller_voucher_batches'::regclass
+    AND attname='batch_key' AND NOT attisdropped;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_index i
+    WHERE i.indrelid='public.reseller_voucher_batches'::regclass
+      AND i.indisunique AND i.indisvalid
+      AND i.indnkeyatts=1
+      AND i.indkey[0]=v_batch_key_attnum
+  ) THEN
+    EXECUTE 'CREATE UNIQUE INDEX uq_reseller_voucher_batches_batch_key_compat ON public.reseller_voucher_batches(batch_key)';
+  END IF;
+END
+$ensure_unique$;
 
 DO $verify$
+DECLARE
+  v_batch_key_attnum SMALLINT;
 BEGIN
+  SELECT attnum INTO v_batch_key_attnum
+  FROM pg_attribute
+  WHERE attrelid='public.reseller_voucher_batches'::regclass
+    AND attname='batch_key' AND NOT attisdropped;
   IF EXISTS (
     SELECT 1 FROM public.reseller_voucher_batches
     WHERE batch_key IS NULL
@@ -60,12 +84,11 @@ BEGIN
     RAISE EXCEPTION 'Compatibility migration verification failed: duplicate batch_key values remain.';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname='public'
-      AND tablename='reseller_voucher_batches'
-      AND indexname='uq_reseller_voucher_batches_batch_key_compat'
-      AND indexdef ILIKE 'CREATE UNIQUE INDEX%'
-      AND indexdef ILIKE '%(batch_key)%'
+    SELECT 1 FROM pg_index i
+    WHERE i.indrelid='public.reseller_voucher_batches'::regclass
+      AND i.indisunique AND i.indisvalid
+      AND i.indnkeyatts=1
+      AND i.indkey[0]=v_batch_key_attnum
   ) THEN
     RAISE EXCEPTION 'Compatibility migration verification failed: unique batch_key index is missing.';
   END IF;
