@@ -130,7 +130,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     form.querySelectorAll('[data-fpr-field-error="1"]').forEach(function (node) { node.remove(); });
   }
 
-  function mapPopFieldErrors(error, form) {
+  function mapPopFieldErrors(error, container) {
     const payload = error && error.payload ? error.payload : {};
     const supplied = payload.errors || payload.validationErrors || payload.details;
     const mapped = {};
@@ -155,7 +155,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
       if (match) mapped[match[0]] = message;
     }
     Object.keys(mapped).forEach(function (name) {
-      const field = form.elements.namedItem(name);
+      const field = container.querySelector('[name="' + name + '"]');
       if (!field || !field.classList) return;
       field.classList.add('is-invalid');
       field.setAttribute('aria-invalid', 'true');
@@ -328,19 +328,21 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
 
 
 
-  async function savePopForm(form, saveBtn) {
-    if (!form || form.id !== 'fprPopForm') {
+  async function savePopForm(form, saveBtn, container) {
+    container = container || form || (saveBtn && saveBtn.closest('.modal') ? saveBtn.closest('.modal').querySelector('.modal-body') : null) || document.querySelector('.modal.show .modal-body') || document.querySelector('#fprPopModal .modal-body');
+    const lockTarget = form || container;
+    if (!container) {
       console.error('[POP UI] #fprPopForm not found');
       showToast('POP form is unavailable. Close and reopen the POP editor.', 'danger');
       return;
     }
-    if (form.dataset.submitting === '1') return;
+    if (lockTarget.dataset.submitting === '1') return;
 
-    const nameInput = form.querySelector('[name="name"]');
+    const nameInput = container.querySelector('[name="name"]');
     const name = nameInput ? nameInput.value.trim() : '';
-    const errorHost = form.querySelector('#fprPopFormError');
+    const errorHost = container.querySelector('#fprPopFormError') || document.querySelector('#fprPopFormError');
     if (errorHost) errorHost.innerHTML = '';
-    clearFieldErrors(form);
+    clearFieldErrors(container);
     if (!name) {
       if (nameInput) {
         nameInput.classList.add('is-invalid');
@@ -352,13 +354,13 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
       return;
     }
 
-    const areaInput = form.querySelector('[name="area_zone"]');
-    const resellerSelect = form.querySelector('[name="reseller_id"]');
-    const vlanInput = form.querySelector('[name="vlan_id"]');
-    const poolInput = form.querySelector('[name="mikrotik_ip_pool"]');
-    const commTypeSelect = form.querySelector('[name="commission_type"]');
-    const commRateInput = form.querySelector('[name="commission_rate"]');
-    const idInput = form.querySelector('[name="id"]');
+    const areaInput = container.querySelector('[name="area_zone"]');
+    const resellerSelect = container.querySelector('[name="reseller_id"]');
+    const vlanInput = container.querySelector('[name="vlan_id"]');
+    const poolInput = container.querySelector('[name="mikrotik_ip_pool"]');
+    const commTypeSelect = container.querySelector('[name="commission_type"]');
+    const commRateInput = container.querySelector('[name="commission_rate"]');
+    const idInput = container.querySelector('[name="id"]');
     const popId = idInput ? idInput.value : '';
     const current = popId ? state.pops.find(function (item) { return String(item.id) === String(popId); }) : null;
     const resellerId = current && current.name === DIRECT_POP_NAME
@@ -389,7 +391,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     const method = popId ? 'PUT' : 'POST';
     const originalText = saveBtn ? saveBtn.textContent : 'Save POP';
 
-    form.dataset.submitting = '1';
+    lockTarget.dataset.submitting = '1';
     if (saveBtn) {
       saveBtn.disabled = true;
       saveBtn.setAttribute('aria-busy', 'true');
@@ -412,19 +414,19 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
       }
     } catch (error) {
       if (error.field) {
-        const field = form.querySelector('[name="' + error.field + '"]');
+        const field = container.querySelector('[name="' + error.field + '"]');
         if (field) {
           field.classList.add('is-invalid');
           field.setAttribute('aria-invalid', 'true');
         }
       } else {
-        mapPopFieldErrors(error, form);
+        mapPopFieldErrors(error, container);
       }
       if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save POP. Please try again.');
       showToast(error.message || 'Unable to save POP. Please try again.', 'danger');
       console.error('[POP UI] Save failed:', error);
     } finally {
-      delete form.dataset.submitting;
+      delete lockTarget.dataset.submitting;
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.removeAttribute('aria-busy');
@@ -450,14 +452,20 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     if (!saveBtn) return;
     event.preventDefault();
     event.stopPropagation();
-    const modal = saveBtn.closest('#fprPopModal') || document.getElementById('fprPopModal');
-    const form = modal ? modal.querySelector('#fprPopForm') : document.getElementById('fprPopForm');
-    if (!form) {
-      console.error('[POP UI] #fprPopForm not found');
-      showToast('POP form is unavailable. Close and reopen the POP editor.', 'danger');
+    const form = saveBtn.closest('form')
+      || saveBtn.form
+      || document.getElementById('fprPopForm')
+      || document.querySelector('.modal.show form')
+      || document.querySelector('#fprPopModal form');
+    const container = form
+      || document.querySelector('.modal.show .modal-body')
+      || document.querySelector('#fprPopModal .modal-body');
+    if (!container) {
+      console.error('[POP UI] POP editor container not found from Save button or open modal.');
+      showToast('POP editor fields are unavailable. Close and reopen the POP editor.', 'danger');
       return;
     }
-    savePopForm(form, saveBtn);
+    savePopForm(form, saveBtn, container);
   });
 
   document.addEventListener('submit', async function (event) {
