@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
 const express = require('express');
 const db = require('../db');
 const { requireRole } = require('../middleware/rbac');
@@ -76,6 +77,14 @@ async function createHttpApp(t) {
   }));
   return 'http://127.0.0.1:' + server.address().port;
 }
+
+test('production page route orders role, tenant scope, and ownership guards before EJS rendering', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.match(
+    server,
+    /app\.get\("\/reseller\/customers\/:id",requireRole\(\["reseller"\]\),loadTenantScope,requireCustomerOwnership\(\{notFoundStatus:403\}\),\(req,res\)=>res\.set/
+  );
+});
 
 test('reseller customer page renders HTTP 200 for a customer in the reseller POP scope', async t => {
   mockTenantDatabase(t);

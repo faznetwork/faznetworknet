@@ -40,7 +40,7 @@ async function loadTenantScope(req,res,next){
  * Page routes may select notFoundStatus: 403 to avoid rendering or disclosing
  * whether an arbitrary customer identifier exists.
  */
-function requireCustomerOwnership(options={}){
+function createCustomerOwnershipGuard(options={}){
  const notFoundStatus=options.notFoundStatus===403?403:404;
  return async function customerOwnershipGuard(req,res,next){
   const scope=req.tenantScope;
@@ -64,6 +64,12 @@ function requireCustomerOwnership(options={}){
    return res.status(503).json({success:false,message:'Customer authorization service unavailable.'});
   }
  };
+}
+
+// Backward compatible as a direct Express middleware; passing options creates a configured guard.
+function requireCustomerOwnership(reqOrOptions,res,next){
+ if(typeof next==='function')return createCustomerOwnershipGuard({})(reqOrOptions,res,next);
+ return createCustomerOwnershipGuard(reqOrOptions||{});
 }
 
 function requireAdminOnly(req,res,next){
