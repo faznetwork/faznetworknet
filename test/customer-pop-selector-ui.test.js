@@ -28,7 +28,7 @@ test('POP options are loaded through the existing role-scoped endpoint with visi
 
 test('administrator selector defaults Direct POP and preselects existing customer POP', () => {
   assert.match(adminView, /faz main \(direct\)/);
-  assert.match(adminView, /loadCustomerPopOptions\\(customer\\.pop_id, true\\)/);
+  assert.match(adminView, /loadCustomerPopOptions\(customer\.pop_id, true\)/);
   assert.match(adminView, /customerPopSearch/);
 });
 
