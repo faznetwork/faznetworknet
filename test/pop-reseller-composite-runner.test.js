@@ -10,6 +10,7 @@ const root = path.join(__dirname, '..');
 test('composite POP/reseller runner requires an explicit non-production database target', () => {
   const runner = fs.readFileSync(path.join(root, 'scripts/apply-pop-reseller-migrations.ps1'), 'utf8');
   assert.match(runner, /ExpectedDatabaseName/);
+  assert.match(runner, /ConfirmNonProductionTarget/);
   assert.match(runner, /stage\|staging\|test\|disposable/i);
   assert.match(runner, /prod\|production\|live/i);
   assert.match(runner, /current_database\(\)/);
