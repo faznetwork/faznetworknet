@@ -28,7 +28,7 @@ async function overview(req, res) {
     const popIds = resellerPopIds(req);
     const resellerId = Number(req.auth?.resellerId);
     const popResult = await db.query(
-      'SELECT id, name, area_zone, status, vlan_id, mikrotik_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
+      'SELECT id, name, area_zone, status, vlan_id, pppoe_enabled, pppoe_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
       [resellerId]
     );
 
@@ -148,6 +148,8 @@ async function createCustomer(req, res) {
   delete body.reseller_id;
   delete body.vlan_id;
   delete body.mikrotik_ip_pool;
+  delete body.pppoe_ip_pool;
+  delete body.pppoe_enabled;
   req.body = body;
   return customerController.createCustomer(req, res);
 }
