@@ -66,5 +66,5 @@ test('Customer 360 update only sends a changed active pop_id for administrators'
 });
 
 test('customer creation route protection remains unchanged', () => {
-  assert.ok(customerRoutes.includes("router.post('/', requireAdminOnly, controller.createCustomer)"));
+  assert.ok(customerRoutes.includes("router.post('/',requireAdminOnly,controller.createCustomer)"));
 });
