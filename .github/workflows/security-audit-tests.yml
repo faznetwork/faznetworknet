@@ -41,6 +41,8 @@ jobs:
           node --check routes/paymentRoutes.js
           node --check routes/pppoeRoutes.js
           node --check public/js/rbac-sidebar.js
+          node --check public/js/pop-reseller-admin.js
+          node --check test/pop-reseller-admin-ui-contract.test.js
           node -e "const fs=require('fs'),ejs=require('ejs'); ejs.compile(fs.readFileSync('views/admin.ejs','utf8')); ejs.compile(fs.readFileSync('views/verify-otp.ejs','utf8')); console.log('RBAC EJS templates compile')"
       - name: Hotspot calendar validity syntax and build
         run: |
