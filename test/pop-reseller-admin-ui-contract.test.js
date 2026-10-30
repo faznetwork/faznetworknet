@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-ip-pool-v5"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v6"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -87,7 +87,7 @@ test('Customer directory and Customer 360 add only read-only POP/reseller joins'
 
 
 test('POP create serializes every API contract field, including an explicit reseller assignment', () => {
-  const fields = ['name', 'area_zone', 'reseller_id', 'vlan_id', 'mikrotik_ip_pool', 'commission_type', 'commission_rate'];
+  const fields = ['name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled', 'pppoe_ip_pool', 'hotspot_enabled', 'hotspot_server', 'hotspot_interface', 'hotspot_vlan_id', 'hotspot_ip_pool', 'commission_type', 'commission_rate'];
   for (const field of fields) {
     assert.match(ui, new RegExp('\\b' + field + ':'));
   }
@@ -160,8 +160,8 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-ip-pool-v5"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');"));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v6"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
@@ -190,15 +190,40 @@ test('POP save resolves a form from the clicked button and falls back to open mo
 });
 
 test('POP IP Pool editor loads configured MikroTik pools dynamically and preserves the current assignment', () => {
-  assert.ok(ui.includes('id="fprPopIpPool"'));
-  assert.ok(ui.includes('name="mikrotik_ip_pool" id="fprPopIpPool"'));
-  assert.ok(!ui.includes('name="mikrotik_ip_pool" maxlength="150"'));
+  assert.ok(ui.includes('id="fprPppoeIpPool"'));
+  assert.ok(ui.includes('name="pppoe_ip_pool" id="fprPppoeIpPool"'));
+  assert.ok(ui.includes('name="hotspot_ip_pool" id="fprHotspotIpPool"'));
+  assert.ok(ui.includes('name="pppoe_enabled" id="fprPppoeEnabled"'));
+  assert.ok(ui.includes('name="hotspot_enabled" id="fprHotspotEnabled"'));
+  assert.ok(!ui.includes('name="mikrotik_ip_pool" id="fprPopIpPool"'));
   assert.ok(ui.includes("const pools = await apiRequest('/ip-pools');"));
-  assert.ok(ui.includes("select.innerHTML = '<option value=\"\">None / Unassigned</option>';"));
+  assert.ok(ui.includes("item.element.innerHTML = '<option value=\"\">None / Unassigned</option>';"));
   assert.ok(ui.includes("await loadPopIpPools(form, pop);"));
-  assert.ok(ui.includes("select.value = selectedName;"));
+  assert.ok(ui.includes('item.element.value = item.value;'));
   assert.ok(ui.includes('current assignment (not in active pool list)'));
-  assert.ok(ui.includes('Existing POP assignment was preserved.'));
-  assert.ok(ui.includes('mikrotik_ip_pool: poolInput && poolInput.value ? poolInput.value : null'));
+  assert.ok(ui.includes('Existing PPPoE and Hotspot assignments were preserved.'));
+  assert.ok(ui.includes('pppoe_ip_pool: pppoePoolInput && pppoePoolInput.value ? pppoePoolInput.value : null'));
+  assert.ok(ui.includes('hotspot_ip_pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null'));
+  assert.ok(ui.includes('pop.hotspot_ip_pool'));
+  assert.ok(ui.includes('pop.pppoe_ip_pool'));
+  assert.ok(ui.includes('pop.hotspot_enabled'));
+  assert.ok(ui.includes('pop.pppoe_enabled'));
   assert.ok(admin.includes('pop-ip-pool-v5'));
+});
+
+
+test('POP service pools remain segregated and legacy pool is not rendered as a shared assignment', () => {
+  assert.ok(ui.includes('PPPoE IP Pool'));
+  assert.ok(ui.includes('Hotspot IP Pool'));
+  assert.ok(ui.includes('Used only for PPPoE subscriber address assignment.'));
+  assert.ok(ui.includes('is never reused for PPPoE.'));
+  assert.ok(!ui.includes('pop.mikrotik_ip_pool'));
+  const controller = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
+  assert.ok(controller.includes('pppoe_ip_pool'));
+  assert.ok(controller.includes('hb.ip_pool AS hotspot_ip_pool'));
+  assert.ok(controller.includes('status=\'inactive\''));
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '20261031_dual_service_pop_ip_pools.sql'), 'utf8');
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS pppoe_ip_pool/);
+  assert.match(migration, /SET pppoe_ip_pool = NULLIF\(BTRIM\(mikrotik_ip_pool\)/);
+  assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN)\\b/i);
 });
