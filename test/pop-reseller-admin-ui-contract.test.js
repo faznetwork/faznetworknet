@@ -35,6 +35,8 @@ test('POP UI uses stable POP totals, direct POP protection and soft status toggl
   assert.ok(ui.includes("const DIRECT_POP_NAME = 'FAZ Main (Direct)'"));
   assert.ok(ui.includes("pop.name !== DIRECT_POP_NAME"));
   assert.ok(ui.includes("method: 'PATCH', body: { status: nextStatus }"));
+  assert.ok(ui.includes("if (!id || String(current.reseller_id || '') !== String(owner || '')) payload.reseller_id = owner;"));
+  assert.ok(ui.includes("option.textContent = (currentOwner ? currentOwner.name : (pop.reseller_name || 'Current reseller')) + ' — current owner';"));
   assert.ok(!/method\s*:\s*['"]DELETE['"]/i.test(ui));
   assert.ok(!/api\/pops\/[^'"]+['"]\s*,\s*\{\s*method\s*:\s*['"]DELETE/i.test(ui));
 });
