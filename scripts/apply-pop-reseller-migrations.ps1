@@ -93,7 +93,8 @@ try {
     $repositoryRoot = Split-Path -Parent $PSScriptRoot
     $migrationFiles = @(
         (Join-Path $repositoryRoot 'db/migrations/20261030_pop_reseller_architecture.sql'),
-        (Join-Path $repositoryRoot 'db/migrations/20261030_reseller_email_invitations.sql')
+        (Join-Path $repositoryRoot 'db/migrations/20261030_reseller_email_invitations.sql'),
+        (Join-Path $repositoryRoot 'db/migrations/20261030_rate_limits.sql')
     )
 
     $composite = New-Object System.Text.StringBuilder
@@ -125,14 +126,14 @@ try {
     [System.IO.File]::WriteAllText($tempSql, $composite.ToString(), (New-Object System.Text.UTF8Encoding($false)))
 
     Write-Host "Verified non-production database: $actualDatabaseName"
-    Write-Host 'Applying both POP/reseller migrations in one PostgreSQL transaction...'
+    Write-Host 'Applying all three POP/reseller migrations in one PostgreSQL transaction...'
 
     & $psql.Source --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction --file $tempSql
     if ($LASTEXITCODE -ne 0) {
         throw "Composite migration failed. PostgreSQL rolled back the unified transaction; inspect the psql error above."
     }
 
-    Write-Host 'SUCCESS: both migrations committed atomically.'
+    Write-Host 'SUCCESS: all three migrations committed atomically.'
 }
 finally {
     if ($tempSql -and (Test-Path -LiteralPath $tempSql)) {
