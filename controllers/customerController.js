@@ -244,26 +244,63 @@ async function createCustomer(req, res) {
     if (requestedPopId !== null && (!Number.isSafeInteger(requestedPopId) || requestedPopId < 1)) {
       return res.status(400).json({ success: false, message: "A valid POP ID is required." });
     }
-    const selectedPopResult = requestedPopId === null
-      ? await db.query("SELECT id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' LIMIT 1")
-      : await db.query("SELECT id FROM pops WHERE id=$1 AND status='active' LIMIT 1", [requestedPopId]);
-    if (!selectedPopResult.rows.length) {
-      return res.status(400).json({ success: false, message: requestedPopId === null ? "Canonical active POP FAZ Main (Direct) is unavailable. No customer was created." : "Selected POP does not exist or is inactive." });
-    }
-    customer.popId = selectedPopResult.rows[0].id;
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
     customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
     // Resolve the effective RouterOS profile only after the package profile is canonicalized.
     customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
 
-    const existing = await db.query(
-      `SELECT id, username, phone FROM customers
-       WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1`,
-      [customer.username, customer.phone]
-    );
-    if (existing.rows.length) {
-      const match = existing.rows[0];
+    // Serialize customer creation against POP status changes. The POP row lock is
+    // held only through the duplicate check and customer INSERT; RouterOS work
+    // starts after commit so network latency never extends the database lock.
+    const creation = await db.withTransaction(async client => {
+      const selectedPopResult = requestedPopId === null
+        ? await client.query("SELECT id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id ASC LIMIT 1 FOR UPDATE")
+        : await client.query("SELECT id FROM pops WHERE id=$1 AND status='active' FOR UPDATE", [requestedPopId]);
+      if (!selectedPopResult.rows.length) return { kind: "inactive_pop" };
+
+      customer.popId = selectedPopResult.rows[0].id;
+      const existing = await client.query(
+        `SELECT id, username, phone FROM customers
+         WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1`,
+        [customer.username, customer.phone]
+      );
+      if (existing.rows.length) return { kind: "duplicate", match: existing.rows[0] };
+
+      const inserted = await client.query(
+        `INSERT INTO customers
+         (full_name, phone, connection_date, username, password, package_name, profile,
+          monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
+          alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
+          billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
+          email, whatsapp_phone, telegram_link, facebook_link, pop_id, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
+         RETURNING id, username`,
+        [
+          customer.fullName, customer.phone, customer.connectionDate, customer.username,
+          customer.password, customer.packageName, customer.profile, customer.monthlyBill,
+          customer.nid || null, customer.installationAddress || null, customer.areaZone || null, customer.fiberBox || null,
+          null, customer.remarks || null, customer.expirationDate,
+          customer.alternativePhone || null, null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
+          customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
+          (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
+          customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null,customer.popId
+        ]
+      );
+      if (!inserted.rows.length) throw new Error("Customer insert did not return the created record.");
+      return { kind: "created", inserted: inserted.rows[0] };
+    });
+
+    if (creation.kind === "inactive_pop") {
+      return res.status(400).json({
+        success: false,
+        message: requestedPopId === null
+          ? "Canonical active POP FAZ Main (Direct) is unavailable. No customer was created."
+          : "Selected POP does not exist or is inactive."
+      });
+    }
+    if (creation.kind === "duplicate") {
+      const match = creation.match;
       return res.status(409).json({
         success: false,
         message: String(match.username).toLowerCase() === customer.username.toLowerCase()
@@ -271,27 +308,7 @@ async function createCustomer(req, res) {
           : "A customer with this phone number already exists."
       });
     }
-
-    const inserted = await db.query(
-      `INSERT INTO customers
-       (full_name, phone, connection_date, username, password, package_name, profile,
-        monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
-        alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
-        billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status,
-        email, whatsapp_phone, telegram_link, facebook_link, pop_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::date,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24::text='paid' THEN $15::date ELSE NULL::date END,'pending',$25,$26,$27,$28,$29,$30,NOW(),NOW())
-       RETURNING id, username`,
-      [
-        customer.fullName, customer.phone, customer.connectionDate, customer.username,
-        customer.password, customer.packageName, customer.profile, customer.monthlyBill,
-        customer.nid || null, customer.installationAddress || null, customer.areaZone || null, customer.fiberBox || null,
-        null, customer.remarks || null, customer.expirationDate,
-        customer.alternativePhone || null, null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
-        customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
-        (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active",
-        customer.email||null,customer.whatsappPhone||null,customer.telegramLink||null,customer.facebookLink||null,customer.popId
-      ]
-    );
+    const inserted = { rows: [creation.inserted] };
 
     const customerId = inserted.rows[0].id;
     // Persist the selected router before attempting network provisioning. An
