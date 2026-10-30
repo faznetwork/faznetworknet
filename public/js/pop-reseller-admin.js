@@ -248,12 +248,12 @@
           const payload = {
             name: name,
             area_zone: String(data.get('area_zone') || '').trim(),
-            reseller_id: owner,
             vlan_id: data.get('vlan_id') ? Number(data.get('vlan_id')) : null,
             mikrotik_ip_pool: String(data.get('mikrotik_ip_pool') || '').trim() || null,
             commission_type: String(data.get('commission_type') || 'percentage'),
             commission_rate: Number(data.get('commission_rate') || 0)
           };
+          if (!id || String(current.reseller_id || '') !== String(owner || '')) payload.reseller_id = owner;
           await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body: payload });
           closeModal('fprPopModal');
           await window.loadPopManagement();
@@ -296,13 +296,20 @@
     form.elements.id.value = pop ? pop.id : '';
     form.elements.name.value = pop ? pop.name || '' : '';
     form.elements.area_zone.value = pop ? pop.area_zone || '' : '';
-    form.elements.reseller_id.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
+    const owner = form.querySelector('#fprPopReseller');
+    if (pop && pop.reseller_id && !Array.from(owner.options).some(function (option) { return option.value === String(pop.reseller_id); })) {
+      const currentOwner = state.resellers.find(function (item) { return String(item.id) === String(pop.reseller_id); });
+      const option = document.createElement('option');
+      option.value = String(pop.reseller_id);
+      option.textContent = (currentOwner ? currentOwner.name : (pop.reseller_name || 'Current reseller')) + ' — current owner';
+      owner.appendChild(option);
+    }
+    owner.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
     form.elements.vlan_id.value = pop && pop.vlan_id ? pop.vlan_id : '';
     form.elements.mikrotik_ip_pool.value = pop ? pop.mikrotik_ip_pool || '' : '';
     form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
     form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
     const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
-    const owner = form.querySelector('#fprPopReseller');
     owner.disabled = direct || Boolean(pop && Number(pop.customer_count || 0) > 0);
     form.querySelector('#fprPopOwnerHelp').textContent = direct ? 'FAZ Main (Direct) is permanently protected from third-party reseller assignment.' :
       (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
