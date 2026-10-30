@@ -328,177 +328,179 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');
 
 
 
-  // Block native navigation for dynamically-rendered POP/reseller forms while allowing the async bubble handler to run.
+  async function savePopForm(form, saveBtn) {
+    if (!form || form.id !== 'fprPopForm') {
+      console.error('[POP UI] #fprPopForm not found');
+      showToast('POP form is unavailable. Close and reopen the POP editor.', 'danger');
+      return;
+    }
+    if (form.dataset.submitting === '1') return;
+
+    const nameInput = form.querySelector('[name="name"]');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const errorHost = form.querySelector('#fprPopFormError');
+    if (errorHost) errorHost.innerHTML = '';
+    clearFieldErrors(form);
+    if (!name) {
+      if (nameInput) {
+        nameInput.classList.add('is-invalid');
+        nameInput.setAttribute('aria-invalid', 'true');
+        nameInput.focus();
+      }
+      showToast('POP Name is required', 'danger');
+      if (errorHost) errorHost.innerHTML = errorBanner('POP Name is required. Please enter a name before saving.');
+      return;
+    }
+
+    const areaInput = form.querySelector('[name="area_zone"]');
+    const resellerSelect = form.querySelector('[name="reseller_id"]');
+    const vlanInput = form.querySelector('[name="vlan_id"]');
+    const poolInput = form.querySelector('[name="mikrotik_ip_pool"]');
+    const commTypeSelect = form.querySelector('[name="commission_type"]');
+    const commRateInput = form.querySelector('[name="commission_rate"]');
+    const idInput = form.querySelector('[name="id"]');
+    const popId = idInput ? idInput.value : '';
+    const current = popId ? state.pops.find(function (item) { return String(item.id) === String(popId); }) : null;
+    const resellerId = current && current.name === DIRECT_POP_NAME
+      ? null
+      : (resellerSelect && resellerSelect.value ? resellerSelect.value : null);
+
+    if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(resellerId || '')) {
+      const message = 'Ownership cannot be changed while this POP has customer records.';
+      if (resellerSelect) {
+        resellerSelect.classList.add('is-invalid');
+        resellerSelect.setAttribute('aria-invalid', 'true');
+      }
+      if (errorHost) errorHost.innerHTML = errorBanner(message);
+      showToast(message, 'danger');
+      return;
+    }
+
+    const payload = {
+      name: name,
+      area_zone: areaInput ? areaInput.value.trim() : '',
+      reseller_id: resellerId,
+      vlan_id: vlanInput && vlanInput.value ? Number(vlanInput.value) : null,
+      mikrotik_ip_pool: poolInput && poolInput.value.trim() ? poolInput.value.trim() : null,
+      commission_type: commTypeSelect ? commTypeSelect.value : 'percentage',
+      commission_rate: commRateInput ? Number(commRateInput.value || 0) : 0
+    };
+    const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');
+    const method = popId ? 'PUT' : 'POST';
+    const originalText = saveBtn ? saveBtn.textContent : 'Save POP';
+
+    form.dataset.submitting = '1';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.setAttribute('aria-busy', 'true');
+      saveBtn.textContent = 'Saving...';
+    }
+
+    try {
+      console.log('[POP UI] Dispatching save request:', { endpoint: '/api' + endpoint, method: method, payload: payload });
+      const response = await apiRequest(endpoint, { method: method, body: payload });
+      console.log('[POP UI] Save response received:', response);
+      if (!response || response.success !== true || !response.pop || typeof response.pop !== 'object' || !response.pop.id || !response.pop.name) {
+        throw new Error('The server did not confirm a valid POP save. The form remains open; verify the POP directory before retrying.');
+      }
+
+      closeModal('fprPopModal');
+      showToast(popId ? 'POP updated successfully.' : 'POP created successfully.', 'success');
+      const refreshed = await window.loadPopManagement();
+      if (refreshed === false) {
+        showToast('POP was saved, but the POP table could not be refreshed. Use Refresh to reload the latest records.', 'warning');
+      }
+    } catch (error) {
+      if (error.field) {
+        const field = form.querySelector('[name="' + error.field + '"]');
+        if (field) {
+          field.classList.add('is-invalid');
+          field.setAttribute('aria-invalid', 'true');
+        }
+      } else {
+        mapPopFieldErrors(error, form);
+      }
+      if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save POP. Please try again.');
+      showToast(error.message || 'Unable to save POP. Please try again.', 'danger');
+      console.error('[POP UI] Save failed:', error);
+    } finally {
+      delete form.dataset.submitting;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.removeAttribute('aria-busy');
+        saveBtn.textContent = originalText;
+      }
+    }
+  }
+
+  // Enter-key submission is converted into the same direct async save path; native navigation is never allowed.
   document.addEventListener('submit', function (event) {
     const form = event.target;
-    if (form && (form.id === 'fprPopForm' || form.id === 'fprResellerForm')) {
-      event.preventDefault();
+    if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) return;
+    event.preventDefault();
+    if (form.id === 'fprPopForm') {
+      event.stopImmediatePropagation();
+      savePopForm(form, form.querySelector('#fprPopSave'));
     }
   }, true);
 
   document.addEventListener('click', function (event) {
-    console.log('[POP DEBUG CLICK] Document click observed:', event.target);
     const target = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
-    const button = target && target.closest ? target.closest('#fprPopSave, [data-action="save-pop"]') : null;
-    if (button) {
-      console.log('[POP DEBUG CLICK] Save button clicked directly!', button);
-      const activeModal = document.querySelector('#fprPopModal.show, #fprPopModal');
-      const form = button.closest('form') || (activeModal ? activeModal.querySelector('form#fprPopForm') : document.getElementById('fprPopForm'));
-      console.log('[POP DEBUG CLICK] Target form found:', form);
-      if (form) {
-        event.preventDefault();
-        delete form.dataset.fprSubmitIntercepted;
-        if (typeof form.requestSubmit === 'function') {
-          try {
-            form.requestSubmit();
-          } catch (requestSubmitError) {
-            console.error('[POP DEBUG CLICK] requestSubmit() failed; attempting explicit submit-event fallback:', requestSubmitError);
-          }
-        } else {
-          console.warn('[POP DEBUG CLICK] requestSubmit() is unavailable; attempting explicit submit-event fallback.');
-        }
-        if (form.dataset.fprSubmitIntercepted !== '1') {
-          console.warn('[POP DEBUG CLICK] Submit listener did not confirm interception; dispatching a bubbling submit event.');
-          const fallbackSubmitEvent = new Event('submit', { bubbles: true, cancelable: true });
-          form.dispatchEvent(fallbackSubmitEvent);
-          if (form.dataset.fprSubmitIntercepted !== '1') {
-            console.error('[POP DEBUG CLICK] The document submit handler did not intercept the fallback event.');
-            showToast('The POP form handler is unavailable. Reload the page and try again.', 'danger');
-          }
-        }
-      } else {
-        console.error('[POP DEBUG CLICK] Could not find #fprPopForm!');
-      }
+    const saveBtn = target && target.closest ? target.closest('#fprPopSave') : null;
+    if (!saveBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const modal = saveBtn.closest('#fprPopModal') || document.getElementById('fprPopModal');
+    const form = modal ? modal.querySelector('#fprPopForm') : document.getElementById('fprPopForm');
+    if (!form) {
+      console.error('[POP UI] #fprPopForm not found');
+      showToast('POP form is unavailable. Close and reopen the POP editor.', 'danger');
+      return;
     }
+    savePopForm(form, saveBtn);
   });
 
   document.addEventListener('submit', async function (event) {
-      console.log('[POP DEBUG SUBMIT] Raw submit fired on element:', event.target);
-      const form = event.target;
-      if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) {
-        console.warn('[POP DEBUG SUBMIT] Ignored form with ID:', form ? form.id : 'no-target');
-        return;
-      }
-      event.preventDefault();
-      form.dataset.fprSubmitIntercepted = '1';
-      console.log('[POP DEBUG SUBMIT] Handling POP Form submission now!', form);
-      if (form.dataset.submitting === '1') return;
+    const form = event.target;
+    if (!form || form.id !== 'fprResellerForm') return;
+    event.preventDefault();
+    if (form.dataset.submitting === '1') return;
 
-      const isPop = form.id === 'fprPopForm';
-      const submit = isPop ? form.querySelector('#fprPopSave') : form.querySelector('[type="submit"]');
-      const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
-      const originalLabel = submit ? submit.textContent : '';
-      if (errorHost) errorHost.innerHTML = '';
-      if (isPop) clearFieldErrors(form);
-      if (isPop) {
-        const nameField = form.elements.namedItem('name');
-        if (!nameField || !String(nameField.value || '').trim()) {
-          const message = 'POP Name is required. Please enter a name before saving.';
-          if (nameField && nameField.classList) {
-            nameField.classList.add('is-invalid');
-            nameField.setAttribute('aria-invalid', 'true');
-            const feedback = document.createElement('div');
-            feedback.className = 'invalid-feedback d-block';
-            feedback.dataset.fprFieldError = '1';
-            feedback.textContent = message;
-            nameField.insertAdjacentElement('afterend', feedback);
-            nameField.focus();
-          }
-          if (errorHost) errorHost.innerHTML = errorBanner(message);
-          showToast(message, 'danger');
-          return;
-        }
-      }
-      form.dataset.submitting = '1';
+    const submit = form.querySelector('[type="submit"]');
+    const errorHost = form.querySelector('#fprResellerFormError');
+    const originalLabel = submit ? submit.textContent : 'Queue Invitation';
+    if (errorHost) errorHost.innerHTML = '';
+    form.dataset.submitting = '1';
+    if (submit) {
+      submit.disabled = true;
+      submit.setAttribute('aria-busy', 'true');
+      submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+    }
+
+    try {
+      const data = new FormData(form);
+      const payload = {
+        name: String(data.get('name') || '').trim(),
+        email: String(data.get('email') || '').trim(),
+        phone: String(data.get('phone') || '').trim(),
+        assigned_pop_ids: Array.from(form.querySelector('#fprInvitePops').selectedOptions).map(function (option) { return Number(option.value); })
+      };
+      await apiRequest('/resellers/invite', { method: 'POST', body: payload });
+      closeModal('fprResellerModal');
+      await window.loadResellerAccess();
+    } catch (error) {
+      if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
+      showToast(error.message || 'Unable to save changes.', 'danger');
+      console.error('[POP/Reseller Admin UI] Form submission failed:', error);
+    } finally {
+      delete form.dataset.submitting;
       if (submit) {
-        submit.disabled = true;
-        submit.setAttribute('aria-busy', 'true');
-        submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+        submit.disabled = false;
+        submit.removeAttribute('aria-busy');
+        submit.textContent = originalLabel;
       }
-
-      try {
-        const data = new FormData(form);
-        if (isPop) {
-          const id = String(data.get('id') || '');
-          const name = String(data.get('name') || '').trim();
-          const ownerSelect = form.querySelector('[name="reseller_id"]');
-          const current = id ? state.pops.find(function (item) { return String(item.id) === id; }) : null;
-          const owner = current && current.name === DIRECT_POP_NAME ? null : (ownerSelect.value || null);
-          if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(owner || '')) {
-            const ownershipError = new Error('Ownership cannot be changed while this POP has customer records.');
-            ownershipError.field = 'reseller_id';
-            throw ownershipError;
-          }
-          const payload = {
-            name: name,
-            area_zone: String(data.get('area_zone') || '').trim(),
-            reseller_id: owner,
-            vlan_id: data.get('vlan_id') ? Number(data.get('vlan_id')) : null,
-            mikrotik_ip_pool: String(data.get('mikrotik_ip_pool') || '').trim() || null,
-            commission_type: String(data.get('commission_type') || 'percentage').trim(),
-            commission_rate: Number(data.get('commission_rate') || 0)
-          };
-          try {
-            console.info('[POP DEBUG] Payload dispatched', { method: id ? 'PUT' : 'POST', endpoint: '/api/pops' + (id ? '/' + encodeURIComponent(id) : ''), payload: payload });
-            const response = await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), {
-              method: id ? 'PUT' : 'POST',
-              body: payload
-            });
-            console.info('[POP DEBUG] Response received', { success: response && response.success, status: id ? 'updated' : 'created', pop: response && response.pop });
-            if (!response || response.success !== true || !response.pop || typeof response.pop !== 'object' || !response.pop.id || !response.pop.name) {
-              throw new Error('The server did not confirm a valid POP save. The form remains open; verify the POP directory before retrying.');
-            }
-          } catch (saveError) {
-            if (saveError.field) {
-              const field = form.elements.namedItem(saveError.field);
-              if (field) {
-                field.classList.add('is-invalid');
-                field.setAttribute('aria-invalid', 'true');
-                const feedback = document.createElement('div');
-                feedback.className = 'invalid-feedback d-block';
-                feedback.dataset.fprFieldError = '1';
-                feedback.textContent = saveError.message;
-                field.insertAdjacentElement('afterend', feedback);
-              }
-            } else {
-              mapPopFieldErrors(saveError, form);
-            }
-            if (errorHost) errorHost.innerHTML = errorBanner(saveError.message || 'Unable to save POP. Please try again.');
-            showToast(saveError.message || 'Unable to save POP. Please try again.', 'danger');
-            console.error('[POP Admin UI] POP save failed:', saveError);
-            return;
-          }
-
-          closeModal('fprPopModal');
-          showToast(id ? 'POP updated successfully.' : 'POP created successfully.', 'success');
-          const reloaded = await window.loadPopManagement();
-          if (reloaded === false) {
-            showToast('POP was saved, but the POP table could not be refreshed. Use Refresh to reload the latest records.', 'warning');
-          }
-        } else {
-          const payload = {
-            name: String(data.get('name') || '').trim(),
-            email: String(data.get('email') || '').trim(),
-            phone: String(data.get('phone') || '').trim(),
-            assigned_pop_ids: Array.from(form.querySelector('#fprInvitePops').selectedOptions).map(function (option) { return Number(option.value); })
-          };
-          await apiRequest('/resellers/invite', { method: 'POST', body: payload });
-          closeModal('fprResellerModal');
-          await window.loadResellerAccess();
-        }
-      } catch (error) {
-        if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
-        showToast(error.message || 'Unable to save changes.', 'danger');
-        console.error('[POP/Reseller Admin UI] Form submission failed:', error);
-      } finally {
-        delete form.dataset.submitting;
-        if (submit) {
-          submit.disabled = false;
-          submit.removeAttribute('aria-busy');
-          submit.textContent = originalLabel || (isPop ? 'Save POP' : 'Queue Invitation');
-        }
-      }
-    });
+    }
+  });
   function modalInstance(id) {
     const element = document.getElementById(id);
     if (!element || !window.bootstrap || !window.bootstrap.Modal) throw new Error('Bootstrap modal support is unavailable.');
