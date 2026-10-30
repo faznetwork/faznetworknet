@@ -1,10 +1,10 @@
-console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
+console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
 (function () {
   'use strict';
 
   const API = '/api';
   const DIRECT_POP_NAME = 'FAZ Main (Direct)';
-  const state = { pops: [], resellers: [], activeView: null, busy: false };
+  const state = { pops: [], resellers: [], ipPools: [], activeView: null, busy: false };
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -242,7 +242,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
       state.resellers.filter(function (r) { return r.status === 'active'; }).map(function (r) { return '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + ' — ' + escapeHtml(r.email || r.username || '') + '</option>'; }).join('') +
       '</select><div class="form-text" id="fprPopOwnerHelp">FAZ Main (Direct) is protected from third-party assignment.</div></div>' +
       '<div class="col-12 col-md-6"><label class="form-label">VLAN ID</label><input class="form-control" type="number" name="vlan_id" min="1" max="4094"></div>' +
-      '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><input class="form-control" name="mikrotik_ip_pool" maxlength="150"></div>' +
+      '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><select class="form-select" name="mikrotik_ip_pool" id="fprPopIpPool"><option value="">None / Unassigned</option></select><div class="form-text">Select an existing active MikroTik IP Pool. The current assignment is preserved when editing.</div></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
@@ -383,7 +383,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
       area_zone: areaInput ? areaInput.value.trim() : '',
       reseller_id: resellerId,
       vlan_id: vlanInput && vlanInput.value ? Number(vlanInput.value) : null,
-      mikrotik_ip_pool: poolInput && poolInput.value.trim() ? poolInput.value.trim() : null,
+      mikrotik_ip_pool: poolInput && poolInput.value ? poolInput.value : null,
       commission_type: commTypeSelect ? commTypeSelect.value : 'percentage',
       commission_rate: commRateInput ? Number(commRateInput.value || 0) : 0
     };
@@ -520,7 +520,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     if (element && window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(element).hide();
   }
 
-  function openPopModal(pop) {
+  async function openPopModal(pop) {
     const section = document.getElementById('view-pop-management');
     const form = section && section.querySelector('#fprPopForm');
     if (!form) throw new Error('POP editor is not ready. Refresh the view and try again.');
@@ -538,7 +538,7 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     }
     owner.value = pop && pop.reseller_id ? String(pop.reseller_id) : '';
     form.elements.vlan_id.value = pop && pop.vlan_id ? pop.vlan_id : '';
-    form.elements.mikrotik_ip_pool.value = pop ? pop.mikrotik_ip_pool || '' : '';
+    await loadPopIpPools(form, pop);
     form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
     form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
     const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
@@ -548,6 +548,50 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
     form.querySelector('#fprPopFormError').innerHTML = '';
     section.querySelector('#fprPopModalTitle').textContent = pop ? 'Edit POP' : 'Create POP';
     modalInstance('fprPopModal').show();
+  }
+
+  async function loadPopIpPools(form, pop) {
+    const select = form && form.querySelector('#fprPopIpPool');
+    if (!select) throw new Error('POP IP Pool selector is unavailable.');
+    const selectedName = String(pop && pop.mikrotik_ip_pool || '').trim();
+    select.disabled = true;
+    select.innerHTML = '<option value="">None / Unassigned</option>';
+    try {
+      const pools = await apiRequest('/ip-pools');
+      if (!Array.isArray(pools)) throw new Error('The IP Pool endpoint returned an invalid pool list.');
+      state.ipPools = pools
+        .filter(function (pool) { return pool && String(pool.name || '').trim() && !/^default(?:[-_].*)?$/i.test(String(pool.name).trim()); })
+        .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      state.ipPools.forEach(function (pool) {
+        const option = document.createElement('option');
+        option.value = String(pool.name);
+        option.textContent = String(pool.name) + (pool.ranges ? ' — ' + String(pool.ranges) : '');
+        select.appendChild(option);
+      });
+      if (selectedName && !state.ipPools.some(function (pool) { return String(pool.name).toLowerCase() === selectedName.toLowerCase(); })) {
+        const existing = document.createElement('option');
+        existing.value = selectedName;
+        existing.textContent = selectedName + ' — current assignment (not in active pool list)';
+        existing.dataset.currentAssignment = 'true';
+        select.appendChild(existing);
+      }
+      select.value = selectedName;
+    } catch (error) {
+      console.error('[POP Admin UI] Could not load configured MikroTik IP Pools:', error);
+      if (selectedName) {
+        const existing = document.createElement('option');
+        existing.value = selectedName;
+        existing.textContent = selectedName + ' — current assignment (pool list unavailable)';
+        existing.dataset.currentAssignment = 'true';
+        select.appendChild(existing);
+        select.value = selectedName;
+      }
+      const errorHost = form.querySelector('#fprPopFormError');
+      if (errorHost) errorHost.innerHTML = errorBanner('Configured IP Pools could not be loaded. The existing assignment has been preserved. You may keep it or choose None / Unassigned; retry the pool list before selecting another pool.');
+      showToast('IP Pool list is unavailable. Existing POP assignment was preserved.', 'warning');
+    } finally {
+      select.disabled = false;
+    }
   }
 
   function openResellerModal() {
