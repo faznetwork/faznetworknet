@@ -107,6 +107,24 @@ async function listCustomers(req, res) {
   }
 }
 
+async function packages(req, res) {
+  try {
+    // Read-only catalog: do not open MikroTik connections while rendering the form.
+    const result = await db.query(`SELECT id, plan_name AS name,
+      COALESCE(profile_name, plan_name) AS profile_name, price, duration_months
+      FROM packages
+      WHERE LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE '%default%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) <> 'vpn'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'template%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'internal%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'system%'
+      ORDER BY plan_name ASC, id ASC`);
+    return res.json({ success: true, packages: result.rows.map(row => ({
+      id: String(row.id), name: row.name, profileName: row.profile_name,
+      price: Number(row.price || 0), durationMonths: Number(row.duration_months || 1)
+    })) });
+  } catch (error) { return handleError(res, error, 'Package catalog'); }
+}
 async function createCustomer(req, res) {
   const resellerId = Number(req.auth?.resellerId);
   const scopedResellerId = Number(req.tenantScope?.resellerId);
@@ -225,4 +243,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, listCustomers, createCustomer, getCustomer, liveSession, paymentHistory };
+module.exports = { overview, listCustomers, packages, createCustomer, getCustomer, liveSession, paymentHistory };
