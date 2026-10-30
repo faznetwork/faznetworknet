@@ -60,17 +60,18 @@ foreach ($name in $pgNames) {
 $tempSql = $null
 try {
     $env:PGHOST = $connectionUri.DnsSafeHost
-    $env:PGPORT = if ($connectionUri.IsDefaultPort) { '5432' } else { [string]$connectionUri.Port }
+    $env:PGPORT = if ($connectionUri.IsDefaultPort -or $connectionUri.Port -lt 1) { '5432' } else { [string]$connectionUri.Port }
     $env:PGDATABASE = $databaseFromUri
-    $env:PGUSER = [System.Uri]::UnescapeDataString($userInfo[0])
-    $env:PGPASSWORD = [System.Uri]::UnescapeDataString($userInfo[1])
+    $env:PGUSER = [System.Uri]::UnescapeDataString($userNameEncoded)
+    $env:PGPASSWORD = [System.Uri]::UnescapeDataString($passwordEncoded)
+    $env:PGSSLMODE = $null
     $env:PGAPPNAME = 'faznetwork-pop-reseller-migration'
 
     foreach ($part in $connectionUri.Query.TrimStart('?').Split('&')) {
         if (-not $part) { continue }
-        $pair = $part.Split('=', 2)
-        if ([System.Uri]::UnescapeDataString($pair[0]) -eq 'sslmode' -and $pair.Count -eq 2) {
-            $env:PGSSLMODE = [System.Uri]::UnescapeDataString($pair[1])
+        $separator = $part.IndexOf('=')
+        if ($separator -gt 0 -and [System.Uri]::UnescapeDataString($part.Substring(0, $separator)) -eq 'sslmode') {
+            $env:PGSSLMODE = [System.Uri]::UnescapeDataString($part.Substring($separator + 1))
         }
     }
 
