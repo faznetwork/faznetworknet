@@ -34,6 +34,8 @@ jobs:
           node --check services/paymentWebhookParser.js
           node --check services/mikrotikService.js
           node --check middleware/rbac.js
+          node --check middleware/tenantScope.js
+          node --check test/reseller-customer-ownership.integration.test.js
           node --check controllers/resellerPortalController.js
           node --check controllers/customerController.js
           node --check routes/resellerPortalRoutes.js
