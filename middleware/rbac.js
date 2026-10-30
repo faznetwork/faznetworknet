@@ -14,7 +14,7 @@ function normalizeRole(role) {
 
 function isResellerSession(req) {
   const nested = req.session?.auth?.isReseller === true && normalizeRole(req.session?.auth?.role) === 'reseller';
-  const legacy = req.session?.isReseller === true && normalizeRole(req.session?.role) === 'reseller';
+  const legacy = req.session?.isReseller===true && normalizeRole(req.session?.role) === 'reseller';
   return nested || legacy;
 }
 
