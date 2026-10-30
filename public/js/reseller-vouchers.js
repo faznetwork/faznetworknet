@@ -42,7 +42,7 @@
   }
   function renderPopOptions() {
     const select=byId('voucherPop');const pops=state.catalog?.pops||[];
-    select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+'</option>').join(''):'<option value="">No eligible active POPs</option>';
+    select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+(pop.bindingConfigured?(pop.packages?.length?'':' · No active hotspot packages'):' · Hotspot binding not configured')+'</option>').join(''):'<option value="">No eligible active POPs</option>';
     select.disabled=!pops.length;renderPackageOptions();renderAccount();
   }
   async function loadCatalog() {

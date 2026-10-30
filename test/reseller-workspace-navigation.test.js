@@ -29,6 +29,9 @@ test('reseller workspace pages use the shared shell and separated page assets', 
     if (view === 'reseller-dashboard.ejs' || view === 'reseller-payments.ejs') assert.doesNotMatch(source, /id="voucherPop"/, 'Dashboard and payments must not render voucher controls');
   }
   assert.match(read('public/css/reseller-workspace.css'), /--fzn-green:#0a3d2e/);
+  assert.ok(read('public/css/reseller-workspace.css').includes('Plus+Jakarta+Sans'));
+  assert.ok(read('public/js/reseller-workspace.js').includes("document.body.style.position='fixed'"));
+  assert.ok(read('public/js/reseller-workspace.js').includes('window.scrollTo(0,lockedScrollY)'));
 });
 
 test('voucher and customer views remain separated and preserve existing API contracts', () => {
@@ -38,7 +41,11 @@ test('voucher and customer views remain separated and preserve existing API cont
   assert.match(voucher, /Voucher Batch History/);
   assert.doesNotMatch(customers, /voucher/i);
   assert.match(customers, /name="activationDate"/);
-  assert.match(customers, /name="expirationDate"/);
+  assert.match(customers, /id="newCustomerExpiryDate" type="hidden" name="expirationDate"/);
+  assert.doesNotMatch(customers, /id="newCustomerExpiryDate"[^>]*type="date"/);
+  assert.match(customers, /newCustomerExpiryPreview/);
+  assert.ok(read('public/js/reseller-customers.js').includes('data-duration-months'));
+  assert.ok(read('public/js/reseller-customers.js').includes('addCalendarMonths(connection,months)'));
   assert.match(customers, /id="newCustomerVlan"[^>]*readonly/);
   assert.match(customers, /id="newCustomerIpPool"[^>]*readonly/);
   assert.match(read('public/js/reseller-customers.js'), /api\+'\/packages'/);
@@ -72,4 +79,16 @@ test('reseller workspace activePath is explicitly passed and partials safely def
     const source = read(path.join('views', view));
     assert.ok(source.includes("include('partials/reseller-scripts', { activePath })"));
   }
+});
+
+test('reseller package duration drives a validated month-end-safe expiry date', () => {
+  const vm = require('node:vm');
+  const context = { window: {}, document: { addEventListener() {} }, Intl, Date, Number, String, Math };
+  vm.runInNewContext(read('public/js/reseller-workspace.js'), context);
+  const calculate = context.window.ResellerWorkspace.addCalendarMonths;
+  assert.equal(calculate('2026-01-31', 1), '2026-02-28');
+  assert.equal(calculate('2026-01-31', 2), '2026-03-31');
+  assert.equal(calculate('2026-02-28', 12), '2027-02-28');
+  assert.equal(calculate('2026-01-31', 0), '');
+  assert.equal(calculate('2026-02-30', 1), '');
 });

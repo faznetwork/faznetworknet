@@ -4,18 +4,31 @@ const catalogService = require('../services/resellerHotspotCatalogService');
 const issuanceService = require('../services/resellerVoucherIssuanceService');
 
 function sendError(res, error, operation, resellerId) {
+  const databaseCode = /^[0-9A-Z]{5}$/.test(String(error.code || '')) ? String(error.code) : null;
   console.error('[Reseller Hotspot] ' + operation + ' failed:', {
-    resellerId: resellerId || null,
-    code: error.code || 'UNEXPECTED_ERROR',
-    message: error.message,
-    stack: error.stack
+    resellerId: resellerId || null, code: error.code || 'UNEXPECTED_ERROR',
+    databaseCode, constraint: error.constraint || null, detail: error.detail || null,
+    message: error.message, stack: error.stack
   });
   const status = Number.isInteger(error.statusCode) ? error.statusCode : 503;
-  return res.status(status).json({
-    success: false,
-    code: error.code || 'RESELLER_HOTSPOT_UNAVAILABLE',
-    message: status < 500 ? error.message : 'Reseller Hotspot service is temporarily unavailable. Please retry or contact support.'
-  });
+  let publicCode = error.code || 'RESELLER_HOTSPOT_UNAVAILABLE';
+  let message = error.message || 'The reseller hotspot request failed.';
+  if (status >= 500 && operation === 'Catalog') {
+    if (databaseCode === '42P01') {
+      publicCode = 'HOTSPOT_CATALOG_SCHEMA_MISSING';
+      message = 'Hotspot catalog storage is not initialized on this server. Contact FAZ NETWORK support and provide code HOTSPOT_CATALOG_SCHEMA_MISSING.';
+    } else if (databaseCode === '42703') {
+      publicCode = 'HOTSPOT_CATALOG_SCHEMA_MISMATCH';
+      message = 'Hotspot catalog configuration does not match the active server version. Contact FAZ NETWORK support and provide code HOTSPOT_CATALOG_SCHEMA_MISMATCH.';
+    } else if (!error.code) {
+      publicCode = 'HOTSPOT_CATALOG_QUERY_FAILED';
+      message = 'The server could not read the hotspot catalog. Please retry or contact support with code HOTSPOT_CATALOG_QUERY_FAILED.';
+    }
+  } else if (status >= 500 && !error.code) {
+    publicCode = 'RESELLER_HOTSPOT_UNAVAILABLE';
+    message = 'The reseller hotspot request could not be completed. Please retry or contact support with code RESELLER_HOTSPOT_UNAVAILABLE.';
+  }
+  return res.status(status).json({ success: false, code: publicCode, message });
 }
 
 function resellerId(req) {

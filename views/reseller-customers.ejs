@@ -1,60 +1,59 @@
 <%
-  const brand = typeof brandSettings !== 'undefined' && brandSettings ? brandSettings : {};
-  const brandName = String(brand.company_name || 'FAZ NETWORK');
-  const safeResellerName = String(resellerName || 'Reseller');
-  const activePath = String(currentPath || '');
+const brand=typeof brandSettings!=='undefined'&&brandSettings?brandSettings:{};
+const brandName=String(brand.company_name||'FAZ NETWORK');
+const safeResellerName=String(resellerName||'Reseller');
+const activePath=String(currentPath||'');
 %>
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title><%= title || brandName %></title>
-  <% if (brand.favicon_url) { %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/css/reseller-workspace.css?v=20261031-1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title><%= title||brandName %></title>
+<% if(brand.favicon_url){ %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="/css/reseller-workspace.css?v=20261031-2">
 </head>
 <body>
-  <%- include('partials/reseller-sidebar', { brandName, safeResellerName, activePath }) %>
-  <div class="reseller-main">
-    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath }) %>
-    <main class="reseller-content">
-      <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
-      <% if (pageMode === 'directory') { %>
-      <section class="reseller-panel">
-        <div class="reseller-section-heading"><div><h2>All Subscribers</h2><p>PPPoE customers assigned to your reseller POPs only</p></div><a class="btn btn-fzn btn-sm" href="/reseller/customers/add"><i class="bi bi-person-plus me-1"></i>Add New Customer</a></div>
-        <div class="d-flex gap-2 flex-wrap mb-3"><input id="customerSearch" class="form-control form-control-sm" style="width:min(280px,70vw)" type="search" placeholder="Search name, username or package" aria-label="Search customers"><select id="popFilter" class="form-select form-select-sm" style="width:auto;min-width:170px" aria-label="Filter by POP"><option value="">All assigned POPs</option></select></div>
-        <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Customer</th><th>Username</th><th>Package</th><th>Expiration date</th><th>Assigned POP</th><th>Live status</th><th>Account</th><th></th></tr></thead><tbody id="customerRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading customer directory…</td></tr></tbody></table></div>
-        <div id="customerCount" class="small text-secondary mt-3"></div>
-      </section>
-      <% } else { %>
-      <section class="reseller-panel">
-        <div class="reseller-section-heading"><div><h2>Add PPPoE Customer</h2><p>Create a subscriber under one of your assigned active POPs</p></div><a class="btn btn-sm btn-outline-success" href="/reseller/customers"><i class="bi bi-arrow-left me-1"></i>Back to directory</a></div>
-        <div id="customerCreateError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div><div id="customerCreateSuccess" class="alert alert-success d-none" role="status" aria-live="polite"></div>
-        <form id="customerCreateForm" novalidate>
-          <div class="row g-3">
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerName">Customer full name</label><input class="form-control" id="newCustomerName" name="fullName" maxlength="200" autocomplete="name" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPhone">Mobile number</label><input class="form-control" id="newCustomerPhone" name="phone" type="tel" maxlength="40" autocomplete="tel" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerUsername">PPPoE username</label><input class="form-control" id="newCustomerUsername" name="username" maxlength="100" autocomplete="off" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPassword">PPPoE password</label><input class="form-control" id="newCustomerPassword" name="password" type="text" maxlength="255" autocomplete="new-password" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPackage">Internet package</label><select class="form-select" id="newCustomerPackage" name="package" required disabled><option value="">Loading packages…</option></select></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPop">Assigned active POP</label><select class="form-select" id="newCustomerPop" name="pop_id" required disabled><option value="">Loading assigned POPs…</option></select></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerConnectionDate">Connection date</label><input class="form-control" id="newCustomerConnectionDate" name="activationDate" type="date" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerExpiryDate">Billing expiry date</label><input class="form-control" id="newCustomerExpiryDate" name="expirationDate" type="date" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerVlan">Inherited VLAN ID</label><input class="form-control bg-light" id="newCustomerVlan" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerIpPool">Inherited MikroTik IP Pool</label><input class="form-control bg-light" id="newCustomerIpPool" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
-            <div class="col-12"><label class="form-label fw-semibold" for="newCustomerAddress">Installation address (optional)</label><textarea class="form-control" id="newCustomerAddress" name="installationAddress" rows="2" maxlength="500"></textarea></div>
-          </div>
-          <input type="hidden" name="routerId" value="3">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4"><p class="small text-secondary mb-0"><i class="bi bi-lock me-1"></i>VLAN and IP Pool are display-only. Server verifies POP ownership and active status; browser values are never trusted.</p><button id="submitCustomerCreate" class="btn btn-fzn px-4" type="submit" disabled><i class="bi bi-person-check me-1"></i>Create customer</button></div>
-        </form>
-      </section>
-      <% } %>
-</main>
-    <footer class="reseller-footer">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Workspace</footer>
-  </div>
-  <%- include('partials/reseller-scripts', { activePath }) %>
-</body>
-</html>
+<%- include('partials/reseller-sidebar',{brandName,safeResellerName,activePath}) %>
+<div class="reseller-main"><%- include('partials/reseller-topbar',{brandName,safeResellerName,title,activePath}) %>
+<main class="reseller-content">
+<div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+<% if(pageMode==='directory'){ %>
+<section class="reseller-panel">
+<div class="reseller-section-heading"><div><h2>All Subscribers</h2><p>PPPoE customers assigned to your reseller POPs only</p></div><a class="btn btn-fzn btn-sm" href="/reseller/customers/add"><i class="bi bi-person-plus me-1"></i>Add New Customer</a></div>
+<div class="d-flex gap-2 flex-wrap mb-3"><input id="customerSearch" class="form-control form-control-sm" style="width:min(280px,70vw)" type="search" placeholder="Search name, username or package" aria-label="Search customers"><select id="popFilter" class="form-select form-select-sm" style="width:auto;min-width:170px" aria-label="Filter by POP"><option value="">All assigned POPs</option></select></div>
+<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Customer</th><th>Username</th><th>Package</th><th>Expiration date</th><th>Assigned POP</th><th>Live status</th><th>Account</th><th></th></tr></thead><tbody id="customerRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading customer directory…</td></tr></tbody></table></div><div id="customerCount" class="small text-secondary mt-3"></div>
+</section>
+<% }else{ %>
+<div class="reseller-add-shell">
+<div class="reseller-add-hero mb-4"><div><div class="d-flex align-items-center flex-wrap gap-2 mb-2"><span class="rounded-3 bg-success-subtle text-success p-2"><i class="bi bi-person-plus-fill fs-5"></i></span><span class="badge bg-success-subtle text-success border border-success-subtle">Broadband / PPPoE</span></div><h2 class="h4 fw-bold mb-1">Add Customer</h2><p class="mb-0">Create the customer record, assign a package and provision the PPPoE account under your assigned POP.</p></div><div class="reseller-add-hero-meta"><i class="bi bi-shield-check text-success"></i><span>Reseller-scoped onboarding</span></div></div>
+<div class="reseller-section-heading"><div><h2>Customer Registration</h2><p>Complete the required details. Network assignment is inherited from the selected POP.</p></div><a class="btn btn-sm btn-outline-success" href="/reseller/customers"><i class="bi bi-arrow-left me-1"></i>Back to directory</a></div>
+<div id="customerCreateError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div><div id="customerCreateSuccess" class="alert alert-success d-none" role="status" aria-live="polite"></div>
+<form id="customerCreateForm" class="reseller-add-form" novalidate>
+<div class="reseller-form-card"><div class="reseller-form-card-header"><i class="bi bi-diagram-3 text-success fs-5"></i><div>Network POP Assignment<small>Choose one of the active POPs assigned to your reseller account</small></div></div><div class="reseller-form-card-body"><div class="row g-3">
+<div class="col-12 col-lg-6"><label class="form-label" for="newCustomerPop">Assigned active POP <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><select class="form-select" id="newCustomerPop" name="pop_id" required disabled><option value="">Loading assigned POPs…</option></select></div><div class="form-text">Only POPs owned by your reseller account are available.</div></div>
+<div class="col-12 col-lg-3"><label class="form-label" for="newCustomerVlan">Inherited VLAN ID</label><input class="form-control reseller-readonly-field" id="newCustomerVlan" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+<div class="col-12 col-lg-3"><label class="form-label" for="newCustomerIpPool">Inherited MikroTik IP Pool</label><input class="form-control reseller-readonly-field" id="newCustomerIpPool" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+</div></div></div>
+<div class="reseller-form-card"><div class="reseller-form-card-header"><i class="bi bi-person-vcard text-success fs-5"></i><div>Personal &amp; Account Details<small>Required customer identity and connection date</small></div></div><div class="reseller-form-card-body"><div class="row g-3">
+<div class="col-12 col-lg-5"><label class="form-label" for="newCustomerName">Full Name <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person"></i></span><input type="text" class="form-control" id="newCustomerName" name="fullName" maxlength="200" placeholder="Customer full name" autocomplete="name" required></div></div>
+<div class="col-12 col-lg-4"><label class="form-label" for="newCustomerPhone">Phone Number <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-telephone"></i></span><input type="tel" class="form-control" id="newCustomerPhone" name="phone" maxlength="40" placeholder="01XXXXXXXXX" autocomplete="tel" required></div></div>
+<div class="col-12 col-lg-3"><label class="form-label" for="newCustomerConnectionDate">Connection Date <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="date" class="form-control" id="newCustomerConnectionDate" name="activationDate" required></div></div>
+</div></div></div>
+<div class="reseller-form-card"><div class="reseller-form-card-header"><i class="bi bi-router text-success fs-5"></i><div>PPPoE Service &amp; Package<small>Credentials and package profile used for the new connection</small></div></div><div class="reseller-form-card-body"><div class="row g-3">
+<div class="col-12 col-md-6"><label class="form-label" for="newCustomerUsername">PPPoE Username <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person-badge"></i></span><input type="text" class="form-control" id="newCustomerUsername" name="username" maxlength="100" autocomplete="off" required></div></div>
+<div class="col-12 col-md-6"><label class="form-label" for="newCustomerPassword">PPPoE Password <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-key"></i></span><input type="password" class="form-control" id="newCustomerPassword" name="password" maxlength="255" autocomplete="new-password" required></div></div>
+<div class="col-12"><label class="form-label" for="newCustomerPackage">Internet Package <span class="text-danger">*</span></label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-speedometer2"></i></span><select class="form-select" id="newCustomerPackage" name="package" required disabled><option value="">Loading packages…</option></select></div><div class="form-text">Package price and duration are loaded from the existing billing catalog.</div></div>
+</div></div></div>
+<div class="reseller-form-card"><div class="reseller-form-card-header"><i class="bi bi-calendar2-check text-success fs-5"></i><div>Billing &amp; Expiry Schedule<small>Expiry is calculated from the connection date and selected package duration</small></div></div><div class="reseller-form-card-body"><div class="row g-3 align-items-center">
+<div class="col-12 col-md-6"><div class="reseller-expiry-preview" aria-live="polite"><div class="small text-secondary fw-semibold">Calculated Billing Expiry Date</div><input id="newCustomerExpiryPreview" class="form-control reseller-readonly-field mt-2" type="text" value="Select connection date and package" readonly aria-readonly="true"><div id="newCustomerExpiryPreviewText" class="form-text mt-2">The expiry date is calculated automatically after selecting a connection date and package.</div><input id="newCustomerExpiryDate" type="hidden" name="expirationDate" value=""></div></div>
+<div class="col-12 col-md-6"><div class="small text-secondary mb-2">Automatic billing schedule</div><div class="border rounded-3 bg-light-subtle p-3 small"><i class="bi bi-shield-check text-success me-1"></i>The calculated expiry date is submitted to preserve the existing customer provisioning contract. Manual expiry selection is not required.</div></div>
+</div></div></div>
+<div class="reseller-form-card"><div class="reseller-form-card-header"><i class="bi bi-geo text-success fs-5"></i><div>Installation Details<small>Optional service location information</small></div></div><div class="reseller-form-card-body"><label class="form-label" for="newCustomerAddress">Installation Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-house"></i></span><textarea class="form-control" id="newCustomerAddress" name="installationAddress" rows="2" maxlength="500" placeholder="House, road, area and nearby landmark"></textarea></div></div></div>
+<input type="hidden" name="routerId" value="3"><div class="reseller-form-actions"><p class="small text-secondary mb-0"><i class="bi bi-lock me-1"></i>POP ownership, VLAN and IP Pool are verified server-side. Browser values cannot override network assignment.</p><button id="submitCustomerCreate" class="btn btn-success px-4" type="submit" disabled><i class="bi bi-person-check me-1"></i>Create Customer</button></div>
+</form></div>
+<% } %>
+</main><footer class="reseller-footer">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Workspace</footer></div>
+<%- include('partials/reseller-scripts',{activePath}) %>
+</body></html>

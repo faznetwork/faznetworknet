@@ -372,3 +372,21 @@ test('voucher generation failure aborts the enclosing transaction before account
   assert.equal(statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')), false);
   assert.equal(statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
 });
+
+test('catalog retains active reseller POPs without an active hotspot binding or package', async t => {
+  const catalogService = require('../services/resellerHotspotCatalogService');
+  t.mock.method(db, 'query', async sql => {
+    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
+    if (sql.includes('FROM public.pops p')) {
+      assert.ok(sql.includes('LEFT JOIN public.pop_hotspot_bindings'));
+      assert.ok(sql.includes('LEFT JOIN public.pop_hotspot_packages'));
+      return { rows: [
+        { pop_id: 21, pop_name: 'North POP', area_zone: 'North', binding_id: null, package_id: null },
+        { pop_id: 22, pop_name: 'South POP', area_zone: 'South', binding_id: '502', package_id: null }
+      ] };
+    }
+    throw new Error('Unexpected catalog SQL: ' + sql);
+  });
+  const result = await catalogService.getCatalog(41);
+  assert.deepEqual(result.pops.map(pop => [pop.id, pop.bindingConfigured, pop.packages.length]), [[21, false, 0], [22, true, 0]]);
+});
