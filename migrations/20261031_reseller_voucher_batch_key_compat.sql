@@ -59,6 +59,16 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Compatibility migration verification failed: duplicate batch_key values remain.';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname='public'
+      AND tablename='reseller_voucher_batches'
+      AND indexname='uq_reseller_voucher_batches_batch_key_compat'
+      AND indexdef ILIKE 'CREATE UNIQUE INDEX%'
+      AND indexdef ILIKE '%(batch_key)%'
+  ) THEN
+    RAISE EXCEPTION 'Compatibility migration verification failed: unique batch_key index is missing.';
+  END IF;
 END
 $verify$;
 
