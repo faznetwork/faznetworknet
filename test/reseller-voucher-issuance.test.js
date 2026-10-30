@@ -259,7 +259,7 @@ test('forward batch-key compatibility migration adds/backfills UUID without dest
   assert.match(migration, /SET batch_key = gen_random_uuid\(\)/);
   assert.match(migration, /ALTER COLUMN batch_key SET NOT NULL/);
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS/);
-  assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN|INDEX)\\b/i);
+  assert.doesNotMatch(migration, /\bDROP\s+(TABLE|COLUMN|INDEX)\b/i);
   assert.doesNotMatch(migration, /DELETE FROM public\.(reseller_voucher_batches|reseller_voucher_issuance_items|reseller_ledger_entries)/i);
 });
 
