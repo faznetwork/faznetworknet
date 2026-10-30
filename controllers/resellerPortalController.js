@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const customerController = require('./customerController');
 
 function resellerPopIds(req) {
   const ids = req.tenantScope?.popIds;
@@ -27,7 +28,7 @@ async function overview(req, res) {
     const popIds = resellerPopIds(req);
     const resellerId = Number(req.auth?.resellerId);
     const popResult = await db.query(
-      'SELECT id, name, area_zone, status FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
+      'SELECT id, name, area_zone, status, vlan_id, mikrotik_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
       [resellerId]
     );
 
@@ -143,6 +144,12 @@ async function getCustomer(req, res) {
   }
 }
 
+async function liveSession(req, res) {
+  // Reuse the established target-router status resolver after this router has
+  // authenticated the reseller and loaded the reseller's POP tenant scope.
+  return customerController.getCustomerLiveSession(req, res);
+}
+
 async function paymentHistory(req, res) {
   const key = customerKey(req.params.id);
   if (!key) return res.status(400).json({ success: false, message: 'Customer identifier is required.' });
@@ -191,4 +198,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, listCustomers, getCustomer, paymentHistory };
+module.exports = { overview, listCustomers, getCustomer, liveSession, paymentHistory };
