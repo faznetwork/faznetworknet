@@ -102,10 +102,13 @@ async function resendInvite(req, res) {
   const expiresAt = new Date(Date.now() + invitationService.INVITATION_TTL_MS);
   try {
     const outcome = await db.withTransaction(async client => {
-      const found = await client.query('SELECT id,name,email,phone,status FROM resellers WHERE id=$1 FOR UPDATE', [id]);
+      const found = await client.query(\`SELECT id,name,email,phone,status,invited_at,\n        GREATEST(0, CEIL(EXTRACT(EPOCH FROM (invited_at + INTERVAL '60 seconds' - NOW()))))::int AS cooldown_remaining\n        FROM resellers WHERE id=$1 FOR UPDATE\`, [id]);
       const reseller = found.rows[0];
       if (!reseller) return { kind: 'missing' };
       if (reseller.status !== 'inactive' || !reseller.email) return { kind: 'not_pending' };
+      if (Number(reseller.cooldown_remaining) > 0) {
+        return { kind: 'cooldown', retryAfter: Number(reseller.cooldown_remaining) };
+      }
       const updated = await client.query(
         'UPDATE resellers SET invite_token_hash=$1,invite_expires_at=$2,invited_at=NOW(),updated_at=NOW() WHERE id=$3 AND status=\'inactive\' RETURNING id,name,email,phone,status',
         [hash, expiresAt, id]
@@ -115,6 +118,10 @@ async function resendInvite(req, res) {
     });
     if (outcome.kind === 'missing') return res.status(404).json({ success: false, message: 'Reseller not found.' });
     if (outcome.kind === 'not_pending') return res.status(409).json({ success: false, message: 'Only inactive email-based reseller accounts can receive a replacement invitation.' });
+    if (outcome.kind === 'cooldown') {
+      res.set('Retry-After', String(outcome.retryAfter));
+      return res.status(429).json({ success: false, code: 'INVITATION_COOLDOWN', retryAfter: outcome.retryAfter, message: 'Please wait before sending another invitation.' });
+    }
     return res.json({ success: true, message: 'Replacement invitation queued; the previous link is invalidated.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'A conflicting reseller invitation exists. Refresh and retry.' });
