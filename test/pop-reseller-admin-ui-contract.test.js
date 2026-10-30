@@ -120,7 +120,9 @@ test('POP insert success and table reload failure are reported as separate outco
   assert.ok(ui.includes('const reloaded = await window.loadPopManagement();'));
   assert.ok(ui.includes('if (reloaded === false)'));
   assert.ok(ui.includes('POP was saved, but the POP table could not be refreshed.'));
-  assert.match(ui, /renderPopManagement\(section, error\.message \|\| 'Unable to load POP data\.'\);[\\s\\S]*?return false;/);
+  const reloadFailure = ui.indexOf("renderPopManagement(section, error.message || 'Unable to load POP data.')");
+  assert.ok(reloadFailure >= 0);
+  assert.ok(ui.indexOf('return false;', reloadFailure) > reloadFailure);
 });
 
 test('POP API errors retain HTTP status and structured validation details for UI mapping', () => {
