@@ -17,7 +17,7 @@ function escapeHtml(value) {
 }
 
 function invitationUrl(token) {
-  const baseUrl = String(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || '').trim().replace(/\/+$/, '');
+  const baseUrl = String(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
   if (!/^https:\/\//i.test(baseUrl)) {
     throw new Error('APP_BASE_URL or PUBLIC_APP_URL must be configured with the HTTPS application origin.');
   }
