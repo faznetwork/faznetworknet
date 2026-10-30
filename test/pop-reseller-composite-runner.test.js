@@ -14,6 +14,9 @@ test('composite POP/reseller runner requires an explicit non-production database
   assert.match(runner, /stage\|staging\|test\|disposable/i);
   assert.match(runner, /prod\|production\|live/i);
   assert.match(runner, /current_database\(\)/);
+  assert.match(runner, /PGPASSWORD/);
+  assert.match(runner, /credentialSeparator/);
+  assert.doesNotMatch(runner, /& \$psql\.Source \$DatabaseUrl/);
   assert.match(runner, /-cne \$ExpectedDatabaseName/);
 });
 
