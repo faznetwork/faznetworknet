@@ -9,6 +9,7 @@ const db = require('../db');
 const { requireRole } = require('../middleware/rbac');
 const { loadTenantScope, requireCustomerOwnership } = require('../middleware/tenantScope');
 const resellerPortalRoutes = require('../routes/resellerPortalRoutes');
+const customerController = require('../controllers/customerController');
 
 function mockTenantDatabase(t) {
   t.mock.method(db, 'query', async (sql, values = []) => {
@@ -39,6 +40,7 @@ function mockTenantDatabase(t) {
 
 async function createHttpApp(t) {
   const app = express();
+  app.use(express.json());
   app.set('views', path.join(__dirname, '..', 'views'));
   app.set('view engine', 'ejs');
   app.use((req, res, next) => {
@@ -127,4 +129,55 @@ test('reseller customer API returns HTTP 403 for a customer owned by another res
   const payload = await response.json();
   assert.equal(payload.success, false);
   assert.match(payload.message, /another reseller or POP/i);
+});
+
+test('reseller customer creation delegates only after verified identity and assigned POP scope', async t => {
+  mockTenantDatabase(t);
+  let receivedBody = null;
+  t.mock.method(customerController, 'createCustomer', async (req, res) => {
+    receivedBody = req.body;
+    return res.status(201).json({ success: true, customer: { username: req.body.username } });
+  });
+  const baseUrl = await createHttpApp(t);
+
+  const response = await fetch(baseUrl + '/api/reseller-portal/customers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fullName: 'Owned Customer',
+      username: 'owned-customer',
+      pop_id: 101,
+      reseller_id: 999,
+      vlan_id: 4090,
+      mikrotik_ip_pool: 'AttackerPool'
+    })
+  });
+
+  assert.equal(response.status, 201);
+  assert.equal(receivedBody.pop_id, 101);
+  assert.equal(Object.prototype.hasOwnProperty.call(receivedBody, 'reseller_id'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(receivedBody, 'vlan_id'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(receivedBody, 'mikrotik_ip_pool'), false);
+});
+
+test('reseller customer creation rejects a POP outside the authenticated reseller scope', async t => {
+  mockTenantDatabase(t);
+  let delegated = false;
+  t.mock.method(customerController, 'createCustomer', async (_req, res) => {
+    delegated = true;
+    return res.status(201).json({ success: true });
+  });
+  const baseUrl = await createHttpApp(t);
+
+  const response = await fetch(baseUrl + '/api/reseller-portal/customers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fullName: 'Foreign Customer', username: 'foreign-customer', pop_id: 201 })
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(delegated, false);
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.match(payload.message, /not assigned to your reseller/i);
 });
