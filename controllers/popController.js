@@ -21,6 +21,24 @@ function parse(b={},partial=false){
  if(d.commission_rate!==undefined&&(!Number.isFinite(d.commission_rate)||d.commission_rate<0||(d.commission_type==='percentage'&&d.commission_rate>100)))throw Object.assign(new Error('Invalid commission_rate.'),{statusCode:400});
  return d;
 }
+async function options(req,res){
+ try{
+  const role=req.auth?.role;
+  if(!['super_admin','admin','reseller'].includes(role))return res.status(403).json({success:false,message:'You are not authorized to view POP options.'});
+  let result;
+  if(role==='reseller'){
+   const resellerId=Number(req.auth?.resellerId);
+   if(!Number.isSafeInteger(resellerId)||resellerId<1)return res.status(403).json({success:false,message:'Verified reseller identity is required.'});
+   result=await db.query("SELECT id,name,area_zone,vlan_id,mikrotik_ip_pool FROM pops WHERE reseller_id=$1 AND status='active' ORDER BY name ASC,id ASC",[resellerId]);
+  }else{
+   result=await db.query("SELECT id,name,area_zone,vlan_id,mikrotik_ip_pool FROM pops WHERE status='active' ORDER BY name ASC,id ASC");
+  }
+  return res.json({success:true,pops:result.rows});
+ }catch(e){
+  console.error('[POP API] Active options lookup failed:',e);
+  return res.status(503).json({success:false,message:'Unable to load POP options. Please try again.'});
+ }
+}
 async function list(req,res){
  try{
   const reseller=req.auth?.role==='reseller';
@@ -56,4 +74,4 @@ async function updateStatus(req,res){
  try{const r=await db.query('UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',[status,id]);if(!r.rows.length)return res.status(404).json({success:false,message:'POP not found.'});return res.json({success:true,pop:r.rows[0],message:'POP status updated. Customer records were preserved.'});}
  catch(e){return fail(res,e,'Status update');}
 }
-module.exports={list,create,update,updateStatus};
+module.exports={options,list,create,update,updateStatus};

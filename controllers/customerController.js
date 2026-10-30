@@ -35,6 +35,14 @@ async function withTimeout(task, timeoutMs = 2500) {
 
 function tenantPopIds(req) { return req.tenantScope?.global ? null : (req.tenantScope?.popIds || []); }
 
+function parseRequestedPopId(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const raw = String(value).trim();
+  if (!/^[1-9]\d*$/.test(raw)) return { invalid: true };
+  const id = Number(raw);
+  return Number.isSafeInteger(id) && id > 0 ? id : { invalid: true };
+}
+
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -240,10 +248,12 @@ async function createCustomer(req, res) {
 
   try {
     const packageDefinition = await resolvePackageDefinition(customer.profile, customer.packageName);
-    const requestedPopId = body.pop_id === undefined || body.pop_id === null || body.pop_id === "" ? null : Number(body.pop_id);
-    if (requestedPopId !== null && (!Number.isSafeInteger(requestedPopId) || requestedPopId < 1)) {
-      return res.status(400).json({ success: false, message: "A valid POP ID is required." });
-    }
+    const role = req.auth?.role;
+    const isReseller = role === 'reseller';
+    if (!['super_admin', 'admin', 'reseller'].includes(role)) return res.status(403).json({ success: false, message: 'You are not authorized to create customers.' });
+    const requestedPopId = parseRequestedPopId(body.pop_id);
+    if (requestedPopId?.invalid) return res.status(400).json({ success: false, message: 'A valid positive integer POP ID is required.' });
+    if (isReseller && requestedPopId === null) return res.status(400).json({ success: false, message: 'Select an assigned POP before creating the customer.' });
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
     customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
@@ -255,10 +265,12 @@ async function createCustomer(req, res) {
     // starts after commit so network latency never extends the database lock.
     const creation = await db.withTransaction(async client => {
       const selectedPopResult = requestedPopId === null
-        ? await client.query("SELECT id FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id ASC LIMIT 1 FOR UPDATE")
-        : await client.query("SELECT id FROM pops WHERE id=$1 AND status='active' FOR UPDATE", [requestedPopId]);
+        ? await client.query("SELECT id,reseller_id,status FROM pops WHERE reseller_id IS NULL AND name='FAZ Main (Direct)' AND status='active' ORDER BY id ASC LIMIT 1 FOR UPDATE")
+        : await client.query("SELECT id,reseller_id,status FROM pops WHERE id=$1 AND status='active' FOR UPDATE", [requestedPopId]);
       if (!selectedPopResult.rows.length) return { kind: "inactive_pop" };
-
+      const selectedPop = selectedPopResult.rows[0];
+      if (String(selectedPop.status).toLowerCase() !== 'active') return { kind: "inactive_pop" };
+      if (isReseller && Number(selectedPop.reseller_id) !== Number(req.auth.resellerId)) return { kind: "forbidden_pop" };
       customer.popId = selectedPopResult.rows[0].id;
       const existing = await client.query(
         `SELECT id, username, phone FROM customers
@@ -299,6 +311,7 @@ async function createCustomer(req, res) {
           : "Selected POP does not exist or is inactive."
       });
     }
+    if (creation.kind === "forbidden_pop") return res.status(403).json({ success: false, message: "The selected POP is not assigned to your reseller account." });
     if (creation.kind === "duplicate") {
       const match = creation.match;
       return res.status(409).json({
@@ -1106,6 +1119,13 @@ async function removeCustomer(req,res){
 }
 async function updateCustomer(req,res){
   const body=req.body||{},id=clean(req.params.id||body.id||body.username,100);
+  const role=req.auth?.role;
+  const isReseller=role==='reseller';
+  const hasPopAssignment=Object.prototype.hasOwnProperty.call(body,'pop_id');
+  if(isReseller&&hasPopAssignment)return res.status(403).json({success:false,message:'Resellers cannot change a customer POP assignment.'});
+  if(hasPopAssignment&&!['super_admin','admin'].includes(role))return res.status(403).json({success:false,message:'Only administrators can change customer POP assignments.'});
+  const requestedPopId=hasPopAssignment?parseRequestedPopId(body.pop_id):null;
+  if(requestedPopId?.invalid||(hasPopAssignment&&requestedPopId===null))return res.status(400).json({success:false,message:'A valid positive integer POP ID is required.'});
   if(!id)return res.status(400).json({success:false,message:"Customer ID or username is required."});
   try{
     const selectedUsername=clean(body.username,100);
@@ -1165,6 +1185,13 @@ async function updateCustomer(req,res){
       if(!current.rows.length)return res.status(409).json({success:false,message:"Could not create the Billing Panel record for this MikroTik customer. Check for a duplicate username or database constraint."});
     }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
+    let nextPopId=row.pop_id;
+    if(hasPopAssignment){
+      const targetPop=await db.query("SELECT id,status FROM pops WHERE id=$1 LIMIT 1",[requestedPopId]);
+      if(!targetPop.rows.length)return res.status(400).json({success:false,message:'Selected POP does not exist.'});
+      if(String(targetPop.rows[0].status).toLowerCase()!=='active')return res.status(400).json({success:false,message:'An inactive POP cannot be assigned to a customer.'});
+      nextPopId=targetPop.rows[0].id;
+    }
     const connectionDate=normalizeDate(body.activationDate||body.activation_date||body.connectionDate||body.connection_date)||normalizeDate(row.connection_date);
     const activationDateKey=["activationDate","activation_date","connectionDate","connection_date"].find(key=>Object.prototype.hasOwnProperty.call(body,key));
     if(activationDateKey&&String(body[activationDateKey]||"").trim()&&!validDateOnly(body[activationDateKey])){
@@ -1240,12 +1267,16 @@ async function updateCustomer(req,res){
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const nextStatus=expired?"expired":effectiveDisabled?(requestedAccountStatus==="suspended"?"suspended":"inactive"):"active";
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30 WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null]);
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30,pop_id=$31 WHERE id=$24 AND ($32::boolean=FALSE OR EXISTS (SELECT 1 FROM pops WHERE id=$31 AND status='active')) RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null,nextPopId,hasPopAssignment]);
+    if(!result.rows.length)return res.status(409).json({success:false,message:'Customer or selected POP changed during the update. Reload and try again.'});
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,caller_id,remote_address,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NULLIF($11,''),NULLIF($12,''),NOW(),NOW())
       ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),remote_address=EXCLUDED.remote_address,synced_at=NOW(),updated_at=NOW()`,
       [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus,routerMac,remoteAddress]);
+    if(hasPopAssignment&&Number(row.pop_id)!==Number(nextPopId)){
+      await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"POP_REASSIGN",details:{message:"Customer POP assignment changed by administrator.",previousPopId:row.pop_id,nextPopId,actorRole:role},ipAddress:getIpAddress(req)});
+    }
     await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date,billingCycle:row.billing_cycle,billingDurationDays:row.billing_duration_days,billingExpiryOverride:row.billing_expiry_override},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate,billingCycle,billingDurationDays,billingExpiryOverride,billingStatus:nextBillingStatus}},ipAddress:getIpAddress(req)});
     if(packageChanged) await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed from ${row.package_name||row.profile} to ${packageDefinition.name}`,previousPackage:row.package_name,previousProfile:row.profile,newPackage:packageDefinition.name,newProfile:profileName},ipAddress:getIpAddress(req)});
     const previousStatus=String(row.status||"").toLowerCase();
