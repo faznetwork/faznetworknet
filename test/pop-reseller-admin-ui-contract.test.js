@@ -161,7 +161,7 @@ test('POP modal disables native focus-blocking validation and validates its requ
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
   assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-direct-v4"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V3 <<<');"));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
