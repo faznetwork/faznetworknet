@@ -247,24 +247,15 @@ test('reseller dashboard contains bounded generation and read-only reprint contr
 });
 
 
-test('catalog returns only the authenticated reseller POP/package rows and exact margin', async t => {
+test('catalog reads stable POP columns and enriches only with available baseline voucher metadata', async t => {
   const catalogService = require('../services/resellerHotspotCatalogService');
   const calls = [];
   t.mock.method(db, 'query', async (sql, values) => {
     calls.push({ sql, values });
-    if (sql.includes('FROM public.reseller_billing_accounts')) {
-      return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
-    }
-    if (sql.includes('FROM public.pops p')) {
-      return { rows: [{
-        pop_id: 21, pop_name: 'North POP', area_zone: 'North',
-        binding_id: '501', router_key: 'core_mikrotik', hotspot_server: 'hotspot1',
-        hotspot_interface: 'bridge-hotspot', vlan_id: 120, ip_pool: 'hs-pool',
-        package_id: '701', package_name: '2 Hour', profile_key: '2-Hour',
-        validity: '2h', time_limit: '2h', data_limit: '1G',
-        retail_price: '50.10', wholesale_price: '30.05'
-      }] };
-    }
+    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
+    if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
+    if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active' }] };
+    if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '2 Hour', profile_key: '2-Hour', validity: '2h', retail_price: '50.10', wholesale_price: '30.05' }] };
     throw new Error('Unexpected catalog SQL: ' + sql);
   });
   const result = await catalogService.getCatalog(41);
@@ -272,10 +263,10 @@ test('catalog returns only the authenticated reseller POP/package rows and exact
   assert.equal(result.pops[0].id, 21);
   assert.equal(result.pops[0].packages[0].expectedMargin, '20.05');
   assert.equal(result.account.walletBalance, '100.00');
-  assert.deepEqual(calls.map(call => call.values), [[41], [41]]);
+  assert.deepEqual(calls.map(call => call.values), [[41], [41], [[21]], [[21]]]);
   assert.match(calls[1].sql, /p\.status='active'/);
-  assert.match(calls[1].sql, /b\.status='active'/);
-  assert.match(calls[1].sql, /pkg\.status='active'/);
+  assert.match(calls[1].sql, /p\.reseller_id=\$1/);
+  assert.doesNotMatch(calls[1].sql, /area_zone|router_key|hotspot_server|display_order|time_limit|data_limit/);
 });
 
 test('catalog rejects missing or invalid authenticated reseller identity', async () => {
@@ -373,20 +364,20 @@ test('voucher generation failure aborts the enclosing transaction before account
   assert.equal(statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
 });
 
-test('catalog retains active reseller POPs without an active hotspot binding or package', async t => {
+test('catalog gracefully falls back when optional binding/package schema versions are missing columns', async t => {
   const catalogService = require('../services/resellerHotspotCatalogService');
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
   t.mock.method(db, 'query', async sql => {
     if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
-    if (sql.includes('FROM public.pops p')) {
-      assert.ok(sql.includes('LEFT JOIN public.pop_hotspot_bindings'));
-      assert.ok(sql.includes('LEFT JOIN public.pop_hotspot_packages'));
-      return { rows: [
-        { pop_id: 21, pop_name: 'North POP', area_zone: 'North', binding_id: null, package_id: null },
-        { pop_id: 22, pop_name: 'South POP', area_zone: 'South', binding_id: '502', package_id: null }
-      ] };
-    }
-    throw new Error('Unexpected catalog SQL: ' + sql);
+    if (sql.includes('FROM public.pops p')) return { rows: [
+      { id: 21, name: 'North POP', status: 'active', reseller_id: 41 },
+      { id: 22, name: 'South POP', status: 'active', reseller_id: 41 }
+    ] };
+    if (sql.includes('FROM public.pop_hotspot_bindings')) { const error = new Error('column status does not exist'); error.code = '42703'; throw error; }
+    throw new Error('Package query must not run when bindings are unavailable: ' + sql);
   });
   const result = await catalogService.getCatalog(41);
-  assert.deepEqual(result.pops.map(pop => [pop.id, pop.bindingConfigured, pop.packages.length]), [[21, false, 0], [22, true, 0]]);
+  assert.deepEqual(result.pops.map(pop => [pop.id, pop.bindingConfigured, pop.packages.length]), [[21, false, 0], [22, false, 0]]);
+  assert.ok(warnings.some(args => args[1]?.databaseCode === '42703'));
 });

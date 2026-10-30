@@ -50,7 +50,7 @@ test('customer creation is an isolated page and uses explicit HTTP 201 handling'
   assert.match(script, /customerCreateError/);
 });
 test('customer creation UI exposes validation and user-visible result feedback', () => {
-  assert.match(script, /form\.reportValidity\(\)/);
+  assert.match(script, /form\.checkValidity\(\)/);\n  assert.match(script, /form\.reportValidity\(\)/);\n  assert.match(script, /showInvalidField\(form\)/);\n  assert.match(script, /isStrictIsoDate\(expiry\)/);\n  assert.match(script, /payload\.expirationDate=expiry/);
   assert.match(view, /customerCreateError/);
   assert.match(view, /customerCreateSuccess/);
   assert.match(script, /finally \{ button\.innerHTML=/);
