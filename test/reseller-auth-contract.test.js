@@ -61,3 +61,16 @@ test('invitation schema is additive and preserves legacy account compatibility',
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS uq_resellers_email_ci/);
   assert.match(migration, /BEGIN;[\s\S]*COMMIT;/);
 });
+
+test('reseller list projection includes assigned POP identity and safe invitation lifecycle status', () => {
+  const controller = read('controllers/resellerController.js');
+  assert.match(controller, /jsonb_build_object\('id',p\.id,'name',p\.name\)/);
+  assert.match(controller, /\) AS assigned_pops/);
+  assert.match(controller, /WHEN r\.status='active' THEN 'active'/);
+  assert.match(controller, /THEN 'pending'/);
+  assert.match(controller, /THEN 'expired'/);
+  assert.match(controller, /ELSE 'inactive'/);
+  assert.match(controller, /LEFT JOIN pops p ON p\.reseller_id=r\.id/);
+  assert.match(controller, /GROUP BY r\.id/);
+  assert.doesNotMatch(controller, /invite_token_hash\s*,|SELECT[^;]*invite_token_hash/i);
+});
