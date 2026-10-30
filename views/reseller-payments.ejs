@@ -1,0 +1,44 @@
+<%
+  const brand = typeof brandSettings !== 'undefined' && brandSettings ? brandSettings : {};
+  const brandName = String(brand.company_name || 'FAZ NETWORK');
+  const safeResellerName = String(resellerName || 'Reseller');
+  const activePath = String(currentPath || '');
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title><%= title || brandName %></title>
+  <% if (brand.favicon_url) { %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/reseller-workspace.css?v=20261031-1">
+</head>
+<body>
+  <%- include('partials/reseller-sidebar', { brandName, safeResellerName, activePath }) %>
+  <div class="reseller-main">
+    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath }) %>
+    <main class="reseller-content">
+      <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+      <section class="mb-4">
+        <div class="reseller-section-heading"><div><h2>Reports &amp; Payments</h2><p>Current-month collection summary and customer-level PPPoE payment history</p></div><span class="badge badge-muted">Existing payment records · read-only</span></div>
+        <div class="row g-3">
+          <div class="col-12 col-md-4"><div class="metric-card"><div class="metric-icon"><i class="bi bi-cash-stack"></i></div><div class="metric-label">Monthly collection</div><div class="metric-value" id="paymentMonthlyCollection">—</div><div class="metric-foot">Paid PPPoE transactions this month</div></div></div>
+          <div class="col-12 col-md-4"><div class="metric-card"><div class="metric-icon"><i class="bi bi-arrow-repeat"></i></div><div class="metric-label">Monthly renewals</div><div class="metric-value" id="paymentMonthlyRenewals">—</div><div class="metric-foot">Paid renewal transactions this month</div></div></div>
+          <div class="col-12 col-md-4"><div class="metric-card"><div class="metric-icon"><i class="bi bi-diagram-3"></i></div><div class="metric-label">Assigned POPs</div><div class="metric-value" id="paymentAssignedPops">—</div><div class="metric-foot">Your assigned network locations</div></div></div>
+        </div>
+      </section>
+      <section class="reseller-panel">
+        <div class="reseller-section-heading"><div><h2>Customer Payment History</h2><p>Select a subscriber to review the latest existing PPPoE transactions</p></div><button id="refreshPayments" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+        <div class="mb-3"><label for="paymentCustomer" class="form-label fw-semibold">Assigned customer</label><select id="paymentCustomer" class="form-select"><option value="">Loading customers…</option></select></div>
+        <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Date</th><th>Transaction ID</th><th>Channel</th><th>Amount</th><th>Status</th></tr></thead><tbody id="paymentRows"><tr><td colspan="5" class="text-center text-secondary py-4">Loading payment history…</td></tr></tbody></table></div>
+      </section>
+      <script src="/js/reseller-payments.js?v=20261031-1"></script>
+    </main>
+    <footer class="reseller-footer">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Workspace</footer>
+  </div>
+  <%- include('partials/reseller-scripts') %>
+</body>
+</html>

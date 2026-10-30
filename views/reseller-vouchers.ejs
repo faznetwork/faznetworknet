@@ -1,0 +1,53 @@
+<%
+  const brand = typeof brandSettings !== 'undefined' && brandSettings ? brandSettings : {};
+  const brandName = String(brand.company_name || 'FAZ NETWORK');
+  const safeResellerName = String(resellerName || 'Reseller');
+  const activePath = String(currentPath || '');
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title><%= title || brandName %></title>
+  <% if (brand.favicon_url) { %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/reseller-workspace.css?v=20261031-1">
+</head>
+<body>
+  <%- include('partials/reseller-sidebar', { brandName, safeResellerName, activePath }) %>
+  <div class="reseller-main">
+    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath }) %>
+    <main class="reseller-content">
+      <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+      <% if (pageMode === 'generate') { %>
+      <section class="reseller-panel">
+        <div class="reseller-section-heading"><div><h2>Generate Hotspot Vouchers</h2><p>Choose an assigned POP, review package margin and issue a secure voucher batch</p></div><span class="badge rounded-pill badge-soft"><i class="bi bi-shield-check me-1"></i>Server-verified pricing</span></div>
+        <div id="voucherError" class="alert alert-danger d-none" role="alert"></div><div id="voucherSuccess" class="alert alert-success d-none" role="status"></div>
+        <div class="row g-3">
+          <div class="col-12 col-lg-6"><label for="voucherPop" class="form-label fw-semibold">Assigned POP</label><select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select></div>
+          <div class="col-12 col-lg-6"><label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label><select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select></div>
+          <div class="col-12"><div class="border rounded-3 p-3 bg-light" aria-live="polite"><div class="small fw-bold mb-2">Selected package pricing</div><div class="row g-3"><div class="col-4"><div class="small text-secondary">Retail / unit</div><strong id="voucherRetail">৳—</strong></div><div class="col-4"><div class="small text-secondary">Wholesale / unit</div><strong id="voucherWholesale">৳—</strong></div><div class="col-4"><div class="small text-secondary">Margin / unit</div><strong class="text-success" id="voucherMargin">৳—</strong></div><div class="col-4"><div class="small text-secondary">Retail total</div><strong id="voucherRetailTotal">৳—</strong></div><div class="col-4"><div class="small text-secondary">Your cost</div><strong id="voucherCostTotal">৳—</strong></div><div class="col-4"><div class="small text-secondary">Expected margin</div><strong class="text-success" id="voucherMarginTotal">৳—</strong></div></div></div></div>
+          <div class="col-12 col-md-4"><label for="voucherQuantity" class="form-label fw-semibold">Voucher quantity</label><input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required></div>
+          <div class="col-12 col-md-8"><label class="form-label fw-semibold">Reseller billing account</label><div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div></div>
+          <div class="col-12"><div id="voucherImpact" class="small p-3 border rounded-3 bg-light" aria-live="polite">Select a package and quantity to preview the billing impact.</div></div>
+          <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap"><div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices, account eligibility and reseller identity are recalculated and verified by the server at issue time.</div><button id="generateVouchersButton" class="btn btn-fzn px-4" type="button" disabled><i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch</button></div>
+        </div>
+        <div id="voucherIssuedResult" class="mt-4 d-none"></div>
+      </section>
+      <% } else { %>
+      <section class="reseller-panel">
+        <div class="reseller-section-heading"><div><h2>Voucher Batch History &amp; Reprint</h2><p>Your issued batches · read-only history · original voucher credentials remain printable</p></div><button id="refreshVoucherHistory" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Refresh history</button></div>
+        <div id="voucherHistoryError" class="alert alert-danger d-none" role="alert"></div>
+        <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Issued date</th><th>Batch reference</th><th>POP</th><th>Package</th><th>Quantity</th><th>Total cost</th><th>Margin</th><th>Action</th></tr></thead><tbody id="voucherHistoryRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr></tbody></table></div>
+      </section>
+      <% } %>
+      <script src="/js/reseller-vouchers.js?v=20261031-1"></script>
+    </main>
+    <footer class="reseller-footer">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Workspace</footer>
+  </div>
+  <%- include('partials/reseller-scripts') %>
+</body>
+</html>
