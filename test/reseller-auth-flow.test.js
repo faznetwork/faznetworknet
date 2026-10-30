@@ -244,3 +244,32 @@ test('legacy username login is used only when no email address matches', async t
   assert.equal(res.statusCode, 200);
   assert.equal(session.auth.resellerId, 709);
 });
+
+test('POP assignment locks customer writes and accepts only an empty active unassigned POP', async t => {
+  const statements = [];
+  t.mock.method(db, 'withTransaction', async callback => callback({
+    async query(sql) {
+      statements.push(sql);
+      if (sql.startsWith('SELECT p.id,p.name,p.reseller_id,p.status')) {
+        return { rows: [{ id: 811, name: 'North POP', reseller_id: null, status: 'active', has_customers: false }] };
+      }
+      if (sql.startsWith('INSERT INTO resellers')) {
+        return { rows: [{ id: 810, name: 'North Partner', email: 'north@example.com', phone: '01700000000', status: 'inactive' }] };
+      }
+      if (sql.startsWith('UPDATE pops')) return { rows: [{ id: 811 }] };
+      return { rows: [] };
+    }
+  }));
+  t.mock.method(invitationService, 'queueInvitation', async () => ({ accepted: true }));
+  const res = responseRecorder();
+
+  await controller.invite({
+    body: { name: 'North Partner', email: 'north@example.com', phone: '01700000000', assigned_pop_ids: [811] }
+  }, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.match(statements[0], /LOCK TABLE customers IN SHARE ROW EXCLUSIVE MODE/);
+  assert.match(statements[1], /FROM pops p WHERE p.id=ANY/);
+  assert.match(statements[2], /INSERT INTO resellers/);
+  assert.match(statements[3], /UPDATE pops SET reseller_id/);
+});
