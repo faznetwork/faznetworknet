@@ -6,10 +6,17 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$ExpectedDatabaseName
+    [string]$ExpectedDatabaseName,
+
+    [Parameter(Mandatory = $true)]
+    [switch]$ConfirmNonProductionTarget
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $ConfirmNonProductionTarget) {
+    throw 'Refusing migration: pass -ConfirmNonProductionTarget only after independently verifying this is a disposable/staging database.'
+}
 
 # This runner is intentionally restricted to explicitly named staging/test databases.
 # It never reads DATABASE_URL implicitly and refuses production-like database names.
