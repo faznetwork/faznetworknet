@@ -142,37 +142,10 @@
       </div>
     </section>
 
-    <section class="panel mb-4" id="customer-creation">
-      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div><h2 class="section-title">Add PPPoE Customer</h2><div class="section-subtitle">Create a customer under one of your active POPs. Network settings are inherited from that POP.</div></div>
-        <button id="toggleCustomerCreate" class="btn btn-fzn btn-sm" type="button" aria-expanded="false" aria-controls="customerCreatePanel"><i class="bi bi-person-plus me-1"></i>Add customer</button>
-      </div>
-      <div id="customerCreatePanel" class="mt-4" hidden>
-        <div id="customerCreateError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
-        <div id="customerCreateSuccess" class="alert alert-success d-none" role="status" aria-live="polite"></div>
-        <form id="customerCreateForm" novalidate>
-          <div class="row g-3">
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerName">Customer full name</label><input class="form-control" id="newCustomerName" name="fullName" maxlength="200" autocomplete="name" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPhone">Mobile number</label><input class="form-control" id="newCustomerPhone" name="phone" type="tel" maxlength="40" autocomplete="tel" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerUsername">PPPoE username</label><input class="form-control" id="newCustomerUsername" name="username" maxlength="100" autocomplete="off" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPassword">PPPoE password</label><input class="form-control" id="newCustomerPassword" name="password" type="text" maxlength="255" autocomplete="new-password" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPackage">Internet package</label><select class="form-select" id="newCustomerPackage" name="package" required disabled><option value="">Loading packages…</option></select></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPop">Assigned active POP</label><select class="form-select" id="newCustomerPop" name="pop_id" required disabled><option value="">Loading assigned POPs…</option></select></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerConnectionDate">Connection date</label><input class="form-control" id="newCustomerConnectionDate" name="activationDate" type="date" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerExpiryDate">Billing expiry date</label><input class="form-control" id="newCustomerExpiryDate" name="expirationDate" type="date" required></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerVlan">Inherited VLAN ID</label><input class="form-control bg-light" id="newCustomerVlan" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
-            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerIpPool">Inherited MikroTik IP Pool</label><input class="form-control bg-light" id="newCustomerIpPool" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
-            <div class="col-12"><label class="form-label fw-semibold" for="newCustomerAddress">Installation address (optional)</label><textarea class="form-control" id="newCustomerAddress" name="installationAddress" rows="2" maxlength="500"></textarea></div>
-          </div>
-          <input type="hidden" name="routerId" value="3">
-          <div class="d-flex justify-content-end gap-2 flex-wrap mt-4"><button id="cancelCustomerCreate" class="btn btn-outline-secondary" type="button">Cancel</button><button id="submitCustomerCreate" class="btn btn-fzn" type="submit" disabled><i class="bi bi-person-check me-1"></i>Create customer</button></div>
-          <p class="small text-secondary mt-3 mb-0"><i class="bi bi-lock me-1"></i>VLAN and IP Pool are display-only. The server verifies POP ownership and active status and never trusts browser-supplied network settings.</p>
-        </form>
-      </div>
-    </section>
     <section class="panel">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
         <div><h2 class="section-title">Customer directory</h2><div class="section-subtitle">Only customers assigned to your POPs are shown</div></div>
+        <button id="openCustomerCreate" class="btn btn-fzn btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#customerCreateModal"><i class="bi bi-person-plus me-1"></i>Add customer</button>
         <div class="d-flex gap-2 flex-wrap"><input id="customerSearch" class="form-control form-control-sm" style="width:min(260px,65vw)" type="search" placeholder="Search name or username" aria-label="Search customers"><select id="popFilter" class="form-select form-select-sm" style="width:auto;min-width:150px" aria-label="Filter by POP"><option value="">All assigned POPs</option></select></div>
       </div>
       <div class="table-responsive">
@@ -183,12 +156,51 @@
       </div>
       <div id="customerCount" class="small text-secondary mt-3"></div>
     </section>
+    <div class="modal fade" id="customerCreateModal" tabindex="-1" aria-labelledby="customerCreateModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <div><h2 class="modal-title fs-5 fw-bold" id="customerCreateModalTitle">Add PPPoE Customer</h2><p class="small text-secondary mb-0">Create a customer under one of your active POPs.</p></div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="customerCreateError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+            <form id="customerCreateForm" novalidate>
+              <div class="row g-3">
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerName">Customer full name</label><input class="form-control" id="newCustomerName" name="fullName" maxlength="200" autocomplete="name" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPhone">Mobile number</label><input class="form-control" id="newCustomerPhone" name="phone" type="tel" maxlength="40" autocomplete="tel" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerUsername">PPPoE username</label><input class="form-control" id="newCustomerUsername" name="username" maxlength="100" autocomplete="off" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPassword">PPPoE password</label><input class="form-control" id="newCustomerPassword" name="password" type="text" maxlength="255" autocomplete="new-password" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPackage">Internet package</label><select class="form-select" id="newCustomerPackage" name="package" required disabled><option value="">Loading packages…</option></select></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPop">Assigned active POP</label><select class="form-select" id="newCustomerPop" name="pop_id" required disabled><option value="">Loading assigned POPs…</option></select></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerConnectionDate">Connection date</label><input class="form-control" id="newCustomerConnectionDate" name="activationDate" type="date" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerExpiryDate">Billing expiry date</label><input class="form-control" id="newCustomerExpiryDate" name="expirationDate" type="date" required></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerVlan">Inherited VLAN ID</label><input class="form-control bg-light" id="newCustomerVlan" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+                <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerIpPool">Inherited MikroTik IP Pool</label><input class="form-control bg-light" id="newCustomerIpPool" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+                <div class="col-12"><label class="form-label fw-semibold" for="newCustomerAddress">Installation address (optional)</label><textarea class="form-control" id="newCustomerAddress" name="installationAddress" rows="2" maxlength="500"></textarea></div>
+              </div>
+              <input type="hidden" name="routerId" value="3">
+            </form>
+            <p class="small text-secondary mt-3 mb-0"><i class="bi bi-lock me-1"></i>VLAN and IP Pool are display-only. The server verifies POP ownership and active status and never trusts browser-supplied network settings.</p>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button id="submitCustomerCreate" class="btn btn-fzn" type="submit" form="customerCreateForm" disabled><i class="bi bi-person-check me-1"></i>Create customer</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" aria-live="polite" aria-atomic="true">
+      <div id="customerCreateSuccessToast" class="toast text-bg-success border-0" role="status"><div class="d-flex"><div id="customerCreateSuccessMessage" class="toast-body">Customer created successfully.</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>
+      <div id="customerCreateErrorToast" class="toast text-bg-danger border-0 mt-2" role="alert"><div class="d-flex"><div id="customerCreateErrorMessage" class="toast-body">Customer creation failed.</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>
+    </div>
     <footer class="text-center small text-secondary mt-4">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Portal</footer>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const api='/api/reseller-portal';
     const state={customers:[],pops:[],customerPackages:[],voucherCatalog:null,pendingVoucherIdempotencyKey:null};
+    const customerCreateModal=bootstrap.Modal.getOrCreateInstance(document.getElementById('customerCreateModal'));
+    const customerCreateSuccessToast=bootstrap.Toast.getOrCreateInstance(document.getElementById('customerCreateSuccessToast'));
+    const customerCreateErrorToast=bootstrap.Toast.getOrCreateInstance(document.getElementById('customerCreateErrorToast'));
     const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const money=value=>'৳'+Number(value||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
     const date=value=>{if(!value)return '—';const raw=String(value).slice(0,10);const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:escapeHtml(raw)};
@@ -237,25 +249,17 @@
     }
     function showCustomerCreateError(message){
       const box=document.getElementById('customerCreateError');box.textContent=message;box.classList.remove('d-none');
-      document.getElementById('customerCreateSuccess').classList.add('d-none');
+      document.getElementById('customerCreateErrorMessage').textContent=message;customerCreateErrorToast.show();
     }
     function clearCustomerCreateMessages(){
       const error=document.getElementById('customerCreateError');error.textContent='';error.classList.add('d-none');
-      const success=document.getElementById('customerCreateSuccess');success.textContent='';success.classList.add('d-none');
     }
-    async function loadCustomerPackages(){
-      const select=document.getElementById('newCustomerPackage');
-      try{const result=await getJson(api+'/packages');state.customerPackages=result.packages||[];renderCustomerCreationOptions();
-        if(!state.customerPackages.length)select.innerHTML='<option value="">No active internet packages are configured</option>';
-      }catch(error){select.innerHTML='<option value="">Package catalog unavailable</option>';select.disabled=true;document.getElementById('submitCustomerCreate').disabled=true;showCustomerCreateError(error.message)}
+    function showCustomerCreateSuccess(message){
+      document.getElementById('customerCreateSuccessMessage').textContent=message;customerCreateSuccessToast.show();
     }
-    document.getElementById('toggleCustomerCreate').addEventListener('click',()=>{
-      const panel=document.getElementById('customerCreatePanel');const opening=panel.hidden;panel.hidden=!opening;
-      document.getElementById('toggleCustomerCreate').setAttribute('aria-expanded',String(opening));if(opening)document.getElementById('newCustomerName').focus();
-    });
-    document.getElementById('cancelCustomerCreate').addEventListener('click',()=>{
-      document.getElementById('customerCreateForm').reset();clearCustomerCreateMessages();document.getElementById('customerCreatePanel').hidden=true;
-      document.getElementById('toggleCustomerCreate').setAttribute('aria-expanded','false');updateInheritedPopFields();
+    document.getElementById('customerCreateModal').addEventListener('show.bs.modal',()=>{clearCustomerCreateMessages();updateInheritedPopFields()});
+    document.getElementById('customerCreateModal').addEventListener('hidden.bs.modal',()=>{
+      document.getElementById('customerCreateForm').reset();clearCustomerCreateMessages();updateInheritedPopFields();
     });
     document.getElementById('newCustomerPop').addEventListener('change',updateInheritedPopFields);
     document.getElementById('customerCreateForm').addEventListener('submit',async event=>{
@@ -269,9 +273,8 @@
       try{
         const response=await fetch(api+'/customers',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(payload)});
         let result;try{result=await response.json()}catch(parseError){throw new Error('The server returned an invalid response.')}
-        if(!response.ok||!result.success)throw new Error(result.message||'Customer creation failed.');
-        const success=document.getElementById('customerCreateSuccess');success.textContent=result.message||'Customer created successfully.';success.classList.remove('d-none');
-        form.reset();updateInheritedPopFields();await loadDashboard();
+        if(response.status!==201||!result.success)throw new Error(result.message||'Customer creation failed.');
+        customerCreateModal.hide();showCustomerCreateSuccess(result.message||'Customer created successfully.');await loadDashboard();
       }catch(error){showCustomerCreateError(error.message)}
       finally{button.innerHTML='<i class="bi bi-person-check me-1"></i>Create customer';button.disabled=!activeCustomerPops().length||!state.customerPackages.length}
     });
