@@ -13,7 +13,11 @@ const customerController = fs.readFileSync(path.join(__dirname, '..', 'controlle
 
 test('reseller form sends connection and expiry dates using the existing customer contract', () => {
   assert.match(view, /name="activationDate" type="date"/);
-  assert.match(view, /name="expirationDate" type="date"/);
+  assert.match(view, /id="newCustomerExpiryDate" type="hidden" name="expirationDate"/);
+  assert.match(view, /id="newCustomerExpiryPreview"[^>]*readonly/);
+  assert.doesNotMatch(view, /name="expirationDate" type="date"/);
+  assert.match(script, /addCalendarMonths\(connection,months\)/);
+  assert.match(script, /data-duration-months/);
   assert.match(script, /payload\.pop_id=popId/);
   assert.match(script, /payload\.packageProfile=packageOption\.dataset\.profile/);
   assert.match(customerController, /normalizeDate\(body\.activationDate \|\| body\.activation_date \|\| body\.connectionDate \|\| body\.connection_date\)/);
