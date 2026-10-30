@@ -345,7 +345,7 @@ test('voucher generation failure aborts the enclosing transaction before account
   const client = {
     async query(sql, values = []) {
       statements.push({ sql, values });
-      if (sql.includes('idempotency_key')) return { rows: [] };
+      if (sql.startsWith('SELECT id, batch_key')) return { rows: [] };
       if (sql.includes('FROM public.pops p')) return { rows: [eligibleRow()] };
       if (sql.startsWith('INSERT INTO public.reseller_voucher_batches')) return { rowCount: 1, rows: [{ id: '9001', batch_key: values[0] }] };
       throw new Error('Unexpected SQL in rollback test: ' + sql);
