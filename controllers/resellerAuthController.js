@@ -62,11 +62,11 @@ async function invite(req, res) {
         // The lock is held only for this short assignment transaction.
         await client.query('LOCK TABLE customers IN SHARE ROW EXCLUSIVE MODE');
         const pops = await client.query(
-          'SELECT p.id,p.name,p.reseller_id,EXISTS(SELECT 1 FROM customers c WHERE c.pop_id=p.id) AS has_customers FROM pops p WHERE p.id=ANY($1::bigint[]) FOR UPDATE',
+          'SELECT p.id,p.name,p.reseller_id,p.status,EXISTS(SELECT 1 FROM customers c WHERE c.pop_id=p.id) AS has_customers FROM pops p WHERE p.id=ANY($1::bigint[]) FOR UPDATE',
           [assignedPopIds]
         );
         if (pops.rows.length !== assignedPopIds.length ||
-            pops.rows.some(pop => pop.reseller_id !== null || pop.name === 'FAZ Main (Direct)' || pop.has_customers)) {
+            pops.rows.some(pop => pop.reseller_id !== null || pop.status !== 'active' || pop.name === 'FAZ Main (Direct)' || pop.has_customers)) {
           const error = new Error('Selected POPs are not eligible for safe reseller assignment.');
           error.statusCode = 409;
           throw error;
