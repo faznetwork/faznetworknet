@@ -57,5 +57,5 @@ test('customer creation UI exposes validation and user-visible result feedback',
   assert.match(script, /payload\.expirationDate=expiry/);
   assert.match(view, /customerCreateError/);
   assert.match(view, /customerCreateSuccess/);
-  assert.match(script, /finally \{ button\.innerHTML=/);
+  assert.match(script, /finally\s*\{\s*button\.innerHTML=/);
 });
