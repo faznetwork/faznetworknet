@@ -54,7 +54,8 @@ test('Customer 360 administrators load active POPs and preselect the current pop
   assert.ok(customerProfileView.includes("fetch('/api/pops/options'"));
   assert.match(customerProfileView, /currentPopId=customer\?\.pop_id==null\?'':String\(customer\.pop_id\)/);
   assert.match(customerProfileView, /select\.dataset\.initialValue=currentPopId/);
-  assert.match(customerProfileView, /await loadCustomerPopOptions\(c\);open\('editModal'\)/);
+  assert.match(customerProfileView, /api\('\/api\/customers\/customers\/'\+encodeURIComponent\(id\)\)/);
+  assert.match(customerProfileView, /await loadCustomerPopOptions\(\{\.\.\.c,pop_id:popRecord\?\.customer\?\.pop_id\?\?''\}\);open\('editModal'\)/);
   assert.match(server, /currentRole:req\.session\.role\|\|\(req\.session\.legacySuperAdmin/);
   assert.match(customerProfileView, /data-user-role="<%= currentRole \|\| 'staff' %>"/);
 });
