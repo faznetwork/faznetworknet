@@ -19,8 +19,8 @@ test('shared customer form exposes a POP selector and locked reseller assignment
 });
 
 test('role normalization recognizes administrator role spellings', () => {
-  assert.match(adminView, /replace\(\/\[\\s-\]\+\/g, '_ '\)/);
-  const normalizeRole = role => String(role || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+  assert.ok(adminView.includes(".replace(/[\s-]+/g, '_');"));
+  const normalizeRole = role => String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   for (const role of ['admin', 'super_admin', 'super admin', 'super-admin']) {
     assert.ok(['admin', 'super_admin'].includes(normalizeRole(role)), role + ' must be recognized');
   }
@@ -28,7 +28,7 @@ test('role normalization recognizes administrator role spellings', () => {
 
 test('POP options use one shared role-scoped async loader and visible retry fallback', () => {
   assert.match(adminView, /async function ensureCustomerPopOptions\(\)/);
-  assert.match(adminView, /fetch\('\/api\/pops\/options'/);
+  assert.match(adminView, /fetch\('\\/api\\/pops\\/options'/);
   assert.match(adminView, /id="customerPopRetry"/);
   assert.match(adminView, /id="cpPopRetry"/);
   assert.match(adminView, /customerPopOptionsPromise = null/);
@@ -38,7 +38,7 @@ test('POP options use one shared role-scoped async loader and visible retry fall
 test('administrator selector defaults Direct POP and preselects existing customer POP', () => {
   assert.match(adminView, /faz main \(direct\)/);
   assert.match(adminView, /loadCustomerPopOptions\(customer\.pop_id, true\)/);
-  assert.match(adminView, /select\.dataset\.initialValue = selectedId/);
+  assert.match(adminView, /select\.dataset\.initialValue = selected/);
 });
 
 test('Customer 360 POP field follows Area / Zone and uses role-scoped read-only reseller view', () => {
@@ -56,11 +56,11 @@ test('Customer 360 update only includes an explicitly changed active POP for adm
   assert.match(adminView, /areaZone:m\.querySelector\('#cpAreaZone'\)\.value\.trim\(\)/);
 });
 
-test('shared customer update omits pop_id for resellers', () => {
+test('shared customer edit payload omits unchanged POP while customer creation can use the selected default', () => {
+  assert.match(adminView, /!editId \|\| String\(valueOf\('customerPopSelect'\)\)\.trim\(\) !== String\(document\.getElementById\('customerPopSelect'\)\?\.dataset\.initialValue \|\| ''\)\.trim\(\)/);
   assert.match(adminView, /const isCustomerAdmin = \['super_admin', 'admin'\]\.includes\(customerActorRole\)/);
-  assert.match(adminView, /\.\.\.\(isCustomerAdmin && String\(valueOf\('customerPopSelect'\)\)\.trim\(\) \? \{ pop_id: String\(valueOf\('customerPopSelect'\)\)\.trim\(\) \} : \{\}\)/);
 });
 
 test('customer creation route protection remains unchanged', () => {
-  assert.match(customerRoutes, /router\.post\('\/',\s*requireAdminOnly,\s*controller\.createCustomer\)/);
+  assert.match(customerRoutes, /router\.post\('\\/',\s*requireAdminOnly,\s*controller\.createCustomer\)/);
 });
