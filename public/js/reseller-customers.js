@@ -3,7 +3,7 @@
 const workspace=window.ResellerWorkspace;
 const byId=id=>document.getElementById(id);
 if(!workspace){
- const fatal=()=>{const box=byId('customerCreateError'),form=byId('customerCreateForm');if(box){box.textContent='The reseller workspace JavaScript dependency did not load. Refresh the page; if this continues, contact FAZ NETWORK support.';box.classList.remove('d-none');}if(form)form.addEventListener('submit',event=>event.preventDefault());};
+ const fatal=()=>{const box=byId('customerCreateError'),form=byId('customerCreateForm');if(box){box.textContent='The reseller workspace dependency did not load because its JavaScript module is unavailable. Refresh the page; if this continues, contact FAZ NETWORK support.';box.classList.remove('d-none');}if(form)form.addEventListener('submit',event=>event.preventDefault());};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fatal,{once:true});else fatal();
  return;
 }
