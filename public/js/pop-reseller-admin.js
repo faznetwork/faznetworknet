@@ -45,10 +45,12 @@
     return '<span class="badge rounded-pill text-bg-' + item[0] + '">' + item[1] + '</span>';
   }
 
-  function statusButton(status, id, kind) {
+  function statusButton(status, id, kind, activationLocked) {
     const active = String(status).toLowerCase() === 'active';
+    const locked = !active && Boolean(activationLocked);
     return '<button type="button" class="btn btn-sm ' + (active ? 'btn-outline-warning' : 'btn-outline-success') +
-      '" data-action="toggle-' + kind + '" data-id="' + escapeHtml(id) + '" data-status="' + (active ? 'inactive' : 'active') + '">' +
+      '" data-action="toggle-' + kind + '" data-id="' + escapeHtml(id) + '" data-status="' + (active ? 'inactive' : 'active') + '"' +
+      (locked ? ' disabled title="This invitation must be accepted and a password set before activation."' : '') + '>' +
       (active ? 'Set Inactive' : 'Set Active') + '</button>';
   }
 
@@ -158,7 +160,7 @@
       return '<tr><td><strong>' + escapeHtml(reseller.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(reseller.id) + '</div></td>' +
         '<td><div>' + escapeHtml(reseller.email || reseller.username || '—') + '</div><div class="small fpr-muted">' + escapeHtml(reseller.phone || '') + '</div></td>' +
         '<td><div class="fpr-badges">' + badges + '</div></td><td>' + statusPill(status) + '</td>' +
-        '<td><div class="fpr-actions">' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller') + '</div></td></tr>';
+        '<td><div class="fpr-actions">' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller', status === 'pending' || status === 'expired') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
       '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Access & Invitations</div><h1 class="h4 fw-bold mb-1">Reseller Accounts &amp; Access</h1><p class="text-muted small mb-0">Review reseller access, assigned POPs and invitation lifecycle.</p></div>' +
