@@ -43,6 +43,10 @@
         <div class="brand-mark"><i class="bi bi-diagram-3-fill"></i></div>
         <div><div class="eyebrow"><%= brandName %></div><div class="fw-bold fs-5">Reseller Workspace</div></div>
       </div>
+      <nav class="d-flex align-items-center gap-2 flex-wrap" aria-label="Reseller workspace">
+        <a class="btn btn-sm btn-outline-light" href="#voucher-generation"><i class="bi bi-ticket-perforated me-1"></i>Generate vouchers</a>
+        <a class="btn btn-sm btn-outline-light" href="#voucher-history"><i class="bi bi-clock-history me-1"></i>Voucher history</a>
+      </nav>
       <div class="d-flex align-items-center gap-3 header-actions">
         <div class="text-end"><div class="small text-white-50">Signed in as</div><div class="fw-semibold"><%= safeResellerName %></div></div>
         <button id="logoutButton" class="btn btn-sm btn-outline-light" type="button"><i class="bi bi-box-arrow-right me-1"></i>Sign out</button>
@@ -55,7 +59,7 @@
     <section class="mb-4">
       <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap mb-3">
         <div><h1 class="h4 fw-bold mb-1">Network overview</h1><div class="text-secondary small">Your assigned POPs, customer activity and current-month collections</div></div>
-        <div class="small text-secondary"><i class="bi bi-shield-lock me-1"></i>Read-only reseller access</div>
+        <div class="small text-secondary"><i class="bi bi-shield-lock me-1"></i>Customer directory · read-only</div>
       </div>
       <div class="row g-3">
         <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-diagram-3"></i></div><div class="metric-label">Assigned POPs</div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your POP locations</div></div></div>
@@ -68,6 +72,66 @@
     <section class="panel mb-4">
       <div class="d-flex align-items-center justify-content-between gap-3 mb-3"><div><h2 class="section-title">Assigned POPs</h2><div class="section-subtitle">Network locations assigned to your reseller account</div></div><span class="badge rounded-pill badge-soft" id="popCount">Loading</span></div>
       <div id="popGrid" class="row g-3"><div class="col-12 text-secondary small">Loading assigned POPs…</div></div>
+    </section>
+
+    <section class="panel mb-4" id="voucher-generation">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div><h2 class="section-title">Hotspot Voucher Generation</h2><div class="section-subtitle">Issue vouchers only for active packages assigned to your POPs</div></div>
+        <span class="badge rounded-pill badge-soft"><i class="bi bi-shield-check me-1"></i>Server-verified pricing</span>
+      </div>
+      <div id="voucherError" class="alert alert-danger d-none" role="alert"></div>
+      <div id="voucherSuccess" class="alert alert-success d-none" role="status"></div>
+      <div class="row g-3">
+        <div class="col-12 col-lg-6">
+          <label for="voucherPop" class="form-label fw-semibold">Assigned POP</label>
+          <select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select>
+        </div>
+        <div class="col-12 col-lg-6">
+          <label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label>
+          <select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
+          <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
+          <div class="form-text">Minimum 1 · Maximum 500 vouchers per batch</div>
+        </div>
+        <div class="col-12 col-md-8">
+          <div class="p-3 rounded-3 border bg-light h-100" aria-live="polite">
+            <div class="small text-secondary fw-semibold mb-2">Selected package pricing</div>
+            <div class="row g-2">
+              <div class="col-4"><div class="small text-secondary">Retail / unit</div><div class="fw-bold" id="voucherRetail">৳—</div></div>
+              <div class="col-4"><div class="small text-secondary">Wholesale / unit</div><div class="fw-bold" id="voucherWholesale">৳—</div></div>
+              <div class="col-4"><div class="small text-secondary">Margin / unit</div><div class="fw-bold text-success" id="voucherMargin">৳—</div></div>
+              <div class="col-12"><hr class="my-1"></div>
+              <div class="col-4"><div class="small text-secondary">Retail total</div><div class="fw-semibold" id="voucherRetailTotal">৳—</div></div>
+              <div class="col-4"><div class="small text-secondary">Your cost</div><div class="fw-semibold" id="voucherCostTotal">৳—</div></div>
+              <div class="col-4"><div class="small text-secondary">Expected margin</div><div class="fw-bold text-success" id="voucherMarginTotal">৳—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div>
+        </div>
+        <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+          <div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices and reseller identity are recalculated and verified by the server at issue time.</div>
+          <button id="generateVouchersButton" class="btn btn-fzn px-4" type="button" disabled><i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch</button>
+        </div>
+      </div>
+      <div id="voucherIssuedResult" class="mt-4 d-none"></div>
+    </section>
+
+    <section class="panel mb-4" id="voucher-history">
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+        <div><h2 class="section-title">Voucher History & Reprint</h2><div class="section-subtitle">Your own issued batches · read-only history</div></div>
+        <button id="refreshVoucherHistory" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Refresh history</button>
+      </div>
+      <div id="voucherHistoryError" class="alert alert-danger d-none" role="alert"></div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead><tr><th>Batch reference</th><th>Profile</th><th>Quantity</th><th>Wholesale cost</th><th>Margin</th><th>Issued</th><th>Status</th><th></th></tr></thead>
+          <tbody id="voucherHistoryRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="panel">
@@ -88,7 +152,7 @@
 
   <script>
     const api='/api/reseller-portal';
-    const state={customers:[],pops:[]};
+    const state={customers:[],pops:[],voucherCatalog:null,pendingVoucherIdempotencyKey:null};
     const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const money=value=>'৳'+Number(value||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
     const date=value=>{if(!value)return '—';const raw=String(value).slice(0,10);const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:escapeHtml(raw)};
@@ -138,7 +202,98 @@
       try{const response=await fetch('/api/resellers/logout',{method:'POST'});const result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Sign out failed.');window.location.assign('/reseller/login')}
       catch(error){showError(error.message);button.disabled=false}
     });
+
+    function voucherAlert(id,message){const box=document.getElementById(id);box.textContent=message;box.classList.remove('d-none')}
+    function clearVoucherAlert(id){const box=document.getElementById(id);box.textContent='';box.classList.add('d-none')}
+    function selectedVoucherPop(){return (state.voucherCatalog?.pops||[]).find(pop=>String(pop.id)===document.getElementById('voucherPop').value)||null}
+    function selectedVoucherPackage(){const pop=selectedVoucherPop();return pop?.packages.find(pkg=>String(pkg.id)===document.getElementById('voucherPackage').value)||null}
+    function renderVoucherAccount(){
+      const box=document.getElementById('voucherAccount');const account=state.voucherCatalog?.account;
+      if(!account){box.textContent='No active reseller billing account is configured. Voucher issuance is unavailable; contact FAZ NETWORK support.';return}
+      if(account.status!=='active'){box.textContent='Your reseller billing account is '+account.status+'. Voucher issuance is unavailable.';return}
+      box.textContent=account.billingMode==='prepaid'
+        ? 'Prepaid wallet balance: '+money(account.walletBalance)+' · Currency: '+escapeHtml(account.currency)
+        : 'Postpaid receivable: '+money(account.receivableBalance)+' · Credit limit: '+money(account.creditLimit)+' · Available credit: '+money(Math.max(0,Number(account.creditLimit)-Number(account.receivableBalance)));
+    }
+    function updateVoucherPricing(){
+      const pkg=selectedVoucherPackage();const quantity=Number(document.getElementById('voucherQuantity').value);
+      const validQuantity=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=500;
+      const retail=pkg?Number(pkg.retailPrice):0;const wholesale=pkg?Number(pkg.wholesalePrice):0;
+      const margin=retail-wholesale;const fmt=value=>pkg?money(value):'৳—';
+      document.getElementById('voucherRetail').textContent=fmt(retail);
+      document.getElementById('voucherWholesale').textContent=fmt(wholesale);
+      document.getElementById('voucherMargin').textContent=fmt(margin);
+      document.getElementById('voucherRetailTotal').textContent=fmt(retail*(validQuantity?quantity:0));
+      document.getElementById('voucherCostTotal').textContent=fmt(wholesale*(validQuantity?quantity:0));
+      document.getElementById('voucherMarginTotal').textContent=fmt(margin*(validQuantity?quantity:0));
+      const account=state.voucherCatalog?.account;
+      const totalCost=wholesale*(validQuantity?quantity:0);
+      const prepaidShortfall=account?.billingMode==='prepaid'&&Number(account.walletBalance)<totalCost;
+      const postpaidLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+totalCost>Number(account.creditLimit));
+      const canIssue=Boolean(pkg&&validQuantity&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!prepaidShortfall&&!postpaidLimit);
+      document.getElementById('generateVouchersButton').disabled=!canIssue;
+      if(pkg&&wholesale===0)voucherAlert('voucherError','This package has zero wholesale cost. The current v1.3 ledger requires a positive journal amount, so issuance is disabled pending a zero-value ledger policy.');
+      else if(pkg&&margin<0)voucherAlert('voucherError','This package is not eligible because wholesale cost exceeds retail price.');
+      else if(!validQuantity)voucherAlert('voucherError','Quantity must be a whole number from 1 to 500.');
+      else if(prepaidShortfall)voucherAlert('voucherError','Your prepaid wallet balance is insufficient for this batch.');
+      else if(postpaidLimit)voucherAlert('voucherError','This batch would exceed your available postpaid credit limit.');
+      else clearVoucherAlert('voucherError');
+    }
+    function renderVoucherPackageOptions(){
+      const pop=selectedVoucherPop();const select=document.getElementById('voucherPackage');
+      const packages=pop?.packages||[];
+      select.innerHTML=packages.length?packages.map(pkg=>'<option value="'+escapeHtml(pkg.id)+'">'+escapeHtml(pkg.name)+' · '+escapeHtml(pkg.validity)+'</option>').join(''):'<option value="">No active packages for this POP</option>';
+      select.disabled=!packages.length;updateVoucherPricing();
+    }
+    function renderVoucherPopOptions(){
+      const select=document.getElementById('voucherPop');const pops=state.voucherCatalog?.pops||[];
+      select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+'</option>').join(''):'<option value="">No eligible active POPs</option>';
+      select.disabled=!pops.length;renderVoucherPackageOptions();renderVoucherAccount();
+    }
+    async function loadVoucherCatalog(){
+      try{
+        state.voucherCatalog=await getJson(api+'/hotspot/catalog');
+        renderVoucherPopOptions();
+      }catch(error){voucherAlert('voucherError',error.message);document.getElementById('voucherPop').innerHTML='<option value="">Catalog unavailable</option>';document.getElementById('voucherPackage').disabled=true}
+    }
+    function renderVoucherIssued(result){
+      const target=document.getElementById('voucherIssuedResult');const vouchers=result.vouchers||[];const batch=result.batch||{};
+      target.innerHTML='<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3"><div><h3 class="h6 fw-bold mb-1">Voucher batch issued</h3><div class="small text-secondary">Reference: '+escapeHtml(batch.batchKey||'')+'</div></div><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>Print / Reprint</a></div>'+
+        '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>#</th><th>Username / PIN</th><th>Password</th><th>Validity</th></tr></thead><tbody>'+vouchers.map((v,i)=>'<tr><td>'+(i+1)+'</td><td class="font-monospace">'+escapeHtml(v.username)+'</td><td class="font-monospace">'+escapeHtml(v.password)+'</td><td>'+escapeHtml(v.validity||batch.validity||'—')+'</td></tr>').join('')+'</tbody></table></div>';
+      target.classList.remove('d-none');
+    }
+    async function loadVoucherHistory(){
+      const body=document.getElementById('voucherHistoryRows');clearVoucherAlert('voucherHistoryError');
+      body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr>';
+      try{
+        const result=await getJson(api+'/hotspot/voucher-batches?limit=100');const batches=result.batches||[];
+        if(!batches.length){body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">No voucher batches have been issued yet.</td></tr>';return}
+        body.innerHTML=batches.map(batch=>'<tr><td class="font-monospace small">'+escapeHtml(batch.batchKey)+'</td><td>'+escapeHtml(batch.profileKey)+'</td><td>'+escapeHtml(batch.issuedCount)+' / '+escapeHtml(batch.quantity)+'</td><td>'+money(batch.wholesaleTotal)+'</td><td class="text-success fw-semibold">'+money(batch.marginTotal)+'</td><td>'+date(batch.createdAt)+'</td><td><span class="badge badge-soft">'+escapeHtml(batch.status)+'</span></td><td><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>Reprint</a></td></tr>').join('');
+      }catch(error){body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Voucher history could not be loaded.</td></tr>';voucherAlert('voucherHistoryError',error.message)}
+    }
+    document.getElementById('voucherPop').addEventListener('change',()=>{state.pendingVoucherIdempotencyKey=null;renderVoucherPackageOptions()});
+    document.getElementById('voucherPackage').addEventListener('change',()=>{state.pendingVoucherIdempotencyKey=null;updateVoucherPricing()});
+    document.getElementById('voucherQuantity').addEventListener('input',()=>{state.pendingVoucherIdempotencyKey=null;updateVoucherPricing()});
+    document.getElementById('generateVouchersButton').addEventListener('click',async event=>{clearVoucherAlert('voucherError');clearVoucherAlert('voucherSuccess');
+      const pop=selectedVoucherPop();const pkg=selectedVoucherPackage();const quantity=Number(document.getElementById('voucherQuantity').value);const button=document.getElementById('generateVouchersButton');
+      if(!pop||!pkg||!Number.isSafeInteger(quantity)||quantity<1||quantity>500){voucherAlert('voucherError','Select an eligible POP and package, and enter a whole quantity from 1 to 500.');return}
+      if(!state.pendingVoucherIdempotencyKey){if(!window.crypto?.randomUUID){voucherAlert('voucherError','Secure request identifiers are unavailable in this browser. Refresh the page or contact support.');return}state.pendingVoucherIdempotencyKey=window.crypto.randomUUID()}
+      button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Issuing…';
+      try{
+        const response=await fetch(api+'/hotspot/voucher-batches',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':state.pendingVoucherIdempotencyKey},body:JSON.stringify({popId:pop.id,packageId:pkg.id,quantity})});
+        let result;try{result=await response.json()}catch(parseError){throw new Error('The server returned an invalid response.')}
+        if(!response.ok||!result.success)throw new Error(result.message||'Voucher issuance failed.');
+        state.pendingVoucherIdempotencyKey=null;renderVoucherIssued(result);voucherAlert('voucherSuccess',result.message||'Voucher batch issued successfully.');
+        if(result.account&&state.voucherCatalog?.account){Object.assign(state.voucherCatalog.account,{walletBalance:result.account.walletBalance,receivableBalance:result.account.receivableBalance,creditLimit:result.account.creditLimit})}
+        renderVoucherAccount();await loadVoucherHistory();
+      }catch(error){voucherAlert('voucherError',error.message)}
+      finally{button.innerHTML='<i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch';updateVoucherPricing()}
+    });
+    document.getElementById('refreshVoucherHistory').addEventListener('click',loadVoucherHistory);
+    async function loadVoucherPortal(){await Promise.all([loadVoucherCatalog(),loadVoucherHistory()])}
+
     loadDashboard();
+    loadVoucherPortal();
   </script>
 </body>
 </html>

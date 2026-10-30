@@ -20,6 +20,7 @@ const {loadTenantScope,requireCustomerOwnership}=require("./middleware/tenantSco
 const dashboardController=require("./controllers/dashboardController");
 const rbacAuthController=require("./controllers/rbacAuthController");
 const resellerAuthController=require("./controllers/resellerAuthController");
+const resellerHotspotController=require("./controllers/resellerHotspotController");
 const adminUserRoutes=require("./routes/adminUserRoutes");
 const adminSecurityRoutes=require("./routes/adminSecurityRoutes");
 const appSettingsService=require("./services/appSettings");
@@ -66,6 +67,7 @@ app.post("/login",rbacAuthController.login);
 app.get("/reseller/accept-invite",resellerAuthController.showAcceptInvite);
 app.get("/reseller/login",(req,res)=>res.set("Cache-Control","no-store").render("reseller-login",{title:"FAZ NETWORK Reseller Sign In",error:null}));
 app.get("/reseller/dashboard",requireRole(["reseller"]),(req,res)=>res.set("Cache-Control","no-store, no-cache, must-revalidate, private").render("reseller-dashboard",{title:"FAZ NETWORK Reseller Portal",resellerName:req.session.auth?.name||req.session.resellerName||"Reseller"}));
+app.get("/reseller/hotspot/voucher-batches/:batchKey/print",requireRole(["reseller"]),loadTenantScope,resellerHotspotController.printBatchPage);
 app.get("/reseller/customers/:id",requireRole(["reseller"]),loadTenantScope,requireCustomerOwnership({notFoundStatus:403}),(req,res)=>res.set("Cache-Control","no-store, no-cache, must-revalidate, private").render("reseller-customer-profile",{title:"FAZ NETWORK Reseller Customer Profile",customerId:String(req.params.id||"")}));
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
