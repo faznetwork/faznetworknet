@@ -152,3 +152,13 @@ test('POP modal closes only after an explicit successful API response with a val
     assert.ok(ui.includes(trace), trace + ' trace exists');
   }
 });
+
+test('Raw POP diagnostics execute before selector guards in top-level document listeners', () => {
+  const clickListener = ui.indexOf("document.addEventListener('click', function (event) {");
+  const submitListener = ui.indexOf("document.addEventListener('submit', async function (event) {");
+  assert.ok(clickListener >= 0 && submitListener > clickListener);
+  assert.ok(ui.indexOf("console.log('[POP DEBUG CLICK] Document click observed:") > clickListener);
+  assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") > submitListener);
+  assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") < ui.indexOf("if (!form || (form.id !== 'fprPopForm'"));
+  assert.ok(!ui.includes('function bindGlobalFormLifecycle'));
+});
