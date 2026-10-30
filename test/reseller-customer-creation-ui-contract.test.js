@@ -27,10 +27,15 @@ test('reseller form sends connection and expiry dates using the existing custome
 test('VLAN and IP Pool are display-only and browser-supplied values are removed server-side', () => {
   assert.match(view, /id="newCustomerVlan"[^>]*readonly/);
   assert.match(view, /id="newCustomerIpPool"[^>]*readonly/);
-  assert.doesNotMatch(script, /payload\.(vlan_id|mikrotik_ip_pool)\s*=/);
+  assert.match(view, /Inherited PPPoE IP Pool/);
+  assert.doesNotMatch(script, /payload\.(vlan_id|mikrotik_ip_pool|pppoe_ip_pool)\s*=/);
+  assert.match(script, /p\?\.pppoe_ip_pool/);
+  assert.match(script, /pppoe_enabled===true/);
   assert.match(portalController, /delete body\.vlan_id/);
   assert.match(portalController, /delete body\.mikrotik_ip_pool/);
-  assert.match(customerController, /SELECT id,reseller_id,status FROM pops WHERE id=\$1 AND status='active' FOR UPDATE/);
+  assert.match(portalController, /delete body\.pppoe_ip_pool/);
+  assert.match(customerController, /SELECT id,reseller_id,status,pppoe_enabled,pppoe_ip_pool FROM pops WHERE id=\$1 AND status='active' FOR UPDATE/);
+  assert.match(customerController, /PPPOE_SERVICE_NOT_CONFIGURED/);
   assert.match(customerController, /Number\(selectedPop\.reseller_id\) !== Number\(req\.auth\.resellerId\)/);
 });
 
@@ -58,4 +63,16 @@ test('customer creation UI exposes validation and user-visible result feedback',
   assert.match(view, /customerCreateError/);
   assert.match(view, /customerCreateSuccess/);
   assert.match(script, /finally\s*\{\s*button\.innerHTML=/);
+});
+
+
+test('customer submit is not gated by asynchronous catalog loading and exposes retry feedback', () => {
+  assert.doesNotMatch(view, /id="submitCustomerCreate"[^>]*disabled/);
+  assert.match(view, /id="retryCustomerCatalog"/);
+  assert.match(script, /Promise\.allSettled/);
+  assert.match(script, /catalogStatus==='loading'/);
+  assert.match(script, /catalogErrors/);
+  assert.match(script, /retryCustomerCatalog/);
+  assert.match(script, /button\.disabled=false/);
+  assert.match(script, /workspace dependency did not load/);
 });
