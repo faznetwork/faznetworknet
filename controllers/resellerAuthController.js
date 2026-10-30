@@ -102,7 +102,9 @@ async function resendInvite(req, res) {
   const expiresAt = new Date(Date.now() + invitationService.INVITATION_TTL_MS);
   try {
     const outcome = await db.withTransaction(async client => {
-      const found = await client.query(\`SELECT id,name,email,phone,status,invited_at,\n        GREATEST(0, CEIL(EXTRACT(EPOCH FROM (invited_at + INTERVAL '60 seconds' - NOW()))))::int AS cooldown_remaining\n        FROM resellers WHERE id=$1 FOR UPDATE\`, [id]);
+      const found = await client.query(`SELECT id,name,email,phone,status,invited_at,
+        GREATEST(0, CEIL(EXTRACT(EPOCH FROM (invited_at + INTERVAL '60 seconds' - NOW()))))::int AS cooldown_remaining
+        FROM resellers WHERE id=$1 FOR UPDATE`, [id]);
       const reseller = found.rows[0];
       if (!reseller) return { kind: 'missing' };
       if (reseller.status !== 'inactive' || !reseller.email) return { kind: 'not_pending' };
