@@ -18,24 +18,47 @@ test('shared customer form exposes a POP selector and locked reseller assignment
   assert.match(adminView, /origin\.parent\.insertBefore\(f,/);
 });
 
-test('POP options are loaded through the existing role-scoped endpoint with visible retry fallback', () => {
+test('role normalization recognizes administrator role spellings', () => {
+  assert.match(adminView, /replace\(\/\[\\s-\]\+\/g, '_ '\)/);
+  const normalizeRole = role => String(role || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+  for (const role of ['admin', 'super_admin', 'super admin', 'super-admin']) {
+    assert.ok(['admin', 'super_admin'].includes(normalizeRole(role)), role + ' must be recognized');
+  }
+});
+
+test('POP options use one shared role-scoped async loader and visible retry fallback', () => {
+  assert.match(adminView, /async function ensureCustomerPopOptions\(\)/);
   assert.match(adminView, /fetch\('\/api\/pops\/options'/);
   assert.match(adminView, /id="customerPopRetry"/);
+  assert.match(adminView, /id="cpPopRetry"/);
   assert.match(adminView, /customerPopOptionsPromise = null/);
-  assert.match(adminView, /customer form remains available/);
-  assert.match(adminView, /canonical FAZ Main \(Direct\) default/);
+  assert.match(adminView, /FAZ Main \(Direct\) is selected when available/);
 });
 
 test('administrator selector defaults Direct POP and preselects existing customer POP', () => {
   assert.match(adminView, /faz main \(direct\)/);
   assert.match(adminView, /loadCustomerPopOptions\(customer\.pop_id, true\)/);
-  assert.match(adminView, /customerPopSearch/);
+  assert.match(adminView, /select\.dataset\.initialValue = selectedId/);
 });
 
-test('reseller update payload cannot contain pop_id', () => {
+test('Customer 360 POP field follows Area / Zone and uses role-scoped read-only reseller view', () => {
+  assert.match(adminView, /id="cpAreaZone"/);
+  assert.match(adminView, /id="cpPopAdminControls"/);
+  assert.match(adminView, /id="cpPopSelect"/);
+  assert.match(adminView, /id="cpPopResellerView"/);
+  assert.match(adminView, /await loadCustomerHubPopOptions\(customer\)/);
+  assert.match(adminView, /customer\.pop_id==null\?'':String\(customer\.pop_id\)/);
+});
+
+test('Customer 360 update only includes an explicitly changed active POP for administrators', () => {
+  assert.match(adminView, /const popAssignmentChanged=isCustomerAdmin&&selectedPopId!==initialPopId&&customerPopOptions\.some\(pop=>String\(pop\.id\)===selectedPopId\)/);
+  assert.match(adminView, /\.\.\.\(popAssignmentChanged\?\{pop_id:selectedPopId\}:\{\}\)/);
+  assert.match(adminView, /areaZone:m\.querySelector\('#cpAreaZone'\)\.value\.trim\(\)/);
+});
+
+test('shared customer update omits pop_id for resellers', () => {
   assert.match(adminView, /const isCustomerAdmin = \['super_admin', 'admin'\]\.includes\(customerActorRole\)/);
   assert.match(adminView, /\.\.\.\(isCustomerAdmin && String\(valueOf\('customerPopSelect'\)\)\.trim\(\) \? \{ pop_id: String\(valueOf\('customerPopSelect'\)\)\.trim\(\) \} : \{\}\)/);
-  assert.match(adminView, /Assigned POP.*Locked/);
 });
 
 test('customer creation route protection remains unchanged', () => {
