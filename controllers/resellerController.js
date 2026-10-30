@@ -3,7 +3,39 @@ const db=require('../db');
 function validId(v){const id=Number(v);return Number.isSafeInteger(id)&&id>0?id:null;}
 function fail(res,e,op){console.error('[RESELLER API] '+op+':',e.message);return res.status(e.statusCode||503).json({success:false,message:e.statusCode?e.message:'Reseller operation failed.'});}
 async function list(req,res){
- try{const r=await db.query('SELECT r.id,r.name,r.email,r.username,r.phone,r.status,r.created_at,r.updated_at,COUNT(DISTINCT p.id)::int AS pop_count,COUNT(DISTINCT c.id)::int AS customer_count FROM resellers r LEFT JOIN pops p ON p.reseller_id=r.id LEFT JOIN customers c ON c.pop_id=p.id GROUP BY r.id ORDER BY r.name ASC,r.id ASC');return res.json({success:true,resellers:r.rows});}
+ try{
+  const r=await db.query(
+   `SELECT
+      r.id,
+      r.name,
+      r.email,
+      r.username,
+      r.phone,
+      r.status,
+      r.created_at,
+      r.updated_at,
+      COUNT(DISTINCT p.id)::int AS pop_count,
+      COUNT(DISTINCT c.id)::int AS customer_count,
+      COALESCE(
+        jsonb_agg(
+          DISTINCT jsonb_build_object('id',p.id,'name',p.name)
+        ) FILTER (WHERE p.id IS NOT NULL),
+        '[]'::jsonb
+      ) AS assigned_pops,
+      CASE
+        WHEN r.status='active' THEN 'active'
+        WHEN r.invite_token_hash IS NOT NULL AND r.invite_expires_at > NOW() THEN 'pending'
+        WHEN r.invite_token_hash IS NOT NULL AND r.invite_expires_at <= NOW() THEN 'expired'
+        ELSE 'inactive'
+      END AS invite_status
+    FROM resellers r
+    LEFT JOIN pops p ON p.reseller_id=r.id
+    LEFT JOIN customers c ON c.pop_id=p.id
+    GROUP BY r.id
+    ORDER BY r.name ASC,r.id ASC`
+  );
+  return res.json({success:true,resellers:r.rows});
+ }
  catch(e){return fail(res,e,'List');}
 }
 async function update(req,res){
