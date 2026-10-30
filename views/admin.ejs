@@ -2446,6 +2446,24 @@
 
                     <form id="addCustomerForm" novalidate>
                         <input type="hidden" id="customerEditId" name="customerEditId" value="">
+                        <div class="card card-custom mb-4" id="customerPopAssignmentCard">
+                            <div class="card-custom-header"><i class="bi bi-diagram-3 text-success fs-5"></i><div><div class="fw-semibold">Network POP Assignment</div><small class="text-muted fw-normal">Choose the Point of Presence for this customer</small></div></div>
+                            <div class="card-body p-4">
+                                <div id="customerPopAdminControls" class="d-none">
+                                    <label for="customerPopSearch" class="form-label">Search active POPs</label>
+                                    <input type="search" id="customerPopSearch" class="form-control mb-2" placeholder="Search POP name or area…" autocomplete="off">
+                                    <select id="customerPopSelect" class="form-select" aria-describedby="customerPopHelp"><option value="">Loading active POPs…</option></select>
+                                    <div id="customerPopHelp" class="form-text">FAZ Main (Direct) is selected by default for new customers. Changing an existing assignment is an administrator action.</div>
+                                    <div id="customerPopStatus" class="small mt-2" role="status" aria-live="polite"></div>
+                                    <button type="button" id="customerPopRetry" class="btn btn-sm btn-outline-secondary mt-2"><i class="bi bi-arrow-clockwise me-1"></i>Retry POP list</button>
+                                </div>
+                                <div id="customerPopResellerView" class="d-none">
+                                    <span class="small text-muted d-block mb-1">Assigned POP (locked)</span>
+                                    <span class="badge rounded-pill text-bg-success-subtle border border-success-subtle text-success-emphasis px-3 py-2" id="customerPopLockedLabel">Loading assigned POP…</span>
+                                    <div class="form-text">Resellers can update customer details but cannot change the assigned POP.</div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="card card-custom mb-4">
                             <div class="card-custom-header"><i class="bi bi-person-vcard text-success fs-5"></i><div><div class="fw-semibold">Personal &amp; Account Details</div><small class="text-muted fw-normal">Required billing identity and connection date</small></div></div>
                             <div class="card-body p-4">
@@ -7539,6 +7557,13 @@ async function deletePlan(id,name){
             const set=(id,value)=>{const el=document.getElementById(id);if(!el)return;if(['connectionDate','activationDate','expirationDate'].includes(id)){setCustomerDateValue(el,value);return;}el.value=value??'';};
             // Submit the selected PPPoE username as the edit key; database/RouterOS IDs may collide.
             set('customerEditId',customer.username||name);set('username',customer.username||name);
+            await loadCustomerPopOptions(customer.pop_id, true);
+            if (!isCustomerAdmin) {
+                const lockedLabel = document.getElementById('customerPopLockedLabel');
+                const popName = customer.pop_name || customer.popName || '';
+                if (lockedLabel) lockedLabel.textContent = popName ? popName + ' · Locked' : (customer.pop_id ? 'Assigned POP #' + customer.pop_id + ' · Locked' : 'No assigned POP · Locked');
+            }
+            bindCustomerPopSearch();
             set('fullName',customer.fullName||customer.full_name||customer.name||'');set('phoneNumber',customer.phone||customer.rawPhone||'');
             const activationIso=dateInputToIso(customer.activationDate||customer.activation_date||customer.connectionDate||customer.connection_date)||localDateValue();
             const connectionIso=dateInputToIso(customer.connectionDate||customer.connection_date)||activationIso;
@@ -8139,6 +8164,98 @@ async function deletePlan(id,name){
             },0);
         });
 
+        const customerActorRole = String(document.body?.dataset?.userRole || '').trim().toLowerCase().replace(/[\\s-]/g, '_');
+        const isCustomerAdmin = ['super_admin', 'admin'].includes(customerActorRole);
+        let customerPopOptions = [];
+        let customerPopOptionsLoaded = false;
+        let customerPopOptionsPromise = null;
+
+        function setCustomerPopStatus(message, state) {
+            const status = document.getElementById('customerPopStatus');
+            if (!status) return;
+            status.className = 'small mt-2 ' + (state === 'error' ? 'text-danger' : state === 'success' ? 'text-success' : 'text-muted');
+            status.textContent = message || '';
+        }
+
+        function renderCustomerPopOptions(selectedId, isEdit) {
+            const select = document.getElementById('customerPopSelect');
+            if (!select) return;
+            const selected = selectedId == null ? '' : String(selectedId);
+            const sorted = [...customerPopOptions].sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+            select.replaceChildren(new Option('Select an active POP…', ''));
+            sorted.forEach(pop => select.add(new Option(String(pop.name || ('POP #' + pop.id)) + (pop.area_zone ? ' · ' + pop.area_zone : ''), String(pop.id))));
+            if (selected && sorted.some(pop => String(pop.id) === selected)) select.value = selected;
+            else if (!isEdit) {
+                const direct = sorted.find(pop => String(pop.name || '').trim().toLowerCase() === 'faz main (direct)');
+                if (direct) select.value = String(direct.id);
+                else setCustomerPopStatus('FAZ Main (Direct) was not found in active POPs. The canonical server default remains available.', 'error');
+            } else if (selected) {
+                select.add(new Option('Current assignment · POP #' + selected, selected, true, true));
+                setCustomerPopStatus('Current POP is not in the active options list; its assignment is preserved unless an administrator selects another POP.', 'error');
+            }
+        }
+
+        async function loadCustomerPopOptions(selectedId, isEdit) {
+            if (!isCustomerAdmin) {
+                document.getElementById('customerPopAdminControls')?.classList.add('d-none');
+                document.getElementById('customerPopResellerView')?.classList.remove('d-none');
+                const locked = document.getElementById('customerPopLockedLabel');
+                if (locked) locked.textContent = selectedId ? 'Assigned POP #' + selectedId + ' · Locked' : 'Assigned POP unavailable · Locked';
+                return false;
+            }
+            document.getElementById('customerPopAdminControls')?.classList.remove('d-none');
+            document.getElementById('customerPopResellerView')?.classList.add('d-none');
+            if (customerPopOptionsLoaded) { renderCustomerPopOptions(selectedId, isEdit); return true; }
+            if (!customerPopOptionsPromise) {
+                setCustomerPopStatus('Loading active POPs…');
+                customerPopOptionsPromise = fetch('/api/pops/options', {credentials:'include',headers:{Accept:'application/json'}})
+                    .then(async response => {
+                        const data = await response.json();
+                        if (!response.ok || data.success === false) throw new Error(data.message || 'POP options request failed (HTTP ' + response.status + ').');
+                        if (!Array.isArray(data.pops)) throw new Error('POP options response is invalid.');
+                        customerPopOptions = data.pops;
+                        customerPopOptionsLoaded = true;
+                        return customerPopOptions;
+                    })
+                    .catch(error => {
+                        console.error('[CUSTOMER POP UI] Unable to load active POP options:', error);
+                        customerPopOptionsPromise = null;
+                        throw error;
+                    });
+            }
+            try {
+                await customerPopOptionsPromise;
+                renderCustomerPopOptions(selectedId, isEdit);
+                if (!document.getElementById('customerPopStatus')?.classList.contains('text-danger')) {
+                    setCustomerPopStatus(isEdit ? 'Current customer POP loaded. Review before changing.' : 'Active POPs loaded. FAZ Main (Direct) is selected when available.', 'success');
+                }
+                return true;
+            } catch (error) {
+                const select = document.getElementById('customerPopSelect');
+                if (select) select.replaceChildren(new Option(isEdit ? 'Keep current assignment (POP #' + (selectedId || 'unknown') + ')' : 'Use canonical default POP (FAZ Main Direct)', ''));
+                setCustomerPopStatus((error.message || 'POP options could not be loaded.') + ' The customer form remains available. ' + (isEdit ? 'Existing assignment will be preserved.' : 'The server will apply its canonical FAZ Main (Direct) default.') + ' Use Retry POP list when ready.', 'error');
+                return false;
+            }
+        }
+
+        function bindCustomerPopSearch() {
+            const search = document.getElementById('customerPopSearch'), select = document.getElementById('customerPopSelect');
+            if (!search || !select || search.dataset.bound) return;
+            search.dataset.bound = '1';
+            search.addEventListener('input', () => {
+                const term = search.value.trim().toLowerCase();
+                Array.from(select.options).forEach(option => {
+                    const pop = customerPopOptions.find(item => String(item.id) === option.value);
+                    option.hidden = Boolean(term) && Boolean(option.value) && !(String(pop?.name || '').toLowerCase().includes(term) || String(pop?.area_zone || '').toLowerCase().includes(term));
+                });
+            });
+        }
+
+        document.getElementById('customerPopRetry')?.addEventListener('click', async () => {
+            customerPopOptionsLoaded = false;
+            await loadCustomerPopOptions(document.getElementById('customerEditId')?.value ? document.getElementById('customerPopSelect')?.value : '', Boolean(document.getElementById('customerEditId')?.value));
+        });
+
         async function handleCustomerSubmit(e) {
             if (e) e.preventDefault();
 
@@ -8166,6 +8283,7 @@ async function deletePlan(id,name){
                 const editId = String(valueOf('customerEditId')).trim();
 
                 const payload = {
+                    ...(isCustomerAdmin && String(valueOf('customerPopSelect')).trim() ? { pop_id: String(valueOf('customerPopSelect')).trim() } : {}),
                     name: String(valueOf('fullName')).trim(),
                     fullName: String(valueOf('fullName')).trim(),
                     phone: String(valueOf('phoneNumber')).trim(),
@@ -8267,6 +8385,11 @@ async function deletePlan(id,name){
         }
 
         document.getElementById('addCustomerForm')?.addEventListener('submit', handleCustomerSubmit);
+        bindCustomerPopSearch();
+        loadCustomerPopOptions('', false).catch(error => {
+            console.error('[CUSTOMER POP UI] Initial POP selector setup failed:', error);
+            setCustomerPopStatus('POP selector unavailable. Customer form remains usable; retry when the service is restored.', 'error');
+        });
 
 
 
