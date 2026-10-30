@@ -8,13 +8,15 @@ const { requireRole } = require('../middleware/rbac');
 const { loadTenantScope } = require('../middleware/tenantScope');
 
 // All reseller routes are authenticated and tenant-scoped before controller execution.
-// Voucher issuance is the only reseller write operation; issued batches have no mutation routes.
+// Customer creation is limited to POPs owned by the authenticated reseller.
+// Voucher batches have no edit, delete, cancel, void, disable, or mutation routes.
 // requireRole verifies the active reseller record before tenant scope is loaded.
 router.use(requireRole(['reseller']));
 router.use(loadTenantScope);
 
 router.get('/overview', controller.overview);
 router.get('/customers', controller.listCustomers);
+router.post('/customers', controller.createCustomer);
 router.get('/customers/:id/live-session', controller.liveSession);
 router.get('/customers/:id/payments', controller.paymentHistory);
 router.get('/customers/:id', controller.getCustomer);
