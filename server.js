@@ -117,7 +117,7 @@ app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   if(customerRoute&&!customerSectionSlugs.has(decodeURIComponent(customerRoute[1]).toLowerCase())) return next();
   return res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 });
-app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
+app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||""),currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff")}));
 app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
 app.get("/hotspot/webhook",requireRole(["super_admin","admin"]),(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
