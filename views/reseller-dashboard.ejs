@@ -59,7 +59,7 @@
     <section class="mb-4">
       <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap mb-3">
         <div><h1 class="h4 fw-bold mb-1">Network overview</h1><div class="text-secondary small">Your assigned POPs, customer activity and current-month collections</div></div>
-        <div class="small text-secondary"><i class="bi bi-shield-lock me-1"></i>Customer directory · read-only</div>
+        <div class="small text-secondary"><i class="bi bi-shield-check me-1"></i>Customer access scoped to your assigned POPs</div>
       </div>
       <div class="row g-3">
         <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-diagram-3"></i></div><div class="metric-label">Assigned POPs</div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your POP locations</div></div></div>
@@ -142,6 +142,34 @@
       </div>
     </section>
 
+    <section class="panel mb-4" id="customer-creation">
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div><h2 class="section-title">Add PPPoE Customer</h2><div class="section-subtitle">Create a customer under one of your active POPs. Network settings are inherited from that POP.</div></div>
+        <button id="toggleCustomerCreate" class="btn btn-fzn btn-sm" type="button" aria-expanded="false" aria-controls="customerCreatePanel"><i class="bi bi-person-plus me-1"></i>Add customer</button>
+      </div>
+      <div id="customerCreatePanel" class="mt-4" hidden>
+        <div id="customerCreateError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+        <div id="customerCreateSuccess" class="alert alert-success d-none" role="status" aria-live="polite"></div>
+        <form id="customerCreateForm" novalidate>
+          <div class="row g-3">
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerName">Customer full name</label><input class="form-control" id="newCustomerName" name="fullName" maxlength="200" autocomplete="name" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPhone">Mobile number</label><input class="form-control" id="newCustomerPhone" name="phone" type="tel" maxlength="40" autocomplete="tel" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerUsername">PPPoE username</label><input class="form-control" id="newCustomerUsername" name="username" maxlength="100" autocomplete="off" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPassword">PPPoE password</label><input class="form-control" id="newCustomerPassword" name="password" type="text" maxlength="255" autocomplete="new-password" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPackage">Internet package</label><select class="form-select" id="newCustomerPackage" name="package" required disabled><option value="">Loading packages…</option></select></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerPop">Assigned active POP</label><select class="form-select" id="newCustomerPop" name="pop_id" required disabled><option value="">Loading assigned POPs…</option></select></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerConnectionDate">Connection date</label><input class="form-control" id="newCustomerConnectionDate" name="activationDate" type="date" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerExpiryDate">Billing expiry date</label><input class="form-control" id="newCustomerExpiryDate" name="expirationDate" type="date" required></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerVlan">Inherited VLAN ID</label><input class="form-control bg-light" id="newCustomerVlan" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="newCustomerIpPool">Inherited MikroTik IP Pool</label><input class="form-control bg-light" id="newCustomerIpPool" type="text" value="Select an active POP" readonly aria-readonly="true" tabindex="-1"></div>
+            <div class="col-12"><label class="form-label fw-semibold" for="newCustomerAddress">Installation address (optional)</label><textarea class="form-control" id="newCustomerAddress" name="installationAddress" rows="2" maxlength="500"></textarea></div>
+          </div>
+          <input type="hidden" name="routerId" value="3">
+          <div class="d-flex justify-content-end gap-2 flex-wrap mt-4"><button id="cancelCustomerCreate" class="btn btn-outline-secondary" type="button">Cancel</button><button id="submitCustomerCreate" class="btn btn-fzn" type="submit" disabled><i class="bi bi-person-check me-1"></i>Create customer</button></div>
+          <p class="small text-secondary mt-3 mb-0"><i class="bi bi-lock me-1"></i>VLAN and IP Pool are display-only. The server verifies POP ownership and active status and never trusts browser-supplied network settings.</p>
+        </form>
+      </div>
+    </section>
     <section class="panel">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
         <div><h2 class="section-title">Customer directory</h2><div class="section-subtitle">Only customers assigned to your POPs are shown</div></div>
@@ -160,7 +188,7 @@
 
   <script>
     const api='/api/reseller-portal';
-    const state={customers:[],pops:[],voucherCatalog:null,pendingVoucherIdempotencyKey:null};
+    const state={customers:[],pops:[],customerPackages:[],voucherCatalog:null,pendingVoucherIdempotencyKey:null};
     const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const money=value=>'৳'+Number(value||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
     const date=value=>{if(!value)return '—';const raw=String(value).slice(0,10);const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:escapeHtml(raw)};
@@ -190,6 +218,63 @@
     async function refreshVisibleLiveStatuses(rows){
       const queue=[...rows];const worker=async()=>{while(queue.length){const customer=queue.shift();const cell=document.querySelector('tr[data-customer-id="'+CSS.escape(String(customer.id))+'"] .live-cell');if(!cell)continue;try{const result=await getJson(api+'/customers/'+encodeURIComponent(customer.id)+'/live-session');if(!result.liveStatusAvailable){cell.innerHTML='<span class="badge text-bg-secondary">Status Unavailable</span>';continue}const online=Boolean(result.live?.online);cell.innerHTML='<span class="small"><span class="status-dot '+(online?'online':'offline')+'"></span>'+(online?'Online':'Offline')+'</span>'}catch(error){cell.innerHTML='<span class="badge text-bg-secondary">Status Unavailable</span>'}}};await Promise.all(Array.from({length:Math.min(4,queue.length)},worker));
     }
+    function activeCustomerPops(){return state.pops.filter(pop=>String(pop.status||'active').toLowerCase()==='active')}
+    function renderCustomerCreationOptions(){
+      const popSelect=document.getElementById('newCustomerPop');
+      const packageSelect=document.getElementById('newCustomerPackage');
+      const pops=activeCustomerPops();
+      popSelect.innerHTML='<option value="">Select an active POP</option>'+pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+'</option>').join('');
+      popSelect.disabled=!pops.length;
+      packageSelect.innerHTML='<option value="">Select an internet package</option>'+state.customerPackages.map(pkg=>'<option value="'+escapeHtml(pkg.name)+'" data-profile="'+escapeHtml(pkg.profileName)+'">'+escapeHtml(pkg.name)+' · '+money(pkg.price)+' / month</option>').join('');
+      packageSelect.disabled=!state.customerPackages.length;
+      document.getElementById('submitCustomerCreate').disabled=!pops.length||!state.customerPackages.length;
+      updateInheritedPopFields();
+    }
+    function updateInheritedPopFields(){
+      const selected=activeCustomerPops().find(pop=>String(pop.id)===document.getElementById('newCustomerPop').value);
+      document.getElementById('newCustomerVlan').value=selected?.vlan_id??'Not configured';
+      document.getElementById('newCustomerIpPool').value=selected?.mikrotik_ip_pool||'Not configured';
+    }
+    function showCustomerCreateError(message){
+      const box=document.getElementById('customerCreateError');box.textContent=message;box.classList.remove('d-none');
+      document.getElementById('customerCreateSuccess').classList.add('d-none');
+    }
+    function clearCustomerCreateMessages(){
+      const error=document.getElementById('customerCreateError');error.textContent='';error.classList.add('d-none');
+      const success=document.getElementById('customerCreateSuccess');success.textContent='';success.classList.add('d-none');
+    }
+    async function loadCustomerPackages(){
+      const select=document.getElementById('newCustomerPackage');
+      try{const result=await getJson(api+'/packages');state.customerPackages=result.packages||[];renderCustomerCreationOptions();
+        if(!state.customerPackages.length)select.innerHTML='<option value="">No active internet packages are configured</option>';
+      }catch(error){select.innerHTML='<option value="">Package catalog unavailable</option>';select.disabled=true;document.getElementById('submitCustomerCreate').disabled=true;showCustomerCreateError(error.message)}
+    }
+    document.getElementById('toggleCustomerCreate').addEventListener('click',()=>{
+      const panel=document.getElementById('customerCreatePanel');const opening=panel.hidden;panel.hidden=!opening;
+      document.getElementById('toggleCustomerCreate').setAttribute('aria-expanded',String(opening));if(opening)document.getElementById('newCustomerName').focus();
+    });
+    document.getElementById('cancelCustomerCreate').addEventListener('click',()=>{
+      document.getElementById('customerCreateForm').reset();clearCustomerCreateMessages();document.getElementById('customerCreatePanel').hidden=true;
+      document.getElementById('toggleCustomerCreate').setAttribute('aria-expanded','false');updateInheritedPopFields();
+    });
+    document.getElementById('newCustomerPop').addEventListener('change',updateInheritedPopFields);
+    document.getElementById('customerCreateForm').addEventListener('submit',async event=>{
+      event.preventDefault();clearCustomerCreateMessages();const form=event.currentTarget;const button=document.getElementById('submitCustomerCreate');
+      if(!form.reportValidity())return;
+      const popId=document.getElementById('newCustomerPop').value;const selectedPop=activeCustomerPops().find(pop=>String(pop.id)===popId);
+      const packageOption=document.getElementById('newCustomerPackage').selectedOptions[0];
+      if(!selectedPop||!packageOption?.value){showCustomerCreateError('Select an active assigned POP and a configured internet package.');return}
+      const payload=Object.fromEntries(new FormData(form).entries());payload.pop_id=popId;payload.packageProfile=packageOption.dataset.profile;payload.profile=packageOption.dataset.profile;payload.areaZone=selectedPop.area_zone||'';
+      button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Creating…';
+      try{
+        const response=await fetch(api+'/customers',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(payload)});
+        let result;try{result=await response.json()}catch(parseError){throw new Error('The server returned an invalid response.')}
+        if(!response.ok||!result.success)throw new Error(result.message||'Customer creation failed.');
+        const success=document.getElementById('customerCreateSuccess');success.textContent=result.message||'Customer created successfully.';success.classList.remove('d-none');
+        form.reset();updateInheritedPopFields();await loadDashboard();
+      }catch(error){showCustomerCreateError(error.message)}
+      finally{button.innerHTML='<i class="bi bi-person-check me-1"></i>Create customer';button.disabled=!activeCustomerPops().length||!state.customerPackages.length}
+    });
     async function loadDashboard(){
       try{
         const [overview,directory]=await Promise.all([getJson(api+'/overview'),getJson(api+'/customers')]);
@@ -200,7 +285,7 @@
         document.getElementById('metricRenewals').textContent=m.monthlyRenewalCount??0;
         document.getElementById('metricCollection').textContent='Collection: '+money(m.monthlyCollectionAmount);
         state.pops=overview.pops||[];state.customers=directory.customers||[];
-        renderPops(state.pops);renderCustomers();
+        renderPops(state.pops);renderCustomers();renderCustomerCreationOptions();
       }catch(error){showError(error.message);document.getElementById('customerRows').innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Customer directory could not be loaded.</td></tr>'}
     }
     document.getElementById('customerSearch').addEventListener('input',renderCustomers);
@@ -311,6 +396,7 @@
     async function loadVoucherPortal(){await Promise.all([loadVoucherCatalog(),loadVoucherHistory()])}
 
     loadDashboard();
+    loadCustomerPackages();
     loadVoucherPortal();
   </script>
 </body>
