@@ -242,7 +242,7 @@ test('reseller dashboard contains bounded generation and read-only reprint contr
   assert.match(script, /retailPrice/);
   assert.match(script, /wholesalePrice/);
   assert.match(dashboard, /voucherHistoryRows/);
-  assert.match(dashboard, /\/reseller\/hotspot\/voucher-batches\//);
+  assert.match(script, /\/reseller\/hotspot\/voucher-batches\//);
   assert.match(script, /Idempotency-Key/);
 });
 
