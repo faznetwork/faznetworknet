@@ -283,7 +283,7 @@ async function updateStatus(req, res) {
   if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive.' });
   try {
     const result = await db.query(
-      'UPDATE public.pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',
+      'UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',
       [status,id]
     );
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'POP not found.' });
