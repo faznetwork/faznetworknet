@@ -33,7 +33,9 @@ jobs:
           node --check controllers/adminDiagnosticsController.js
           node --check services/paymentWebhookParser.js
           node --check services/mikrotikService.js
+          node --check middleware/postgresRateLimiter.js
           node --check middleware/rbac.js
+          node --check test/reseller-rate-limit-pop-atomic.test.js
           node --check middleware/tenantScope.js
           node --check test/reseller-customer-ownership.integration.test.js
           node --check test/reseller-session-revocation.test.js
