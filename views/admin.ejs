@@ -2055,6 +2055,17 @@
                     <li><a href="/admin/resellers/sub-staff"><span data-key="sub_staff">Sub-Staff</span></a></li>
                 </ul>
             </li>
+
+            <li class="menu-item" data-rbac-roles="super_admin,admin">
+                <button class="dropdown-toggle" type="button" onclick="toggleSubmenu(event, this)" aria-expanded="false">
+                    <i class="bi bi-diagram-3"></i> <span>Reseller &amp; POP Management</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
+                </button>
+                <ul class="submenu">
+                    <li><a href="/admin/network/pop-management"><i class="bi bi-geo-alt me-2"></i><span>POP Management</span></a></li>
+                    <li><a href="/admin/resellers/accounts"><i class="bi bi-people me-2"></i><span>Reseller Accounts &amp; Access</span></a></li>
+                </ul>
+            </li>
         </ul>
 
         <div class="drawer-account">
@@ -8960,6 +8971,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 }
                 if (route.view === 'monitor') return { view: 'monitor', mode: String(route.mode || 'online') === 'usage' ? 'usage' : 'online' };
                 if (route.view === 'sub-staff') return { view: 'sub-staff' };
+                if (route.view === 'pop-management') return { view: 'pop-management' };
+                if (route.view === 'reseller-accounts') return { view: 'reseller-accounts' };
                 if (route.view === 'account-dashboard') return { view: 'account-dashboard' };
                 if (route.view === 'account-manage') return { view: 'account-manage' };
                 if (route.view === 'vpn') return { view: 'vpn' };
@@ -9036,7 +9049,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/hr/departments': { view: 'hr', section: 'departments' },
                     '/admin/hr/employees': { view: 'hr', section: 'employees' },
                     '/admin/hr/employees/added': { view: 'hr', section: 'added' },
-                    '/admin/resellers/sub-staff': { view: 'sub-staff' }
+                    '/admin/resellers/sub-staff': { view: 'sub-staff' },
+                    '/admin/network/pop-management': { view: 'pop-management' },
+                    '/admin/resellers/accounts': { view: 'reseller-accounts' }
                 };
                 return Object.prototype.hasOwnProperty.call(routes, path) ? cleanRoute(routes[path]) : null;
             }
@@ -9119,6 +9134,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                 if (normalized.view === 'network-diagram') return '/admin/network/diagram';
                 if (normalized.view === 'monitor') return normalized.mode === 'usage' ? '/admin/monitor/usage' : '/admin/monitor/online';
                 if (normalized.view === 'sub-staff') return '/admin/resellers/sub-staff';
+                if (normalized.view === 'pop-management') return '/admin/network/pop-management';
+                if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';
                 if (normalized.view === 'account-dashboard') return '/admin/account/dashboard';
                 if (normalized.view === 'account-manage') return '/admin/account/manage';
                 if (normalized.view === 'vpn') return '/admin/vpn';
@@ -9192,6 +9209,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     case 'olt': return callIfAvailable('loadOltManagement', [r.mode]);
                     case 'staff': return callIfAvailable('loadStaffManagement', ['all']);
                     case 'sub-staff': return callIfAvailable('loadStaffManagement', ['sub-staff']);
+                    case 'pop-management': return callIfAvailable('loadPopManagement');
+                    case 'reseller-accounts': return callIfAvailable('loadResellerAccess');
                     case 'account-dashboard': return callIfAvailable('loadAccountDashboard');
                     case 'account-manage': return callIfAvailable('loadStaffManagement', ['account-manage']);
                     case 'vpn': return callIfAvailable('loadVpnModule');
@@ -9717,5 +9736,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-server-profiles.js?v=1" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
+<script src="/js/pop-reseller-admin.js?v=milestone4-20261030"></script>
 </body>
 </html>
