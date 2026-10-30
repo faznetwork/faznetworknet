@@ -68,14 +68,14 @@ async function getCatalog(resellerIdValue) {
 
   const popIds = pops.map(pop => pop.id);
   const bindings = await getOptionalRows(
-    `SELECT id, pop_id, status
+    `SELECT id, pop_id, status, ip_pool
      FROM public.pop_hotspot_bindings
      WHERE pop_id = ANY($1::bigint[]) AND status='active'
      ORDER BY pop_id ASC, id ASC`,
     [popIds],
     'pop_hotspot_bindings'
   );
-  const bindingPopIds = new Set(bindings.map(row => String(row.pop_id)));
+  const bindingPopIds = new Set(bindings.filter(row => String(row.ip_pool || '').trim()).map(row => String(row.pop_id)));
   for (const pop of pops) pop.bindingConfigured = bindingPopIds.has(String(pop.id));
 
   if (bindings.length) {
