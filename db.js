@@ -70,7 +70,7 @@ async function withTransaction(callback) {
     dbConnected = true;
     return result;
   } catch (error) {
-    try { await client.query("ROLLBACK"); } catch (_) {}
+    try { await client.query("ROLLBACK"); } catch (rollbackError) { console.error("[Database] Transaction rollback failed:", rollbackError.message); }
     dbConnected = false;
     throw error;
   } finally { client.release(); }
