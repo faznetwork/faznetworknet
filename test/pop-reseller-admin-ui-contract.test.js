@@ -137,7 +137,7 @@ test('POP and reseller form submissions use stable document-level delegation wit
   assert.ok(!ui.includes("section.addEventListener('submit'"));
   assert.ok(ui.includes("document.addEventListener('click', function (event)"));
   assert.ok(ui.includes("closest('#fprPopSave, [data-action=\"save-pop\"]')"));
-  assert.ok(ui.includes("form.requestSubmit(button)"));
+  assert.ok(ui.includes("form.requestSubmit()"));
   assert.ok(ui.includes("event.preventDefault();"));
   assert.ok(ui.includes("id=\"fprPopSave\" data-action=\"save-pop\""));
 });
@@ -161,4 +161,20 @@ test('Raw POP diagnostics execute before selector guards in top-level document l
   assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") > submitListener);
   assert.ok(ui.indexOf("console.log('[POP DEBUG SUBMIT] Raw submit fired on element:") < ui.indexOf("if (!form || (form.id !== 'fprPopForm'"));
   assert.ok(!ui.includes('function bindGlobalFormLifecycle'));
+});
+
+test('POP modal disables native focus-blocking validation and validates its required name explicitly', () => {
+  assert.ok(ui.includes('<form id="fprPopForm" novalidate>'));
+  assert.ok(ui.includes("const nameField = form.elements.namedItem('name');"));
+  assert.ok(ui.includes("!String(nameField.value || '').trim()"));
+  assert.ok(ui.includes("nameField.classList.add('is-invalid')"));
+  assert.ok(ui.includes("showToast(message, 'danger')"));
+});
+
+test('POP modal event fallback targets the active modal and stale modal instances are removed before rendering', () => {
+  assert.ok(ui.includes("document.querySelector('#fprPopModal.show, #fprPopModal')"));
+  assert.ok(ui.includes("activeModal.querySelector('form#fprPopForm')"));
+  assert.ok(ui.includes("document.querySelectorAll('#fprPopModal').forEach"));
+  assert.ok(ui.includes("if (instance) instance.dispose();"));
+  assert.ok(ui.includes("element.remove();"));
 });
