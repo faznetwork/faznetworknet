@@ -16,6 +16,7 @@ test('reseller workspace exposes isolated authenticated page routes before custo
     assert.ok(line, 'Missing page route ' + route);
     assert.match(line, /requireRole\(\["reseller"\]\),loadTenantScope/);
     assert.match(line, /Cache-Control/);
+    assert.match(line, /activePath:req.path/);
   }
 });
 
@@ -52,4 +53,21 @@ test('reports and payments use existing scoped per-customer payment history only
   assert.match(view, /Customer Payment History/);
   assert.match(js, /\/customers\/'\+encodeURIComponent\(customerId\)\+'\/payments/);
   assert.doesNotMatch(js, /\/payments\/transactions|\/reports/);
+});
+
+test('reseller workspace activePath is explicitly passed and partials safely default missing locals', () => {
+  const server = read('server.js');
+  for (const route of ['/reseller/dashboard','/reseller/vouchers/generate','/reseller/vouchers/history','/reseller/customers','/reseller/customers/add','/reseller/payments']) {
+    const line = server.split('\\n').find(value => value.includes('app.get("' + route + '"'));
+    assert.ok(line);
+    assert.match(line, /activePath:req\\.path/);
+  }
+  for (const partial of ['reseller-scripts.ejs','reseller-sidebar.ejs']) {
+    const source = read(path.join('views/partials', partial));
+    assert.match(source, /typeof activePath !== 'undefined'/);
+    assert.match(source, /safeActivePath/);
+  }
+  for (const view of ['reseller-dashboard.ejs','reseller-vouchers.ejs','reseller-customers.ejs','reseller-payments.ejs']) {
+    assert.match(read(path.join('views', view)), /include\\('partials\\/reseller-scripts', \\{ activePath \\}\\)/);
+  }
 });

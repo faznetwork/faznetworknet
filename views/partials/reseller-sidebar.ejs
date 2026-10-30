@@ -1,37 +1,31 @@
+<%
+  const safeActivePath = typeof activePath !== 'undefined' ? String(activePath || '') : '';
+  const safeBrandName = typeof brandName !== 'undefined' ? brandName : 'FAZ NETWORK';
+  const safeAccountName = typeof safeResellerName !== 'undefined' ? safeResellerName : 'Reseller';
+%>
 <aside class="reseller-sidebar" id="resellerSidebar" aria-label="Reseller navigation">
   <div class="reseller-sidebar-brand">
     <span class="reseller-brand-mark"><i class="bi bi-diagram-3-fill"></i></span>
-    <span><strong><%= brandName %></strong><small>Reseller Workspace</small></span>
+    <span><strong><%= safeBrandName %></strong><small>Reseller Workspace</small></span>
   </div>
   <nav class="reseller-nav">
-    <a class="reseller-nav-link <%= activePath === '/reseller/dashboard' ? 'active' : '' %>" href="/reseller/dashboard" <%= activePath === '/reseller/dashboard' ? 'aria-current="page"' : '' %>>
-      <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-    </a>
+    <a class="reseller-nav-link <%= safeActivePath === '/reseller/dashboard' ? 'active' : '' %>" href="/reseller/dashboard" <%= safeActivePath === '/reseller/dashboard' ? 'aria-current="page"' : '' %>><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
     <div class="reseller-nav-group">
-      <button class="reseller-nav-link reseller-nav-toggle <%= activePath.startsWith('/reseller/vouchers/') ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#voucherSubnav" aria-expanded="<%= activePath.startsWith('/reseller/vouchers/') ? 'true' : 'false' %>" aria-controls="voucherSubnav">
-        <i class="bi bi-ticket-perforated-fill"></i><span>Voucher Management</span><i class="bi bi-chevron-down ms-auto nav-chevron"></i>
-      </button>
-      <div class="collapse <%= activePath.startsWith('/reseller/vouchers/') ? 'show' : '' %>" id="voucherSubnav">
-        <a class="reseller-subnav-link <%= activePath === '/reseller/vouchers/generate' ? 'active' : '' %>" href="/reseller/vouchers/generate">Generate Vouchers</a>
-        <a class="reseller-subnav-link <%= activePath === '/reseller/vouchers/history' ? 'active' : '' %>" href="/reseller/vouchers/history">Batch History &amp; Reprint</a>
+      <button class="reseller-nav-link reseller-nav-toggle <%= safeActivePath.startsWith('/reseller/vouchers/') ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#voucherSubnav" aria-expanded="<%= safeActivePath.startsWith('/reseller/vouchers/') ? 'true' : 'false' %>" aria-controls="voucherSubnav"><i class="bi bi-ticket-perforated-fill"></i><span>Voucher Management</span><i class="bi bi-chevron-down ms-auto nav-chevron"></i></button>
+      <div class="collapse <%= safeActivePath.startsWith('/reseller/vouchers/') ? 'show' : '' %>" id="voucherSubnav">
+        <a class="reseller-subnav-link <%= safeActivePath === '/reseller/vouchers/generate' ? 'active' : '' %>" href="/reseller/vouchers/generate">Generate Vouchers</a>
+        <a class="reseller-subnav-link <%= safeActivePath === '/reseller/vouchers/history' ? 'active' : '' %>" href="/reseller/vouchers/history">Batch History &amp; Reprint</a>
       </div>
     </div>
     <div class="reseller-nav-group">
-      <button class="reseller-nav-link reseller-nav-toggle <%= activePath.startsWith('/reseller/customers') ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#customerSubnav" aria-expanded="<%= activePath.startsWith('/reseller/customers') ? 'true' : 'false' %>" aria-controls="customerSubnav">
-        <i class="bi bi-people-fill"></i><span>Customer Directory</span><i class="bi bi-chevron-down ms-auto nav-chevron"></i>
-      </button>
-      <div class="collapse <%= activePath.startsWith('/reseller/customers') ? 'show' : '' %>" id="customerSubnav">
-        <a class="reseller-subnav-link <%= activePath === '/reseller/customers' ? 'active' : '' %>" href="/reseller/customers">All Subscribers</a>
-        <a class="reseller-subnav-link <%= activePath === '/reseller/customers/add' ? 'active' : '' %>" href="/reseller/customers/add">Add New Customer</a>
+      <button class="reseller-nav-link reseller-nav-toggle <%= safeActivePath.startsWith('/reseller/customers') ? 'active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#customerSubnav" aria-expanded="<%= safeActivePath.startsWith('/reseller/customers') ? 'true' : 'false' %>" aria-controls="customerSubnav"><i class="bi bi-people-fill"></i><span>Customer Directory</span><i class="bi bi-chevron-down ms-auto nav-chevron"></i></button>
+      <div class="collapse <%= safeActivePath.startsWith('/reseller/customers') ? 'show' : '' %>" id="customerSubnav">
+        <a class="reseller-subnav-link <%= safeActivePath === '/reseller/customers' ? 'active' : '' %>" href="/reseller/customers">All Subscribers</a>
+        <a class="reseller-subnav-link <%= safeActivePath === '/reseller/customers/add' ? 'active' : '' %>" href="/reseller/customers/add">Add New Customer</a>
       </div>
     </div>
-    <a class="reseller-nav-link <%= activePath === '/reseller/payments' ? 'active' : '' %>" href="/reseller/payments" <%= activePath === '/reseller/payments' ? 'aria-current="page"' : '' %>>
-      <i class="bi bi-cash-coin"></i><span>Reports &amp; Payments</span>
-    </a>
+    <a class="reseller-nav-link <%= safeActivePath === '/reseller/payments' ? 'active' : '' %>" href="/reseller/payments" <%= safeActivePath === '/reseller/payments' ? 'aria-current="page"' : '' %>><i class="bi bi-cash-coin"></i><span>Reports &amp; Payments</span></a>
   </nav>
-  <div class="reseller-sidebar-account">
-    <div class="account-avatar"><i class="bi bi-person-fill"></i></div>
-    <div class="min-w-0"><strong><%= safeResellerName %></strong><small>Reseller account</small></div>
-  </div>
+  <div class="reseller-sidebar-account"><div class="account-avatar"><i class="bi bi-person-fill"></i></div><div class="min-w-0"><strong><%= safeAccountName %></strong><small>Reseller account</small></div></div>
 </aside>
 <div class="reseller-sidebar-backdrop" id="resellerSidebarBackdrop"></div>
