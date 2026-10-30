@@ -235,6 +235,34 @@ test('reseller history SQL is always scoped by the authenticated reseller id', (
   assert.match(source, /WHERE batch_key=\$1::uuid AND reseller_id=\$2/);
 });
 
+test('voucher batch history selects the canonical UUID reference and remains reseller-scoped', async t => {
+  let captured;
+  t.mock.method(db, 'query', async (sql, values) => {
+    captured = { sql, values };
+    return { rows: [{
+      id: '9001', batch_key: BATCH_KEY, pop_id: 21, package_id: '701',
+      profile_key: '2-Hour', validity: '2h', quantity: 1, issued_count: 1,
+      retail_total: '50.00', wholesale_total: '30.00', margin_total: '20.00',
+      billing_mode: 'prepaid', status: 'issued', created_at: new Date('2026-10-30T10:00:00Z')
+    }] };
+  });
+  const rows = await issuance.listBatches(41);
+  assert.equal(rows[0].batchKey, BATCH_KEY);
+  assert.match(captured.sql, /b\.batch_key AS batch_key/);
+  assert.match(captured.sql, /WHERE b\.reseller_id=\$1/);
+  assert.deepEqual(captured.values, [41, 50]);
+});
+
+test('forward batch-key compatibility migration adds/backfills UUID without destructive DDL', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261031_reseller_voucher_batch_key_compat.sql'), 'utf8');
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS batch_key UUID/);
+  assert.match(migration, /SET batch_key = gen_random_uuid\(\)/);
+  assert.match(migration, /ALTER COLUMN batch_key SET NOT NULL/);
+  assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS/);
+  assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN|INDEX)\\b/i);
+  assert.doesNotMatch(migration, /DELETE FROM public\.(reseller_voucher_batches|reseller_voucher_issuance_items|reseller_ledger_entries)/i);
+});
+
 test('reseller dashboard contains bounded generation and read-only reprint controls', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
   const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
