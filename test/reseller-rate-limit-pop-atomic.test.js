@@ -6,6 +6,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const db = require('../db');
 const { createRateLimiter } = require('../middleware/postgresRateLimiter');
+const resellerAuthController = require('../controllers/resellerAuthController');
+const invitationService = require('../services/resellerInvitationService');
 
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
@@ -71,6 +73,44 @@ test('rate limiter fails closed with explicit 503 when PostgreSQL counter is una
   assert.equal(nextCalls, 0);
   assert.equal(loggedError[0], '[RATE LIMIT] PostgreSQL counter failed:');
   assert.match(loggedError[1], /database unavailable/);
+});
+
+test('resend endpoint returns HTTP 429 and does not enqueue during the 60-second cooldown', async t => {
+  let queueCalls = 0;
+  t.mock.method(db, 'withTransaction', async callback => callback({
+    query: async sql => {
+      assert.match(sql, /FOR UPDATE/);
+      return { rows: [{ id: 41, name: 'Reseller', email: 'reseller@example.invalid', phone: '01700000000', status: 'inactive', cooldown_remaining: 37 }] };
+    }
+  }));
+  t.mock.method(invitationService, 'queueInvitation', async () => { queueCalls += 1; });
+  const res = response();
+  await resellerAuthController.resendInvite({ params: { id: '41' } }, res);
+  assert.equal(res.statusCode, 429);
+  assert.equal(res.headers['Retry-After'], '37');
+  assert.equal(res.body.code, 'INVITATION_COOLDOWN');
+  assert.equal(queueCalls, 0);
+});
+
+test('resend endpoint queues exactly one invitation after the cooldown expires', async t => {
+  let queueCalls = 0;
+  t.mock.method(db, 'withTransaction', async callback => callback({
+    query: async sql => {
+      if (sql.includes('SELECT id,name,email,phone,status,invited_at')) {
+        return { rows: [{ id: 41, name: 'Reseller', email: 'reseller@example.invalid', phone: '01700000000', status: 'inactive', cooldown_remaining: 0 }] };
+      }
+      if (sql.startsWith('UPDATE resellers SET invite_token_hash')) {
+        return { rows: [{ id: 41, name: 'Reseller', email: 'reseller@example.invalid', phone: '01700000000', status: 'inactive' }] };
+      }
+      throw new Error('Unexpected resend query: ' + sql);
+    }
+  }));
+  t.mock.method(invitationService, 'queueInvitation', async () => { queueCalls += 1; return { accepted: true }; });
+  const res = response();
+  await resellerAuthController.resendInvite({ params: { id: '41' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(queueCalls, 1);
 });
 
 test('resend cooldown is checked under the reseller row lock before outbox enqueue', () => {
