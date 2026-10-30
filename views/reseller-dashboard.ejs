@@ -44,8 +44,8 @@
         <div><div class="eyebrow"><%= brandName %></div><div class="fw-bold fs-5">Reseller Workspace</div></div>
       </div>
       <nav class="d-flex align-items-center gap-2 flex-wrap" aria-label="Reseller workspace">
-        <a class="btn btn-sm btn-outline-light" href="#voucher-generation"><i class="bi bi-ticket-perforated me-1"></i>Generate vouchers</a>
-        <a class="btn btn-sm btn-outline-light" href="#voucher-history"><i class="bi bi-clock-history me-1"></i>Voucher history</a>
+        <a class="btn btn-sm btn-outline-light" href="#voucher-generation"><i class="bi bi-ticket-perforated me-1"></i>Hotspot Vouchers</a>
+        <a class="btn btn-sm btn-outline-light" href="#voucher-history"><i class="bi bi-clock-history me-1"></i>Batch History</a>
       </nav>
       <div class="d-flex align-items-center gap-3 header-actions">
         <div class="text-end"><div class="small text-white-50">Signed in as</div><div class="fw-semibold"><%= safeResellerName %></div></div>
@@ -76,12 +76,13 @@
 
     <section class="panel mb-4" id="voucher-generation">
       <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-        <div><h2 class="section-title">Hotspot Voucher Generation</h2><div class="section-subtitle">Issue vouchers only for active packages assigned to your POPs</div></div>
+        <div><div class="eyebrow text-success mb-1">Reseller sales workspace</div><h2 class="section-title">Hotspot Vouchers</h2><div class="section-subtitle">Choose an assigned POP, select a package, review your margin and billing impact, then issue a batch</div></div>
         <span class="badge rounded-pill badge-soft"><i class="bi bi-shield-check me-1"></i>Server-verified pricing</span>
       </div>
       <div id="voucherError" class="alert alert-danger d-none" role="alert"></div>
       <div id="voucherSuccess" class="alert alert-success d-none" role="status"></div>
       <div class="row g-3">
+        <div class="col-12"><div class="small fw-bold text-success">STEP 1 · SELECT YOUR NETWORK LOCATION</div></div>
         <div class="col-12 col-lg-6">
           <label for="voucherPop" class="form-label fw-semibold">Assigned POP</label>
           <select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select>
@@ -90,6 +91,7 @@
           <label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label>
           <select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select>
         </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · SET BATCH QUANTITY</div></div>
         <div class="col-12 col-md-4">
           <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
           <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
@@ -109,11 +111,14 @@
             </div>
           </div>
         </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 4 · CONFIRM WALLET / CREDIT IMPACT</div></div>
         <div class="col-12">
           <div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div>
+          <div id="voucherImpact" class="small p-3 mt-2 border rounded-3 bg-light" aria-live="polite">Select a package and quantity to preview the billing impact.</div>
         </div>
+        <div class="col-12"><div class="small fw-bold text-success">STEP 5 · ISSUE YOUR VOUCHER BATCH</div></div>
         <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap">
-          <div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices and reseller identity are recalculated and verified by the server at issue time.</div>
+          <div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices, account eligibility and reseller identity are recalculated and verified by the server at issue time.</div>
           <button id="generateVouchersButton" class="btn btn-fzn px-4" type="button" disabled><i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch</button>
         </div>
       </div>
@@ -128,7 +133,7 @@
       <div id="voucherHistoryError" class="alert alert-danger d-none" role="alert"></div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-          <thead><tr><th>Batch reference</th><th>Profile</th><th>Quantity</th><th>Wholesale cost</th><th>Margin</th><th>Issued</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Issued date</th><th>Batch reference</th><th>POP</th><th>Package</th><th>Quantity</th><th>Total cost</th><th>Margin</th><th>Action</th></tr></thead>
           <tbody id="voucherHistoryRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr></tbody>
         </table>
       </div>
@@ -232,7 +237,17 @@
       const postpaidLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+totalCost>Number(account.creditLimit));
       const canIssue=Boolean(pkg&&validQuantity&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!prepaidShortfall&&!postpaidLimit);
       document.getElementById('generateVouchersButton').disabled=!canIssue;
-      if(pkg&&wholesale===0)voucherAlert('voucherError','This package has zero wholesale cost. The current v1.3 ledger requires a positive journal amount, so issuance is disabled pending a zero-value ledger policy.');
+      const impact=document.getElementById('voucherImpact');
+      if(!pkg||!validQuantity){impact.textContent='Select an eligible package and a whole quantity from 1 to 500 to preview your account impact.';}
+      else if(!account||account.status!=='active'){impact.textContent='No active billing account is available. Voucher issuance is blocked.';}
+      else if(account.billingMode==='prepaid'){
+        const afterBalance=Number(account.walletBalance)-totalCost;
+        impact.textContent='Confirmation: '+quantity+' vouchers will debit '+money(totalCost)+' from your prepaid wallet. Current balance: '+money(account.walletBalance)+' · Estimated balance after issue: '+money(afterBalance)+'.';
+      }else{
+        const afterReceivable=Number(account.receivableBalance)+totalCost;
+        impact.textContent='Confirmation: '+quantity+' vouchers will add '+money(totalCost)+' to your postpaid receivable. Current receivable: '+money(account.receivableBalance)+' · Estimated receivable after issue: '+money(afterReceivable)+' · Credit limit: '+money(account.creditLimit)+'.';
+      }
+      if(pkg&&wholesale<=0)voucherAlert('voucherError','This package is not available for reseller issuance because wholesale price must be greater than ৳0. Promotional and free vouchers are issued by an administrator.');
       else if(pkg&&margin<0)voucherAlert('voucherError','This package is not eligible because wholesale cost exceeds retail price.');
       else if(!validQuantity)voucherAlert('voucherError','Quantity must be a whole number from 1 to 500.');
       else if(prepaidShortfall)voucherAlert('voucherError','Your prepaid wallet balance is insufficient for this batch.');
@@ -268,7 +283,7 @@
       try{
         const result=await getJson(api+'/hotspot/voucher-batches?limit=100');const batches=result.batches||[];
         if(!batches.length){body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">No voucher batches have been issued yet.</td></tr>';return}
-        body.innerHTML=batches.map(batch=>'<tr><td class="font-monospace small">'+escapeHtml(batch.batchKey)+'</td><td>'+escapeHtml(batch.profileKey)+'</td><td>'+escapeHtml(batch.issuedCount)+' / '+escapeHtml(batch.quantity)+'</td><td>'+money(batch.wholesaleTotal)+'</td><td class="text-success fw-semibold">'+money(batch.marginTotal)+'</td><td>'+date(batch.createdAt)+'</td><td><span class="badge badge-soft">'+escapeHtml(batch.status)+'</span></td><td><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>Reprint</a></td></tr>').join('');
+        body.innerHTML=batches.map(batch=>'<tr><td>'+date(batch.createdAt)+'</td><td class="font-monospace small">'+escapeHtml(batch.batchKey)+'</td><td>POP #'+escapeHtml(batch.popId)+'</td><td>'+escapeHtml(batch.profileKey)+'</td><td>'+escapeHtml(batch.issuedCount)+' / '+escapeHtml(batch.quantity)+'</td><td>'+money(batch.wholesaleTotal)+'</td><td class="text-success fw-semibold">'+money(batch.marginTotal)+'</td><td><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>View / Print</a></td></tr>').join('');
       }catch(error){body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Voucher history could not be loaded.</td></tr>';voucherAlert('voucherHistoryError',error.message)}
     }
     document.getElementById('voucherPop').addEventListener('change',()=>{state.pendingVoucherIdempotencyKey=null;renderVoucherPackageOptions()});
