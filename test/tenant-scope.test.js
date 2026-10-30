@@ -63,7 +63,7 @@ test('POP and reseller lifecycle endpoints are soft status updates, not hard del
 });
 test('reseller role requires a verified server-side session ID and active database record',()=>{
  const rbac=fs.readFileSync(path.join(root,'middleware/rbac.js'),'utf8');
- assert.match(rbac,/req\.session\?\.isReseller===true/);
- assert.match(rbac,/req\.session\?\.resellerId\?\?req\.session\?\.reseller_id/);
+ assert.match(rbac,/req\.session\?\.isReseller\s*===\s*true/);
+ assert.match(rbac,/req\.session\?\.resellerId\s*\?\?\s*req\.session\?\.reseller_id/);
  assert.match(rbac,/SELECT id,status FROM resellers WHERE id=\$1 LIMIT 1/);
 });
