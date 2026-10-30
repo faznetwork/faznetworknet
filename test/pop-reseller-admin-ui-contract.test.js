@@ -131,3 +131,24 @@ test('POP API errors retain HTTP status and structured validation details for UI
   assert.ok(ui.includes('payload.errors || payload.validationErrors || payload.details'));
   assert.ok(ui.includes("['commission_rate', /commission_rate|commission rate|commission.*rate/i]"));
 });
+
+test('POP and reseller form submissions use stable document-level delegation with a native-validation-safe button fallback', () => {
+  assert.ok(ui.includes("document.addEventListener('submit', async function (event) {"));
+  assert.ok(!ui.includes("section.addEventListener('submit'"));
+  assert.ok(ui.includes("document.addEventListener('click', function (event)"));
+  assert.ok(ui.includes("closest('#fprPopSave, [data-action=\"save-pop\"]')"));
+  assert.ok(ui.includes("form.requestSubmit(button)"));
+  assert.ok(ui.includes("event.preventDefault();"));
+  assert.ok(ui.includes("id=\"fprPopSave\" data-action=\"save-pop\""));
+});
+
+test('POP modal closes only after an explicit successful API response with a valid POP record', () => {
+  assert.ok(ui.includes("response.success !== true"));
+  assert.ok(ui.includes("!response.pop || typeof response.pop !== 'object' || !response.pop.id || !response.pop.name"));
+  const responseGate = ui.indexOf("if (!response || response.success !== true");
+  const closeModal = ui.indexOf("closeModal('fprPopModal')");
+  assert.ok(responseGate >= 0 && closeModal > responseGate);
+  for (const trace of ['[POP DEBUG] Form Submit Intercepted', '[POP DEBUG] Payload dispatched', '[POP DEBUG] Response received']) {
+    assert.ok(ui.includes(trace), trace + ' trace exists');
+  }
+});
