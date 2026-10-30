@@ -179,6 +179,7 @@ async function issueBatch(input) {
     );
     const eligible = eligibleResult.rows?.[0];
     if (!eligible) throw serviceError('The selected POP or package is inactive or is not assigned to your reseller account.', 403, 'POP_PACKAGE_NOT_ELIGIBLE');
+    if (!String(eligible.ip_pool || '').trim()) throw serviceError('The selected POP does not have a configured Hotspot IP Pool. Configure the Hotspot binding before issuing vouchers.', 409, 'HOTSPOT_IP_POOL_NOT_CONFIGURED');
     if (eligible.account_status !== 'active') throw serviceError('Your reseller billing account is not active. Contact FAZ NETWORK support.', 409, 'BILLING_ACCOUNT_INACTIVE');
     if (!['prepaid', 'postpaid'].includes(eligible.billing_mode)) throw serviceError('The reseller billing mode is not configured correctly.', 409, 'INVALID_BILLING_MODE');
 
