@@ -295,8 +295,8 @@ console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V5 <<<');
       const action = button.dataset.action;
       const id = button.dataset.id;
       try {
-        if (action === 'new-pop') return openPopModal(null);
-        if (action === 'edit-pop') return openPopModal(state.pops.find(function (item) { return String(item.id) === String(id); }));
+        if (action === 'new-pop') return await openPopModal(null);
+        if (action === 'edit-pop') return await openPopModal(state.pops.find(function (item) { return String(item.id) === String(id); }));
         if (action === 'new-reseller') return openResellerModal();
         if (action === 'refresh-pops') return window.loadPopManagement();
         if (action === 'refresh-resellers') return window.loadResellerAccess();
