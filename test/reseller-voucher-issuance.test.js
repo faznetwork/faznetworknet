@@ -123,6 +123,16 @@ test('issuance uses one transaction client for the canonical generator, item map
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')));
 });
 
+test('Hotspot voucher issuance rejects a missing Hotspot pool before generating vouchers', async t => {
+  const mock = installIssueMocks(t, { eligible: { ip_pool: null } });
+  await assert.rejects(
+    issuance.issueBatch(validInput),
+    error => error.code === 'HOTSPOT_IP_POOL_NOT_CONFIGURED' && error.statusCode === 409
+  );
+  assert.equal(mock.generated.length, 0);
+  assert.equal(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches')), false);
+});
+
 test('cross-reseller POP/package selection is rejected before voucher generation', async t => {
   const mock = installIssueMocks(t, { eligible: false });
   await assert.rejects(
@@ -282,7 +292,7 @@ test('catalog reads stable POP columns and enriches only with available baseline
     calls.push({ sql, values });
     if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
     if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
-    if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active' }] };
+    if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: 'hs-pool' }] };
     if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '2 Hour', profile_key: '2-Hour', validity: '2h', retail_price: '50.10', wholesale_price: '30.05' }] };
     throw new Error('Unexpected catalog SQL: ' + sql);
   });
@@ -295,6 +305,7 @@ test('catalog reads stable POP columns and enriches only with available baseline
   assert.match(calls[1].sql, /p\.status='active'/);
   assert.match(calls[1].sql, /p\.reseller_id=\$1/);
   assert.doesNotMatch(calls[1].sql, /area_zone|router_key|hotspot_server|display_order|time_limit|data_limit/);
+  assert.match(calls[2].sql, /SELECT id, pop_id, status, ip_pool/);
 });
 
 test('catalog rejects missing or invalid authenticated reseller identity', async () => {
