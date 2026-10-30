@@ -240,7 +240,7 @@ test('reseller dashboard contains bounded generation and read-only reprint contr
   const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
   assert.match(dashboard, /id="voucherQuantity"[^>]*min="1"[^>]*max="500"/);
   assert.match(script, /retailPrice/);
-  assert.match(dashboard, /wholesale_price|wholesalePrice/);
+  assert.match(script, /wholesalePrice/);
   assert.match(dashboard, /voucherHistoryRows/);
   assert.match(dashboard, /\/reseller\/hotspot\/voucher-batches\//);
   assert.match(script, /Idempotency-Key/);
