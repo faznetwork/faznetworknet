@@ -14,12 +14,12 @@ function normalizeRole(role) {
 
 function isResellerSession(req) {
   const nested = req.session?.auth?.isReseller === true && normalizeRole(req.session?.auth?.role) === 'reseller';
-  const legacy = req.session?.isReseller===true && normalizeRole(req.session?.role) === 'reseller';
+  const legacy = req.session?.isReseller === true && normalizeRole(req.session?.role) === 'reseller';
   return nested || legacy;
 }
 
 function resellerSessionId(req) {
-  return Number(req.session?.auth?.resellerId??req.session?.resellerId??req.session?.reseller_id);
+  return Number(req.session?.auth?.resellerId ?? req.session?.resellerId ?? req.session?.reseller_id);
 }
 
 function currentRole(req) {
@@ -27,6 +27,37 @@ function currentRole(req) {
   if (req.session?.legacySuperAdmin === true) return 'super_admin';
   if (req.session?.isAdmin === true && !req.session?.role && !req.session?.userId) return 'super_admin';
   return normalizeRole(req.session?.role);
+}
+
+function rejectResellerSession(req, res, reason) {
+  const api = String(req.originalUrl || '').startsWith('/api/');
+  const session = req.session;
+
+  // A reseller request must never continue when its account is no longer active.
+  // Destroy the server-side session before returning an authentication response.
+  if (!session || typeof session.destroy !== 'function') {
+    console.error('[RBAC] Cannot revoke inactive reseller session: session destroy is unavailable.', { reason });
+    res.clearCookie('connect.sid', { path: '/' });
+    return api
+      ? res.status(503).json({ success: false, message: 'Could not safely revoke the reseller session. Retry sign-in.' })
+      : res.status(503).send('Could not safely revoke the reseller session. Please retry sign-in.');
+  }
+
+  return session.destroy(error => {
+    // Clear the browser cookie even if the backing store reports a destroy error.
+    // The error is surfaced because clearing the cookie alone cannot revoke a copied cookie.
+    res.clearCookie('connect.sid', { path: '/' });
+    if (error) {
+      console.error('[RBAC] Failed to destroy inactive reseller session:', error.message, { reason });
+      return api
+        ? res.status(503).json({ success: false, message: 'Could not safely revoke the reseller session. Retry sign-in.' })
+        : res.status(503).send('Could not safely revoke the reseller session. Please retry sign-in.');
+    }
+
+    return api
+      ? res.status(401).json({ success: false, message: 'Reseller account is inactive or unavailable. Sign in again.' })
+      : res.redirect('/reseller/login');
+  });
 }
 
 function requireRole(allowedRoles) {
@@ -67,13 +98,13 @@ function requireRole(allowedRoles) {
     if (role === 'reseller') {
       const resellerId = resellerSessionId(req);
       if (!Number.isSafeInteger(resellerId) || resellerId < 1) {
-        return res.status(403).json({ success: false, message: 'Forbidden: verified reseller identity is required' });
+        return rejectResellerSession(req, res, 'invalid_reseller_identity');
       }
       try {
         const verified = await db.query('SELECT id,status FROM resellers WHERE id=$1 LIMIT 1', [resellerId]);
         const reseller = verified.rows?.[0];
         if (!reseller || String(reseller.status).toLowerCase() !== 'active') {
-          return res.status(403).json({ success: false, message: 'Forbidden: reseller account is missing or inactive' });
+          return rejectResellerSession(req, res, reseller ? 'inactive_reseller' : 'missing_reseller');
         }
         req.auth = { ...(req.auth || {}), role, resellerId: Number(reseller.id) };
       } catch (error) {
