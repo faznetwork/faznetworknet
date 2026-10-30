@@ -583,9 +583,14 @@ async function listCustomers(req,res){
     const result=await db.query(`
       SELECT c.*,u.disabled AS pppoe_disabled,u.remote_address AS pppoe_remote_address,
              u.caller_id AS pppoe_caller_id,u.comment AS pppoe_comment,u.expiry_date AS pppoe_expiry_date,
-             u.profile AS pppoe_profile
+             u.profile AS pppoe_profile,
+             pop.name AS pop_name,pop.area_zone AS pop_area_zone,pop.vlan_id,
+             pop.mikrotik_ip_pool,pop.commission_type,pop.commission_rate,
+             reseller.id AS reseller_id,reseller.name AS reseller_name
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      LEFT JOIN pops pop ON pop.id=c.pop_id
+      LEFT JOIN resellers reseller ON reseller.id=pop.reseller_id
       WHERE ($1::bigint[] IS NULL OR c.pop_id = ANY($1::bigint[]))
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `, [req.tenantScope?.global ? null : (req.tenantScope?.popIds || [])]);
@@ -729,6 +734,16 @@ async function profile(req,res){
       session=null;
     }
     if(!dbUser&&!pppoeRow)return res.status(404).json({success:false,message:`Customer "${username}" not found in database`});
+    let networkDetails=null;
+    if(dbUser?.pop_id!=null){
+      const networkResult=await db.query(
+        `SELECT p.name AS pop_name,r.name AS reseller_name,p.vlan_id,p.mikrotik_ip_pool,
+                p.commission_type,p.commission_rate
+         FROM pops p LEFT JOIN resellers r ON r.id=p.reseller_id
+         WHERE p.id=$1 LIMIT 1`,[dbUser.pop_id]
+      );
+      networkDetails=networkResult.rows[0]||null;
+    }
     const comment=String(mtSecret?.comment||pppoeRow?.comment||"");
     const nameMatch=comment.match(/Customer:\s*([^|]+)/i),phoneMatch=comment.match(/Phone:\s*([^|]+)/i),expMatch=comment.match(/EXP:\s*([^|]+)/i);
     // Prefer the panel's canonical expiry, then the synchronized PPPoE record,
@@ -754,7 +769,10 @@ async function profile(req,res){
       disabled:Boolean(mtSecret?.disabled??pppoeRow?.disabled),remote_address:clean(mtSecret?.remoteAddress||pppoeRow?.remote_address||dbUser?.remote_address,100),caller_id:clean(mtSecret?.callerId||pppoeRow?.caller_id||dbUser?.caller_id,100),
       service:clean(mtSecret?.service||"pppoe",30),installation_address:dbUser?.installation_address||"",
       distribution_box:dbUser?.distribution_box||dbUser?.fiber_box||"",onu_serial:dbUser?.onu_serial||"",
-      fiber_drop_core:dbUser?.fiber_drop_core||"",remarks:dbUser?.remarks||"",connection_date:dbUser?.connection_date||null
+      fiber_drop_core:dbUser?.fiber_drop_core||"",remarks:dbUser?.remarks||"",connection_date:dbUser?.connection_date||null,
+      pop_name:clean(networkDetails?.pop_name,100),reseller_name:clean(networkDetails?.reseller_name,100),
+      vlan_id:networkDetails?.vlan_id??null,mikrotik_ip_pool:clean(networkDetails?.mikrotik_ip_pool,100),
+      commission_type:clean(networkDetails?.commission_type,20),commission_rate:networkDetails?.commission_rate==null?null:Number(networkDetails.commission_rate)
     };
     return res.json({success:true,customer,live:{online:Boolean(session),ip:session?.address||customer.remote_address||"",mac:session?.callerId||customer.caller_id||"",uptime:session?.uptime||"",bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||""},plans,payments,source:dbUser&&mtSecret?"database+mikrotik":mtSecret?"mikrotik":"database"});
   }catch(error){return errorResponse(res,error);}
