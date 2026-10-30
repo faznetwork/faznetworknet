@@ -32,6 +32,7 @@ test('reseller login and invitation acceptance routes use independent PostgreSQL
 test('PostgreSQL rate limiter allows requests through the configured limit and rejects the next request', async t => {
   let count = 0;
   t.mock.method(db, 'query', async (sql, values) => {
+    if (sql.includes('DELETE FROM rate_limits')) return { rows: [] };
     assert.match(sql, /INSERT INTO rate_limits/);
     assert.equal(values[1], 60_000);
     count += 1;
