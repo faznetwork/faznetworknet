@@ -169,7 +169,6 @@ async function acceptInvite(req, res) {
   if (!validPassword(password)) return res.status(400).json({ success: false, message: 'Password must be 12–128 characters and include uppercase, lowercase, number, and symbol.' });
   if (password !== confirmPassword) return res.status(400).json({ success: false, message: 'Passwords do not match.' });
   try {
-    const passwordHash = await bcrypt.hash(password, 12);
     const outcome = await db.withTransaction(async client => {
       const found = await client.query(
         'SELECT id,email,invite_expires_at FROM resellers WHERE invite_token_hash=$1 AND status=\'inactive\' FOR UPDATE',
@@ -177,6 +176,7 @@ async function acceptInvite(req, res) {
       );
       const reseller = found.rows[0];
       if (!reseller || !reseller.invite_expires_at || new Date(reseller.invite_expires_at).getTime() <= Date.now()) return null;
+      const passwordHash = await bcrypt.hash(password, 12);
       const activated = await client.query(
         'UPDATE resellers SET password_hash=$1,status=\'active\',activated_at=NOW(),invite_token_hash=NULL,invite_expires_at=NULL,updated_at=NOW() WHERE id=$2 AND status=\'inactive\' RETURNING id,name,email',
         [passwordHash, reseller.id]
