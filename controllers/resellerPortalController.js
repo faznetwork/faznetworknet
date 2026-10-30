@@ -107,6 +107,33 @@ async function listCustomers(req, res) {
   }
 }
 
+async function createCustomer(req, res) {
+  const resellerId = Number(req.auth?.resellerId);
+  const scopedResellerId = Number(req.tenantScope?.resellerId);
+  const popIds = resellerPopIds(req);
+  const requestedPopId = Number(req.body?.pop_id);
+
+  if (!Number.isSafeInteger(resellerId) || resellerId < 1 || resellerId !== scopedResellerId) {
+    return res.status(403).json({ success: false, message: 'Verified reseller identity and tenant scope do not match.' });
+  }
+  if (!Number.isSafeInteger(requestedPopId) || requestedPopId < 1) {
+    return res.status(400).json({ success: false, message: 'Select one of your assigned active POPs before creating a customer.' });
+  }
+  if (!popIds.includes(requestedPopId)) {
+    return res.status(403).json({ success: false, message: 'The selected POP is not assigned to your reseller account.' });
+  }
+
+  // POP ownership is checked again under a database row lock by the existing
+  // customer creation transaction. Never accept tenant/network ownership fields
+  // from the browser; VLAN and MikroTik IP Pool remain POP-owned configuration.
+  const body = { ...(req.body || {}), pop_id: requestedPopId };
+  delete body.reseller_id;
+  delete body.vlan_id;
+  delete body.mikrotik_ip_pool;
+  req.body = body;
+  return customerController.createCustomer(req, res);
+}
+
 async function getCustomer(req, res) {
   const key = customerKey(req.params.id);
   if (!key) return res.status(400).json({ success: false, message: 'Customer identifier is required.' });
@@ -198,4 +225,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, listCustomers, getCustomer, liveSession, paymentHistory };
+module.exports = { overview, listCustomers, createCustomer, getCustomer, liveSession, paymentHistory };
