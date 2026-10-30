@@ -57,10 +57,11 @@ test('reports and payments use existing scoped per-customer payment history only
 
 test('reseller workspace activePath is explicitly passed and partials safely default missing locals', () => {
   const server = read('server.js');
+  const lines = server.split(/\r?\n/);
   for (const route of ['/reseller/dashboard','/reseller/vouchers/generate','/reseller/vouchers/history','/reseller/customers','/reseller/customers/add','/reseller/payments']) {
-    const line = server.split('\\n').find(value => value.includes('app.get("' + route + '"'));
-    assert.ok(line);
-    assert.match(line, /activePath:req\\.path/);
+    const line = lines.find(value => value.includes('app.get("' + route + '"'));
+    assert.ok(line, 'Missing route ' + route);
+    assert.match(line, /activePath:req\.path/);
   }
   for (const partial of ['reseller-scripts.ejs','reseller-sidebar.ejs']) {
     const source = read(path.join('views/partials', partial));
@@ -68,6 +69,6 @@ test('reseller workspace activePath is explicitly passed and partials safely def
     assert.match(source, /safeActivePath/);
   }
   for (const view of ['reseller-dashboard.ejs','reseller-vouchers.ejs','reseller-customers.ejs','reseller-payments.ejs']) {
-    assert.match(read(path.join('views', view)), /include\\('partials\\/reseller-scripts', \\{ activePath \\}\\)/);
+    assert.match(read(path.join('views', view)), /include\('partials\/reseller-scripts', \{ activePath \}\)/);
   }
 });
