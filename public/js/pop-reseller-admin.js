@@ -321,28 +321,38 @@
   }
 
 
-  function bindGlobalFormLifecycle() {
-    document.addEventListener('click', function (event) {
-      const button = event.target && event.target.closest ? event.target.closest('#fprPopSave, [data-action="save-pop"]') : null;
-      if (!button || button.disabled) return;
-      const form = button.form || button.closest('form');
-      if (!form || form.id !== 'fprPopForm') return;
-      event.preventDefault();
-      console.info('[POP DEBUG] Save button fallback requested form submission');
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit(button);
-      } else {
-        console.error('[POP DEBUG] HTMLFormElement.requestSubmit is unavailable; native validation-safe fallback cannot run.');
-        showToast('Your browser cannot submit this form safely. Please update the browser and try again.', 'danger');
-      }
-    });
-  }
 
-    document.addEventListener('submit', async function (event) {
+  document.addEventListener('click', function (event) {
+    console.log('[POP DEBUG CLICK] Document click observed:', event.target);
+    const target = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
+    const button = target && target.closest ? target.closest('#fprPopSave, [data-action="save-pop"]') : null;
+    if (button) {
+      console.log('[POP DEBUG CLICK] Save button clicked directly!', button);
+      const form = button.closest('form') || document.getElementById('fprPopForm');
+      console.log('[POP DEBUG CLICK] Target form found:', form);
+      if (form) {
+        event.preventDefault();
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          console.error('[POP DEBUG CLICK] HTMLFormElement.requestSubmit is unavailable.');
+          showToast('Your browser cannot submit this form safely. Please update the browser and try again.', 'danger');
+        }
+      } else {
+        console.error('[POP DEBUG CLICK] Could not find #fprPopForm!');
+      }
+    }
+  });
+
+  document.addEventListener('submit', async function (event) {
+      console.log('[POP DEBUG SUBMIT] Raw submit fired on element:', event.target);
       const form = event.target;
-      if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) return;
+      if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) {
+        console.warn('[POP DEBUG SUBMIT] Ignored form with ID:', form ? form.id : 'no-target');
+        return;
+      }
       event.preventDefault();
-      console.info('[POP DEBUG] Form Submit Intercepted', { formId: form.id, action: form.action, method: form.method });
+      console.log('[POP DEBUG SUBMIT] Handling POP Form submission now!', form);
       if (form.dataset.submitting === '1') return;
 
       const isPop = form.id === 'fprPopForm';
@@ -531,8 +541,6 @@
     }
     return true;
   }
-
-  bindGlobalFormLifecycle();
 
   window.loadPopManagement = loadPopManagement;
   window.loadResellerAccess = loadResellerAccess;
