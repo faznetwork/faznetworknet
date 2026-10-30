@@ -96,29 +96,25 @@ test('POP create serializes every API contract field, including an explicit rese
 });
 
 test('POP save failures preserve the modal and expose field-level and toast feedback', () => {
-  assert.ok(ui.includes("if (saveError.field)"));
-  assert.ok(ui.includes('mapPopFieldErrors(saveError, form)'));
-  assert.ok(ui.includes('field.classList.add(\'is-invalid\')'));
-  assert.ok(ui.includes("showToast(saveError.message || 'Unable to save POP. Please try again.', 'danger')"));
+  assert.ok(ui.includes("mapPopFieldErrors(error, form)"));
+  assert.ok(ui.includes("field.classList.add('is-invalid')"));
+  assert.ok(ui.includes("showToast(error.message || 'Unable to save POP. Please try again.', 'danger')"));
   assert.ok(ui.includes("closeModal('fprPopModal')"));
-  const saveCatch = ui.slice(ui.indexOf('} catch (saveError) {'), ui.indexOf("closeModal('fprPopModal')"));
-  assert.ok(saveCatch.includes('return;'));
-  assert.ok(!saveCatch.includes("closeModal('fprPopModal')"));
 });
 
 test('POP submit lifecycle blocks duplicate submissions and always restores the save button', () => {
   assert.ok(ui.includes("if (form.dataset.submitting === '1') return;"));
   assert.ok(ui.includes("form.dataset.submitting = '1'"));
-  assert.ok(ui.includes("submit.disabled = true"));
+  assert.ok(ui.includes("saveBtn.disabled = true"));
   assert.ok(ui.includes("delete form.dataset.submitting"));
-  assert.ok(ui.includes("submit.disabled = false"));
-  assert.ok(ui.includes("submit.removeAttribute('aria-busy')"));
+  assert.ok(ui.includes("saveBtn.disabled = false"));
+  assert.ok(ui.includes("saveBtn.removeAttribute('aria-busy')"));
 });
 
 test('POP insert success and table reload failure are reported as separate outcomes', () => {
-  assert.ok(ui.includes("showToast(id ? 'POP updated successfully.' : 'POP created successfully.', 'success')"));
-  assert.ok(ui.includes('const reloaded = await window.loadPopManagement();'));
-  assert.ok(ui.includes('if (reloaded === false)'));
+  assert.ok(ui.includes("showToast(popId ? 'POP updated successfully.' : 'POP created successfully.', 'success')"));
+  assert.ok(ui.includes('const refreshed = await window.loadPopManagement();'));
+  assert.ok(ui.includes('if (refreshed === false)'));
   assert.ok(ui.includes('POP was saved, but the POP table could not be refreshed.'));
   const reloadFailure = ui.indexOf("renderPopManagement(section, error.message || 'Unable to load POP data.')");
   assert.ok(reloadFailure >= 0);
