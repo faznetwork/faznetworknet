@@ -1,3 +1,4 @@
+console.log('>>> RUNNING LATEST POP-RESELLER-ADMIN.JS BUILD V4 <<<');
 (function () {
   'use strict';
 
@@ -20,10 +21,19 @@
     }
     const response = await fetch(API + path, opts);
     let payload;
-    try { payload = await response.json(); }
-    catch (error) { throw new Error('The server returned an unreadable response (' + response.status + ').'); }
+    try {
+      payload = await response.json();
+    } catch (error) {
+      const parseError = new Error('The server returned an unreadable response (' + response.status + ').');
+      parseError.status = response.status;
+      parseError.cause = error;
+      throw parseError;
+    }
     if (!response.ok || payload.success === false) {
-      throw new Error(payload.message || payload.error || ('Request failed with HTTP ' + response.status + '.'));
+      const requestError = new Error(payload.message || payload.error || ('Request failed with HTTP ' + response.status + '.'));
+      requestError.status = response.status;
+      requestError.payload = payload;
+      throw requestError;
     }
     return payload;
   }
@@ -75,6 +85,89 @@
       escapeHtml(message) + '</div></div>';
   }
 
+  function showToast(message, type) {
+    const tone = type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'danger');
+    let host = document.getElementById('fprToastContainer');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'fprToastContainer';
+      host.className = 'toast-container position-fixed top-0 end-0 p-3';
+      host.style.zIndex = '1090';
+      document.body.appendChild(host);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-bg-' + tone + ' border-0';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
+    const row = document.createElement('div');
+    row.className = 'd-flex';
+    const body = document.createElement('div');
+    body.className = 'toast-body';
+    body.textContent = message;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn-close btn-close-white me-2 m-auto';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', function () { toast.remove(); });
+    row.appendChild(body);
+    row.appendChild(close);
+    toast.appendChild(row);
+    host.appendChild(toast);
+    if (window.bootstrap && window.bootstrap.Toast) {
+      window.bootstrap.Toast.getOrCreateInstance(toast, { delay: 5000 }).show();
+    } else {
+      toast.classList.add('show');
+      window.setTimeout(function () { toast.remove(); }, 5000);
+    }
+  }
+
+  function clearFieldErrors(form) {
+    form.querySelectorAll('.is-invalid').forEach(function (field) {
+      field.classList.remove('is-invalid');
+      field.removeAttribute('aria-invalid');
+    });
+    form.querySelectorAll('[data-fpr-field-error="1"]').forEach(function (node) { node.remove(); });
+  }
+
+  function mapPopFieldErrors(error, container) {
+    const payload = error && error.payload ? error.payload : {};
+    const supplied = payload.errors || payload.validationErrors || payload.details;
+    const mapped = {};
+    if (supplied && typeof supplied === 'object' && !Array.isArray(supplied)) {
+      Object.keys(supplied).forEach(function (key) {
+        const item = supplied[key];
+        mapped[key] = Array.isArray(item) ? item.join(' ') : String(item && item.message ? item.message : item);
+      });
+    }
+    const message = String(error && error.message || '');
+    if (!Object.keys(mapped).length) {
+      const rules = [
+        ['name', /pop name|name is required|name.*100 characters/i],
+        ['area_zone', /area.?zone/i],
+        ['reseller_id', /reseller/i],
+        ['vlan_id', /vlan/i],
+        ['mikrotik_ip_pool', /ip pool|mikrotik.*pool/i],
+        ['commission_type', /commission_type|commission type/i],
+        ['commission_rate', /commission_rate|commission rate|commission.*rate/i]
+      ];
+      const match = rules.find(function (rule) { return rule[1].test(message); });
+      if (match) mapped[match[0]] = message;
+    }
+    Object.keys(mapped).forEach(function (name) {
+      const field = container.querySelector('[name="' + name + '"]');
+      if (!field || !field.classList) return;
+      field.classList.add('is-invalid');
+      field.setAttribute('aria-invalid', 'true');
+      const feedback = document.createElement('div');
+      feedback.className = 'invalid-feedback d-block';
+      feedback.dataset.fprFieldError = '1';
+      feedback.textContent = mapped[name];
+      field.insertAdjacentElement('afterend', feedback);
+    });
+    return Object.keys(mapped).length > 0;
+  }
+
   function sharedStyles() {
     return '<style id="fazPopResellerStyles">' +
       '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a}' +
@@ -102,6 +195,11 @@
   }
 
   function renderPopManagement(section, error) {
+    document.querySelectorAll('#fprPopModal').forEach(function (element) {
+      const instance = window.bootstrap && window.bootstrap.Modal && window.bootstrap.Modal.getInstance(element);
+      if (instance) instance.dispose();
+      element.remove();
+    });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
     const rows = state.pops.map(function (pop) {
       const owner = pop.reseller_name || (pop.name === DIRECT_POP_NAME ? 'FAZ Direct' : 'FAZ Direct');
@@ -136,7 +234,7 @@
 
   function popModalHtml() {
     return '<div class="modal fade" id="fprPopModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">' +
-      '<form id="fprPopForm"><div class="modal-header"><h5 class="modal-title fw-bold" id="fprPopModalTitle">Create POP</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+      '<form id="fprPopForm" novalidate><div class="modal-header"><h5 class="modal-title fw-bold" id="fprPopModalTitle">Create POP</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
       '<div class="modal-body"><div id="fprPopFormError"></div><input type="hidden" name="id">' +
       '<div class="row g-3"><div class="col-12 col-md-6"><label class="form-label">POP Name *</label><input class="form-control" name="name" maxlength="100" required></div>' +
       '<div class="col-12 col-md-6"><label class="form-label">Area / Zone</label><input class="form-control" name="area_zone" maxlength="150"></div>' +
@@ -147,7 +245,7 @@
       '<div class="col-12 col-md-6"><label class="form-label">MikroTik IP Pool Name</label><input class="form-control" name="mikrotik_ip_pool" maxlength="150"></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
-      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprPopSave">Save POP</button></div></form></div></div></div>';
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
   }
 
   function renderResellerAccess(section, error) {
@@ -225,58 +323,192 @@
       }
     });
 
-    section.addEventListener('submit', async function (event) {
-      const form = event.target;
-      if (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm') return;
-      event.preventDefault();
-      const isPop = form.id === 'fprPopForm';
-      const submit = form.querySelector('[type="submit"]');
-      const errorHost = form.querySelector(isPop ? '#fprPopFormError' : '#fprResellerFormError');
-      if (submit) { submit.disabled = true; submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…'; }
-      if (errorHost) errorHost.innerHTML = '';
-      try {
-        const data = new FormData(form);
-        if (isPop) {
-          const id = String(data.get('id') || '');
-          const name = String(data.get('name') || '').trim();
-          const ownerSelect = form.querySelector('[name="reseller_id"]');
-          const current = id ? state.pops.find(function (item) { return String(item.id) === id; }) : null;
-          const owner = current && current.name === DIRECT_POP_NAME ? null : (ownerSelect.value || null);
-          if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(owner || '')) {
-            throw new Error('Ownership cannot be changed while this POP has customer records.');
-          }
-          const payload = {
-            name: name,
-            area_zone: String(data.get('area_zone') || '').trim(),
-            vlan_id: data.get('vlan_id') ? Number(data.get('vlan_id')) : null,
-            mikrotik_ip_pool: String(data.get('mikrotik_ip_pool') || '').trim() || null,
-            commission_type: String(data.get('commission_type') || 'percentage'),
-            commission_rate: Number(data.get('commission_rate') || 0)
-          };
-          if (!id || String(current.reseller_id || '') !== String(owner || '')) payload.reseller_id = owner;
-          await apiRequest('/pops' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body: payload });
-          closeModal('fprPopModal');
-          await window.loadPopManagement();
-        } else {
-          const payload = {
-            name: String(data.get('name') || '').trim(),
-            email: String(data.get('email') || '').trim(),
-            phone: String(data.get('phone') || '').trim(),
-            assigned_pop_ids: Array.from(form.querySelector('#fprInvitePops').selectedOptions).map(function (option) { return Number(option.value); })
-          };
-          await apiRequest('/resellers/invite', { method: 'POST', body: payload });
-          closeModal('fprResellerModal');
-          await window.loadResellerAccess();
-        }
-      } catch (error) {
-        if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
-        console.error('[POP/Reseller Admin UI] Form submission failed:', error);
-      } finally {
-        if (submit) { submit.disabled = false; submit.textContent = isPop ? 'Save POP' : 'Queue Invitation'; }
-      }
-    });
+
   }
 
+
+
+  async function savePopForm(form, saveBtn, container) {
+    container = container || form || (saveBtn && saveBtn.closest('.modal') ? saveBtn.closest('.modal').querySelector('.modal-body') : null) || document.querySelector('.modal.show .modal-body') || document.querySelector('#fprPopModal .modal-body');
+    const lockTarget = form || container;
+    if (!container) {
+      console.error('[POP UI] POP editor container not found from Save button or open modal.');
+      showToast('POP editor fields are unavailable. Close and reopen the POP editor.', 'danger');
+      return;
+    }
+    if (lockTarget.dataset.submitting === '1') return;
+
+    const nameInput = container.querySelector('[name="name"]');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const errorHost = container.querySelector('#fprPopFormError') || document.querySelector('#fprPopFormError');
+    if (errorHost) errorHost.innerHTML = '';
+    clearFieldErrors(container);
+    if (!name) {
+      if (nameInput) {
+        nameInput.classList.add('is-invalid');
+        nameInput.setAttribute('aria-invalid', 'true');
+        nameInput.focus();
+      }
+      showToast('POP Name is required', 'danger');
+      if (errorHost) errorHost.innerHTML = errorBanner('POP Name is required. Please enter a name before saving.');
+      return;
+    }
+
+    const areaInput = container.querySelector('[name="area_zone"]');
+    const resellerSelect = container.querySelector('[name="reseller_id"]');
+    const vlanInput = container.querySelector('[name="vlan_id"]');
+    const poolInput = container.querySelector('[name="mikrotik_ip_pool"]');
+    const commTypeSelect = container.querySelector('[name="commission_type"]');
+    const commRateInput = container.querySelector('[name="commission_rate"]');
+    const idInput = container.querySelector('[name="id"]');
+    const popId = idInput ? idInput.value : '';
+    const current = popId ? state.pops.find(function (item) { return String(item.id) === String(popId); }) : null;
+    const resellerId = current && current.name === DIRECT_POP_NAME
+      ? null
+      : (resellerSelect && resellerSelect.value ? resellerSelect.value : null);
+
+    if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(resellerId || '')) {
+      const message = 'Ownership cannot be changed while this POP has customer records.';
+      if (resellerSelect) {
+        resellerSelect.classList.add('is-invalid');
+        resellerSelect.setAttribute('aria-invalid', 'true');
+      }
+      if (errorHost) errorHost.innerHTML = errorBanner(message);
+      showToast(message, 'danger');
+      return;
+    }
+
+    const payload = {
+      name: name,
+      area_zone: areaInput ? areaInput.value.trim() : '',
+      reseller_id: resellerId,
+      vlan_id: vlanInput && vlanInput.value ? Number(vlanInput.value) : null,
+      mikrotik_ip_pool: poolInput && poolInput.value.trim() ? poolInput.value.trim() : null,
+      commission_type: commTypeSelect ? commTypeSelect.value : 'percentage',
+      commission_rate: commRateInput ? Number(commRateInput.value || 0) : 0
+    };
+    const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');
+    const method = popId ? 'PUT' : 'POST';
+    const originalText = saveBtn ? saveBtn.textContent : 'Save POP';
+
+    lockTarget.dataset.submitting = '1';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.setAttribute('aria-busy', 'true');
+      saveBtn.textContent = 'Saving...';
+    }
+
+    try {
+      console.log('[POP UI] Dispatching save request:', { endpoint: '/api' + endpoint, method: method, payload: payload });
+      const response = await apiRequest(endpoint, { method: method, body: payload });
+      console.log('[POP UI] Save response received:', response);
+      if (!response || response.success !== true || !response.pop || typeof response.pop !== 'object' || !response.pop.id || !response.pop.name) {
+        throw new Error('The server did not confirm a valid POP save. The form remains open; verify the POP directory before retrying.');
+      }
+
+      closeModal('fprPopModal');
+      showToast(popId ? 'POP updated successfully.' : 'POP created successfully.', 'success');
+      const refreshed = await window.loadPopManagement();
+      if (refreshed === false) {
+        showToast('POP was saved, but the POP table could not be refreshed. Use Refresh to reload the latest records.', 'warning');
+      }
+    } catch (error) {
+      if (error.field) {
+        const field = container.querySelector('[name="' + error.field + '"]');
+        if (field) {
+          field.classList.add('is-invalid');
+          field.setAttribute('aria-invalid', 'true');
+        }
+      } else {
+        mapPopFieldErrors(error, container);
+      }
+      if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save POP. Please try again.');
+      showToast(error.message || 'Unable to save POP. Please try again.', 'danger');
+      console.error('[POP UI] Save failed:', error);
+    } finally {
+      delete lockTarget.dataset.submitting;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.removeAttribute('aria-busy');
+        saveBtn.textContent = originalText;
+      }
+    }
+  }
+
+  // Enter-key submission is converted into the same direct async save path; native navigation is never allowed.
+  document.addEventListener('submit', function (event) {
+    const form = event.target;
+    if (!form || (form.id !== 'fprPopForm' && form.id !== 'fprResellerForm')) return;
+    event.preventDefault();
+    if (form.id === 'fprPopForm') {
+      event.stopImmediatePropagation();
+      savePopForm(form, form.querySelector('#fprPopSave'));
+    }
+  }, true);
+
+  document.addEventListener('click', function (event) {
+    const target = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
+    const saveBtn = target && target.closest ? target.closest('#fprPopSave') : null;
+    if (!saveBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const form = saveBtn.closest('form')
+      || saveBtn.form
+      || document.getElementById('fprPopForm')
+      || document.querySelector('.modal.show form')
+      || document.querySelector('#fprPopModal form');
+    const container = form
+      || document.querySelector('.modal.show .modal-body')
+      || document.querySelector('#fprPopModal .modal-body');
+    if (!container) {
+      console.error('[POP UI] POP editor container not found from Save button or open modal.');
+      showToast('POP editor fields are unavailable. Close and reopen the POP editor.', 'danger');
+      return;
+    }
+    savePopForm(form, saveBtn, container);
+  });
+
+  document.addEventListener('submit', async function (event) {
+    const form = event.target;
+    if (!form || form.id !== 'fprResellerForm') return;
+    event.preventDefault();
+    if (form.dataset.submitting === '1') return;
+
+    const submit = form.querySelector('[type="submit"]');
+    const errorHost = form.querySelector('#fprResellerFormError');
+    const originalLabel = submit ? submit.textContent : 'Queue Invitation';
+    if (errorHost) errorHost.innerHTML = '';
+    form.dataset.submitting = '1';
+    if (submit) {
+      submit.disabled = true;
+      submit.setAttribute('aria-busy', 'true');
+      submit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+    }
+
+    try {
+      const data = new FormData(form);
+      const payload = {
+        name: String(data.get('name') || '').trim(),
+        email: String(data.get('email') || '').trim(),
+        phone: String(data.get('phone') || '').trim(),
+        assigned_pop_ids: Array.from(form.querySelector('#fprInvitePops').selectedOptions).map(function (option) { return Number(option.value); })
+      };
+      await apiRequest('/resellers/invite', { method: 'POST', body: payload });
+      closeModal('fprResellerModal');
+      await window.loadResellerAccess();
+    } catch (error) {
+      if (errorHost) errorHost.innerHTML = errorBanner(error.message || 'Unable to save changes.');
+      showToast(error.message || 'Unable to save changes.', 'danger');
+      console.error('[POP/Reseller Admin UI] Form submission failed:', error);
+    } finally {
+      delete form.dataset.submitting;
+      if (submit) {
+        submit.disabled = false;
+        submit.removeAttribute('aria-busy');
+        submit.textContent = originalLabel;
+      }
+    }
+  });
   function modalInstance(id) {
     const element = document.getElementById(id);
     if (!element || !window.bootstrap || !window.bootstrap.Modal) throw new Error('Bootstrap modal support is unavailable.');
@@ -348,6 +580,7 @@
     } catch (error) {
       renderPopManagement(section, error.message || 'Unable to load POP data.');
       console.error('[POP Admin UI] Initial data load failed:', error);
+      return false;
     }
     return true;
   }
