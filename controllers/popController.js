@@ -182,9 +182,19 @@ async function validateResellerOwner(resellerId) {
 
 async function inspectPopSchema(client) {
   const result = await client.query(`SELECT
-    to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
-    COALESCE((SELECT array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' AND table_name='pops'), ARRAY[]::text[]) AS pop_columns,
-    COALESCE((SELECT array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' AND table_name='pop_hotspot_bindings'), ARRAY[]::text[]) AS binding_columns`);
+    to_regclass('pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
+    COALESCE((
+      SELECT array_agg(column_name)
+      FROM information_schema.columns
+      WHERE table_schema = CURRENT_SCHEMA
+        AND table_name = 'pops'
+    ), ARRAY[]::text[]) AS pop_columns,
+    COALESCE((
+      SELECT array_agg(column_name)
+      FROM information_schema.columns
+      WHERE table_schema = CURRENT_SCHEMA
+        AND table_name = 'pop_hotspot_bindings'
+    ), ARRAY[]::text[]) AS binding_columns`);
   const schema = result.rows?.[0] || {};
   return { hotspotBindingsAvailable: schema.hotspot_bindings_available === true,
     popColumns: new Set(schema.pop_columns || []), bindingColumns: new Set(schema.binding_columns || []) };

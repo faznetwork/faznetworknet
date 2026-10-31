@@ -109,3 +109,43 @@ test('POP update returns explicit schema readiness error instead of querying a m
   assert.match(res.payload.message,/Hotspot binding storage is not ready/i);
   assert.equal(calls.some(call=>/FROM public\\.pop_hotspot_bindings|INTO public\\.pop_hotspot_bindings|UPDATE public\\.pop_hotspot_bindings/.test(call.sql)),false);
 });
+
+test('POP schema inspection resolves the active schema and persists PPPoE, pool, and VLAN updates', async t => {
+  const calls = [];
+  const schema = {
+    hotspot_bindings_available: false,
+    pop_columns: ['id', 'name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled', 'pppoe_ip_pool', 'commission_type', 'commission_rate', 'status', 'updated_at'],
+    binding_columns: []
+  };
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('information_schema.columns')) return { rows: [schema] };
+      if (sql.startsWith('SELECT * FROM public.pops')) {
+        return { rows: [{ id: 14, name: 'Schema POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: false, pppoe_ip_pool: null, status: 'active' }] };
+      }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 14, name: 'Schema POP', vlan_id: 33, pppoe_enabled: true, pppoe_ip_pool: 'ResidentialPool' }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  const res = responseRecorder();
+
+  await controller.update({
+    params: { id: '14' },
+    body: { pppoe_enabled: true, pppoe_ip_pool: 'ResidentialPool', vlan_id: 33 }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  const inspection = calls.find(call => call.sql.includes('information_schema.columns'));
+  assert.match(inspection.sql, /to_regclass\('pop_hotspot_bindings'\)/);
+  assert.match(inspection.sql, /table_schema\s*=\s*CURRENT_SCHEMA/);
+  assert.match(inspection.sql, /table_name\s*=\s*'pops'/);
+  assert.doesNotMatch(inspection.sql, /table_schema\s*=\s*'public'/);
+  const update = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
+  assert.ok(update, 'POP UPDATE statement should execute');
+  assert.deepEqual(update.values, [33, true, 'ResidentialPool', 14]);
+});
