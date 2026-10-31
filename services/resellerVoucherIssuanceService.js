@@ -115,8 +115,7 @@ async function loadBatchDetail(client, resellerId, batchKey) {
             COALESCE(to_jsonb(b)->>'status', 'completed') AS status,
             b.created_at
      FROM public.reseller_voucher_batches b
-     LEFT JOIN public.pop_hotspot_packages pkg
-       ON pkg.id::text=to_jsonb(b)->>'package_id'
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
      WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
      LIMIT 1`,
     [batchKey, resellerId]
@@ -433,8 +432,7 @@ async function listBatches(resellerIdValue, limitValue = 50) {
             b.created_at,
             COALESCE(items.issued_count,0)::int AS issued_count
      FROM public.reseller_voucher_batches b
-     LEFT JOIN public.pop_hotspot_packages pkg
-       ON pkg.id::text=to_jsonb(b)->>'package_id'
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
      LEFT JOIN (
        SELECT batch_id,COUNT(*)::int AS issued_count
        FROM public.reseller_voucher_issuance_items
