@@ -227,3 +227,19 @@ test('POP service pools remain segregated and legacy pool is not rendered as a s
   assert.match(migration, /SET pppoe_ip_pool = NULLIF\(BTRIM\(mikrotik_ip_pool\)/);
   assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN)\\b/i);
 });
+
+
+test('optional POP IP Pool lookup failure is structured, non-blocking, and does not emit toast spam', () => {
+  const lookupStart = ui.indexOf('async function loadPopIpPools(form, pop)');
+  const lookupEnd = ui.indexOf('function openResellerModal()', lookupStart);
+  assert.ok(lookupStart >= 0 && lookupEnd > lookupStart);
+  const lookup = ui.slice(lookupStart, lookupEnd);
+  assert.ok(lookup.includes("console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.'"));
+  assert.ok(lookup.includes("event: 'pop_ip_pool_lookup_failed'"));
+  assert.ok(lookup.includes("endpoint: '/api/ip-pools'"));
+  assert.ok(lookup.includes("popId: pop && pop.id != null ? String(pop.id) : null"));
+  assert.ok(lookup.includes('current assignment (pool list unavailable)'));
+  assert.ok(lookup.includes('Existing PPPoE and Hotspot assignments were preserved.'));
+  assert.ok(!lookup.includes('showToast('));
+  assert.ok(lookup.includes('finally {'));
+});
