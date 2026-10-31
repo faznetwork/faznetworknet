@@ -405,14 +405,44 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       vlan_id: vlanInput && vlanInput.value ? Number(vlanInput.value) : null,
       pppoe_enabled: Boolean(pppoeEnabledInput && pppoeEnabledInput.checked),
       pppoe_ip_pool: pppoePoolInput && pppoePoolInput.value ? pppoePoolInput.value : null,
-      hotspot_enabled: Boolean(hotspotEnabledInput && hotspotEnabledInput.checked),
-      hotspot_server: hotspotServerInput ? hotspotServerInput.value.trim() : '',
-      hotspot_interface: hotspotInterfaceInput ? hotspotInterfaceInput.value.trim() : '',
-      hotspot_vlan_id: hotspotVlanInput && hotspotVlanInput.value ? Number(hotspotVlanInput.value) : null,
-      hotspot_ip_pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null,
       commission_type: commTypeSelect ? commTypeSelect.value : 'percentage',
       commission_rate: commRateInput ? Number(commRateInput.value || 0) : 0
     };
+    const currentHotspot = {
+      enabled: Boolean(hotspotEnabledInput && hotspotEnabledInput.checked),
+      server: hotspotServerInput ? hotspotServerInput.value.trim() : '',
+      interface: hotspotInterfaceInput ? hotspotInterfaceInput.value.trim() : '',
+      vlanId: hotspotVlanInput && hotspotVlanInput.value ? Number(hotspotVlanInput.value) : null,
+      pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null
+    };
+    if (!popId) {
+      payload.hotspot_enabled = currentHotspot.enabled;
+      payload.hotspot_server = currentHotspot.server;
+      payload.hotspot_interface = currentHotspot.interface;
+      payload.hotspot_vlan_id = currentHotspot.vlanId;
+      payload.hotspot_ip_pool = currentHotspot.pool;
+    } else {
+      const initialHotspot = form && form.dataset.hotspotInitial
+        ? JSON.parse(form.dataset.hotspotInitial)
+        : null;
+      if (!initialHotspot) {
+        throw new Error('The original Hotspot binding state is unavailable. Reopen the POP editor before saving.');
+      }
+      if (currentHotspot.enabled !== initialHotspot.enabled) {
+        payload.hotspot_enabled = currentHotspot.enabled;
+        if (currentHotspot.enabled) {
+          payload.hotspot_server = currentHotspot.server;
+          payload.hotspot_interface = currentHotspot.interface;
+          payload.hotspot_vlan_id = currentHotspot.vlanId;
+          payload.hotspot_ip_pool = currentHotspot.pool;
+        }
+      } else if (currentHotspot.enabled) {
+        if (currentHotspot.server !== initialHotspot.server) payload.hotspot_server = currentHotspot.server;
+        if (currentHotspot.interface !== initialHotspot.interface) payload.hotspot_interface = currentHotspot.interface;
+        if (currentHotspot.vlanId !== initialHotspot.vlanId) payload.hotspot_vlan_id = currentHotspot.vlanId;
+        if (currentHotspot.pool !== initialHotspot.pool) payload.hotspot_ip_pool = currentHotspot.pool;
+      }
+    }
     const endpoint = '/pops' + (popId ? '/' + encodeURIComponent(popId) : '');
     const method = popId ? 'PUT' : 'POST';
     const originalText = saveBtn ? saveBtn.textContent : 'Save POP';
@@ -583,6 +613,13 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
     form.querySelector('#fprPopFormError').innerHTML = '';
     await loadPopIpPools(form, pop);
+    form.dataset.hotspotInitial = JSON.stringify({
+      enabled: Boolean(pop && pop.hotspot_enabled),
+      server: pop ? pop.hotspot_server || '' : '',
+      interface: pop ? pop.hotspot_interface || '' : '',
+      vlanId: pop && pop.hotspot_vlan_id ? Number(pop.hotspot_vlan_id) : null,
+      pool: pop ? pop.hotspot_ip_pool || null : null
+    });
     const syncServiceFields = function () {
       form.elements.pppoe_ip_pool.disabled = !form.elements.pppoe_enabled.checked;
       ['hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'].forEach(function (name) { form.elements[name].disabled = !form.elements.hotspot_enabled.checked; });
