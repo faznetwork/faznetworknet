@@ -592,7 +592,9 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     selectors.forEach(function (item) { item.element.disabled = true; item.element.innerHTML = '<option value="">None / Unassigned</option>'; });
     try {
       state.ipPools = [];
+      let poolLookupAvailable = true;
       const pools = await apiRequest('/ip-pools').catch(function (error) {
+        poolLookupAvailable = false;
         console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.', {
           event: 'pop_ip_pool_lookup_failed',
           endpoint: '/api/ip-pools',
@@ -604,6 +606,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
         return [];
       });
       if (!Array.isArray(pools)) {
+        poolLookupAvailable = false;
         console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup returned an invalid response.', {
           event: 'pop_ip_pool_lookup_invalid_response',
           endpoint: '/api/ip-pools',
@@ -626,7 +629,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
         if (item.value && !state.ipPools.some(function (pool) { return String(pool.name).toLowerCase() === item.value.toLowerCase(); })) {
           const existing = document.createElement('option');
           existing.value = item.value;
-          existing.textContent = item.value + ' — current assignment (not in active pool list)';
+          existing.textContent = item.value + (poolLookupAvailable ? ' — current assignment (not in active pool list)' : ' — current assignment (pool list unavailable)');
           existing.dataset.currentAssignment = 'true';
           item.element.appendChild(existing);
         }
