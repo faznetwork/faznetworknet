@@ -356,3 +356,31 @@ test('POP editor preserves established Hotspot state and sends only intentional 
   assert.ok(ui.includes("if (currentHotspot.pool !== initialHotspot.pool) payload.hotspot_ip_pool = currentHotspot.pool;"));
   assert.ok(ui.includes("if (currentHotspot.interface !== initialHotspot.interface) payload.hotspot_interface = currentHotspot.interface;"));
 });
+
+
+test('Admin POP summary cards use three flat semantic surfaces and the directory serial is 1-based', () => {
+  const stylesStart = ui.indexOf('function sharedStyles()');
+  const stylesEnd = ui.indexOf('function renderPopManagement', stylesStart);
+  const styles = ui.slice(stylesStart, stylesEnd);
+  assert.ok(styles.includes('.fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
+  assert.ok(styles.includes('.fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
+  assert.ok(styles.includes('.fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.doesNotMatch(styles, /\.fpr-metric--(?:pops|customers|resellers)\{[^}]*linear-gradient/i);
+  const renderStart = ui.indexOf('function renderPopManagement');
+  const renderEnd = ui.indexOf('function popModalHtml', renderStart);
+  const render = ui.slice(renderStart, renderEnd);
+  for (const label of ['Total POPs', 'Total POP Customers', 'Total Resellers']) assert.ok(render.includes(label));
+  assert.ok(render.includes("'<td class=\"text-secondary\">' + (index + 1) + '</td>'"));
+  assert.ok(!render.includes("'<td class=\"text-secondary\">' + index + '</td>'"));
+});
+
+test('Reseller workspace uses one shared panel gutter and consolidated Inter typography roles', () => {
+  const workspaceCss = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'reseller-workspace.css'), 'utf8');
+  assert.ok(workspaceCss.includes('--reseller-panel-gutter:24px'));
+  assert.ok(workspaceCss.includes('padding:20px var(--reseller-panel-gutter) 0'));
+  assert.ok(workspaceCss.includes('padding:0 var(--reseller-panel-gutter) 20px'));
+  assert.ok(workspaceCss.includes('--reseller-panel-gutter:16px'));
+  assert.ok(workspaceCss.includes('--reseller-panel-gutter:12px'));
+  assert.ok(!workspaceCss.includes('/* Shared reseller page grid and typography roles. */'));
+  assert.ok(workspaceCss.includes('font-family:var(--reseller-font);font-size:var(--reseller-body-size)'));
+});
