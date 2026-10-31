@@ -86,3 +86,13 @@ test('customer onboarding wires submit dispatch and clears stale catalogue failu
   assert.match(script, /byId\('newCustomerExpiryDate'\)\.value=expiry/);
   assert.match(script, /payload\.expirationDate=expiry/);
 });
+
+
+test('expiry hidden field is canonical strict ISO while the preview remains localized', () => {
+  assert.ok(script.includes("function normalizeIsoDate(value){const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);"));
+  assert.ok(script.includes("const expiry=normalizeIsoDate(connection&&option?.value?addCalendarMonths(connection,months):'');"));
+  assert.ok(script.includes("byId('newCustomerExpiryDate').value=expiry;"));
+  assert.ok(script.includes("byId('newCustomerExpiryPreview').value=expiry?formatDate(expiry):"));
+  assert.ok(script.includes("function isStrictIsoDate(value){return normalizeIsoDate(value)===String(value||'');}"));
+  assert.ok(script.includes("payload.expirationDate=expiry"));
+});
