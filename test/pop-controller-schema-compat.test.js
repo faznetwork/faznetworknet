@@ -110,11 +110,10 @@ test('POP update returns explicit schema readiness error instead of querying a m
   assert.equal(calls.some(call=>/FROM public\\.pop_hotspot_bindings|INTO public\\.pop_hotspot_bindings|UPDATE public\\.pop_hotspot_bindings/.test(call.sql)),false);
 });
 
-test('POP schema inspection resolves the active schema and persists PPPoE, pool, and VLAN updates', async t => {
+test('POP update uses the locked row and saves PPPoE, pool, and VLAN fields without inspecting POP columns', async t => {
   const calls = [];
   const schema = {
     hotspot_bindings_available: false,
-    pop_columns: ['id', 'name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled', 'pppoe_ip_pool', 'commission_type', 'commission_rate', 'status', 'updated_at'],
     binding_columns: []
   };
   const client = {
@@ -143,7 +142,8 @@ test('POP schema inspection resolves the active schema and persists PPPoE, pool,
   const inspection = calls.find(call => call.sql.includes('information_schema.columns'));
   assert.match(inspection.sql, /to_regclass\('public\.pop_hotspot_bindings'\)/);
   assert.match(inspection.sql, /table_schema\s*=\s*'public'/);
-  assert.match(inspection.sql, /table_name\s*=\s*'pops'/);
+  assert.match(inspection.sql, /table_name\s*=\s*'pop_hotspot_bindings'/);
+  assert.doesNotMatch(inspection.sql, /table_name\s*=\s*'pops'/);
   assert.doesNotMatch(inspection.sql, /table_schema\s*=\s*CURRENT_SCHEMA/);
   const update = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
   assert.ok(update, 'POP UPDATE statement should execute');
@@ -151,11 +151,10 @@ test('POP schema inspection resolves the active schema and persists PPPoE, pool,
 });
 
 
-test('POP update saves supported fields when the optional pppoe_enabled column is absent', async t => {
+test('POP update saves standard fields and maps legacy pool without a POP schema metadata gate', async t => {
   const calls = [];
   const schema = {
     hotspot_bindings_available: false,
-    pop_columns: ['id','name','area_zone','reseller_id','vlan_id','mikrotik_ip_pool','commission_type','commission_rate','status','updated_at'],
     binding_columns: []
   };
   const client = {
@@ -178,7 +177,7 @@ test('POP update saves supported fields when the optional pppoe_enabled column i
 
   await controller.update({
     params: { id: '22' },
-    body: { name: 'Updated Legacy POP', pppoe_enabled: true, pppoe_ip_pool: 'NewPool', vlan_id: 33 }
+    body: { name: 'Updated Legacy POP', area_zone: 'South', reseller_id: null, pppoe_enabled: true, pppoe_ip_pool: 'NewPool', vlan_id: 33 }
   }, res);
 
   assert.equal(res.statusCode, 200);
@@ -187,6 +186,7 @@ test('POP update saves supported fields when the optional pppoe_enabled column i
   assert.ok(update);
   assert.match(update.sql, /mikrotik_ip_pool/);
   assert.doesNotMatch(update.sql, /pppoe_enabled/);
-  assert.deepEqual(update.values, ['Updated Legacy POP', 33, 'NewPool', 22]);
+  assert.deepEqual(update.values, ['Updated Legacy POP', 'South', null, 33, 'NewPool', 22]);
   assert.equal(warnings.length, 1);
+  assert.equal(calls.some(call => call.sql.includes("table_name = 'pops'")), false);
 });
