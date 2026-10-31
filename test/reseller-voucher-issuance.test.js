@@ -545,7 +545,7 @@ test('reseller POS package selection uses delegated canonical state and recalcul
   assert.match(view, /class="pos-package-scroll mb-3"/);
   assert.match(view, /max-height:380px;overflow-y:auto/);
   assert.doesNotMatch(view, /voucherPrefix|Username prefix/);
-  assert.match(scripts, /reseller-vouchers\.js\?v=20261031-7/);
+  assert.match(scripts, /reseller-vouchers\.js\?v=20261101-2/);
 });
 
 
