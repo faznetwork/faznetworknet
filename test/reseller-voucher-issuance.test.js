@@ -500,16 +500,17 @@ test('voucher history and detail project validity defensively across schema vari
   assert.doesNotMatch(source, /WHERE[^\`]*to_jsonb\(b\)|ORDER BY[^\`]*to_jsonb\(b\)/s);
 });
 
-test('POP update no longer depends on POP information-schema metadata for standard fields', () => {
+test('POP update uses deterministic Hotspot SQL without runtime schema discovery', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
-  assert.ok(source.includes("to_regclass('public.pop_hotspot_bindings')"));
-  assert.ok(source.includes("table_schema = 'public'"));
-  assert.equal(source.includes('table_schema = CURRENT_SCHEMA'), false);
-  assert.equal(source.includes('requirePopColumns'), false);
+  assert.equal(source.includes('information_schema.columns'), false);
+  assert.equal(source.includes('inspectHotspotBindingSchema'), false);
+  assert.ok(source.includes("INSERT INTO public.pop_hotspot_bindings"));
+  assert.ok(source.includes("COALESCE($2, 'core_mikrotik')"));
+  assert.ok(source.includes("ON CONFLICT (pop_id) DO UPDATE SET"));
   const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
   assert.ok(update.includes('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE'));
-  assert.ok(update.includes('const updateColumns = []'));
-  assert.ok(update.includes("field === 'pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current, 'pppoe_enabled')"));
-  assert.ok(update.includes('console.warn('));
+  assert.ok(update.includes('SAVEPOINT pop_hotspot_optional'));
+  assert.ok(update.includes('hotspot_persisted: result.hotspotPersisted'));
+  assert.ok(update.includes('console.error('));
   assert.ok(update.includes('mikrotik_ip_pool'));
 });
