@@ -311,6 +311,8 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   assert.ok(profile.includes('.section-title{font-size:1rem;font-weight:600'));
   assert.ok(profile.includes('.label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500'));
   assert.ok(profile.includes('.value{font-weight:400'));
+  assert.ok(profile.includes('font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif'));
+  assert.ok(!profile.includes("Plus Jakarta Sans"));
 });
 
 
