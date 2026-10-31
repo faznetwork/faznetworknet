@@ -524,3 +524,22 @@ test('POP update uses deterministic Hotspot SQL without runtime schema discovery
   assert.ok(update.includes('console.error('));
   assert.ok(update.includes('mikrotik_ip_pool'));
 });
+
+
+test('reseller POS package selection uses delegated canonical state and recalculates financial totals', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
+  const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const scripts = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'reseller-scripts.ejs'), 'utf8');
+  assert.match(script, /selectedPackageId:null/);
+  assert.match(script, /voucherPackageGrid'\)\.addEventListener\('click'/);
+  assert.match(script, /state\.selectedPackageId=String\(selected\.id\)/);
+  assert.match(script, /state\.retailPrice=String\(selected\.retailPrice\)/);
+  assert.match(script, /state\.wholesalePrice=String\(selected\.wholesalePrice\)/);
+  assert.match(script, /state\.margin=String\(/);
+  assert.match(script, /issueButton\.disabled=!canIssue/);
+  assert.match(script, /summary\(\);\}\);el\('btnIssueVouchers'\)/);
+  assert.match(view, /class="pos-package-scroll mb-3"/);
+  assert.match(view, /max-height:380px;overflow-y:auto/);
+  assert.doesNotMatch(view, /voucherPrefix|Username prefix/);
+  assert.match(scripts, /reseller-vouchers\.js\?v=20261031-7/);
+});
