@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v10"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v11"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -163,8 +163,8 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v10"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');"));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v11"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
@@ -214,7 +214,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-dual-pool-v10'));
+  assert.ok(admin.includes('pop-dual-pool-v11'));
 });
 
 
@@ -280,6 +280,16 @@ test('POP action failures remain toast-visible only inside the explicit action h
   const end = ui.indexOf('function savePopForm(', start);
   assert.ok(start >= 0 && end > start);
   assert.ok(ui.slice(start, end).includes("showToast(error.message || 'The requested action failed.', 'danger')"));
+});
+
+test('POP directory uses a dedicated numeric ID column and clean POP name column', () => {
+  assert.ok(ui.includes(`'<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +`));
+  assert.ok(ui.includes(`'<td><strong>' + escapeHtml(pop.name) + '</strong></td>' +`));
+  assert.ok(ui.includes('<th>#</th><th>Name</th>'));
+  assert.ok(ui.includes('colspan="11"'));
+  assert.ok(ui.includes('fpr-metric--pops'));
+  assert.ok(ui.includes('fpr-metric--customers'));
+  assert.ok(ui.includes('fpr-metric--resellers'));
 });
 
 test('POP and reseller typography uses the approved semantic weight hierarchy', () => {
