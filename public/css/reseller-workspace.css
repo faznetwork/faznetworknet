@@ -26,3 +26,13 @@
 .reseller-customer-directory-table .customer-account-actions .btn{white-space:nowrap}
 @media(max-width:767.98px){.reseller-customer-directory-table{min-width:1000px}.reseller-customer-directory-table th,.reseller-customer-directory-table td{padding:12px 14px}}
 
+
+
+/* Account & Balance KPI theme, aligned with the four existing metric cards. */
+.metric-card--account{background:linear-gradient(135deg,#059669 0%,#0d9488 100%);color:#fff;border-color:rgba(255,255,255,.16)}
+.metric-card--account .metric-icon{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);color:#fff}
+.metric-card--account .metric-label{min-width:0;font-size:.75rem;color:rgba(255,255,255,.92);font-weight:500;letter-spacing:.05em;text-transform:uppercase;line-height:1.4;margin-top:0}
+.metric-card--account .metric-value{font-size:2rem;line-height:1.2;font-weight:700;color:#fff;margin-top:12px}
+.metric-card--account .metric-foot{color:rgba(255,255,255,.82);font-weight:400}
+.metric-card--account #resellerBalanceGuidance{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.94);color:#065f46;font-weight:600}
+.metric-card--account #resellerBalanceGuidance:hover,.metric-card--account #resellerBalanceGuidance:focus{background:#fff;color:#064e3b}
