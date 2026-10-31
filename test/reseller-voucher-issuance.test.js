@@ -535,7 +535,7 @@ test('reseller POS package selection uses delegated canonical state and recalcul
   assert.match(script, /state\.selectedPackageId=String\(selected\.id\)/);
   assert.match(script, /state\.retailPrice=String\(selected\.retailPrice\)/);
   assert.match(script, /state\.wholesalePrice=String\(selected\.wholesalePrice\)/);
-  assert.match(script, /state\.margin=String\(/);
+  assert.match(script, /state\.margin=decimal\(/);
   assert.match(script, /issueButton\.disabled=!canIssue/);
   assert.match(script, /summary\(\);\}\);el\('btnIssueVouchers'\)/);
   assert.match(view, /class="pos-package-scroll mb-3"/);
