@@ -609,7 +609,14 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
         item.element.value = item.value;
       });
     } catch (error) {
-      console.error('[POP Admin UI] Could not load configured MikroTik IP Pools:', error);
+      console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.', {
+        event: 'pop_ip_pool_lookup_failed',
+        endpoint: '/api/ip-pools',
+        popId: pop && pop.id != null ? String(pop.id) : null,
+        status: error && error.status != null ? error.status : null,
+        errorName: error && error.name ? error.name : 'Error',
+        message: error && error.message ? error.message : String(error)
+      });
       selectors.forEach(function (item) {
         if (!item.value) return;
         const existing = document.createElement('option');
@@ -621,7 +628,6 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
       });
       const errorHost = form.querySelector('#fprPopFormError');
       if (errorHost) errorHost.innerHTML = errorBanner('Configured MikroTik IP Pools could not be loaded. Existing PPPoE and Hotspot assignments were preserved. Retry before selecting a different pool.');
-      showToast('IP Pool list is unavailable. Existing service assignments were preserved.', 'warning');
     } finally {
       selectors.forEach(function (item) { item.element.disabled = false; });
     }
