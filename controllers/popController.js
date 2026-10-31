@@ -180,58 +180,44 @@ async function validateResellerOwner(resellerId) {
   if (!owner.rows.length) throw serviceError('Selected reseller does not exist or is inactive.');
 }
 
-async function inspectHotspotBindingSchema(client) {
-  const result = await client.query(`SELECT
-    to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
-    COALESCE((
-      SELECT array_agg(column_name)
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'pop_hotspot_bindings'
-    ), ARRAY[]::text[]) AS binding_columns`);
-  const schema = result.rows?.[0] || {};
-  return {
-    hotspotBindingsAvailable: schema.hotspot_bindings_available === true,
-    bindingColumns: new Set(schema.binding_columns || [])
-  };
-}
-
-function requireHotspotBindingSchema(schema, fields) {
-  if (!schema.hotspotBindingsAvailable) throw serviceError(
-    'Hotspot binding storage is not ready. Apply the approved POP Hotspot binding migration before saving Hotspot settings.',
-    503, 'POP_SCHEMA_NOT_READY'
-  );
-  const missing = fields.filter(field => !schema.bindingColumns.has(field));
-  if (missing.length) throw serviceError(
-    'POP Hotspot binding schema is incomplete. Missing required column(s): ' + missing.join(', ') + '.',
-    503, 'POP_SCHEMA_NOT_READY'
-  );
-}
-
-async function upsertHotspotBinding(client, popId, config, schema) {
-  const bindingSchema = schema || await inspectHotspotBindingSchema(client);
+async function upsertHotspotBinding(client, popId, config) {
   if (!config.enabled) {
-    requireHotspotBindingSchema(bindingSchema, ['pop_id','status','updated_at']);
-    await client.query("UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'", [popId]);
+    await client.query(
+      "UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'",
+      [popId]
+    );
     return;
   }
-  if (!config.server || !config.pool) throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
-  requireHotspotBindingSchema(bindingSchema, ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']);
-  await client.query(`INSERT INTO public.pop_hotspot_bindings
-    (pop_id,router_key,hotspot_server,hotspot_interface,vlan_id,ip_pool,status,updated_at)
-    VALUES ($1,'core_mikrotik',$2,$3,$4,$5,'active',NOW())
-    ON CONFLICT (pop_id) DO UPDATE SET hotspot_server=EXCLUDED.hotspot_server,
-      hotspot_interface=EXCLUDED.hotspot_interface,vlan_id=EXCLUDED.vlan_id,
-      ip_pool=EXCLUDED.ip_pool,status='active',updated_at=NOW()`,
-    [popId,config.server,config.interface||null,config.vlanId,config.pool]);
+
+  if (!config.server || !config.pool) {
+    throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
+  }
+
+  await client.query(`INSERT INTO public.pop_hotspot_bindings (
+      pop_id, router_key, hotspot_server, hotspot_interface, vlan_id, ip_pool, status, updated_at
+    ) VALUES (
+      $1, COALESCE($2, 'core_mikrotik'), $3, $4, $5, $6, COALESCE($7, 'active'), NOW()
+    )
+    ON CONFLICT (pop_id) DO UPDATE SET
+      router_key = EXCLUDED.router_key,
+      hotspot_server = EXCLUDED.hotspot_server,
+      hotspot_interface = EXCLUDED.hotspot_interface,
+      vlan_id = EXCLUDED.vlan_id,
+      ip_pool = EXCLUDED.ip_pool,
+      status = EXCLUDED.status,
+      updated_at = NOW()`,
+    [popId, config.routerKey || null, config.server, config.interface || null,
+      config.vlanId ?? null, config.pool, config.status || null]
+  );
 }
 
-async function readPop(client, id, schema) {
-  const popSchema = schema || await inspectHotspotBindingSchema(client);
-  const hotspotJoin = popSchema.hotspotBindingsAvailable
-    ? `LEFT JOIN LATERAL (SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb
-        WHERE to_jsonb(hb)->>'pop_id'=p.id::text LIMIT 1) hb ON TRUE`
-    : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS data) hb ON TRUE';
+async function readPop(client, id) {
+  const hotspotJoin = `LEFT JOIN LATERAL (
+    SELECT to_jsonb(hb) AS data
+    FROM public.pop_hotspot_bindings hb
+    WHERE hb.pop_id = p.id
+    LIMIT 1
+  ) hb ON TRUE`;
   const result = await client.query(`SELECT p.id,p.reseller_id,p.name,p.area_zone,
     (to_jsonb(p)->>'vlan_id')::integer AS vlan_id,
     COALESCE((to_jsonb(p)->>'pppoe_enabled')::boolean,TRUE) AS pppoe_enabled,
@@ -257,7 +243,7 @@ async function create(req, res) {
       throw serviceError('Select a PPPoE IP Pool or disable the PPPoE service for this POP.');
     }
     const hotspotEnabled = data.hotspot_enabled === true;
-    const pop = await db.withTransaction(async client => {
+    const result = await db.withTransaction(async client => {
       const inserted = await client.query(
         `INSERT INTO public.pops
            (name,area_zone,reseller_id,vlan_id,pppoe_enabled,pppoe_ip_pool,commission_type,commission_rate)
@@ -274,7 +260,7 @@ async function create(req, res) {
       });
       return readPop(client, id);
     });
-    return res.status(201).json({ success: true, pop });
+    return res.status(201).json({ success: true, pop, hotspot_persisted: true });
   } catch (error) {
     return fail(res, error, 'Create');
   }
@@ -331,58 +317,45 @@ async function update(req, res) {
 
       const hotspotFields = ['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
       const hotspotConfigChanged = hotspotFields.some(field => Object.prototype.hasOwnProperty.call(data, field));
-      let bindingSchema = null;
+      let hotspotPersisted = true;
       if (hotspotConfigChanged) {
-        // Isolate optional binding writes with a savepoint: PostgreSQL marks the
-        // transaction failed after a schema mismatch until it is rolled back.
+        // Keep the primary POP update independent while making Hotspot persistence
+        // deterministic against the verified public.pop_hotspot_bindings contract.
         await client.query('SAVEPOINT pop_hotspot_optional');
         try {
-          bindingSchema = await inspectHotspotBindingSchema(client);
-          const requiredColumns = data.hotspot_enabled === false
-            ? ['pop_id','status','updated_at']
-            : ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at'];
-          const missingColumns = requiredColumns.filter(column => !bindingSchema.bindingColumns.has(column));
-          if (!bindingSchema.hotspotBindingsAvailable || missingColumns.length) {
-            console.warn('[POP] Optional Hotspot binding persistence skipped.', {
-              event: 'pop.hotspot_binding.skipped',
-              popId: id,
-              reason: bindingSchema.hotspotBindingsAvailable ? 'incompatible_schema' : 'table_missing',
-              missingColumns
-            });
-            bindingSchema = { hotspotBindingsAvailable: false, bindingColumns: new Set() };
-          } else {
-            const bindingResult = await client.query(
-              'SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',
-              [id]
-            );
-            const binding = bindingResult.rows[0]?.data || {};
-            const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
-            const config = {
-              enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
-              server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
-              interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
-              vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
-              pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
-            };
-            await upsertHotspotBinding(client, id, config, bindingSchema);
-          }
+          const bindingResult = await client.query(
+            'SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',
+            [id]
+          );
+          const binding = bindingResult.rows[0]?.data || {};
+          const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
+          const config = {
+            enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
+            routerKey: binding.router_key || null,
+            server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
+            interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
+            vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
+            pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
+          };
+          await upsertHotspotBinding(client, id, config);
           await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
         } catch (bindingError) {
           await client.query('ROLLBACK TO SAVEPOINT pop_hotspot_optional');
           await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
-          console.warn('[POP] Optional Hotspot binding persistence failed; primary POP update will be retained.', {
+          hotspotPersisted = false;
+          console.error('[POP] Hotspot binding persistence failed; primary POP update is retained.', {
             event: 'pop.hotspot_binding.persistence_failed',
             popId: id,
             databaseCode: bindingError.code || null,
+            constraint: bindingError.constraint || null,
             message: bindingError.message
           });
-          bindingSchema = { hotspotBindingsAvailable: false, bindingColumns: new Set() };
         }
       }
-      return readPop(client, id, bindingSchema || undefined);
+      return { pop: await readPop(client, id), hotspotPersisted };
     });
-    if (!pop) return res.status(404).json({ success: false, message: 'POP not found.' });
-    return res.json({ success: true, pop });
+    if (!result || !result.pop) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop: result.pop, hotspot_persisted: result.hotspotPersisted });
   } catch (error) {
     return fail(res, error, 'Update');
   }
