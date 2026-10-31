@@ -94,3 +94,19 @@ test('reseller package duration drives a validated month-end-safe expiry date', 
   assert.equal(calculate('2026-01-31', 0), '');
   assert.equal(calculate('2026-02-30', 1), '');
 });
+
+
+test('reseller workspace pages share a consistent heading/body typography and content grid', () => {
+  const css = read('public/css/reseller-workspace.css');
+  assert.match(css, /--reseller-body-size:14px;--reseller-body-weight:400/);
+  assert.match(css, /--reseller-heading-size:1\\.125rem;--reseller-heading-weight:600/);
+  assert.match(css, /\\.reseller-page-title\\{font-size:var\\(--reseller-heading-size\\)/);
+  assert.match(css, /\\.reseller-section-heading h2\\{font-size:var\\(--reseller-heading-size\\)/);
+  assert.match(css, /\\.reseller-panel>\\.reseller-section-heading\\{padding:20px 24px 0/);
+  assert.match(css, /\\.reseller-panel>\\.table-responsive\\{padding:0 24px 20px/);
+  assert.match(css, /\\.reseller-panel>\\.pos-terminal\\{padding:0 24px 24px/);
+  assert.match(css, /\\.reseller-panel>\\.reseller-customer-directory-wrap\\{padding:0 24px 0/);
+  const profile = read('views/reseller-customer-profile.ejs');
+  assert.match(profile, /font-size:14px;font-weight:400;line-height:1\\.55/);
+  assert.match(profile, /\\.section-title\\{font-size:1\\.125rem;line-height:1\\.35;font-weight:600/);
+});
