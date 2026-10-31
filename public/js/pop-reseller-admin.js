@@ -424,10 +424,13 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     } else {
       const initialHotspot = form && form.dataset.hotspotInitial
         ? JSON.parse(form.dataset.hotspotInitial)
-        : null;
-      if (!initialHotspot) {
-        throw new Error('The original Hotspot binding state is unavailable. Reopen the POP editor before saving.');
-      }
+        : {
+            enabled: Boolean(current && current.hotspot_enabled),
+            server: current ? current.hotspot_server || '' : '',
+            interface: current ? current.hotspot_interface || '' : '',
+            vlanId: current && current.hotspot_vlan_id ? Number(current.hotspot_vlan_id) : null,
+            pool: current ? current.hotspot_ip_pool || null : null
+          };
       if (currentHotspot.enabled !== initialHotspot.enabled) {
         payload.hotspot_enabled = currentHotspot.enabled;
         if (currentHotspot.enabled) {
