@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v6"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v7"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -160,8 +160,8 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v6"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');"));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v7"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
@@ -201,14 +201,14 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes("await loadPopIpPools(form, pop);"));
   assert.ok(ui.includes('item.element.value = item.value;'));
   assert.ok(ui.includes('current assignment (not in active pool list)'));
-  assert.ok(ui.includes('Existing PPPoE and Hotspot assignments were preserved.'));
+  assert.ok(ui.includes('state.ipPools = [];'));
   assert.ok(ui.includes('pppoe_ip_pool: pppoePoolInput && pppoePoolInput.value ? pppoePoolInput.value : null'));
   assert.ok(ui.includes('hotspot_ip_pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null'));
   assert.ok(ui.includes('pop.hotspot_ip_pool'));
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-dual-pool-v6'));
+  assert.ok(admin.includes('pop-dual-pool-v7'));
 });
 
 
@@ -239,7 +239,7 @@ test('optional POP IP Pool lookup failure is structured, non-blocking, and does 
   assert.ok(lookup.includes("endpoint: '/api/ip-pools'"));
   assert.ok(lookup.includes("popId: pop && pop.id != null ? String(pop.id) : null"));
   assert.ok(lookup.includes('current assignment (pool list unavailable)'));
-  assert.ok(lookup.includes('Existing PPPoE and Hotspot assignments were preserved.'));
+  assert.ok(lookup.includes('state.ipPools = [];'));
   assert.ok(!lookup.includes('showToast('));
   assert.ok(lookup.includes('finally {'));
 });
