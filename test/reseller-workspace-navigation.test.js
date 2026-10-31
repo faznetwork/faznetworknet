@@ -147,7 +147,7 @@ test('all shared reseller stylesheet consumers use cache token 20261101-4', () =
   const consumers = ['reseller-dashboard.ejs','reseller-vouchers.ejs','reseller-customers.ejs','reseller-payments.ejs'];
   for (const view of consumers) {
     const source = read(path.join('views', view));
-    assert.match(source, /reseller-workspace\\.css\\?v=20261101-4/);
-    assert.doesNotMatch(source, /reseller-workspace\\.css\\?v=20261101-3/);
+    assert.ok(source.includes('reseller-workspace.css?v=20261101-4'));
+    assert.ok(!source.includes('reseller-workspace.css?v=20261101-3'));
   }
 });
