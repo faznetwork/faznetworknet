@@ -7,8 +7,8 @@ function validId(value) {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function serviceError(message, statusCode = 400) {
-  return Object.assign(new Error(message), { statusCode });
+function serviceError(message, statusCode = 400, code) {
+  return Object.assign(new Error(message), { statusCode, ...(code ? { code } : {}) });
 }
 
 function parseBoolean(value, field) {
@@ -75,7 +75,7 @@ function fail(res, error, operation) {
   console.error('[POP API] ' + operation + ':', error);
   return res.status(error.statusCode || 503).json({
     success: false,
-    code: error.statusCode ? 'POP_VALIDATION_FAILED' : 'POP_OPERATION_FAILED',
+    code: error.code || (error.statusCode ? 'POP_VALIDATION_FAILED' : 'POP_OPERATION_FAILED'),
     message: error.statusCode ? error.message : 'POP operation failed.'
   });
 }
@@ -180,43 +180,72 @@ async function validateResellerOwner(resellerId) {
   if (!owner.rows.length) throw serviceError('Selected reseller does not exist or is inactive.');
 }
 
-async function upsertHotspotBinding(client, popId, config) {
-  if (!config.enabled) {
-    await client.query(
-      "UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'",
-      [popId]
-    );
-    return;
-  }
-  if (!config.server || !config.pool) {
-    throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
-  }
-  await client.query(
-    `INSERT INTO public.pop_hotspot_bindings
-       (pop_id,router_key,hotspot_server,hotspot_interface,vlan_id,ip_pool,status,updated_at)
-     VALUES ($1,'core_mikrotik',$2,$3,$4,$5,'active',NOW())
-     ON CONFLICT (pop_id) DO UPDATE SET
-       hotspot_server=EXCLUDED.hotspot_server,
-       hotspot_interface=EXCLUDED.hotspot_interface,
-       vlan_id=EXCLUDED.vlan_id,
-       ip_pool=EXCLUDED.ip_pool,
-       status='active',
-       updated_at=NOW()`,
-    [popId, config.server, config.interface || null, config.vlanId, config.pool]
+async function inspectPopSchema(client) {
+  const result = await client.query(`SELECT
+    to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
+    COALESCE((SELECT array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' AND table_name='pops'), ARRAY[]::text[]) AS pop_columns,
+    COALESCE((SELECT array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' AND table_name='pop_hotspot_bindings'), ARRAY[]::text[]) AS binding_columns`);
+  const schema = result.rows?.[0] || {};
+  return { hotspotBindingsAvailable: schema.hotspot_bindings_available === true,
+    popColumns: new Set(schema.pop_columns || []), bindingColumns: new Set(schema.binding_columns || []) };
+}
+
+function requirePopColumns(schema, fields) {
+  const missing = fields.filter(field => !schema.popColumns.has(field));
+  if (missing.length) throw serviceError(
+    'POP schema is not ready. Missing required POP column(s): ' + missing.join(', ') + '. Apply the approved dual-service POP migration before saving these fields.',
+    503, 'POP_SCHEMA_NOT_READY'
   );
 }
 
-async function readPop(client, id) {
-  const result = await client.query(
-    `SELECT p.id,p.reseller_id,p.name,p.area_zone,p.vlan_id,p.pppoe_enabled,p.pppoe_ip_pool,
-            p.mikrotik_ip_pool,p.commission_type,p.commission_rate,p.status,p.created_at,p.updated_at,
-            (hb.status='active') AS hotspot_enabled,hb.hotspot_server,hb.hotspot_interface,
-            hb.vlan_id AS hotspot_vlan_id,hb.ip_pool AS hotspot_ip_pool,
-            hb.status AS hotspot_binding_status
-     FROM public.pops p LEFT JOIN public.pop_hotspot_bindings hb ON hb.pop_id=p.id
-     WHERE p.id=$1 LIMIT 1`,
-    [id]
+function requireHotspotBindingSchema(schema, fields) {
+  if (!schema.hotspotBindingsAvailable) throw serviceError(
+    'Hotspot binding storage is not ready. Apply the approved POP Hotspot binding migration before saving Hotspot settings.',
+    503, 'POP_SCHEMA_NOT_READY'
   );
+  const missing = fields.filter(field => !schema.bindingColumns.has(field));
+  if (missing.length) throw serviceError(
+    'POP Hotspot binding schema is incomplete. Missing required column(s): ' + missing.join(', ') + '.',
+    503, 'POP_SCHEMA_NOT_READY'
+  );
+}
+
+async function upsertHotspotBinding(client, popId, config, schema) {
+  if (!config.enabled) {
+    requireHotspotBindingSchema(schema, ['pop_id','status','updated_at']);
+    await client.query("UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'", [popId]);
+    return;
+  }
+  if (!config.server || !config.pool) throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
+  requireHotspotBindingSchema(schema, ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']);
+  await client.query(`INSERT INTO public.pop_hotspot_bindings
+    (pop_id,router_key,hotspot_server,hotspot_interface,vlan_id,ip_pool,status,updated_at)
+    VALUES ($1,'core_mikrotik',$2,$3,$4,$5,'active',NOW())
+    ON CONFLICT (pop_id) DO UPDATE SET hotspot_server=EXCLUDED.hotspot_server,
+      hotspot_interface=EXCLUDED.hotspot_interface,vlan_id=EXCLUDED.vlan_id,
+      ip_pool=EXCLUDED.ip_pool,status='active',updated_at=NOW()`,
+    [popId,config.server,config.interface||null,config.vlanId,config.pool]);
+}
+
+async function readPop(client, id, schema) {
+  const popSchema = schema || await inspectPopSchema(client);
+  const hotspotJoin = popSchema.hotspotBindingsAvailable
+    ? `LEFT JOIN LATERAL (SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb
+        WHERE to_jsonb(hb)->>'pop_id'=p.id::text LIMIT 1) hb ON TRUE`
+    : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS data) hb ON TRUE';
+  const result = await client.query(`SELECT p.id,p.reseller_id,p.name,p.area_zone,
+    (to_jsonb(p)->>'vlan_id')::integer AS vlan_id,
+    COALESCE((to_jsonb(p)->>'pppoe_enabled')::boolean,TRUE) AS pppoe_enabled,
+    COALESCE(to_jsonb(p)->>'pppoe_ip_pool',to_jsonb(p)->>'mikrotik_ip_pool') AS pppoe_ip_pool,
+    to_jsonb(p)->>'mikrotik_ip_pool' AS mikrotik_ip_pool,
+    COALESCE(to_jsonb(p)->>'commission_type','percentage') AS commission_type,
+    COALESCE((to_jsonb(p)->>'commission_rate')::numeric,0) AS commission_rate,
+    COALESCE(to_jsonb(p)->>'status','inactive') AS status,p.created_at,p.updated_at,
+    COALESCE(hb.data->>'status'='active',FALSE) AS hotspot_enabled,
+    hb.data->>'hotspot_server' AS hotspot_server,hb.data->>'hotspot_interface' AS hotspot_interface,
+    (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,hb.data->>'ip_pool' AS hotspot_ip_pool,
+    hb.data->>'status' AS hotspot_binding_status
+    FROM public.pops p ${hotspotJoin} WHERE p.id=$1 LIMIT 1`,[id]);
   return result.rows[0] || null;
 }
 
@@ -259,57 +288,45 @@ async function update(req, res) {
     const data = parse(req.body, true);
     await validateResellerOwner(data.reseller_id);
     const pop = await db.withTransaction(async client => {
-      const currentResult = await client.query(
-        'SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',
-        [id]
-      );
+      const schema = await inspectPopSchema(client);
+      const currentResult = await client.query('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',[id]);
       const current = currentResult.rows[0];
       if (!current) return null;
-      const bindingResult = await client.query(
-        'SELECT status,hotspot_server,hotspot_interface,vlan_id,ip_pool FROM public.pop_hotspot_bindings WHERE pop_id=$1 FOR UPDATE',
-        [id]
-      );
-      const binding = bindingResult.rows[0] || {};
       const merged = { ...current, ...data };
-      if (data.pppoe_enabled === true && !merged.pppoe_ip_pool) {
-        throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
+      if (Object.prototype.hasOwnProperty.call(data,'pppoe_enabled')) requirePopColumns(schema,['pppoe_enabled']);
+      if (Object.prototype.hasOwnProperty.call(data,'pppoe_ip_pool')) requirePopColumns(schema,['pppoe_ip_pool']);
+      if (data.pppoe_enabled === true && !merged.pppoe_ip_pool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
+      if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !merged.pppoe_ip_pool) throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
+      const fields=['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
+      const updates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
+      if(updates.length){
+        requirePopColumns(schema,updates);
+        const values=updates.map(field=>data[field]); values.push(id);
+        const assignments=updates.map((field,index)=>field+'=$'+(index+1));
+        await client.query('UPDATE public.pops SET '+assignments.join(',')+',updated_at=NOW() WHERE id=$'+values.length,values);
       }
-      if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !merged.pppoe_ip_pool) {
-        throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
-      }
-
-      const fields = ['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
-      const updates = fields.filter(field => Object.prototype.hasOwnProperty.call(data, field));
-      if (updates.length) {
-        const values = updates.map(field => data[field]);
-        values.push(id);
-        const assignments = updates.map((field, index) => field + '=$' + (index + 1));
-        await client.query(
-          'UPDATE public.pops SET ' + assignments.join(',') + ',updated_at=NOW() WHERE id=$' + values.length,
-          values
-        );
-      }
-
-      const hotspotConfigChanged = ['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool']
-        .some(field => Object.prototype.hasOwnProperty.call(data, field));
-      if (hotspotConfigChanged) {
-        const enabled = data.hotspot_enabled === undefined ? binding.status === 'active' : data.hotspot_enabled;
-        const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
-        const config = {
-          enabled,
-          server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
-          interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
-          vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
-          pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
+      const hotspotFields=['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
+      const hotspotConfigChanged=hotspotFields.some(field=>Object.prototype.hasOwnProperty.call(data,field));
+      if(hotspotConfigChanged){
+        requireHotspotBindingSchema(schema,['pop_id','status']);
+        const bindingResult=await client.query('SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',[id]);
+        const binding=bindingResult.rows[0]?.data||{};
+        const hasField=field=>Object.prototype.hasOwnProperty.call(data,field);
+        const config={
+          enabled:hasField('hotspot_enabled')?data.hotspot_enabled:binding.status==='active',
+          server:hasField('hotspot_server')?data.hotspot_server:binding.hotspot_server,
+          interface:hasField('hotspot_interface')?(data.hotspot_interface||null):binding.hotspot_interface,
+          vlanId:hasField('hotspot_vlan_id')?data.hotspot_vlan_id:binding.vlan_id,
+          pool:hasField('hotspot_ip_pool')?data.hotspot_ip_pool:binding.ip_pool
         };
-        await upsertHotspotBinding(client, id, config);
+        await upsertHotspotBinding(client,id,config,schema);
       }
-      return readPop(client, id);
+      return readPop(client,id,schema);
     });
-    if (!pop) return res.status(404).json({ success: false, message: 'POP not found.' });
-    return res.json({ success: true, pop });
-  } catch (error) {
-    return fail(res, error, 'Update');
+    if(!pop) return res.status(404).json({success:false,message:'POP not found.'});
+    return res.json({success:true,pop});
+  } catch(error) {
+    return fail(res,error,'Update');
   }
 }
 

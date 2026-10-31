@@ -155,13 +155,16 @@ async function createCustomer(req, res) {
 }
 
 async function getCustomer(req, res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const key = customerKey(req.params.id);
   if (!key) return res.status(400).json({ success: false, message: 'Customer identifier is required.' });
 
   try {
     const popIds = resellerPopIds(req);
     const scoped = await db.query(
-      `SELECT c.id, c.full_name, c.username, c.phone, c.email,
+      `SELECT c.id, c.full_name, c.username, c.password AS pppoe_password, c.phone, c.email,
               c.package_name, c.profile, c.status, c.expiration_date,
               c.monthly_bill, c.connection_date, c.installation_address,
               c.pop_id, p.name AS pop_name, p.area_zone AS pop_area_zone

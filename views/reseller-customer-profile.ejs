@@ -56,6 +56,20 @@
     </section>
 
     <section class="panel mb-4">
+      <div class="mb-3"><h2 class="section-title">PPPoE Credentials</h2><div class="section-subtitle">Account login details · visible only to the assigned reseller</div></div>
+      <div class="row g-3">
+        <div class="col-12 col-md-6"><div class="info-cell"><div class="label">PPPoE username</div><div class="value" id="pppoeCredentialUsername">—</div></div></div>
+        <div class="col-12 col-md-6"><div class="info-cell">
+          <label class="label" for="pppoePasswordValue">PPPoE password</label>
+          <div class="input-group mt-1">
+            <input id="pppoePasswordValue" class="form-control" type="password" value="" placeholder="••••••••" readonly autocomplete="off" aria-label="PPPoE password">
+            <button id="togglePppoePassword" class="btn btn-outline-secondary" type="button" aria-controls="pppoePasswordValue" aria-pressed="false" aria-label="Show PPPoE password"><i class="bi bi-eye" aria-hidden="true"></i><span class="ms-1">Show</span></button>
+          </div>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
       <div class="mb-3"><h2 class="section-title">Assigned network</h2><div class="section-subtitle">POP and service assignment details</div></div>
       <div class="row g-3" id="networkDetails"><div class="col-12 text-secondary small">Loading network details…</div></div>
     </section>
@@ -84,7 +98,9 @@
         ]);
         const c=profile.customer||{};
         document.getElementById('customerName').textContent=c.full_name||c.username||'Customer';
-        document.getElementById('customerIdentity').textContent='PPPoE username: '+(c.username||'—')+' · Customer ID: '+(c.id||'—');
+        document.getElementById('customerIdentity').textContent='PPPoE username: '+(c.username||'—');
+        document.getElementById('pppoeCredentialUsername').textContent=c.username||'—';
+        document.getElementById('pppoePasswordValue').value=c.pppoe_password||'';
         document.getElementById('accountStatus').textContent=c.status||'Unknown';
         document.getElementById('accountStatus').className='badge '+(String(c.status).toLowerCase()==='active'?'badge-soft':'badge-muted');
         document.getElementById('customerDetails').innerHTML=
@@ -103,6 +119,14 @@
       if(!rows.length){body.innerHTML='<tr><td colspan="5"><div class="empty-state">No username-matched payment records were found.</div></td></tr>';return}
       body.innerHTML=rows.map(row=>'<tr><td>'+date(row.created_at)+'</td><td class="font-monospace">'+escapeHtml(row.trx_id||'—')+'</td><td>'+escapeHtml(row.channel||'—')+'</td><td>'+money(row.amount)+'</td><td><span class="badge '+(String(row.status).toUpperCase()==='PAID'?'badge-soft':'badge-muted')+'">'+escapeHtml(row.status||'Unknown')+'</span></td></tr>').join('');
     }
+    document.getElementById('togglePppoePassword').addEventListener('click',function(){
+      const input=document.getElementById('pppoePasswordValue');
+      const showing=input.type==='password';
+      input.type=showing?'text':'password';
+      this.setAttribute('aria-pressed',String(showing));
+      this.setAttribute('aria-label',showing?'Hide PPPoE password':'Show PPPoE password');
+      this.innerHTML=(showing?'<i class="bi bi-eye-slash" aria-hidden="true"></i><span class="ms-1">Hide</span>':'<i class="bi bi-eye" aria-hidden="true"></i><span class="ms-1">Show</span>');
+    });
     loadProfile();
   </script>
 </body>

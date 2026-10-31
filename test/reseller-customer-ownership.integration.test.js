@@ -34,9 +34,12 @@ function mockTenantDatabase(t) {
     if (sql.includes('FROM packages') && sql.includes('profile_name')) {
       return { rows: [{ id: 7, name: 'Home 30 Mbps', profile_name: 'HOME_30', price: '525.00', duration_months: 1 }] };
     }
-    if (sql.includes('SELECT c.id, c.full_name, c.username')) {
-      return { rows: [] };
+    if (sql.includes('c.password AS pppoe_password')) {
+      assert.deepEqual(values, ['own-customer', [101], 41]);
+      return { rows: [{ id: 11, full_name: 'Owned Customer', username: 'own-customer',
+        pppoe_password: 'secret-pass', pop_id: 101, pop_name: 'Owned POP' }] };
     }
+    if (sql.includes('SELECT c.id, c.full_name, c.username')) return { rows: [] };
     throw new Error('Unexpected database query in reseller ownership integration test: ' + sql);
   });
 }
@@ -201,4 +204,17 @@ test('reseller customer creation rejects a POP outside the authenticated reselle
   const payload = await response.json();
   assert.equal(payload.success, false);
   assert.match(payload.message, /not assigned to your reseller/i);
+});
+
+
+test('reseller customer profile API returns PPPoE password only in the tenant-scoped no-store profile response', async t => {
+  mockTenantDatabase(t);
+  const baseUrl = await createHttpApp(t);
+  const response = await fetch(baseUrl + '/api/reseller-portal/customers/own-customer');
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('cache-control') || '', /no-store/);
+  assert.match(response.headers.get('pragma') || '', /no-cache/i);
+  const payload = await response.json();
+  assert.equal(payload.customer.username, 'own-customer');
+  assert.equal(payload.customer.pppoe_password, 'secret-pass');
 });
