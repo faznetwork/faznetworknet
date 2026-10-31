@@ -299,6 +299,7 @@ test('POP assignment locks customer writes and accepts only an empty active unas
       if (sql.startsWith('INSERT INTO resellers')) {
         return { rows: [{ id: 810, name: 'North Partner', email: 'north@example.com', phone: '01700000000', status: 'inactive' }] };
       }
+      if (sql.includes('INSERT INTO public.reseller_billing_accounts')) return { rows: [] };
       if (sql.startsWith('UPDATE pops')) return { rows: [{ id: 811 }] };
       return { rows: [] };
     }
@@ -314,5 +315,6 @@ test('POP assignment locks customer writes and accepts only an empty active unas
   assert.match(statements[0], /LOCK TABLE customers IN SHARE ROW EXCLUSIVE MODE/);
   assert.match(statements[1], /FROM pops p WHERE p.id=ANY/);
   assert.match(statements[2], /INSERT INTO resellers/);
-  assert.match(statements[3], /UPDATE pops SET reseller_id/);
+  assert.match(statements[3], /INSERT INTO public\.reseller_billing_accounts/);
+  assert.match(statements[4], /UPDATE pops SET reseller_id/);
 });
