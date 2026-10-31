@@ -384,9 +384,9 @@ async function issueBatch(input) {
     const accountType = eligible.billing_mode === 'prepaid' ? 'wallet' : 'receivable';
     const ledgerResult = await client.query(
       `INSERT INTO public.reseller_ledger_entries (
-         reseller_id,billing_account_id,account_type,entry_type,amount,currency,
+         account_id,reseller_id,account_type,entry_type,amount,currency,
          batch_id,settlement_id,idempotency_key,description,actor_user_id
-       ) VALUES ($1,$2,$3,$4,$5::numeric,$6,$7,NULL,$8,$9,$10)
+       ) VALUES ($2,$1,$3,$4,$5::numeric,$6,$7,NULL,$8,$9,$10)
        RETURNING id`,
       [
         resellerId,eligible.billing_account_id,accountType,entryType,wholesaleTotal,
