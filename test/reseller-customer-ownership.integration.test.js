@@ -35,6 +35,7 @@ function mockTenantDatabase(t) {
       return { rows: [{ id: 7, name: 'Home 30 Mbps', profile_name: 'HOME_30', price: '525.00', duration_months: 1 }] };
     }
     if (sql.includes('c.password AS pppoe_password')) {
+      if (String(values[0]) !== 'own-customer') return { rows: [] };
       assert.deepEqual(values, ['own-customer', [101], 41]);
       return { rows: [{ id: 11, full_name: 'Owned Customer', username: 'own-customer',
         pppoe_password: 'secret-pass', pop_id: 101, pop_name: 'Owned POP' }] };
