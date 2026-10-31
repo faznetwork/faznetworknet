@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v11"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v12"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -163,8 +163,8 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v11"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');"));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v12"></script>'));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {
@@ -214,7 +214,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-dual-pool-v11'));
+  assert.ok(admin.includes('pop-dual-pool-v12'));
 });
 
 
@@ -283,13 +283,16 @@ test('POP action failures remain toast-visible only inside the explicit action h
 });
 
 test('POP directory uses a dedicated numeric ID column and clean POP name column', () => {
-  assert.ok(ui.includes(`'<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +`));
+  assert.ok(ui.includes('const rows = state.pops.map(function (pop, index) {'));
+  assert.ok(ui.includes(`'<td class="text-secondary">' + (index + 1) + '</td>' +`));
+  assert.ok(!ui.includes(`'<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +`));
   assert.ok(ui.includes(`'<td><strong>' + escapeHtml(pop.name) + '</strong></td>' +`));
   assert.ok(ui.includes('<th>#</th><th>Name</th>'));
   assert.ok(ui.includes('colspan="11"'));
   assert.ok(ui.includes('fpr-metric--pops'));
   assert.ok(ui.includes('fpr-metric--customers'));
   assert.ok(ui.includes('fpr-metric--resellers'));
+  assert.ok(!ui.includes('linear-gradient(135deg,#f5f3ff,#fffbeb)'));
 });
 
 test('POP and reseller typography uses the approved semantic weight hierarchy', () => {
@@ -298,6 +301,10 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   const styles = ui.slice(stylesStart, stylesEnd);
   assert.ok(styles.includes('fpr-metric-label{font-size:12px;color:#64748b;font-weight:500'));
   assert.ok(styles.includes('fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700'));
+  assert.ok(styles.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
+  assert.ok(styles.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
+  assert.ok(styles.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.doesNotMatch(styles, /fpr-metric--(?:pops|customers|resellers)\\{[^}]*linear-gradient/i);
   assert.ok(styles.includes('fpr-table th{font-size:11px;font-weight:600'));
   assert.ok(styles.includes('fpr-table td{vertical-align:middle;font-weight:400'));
   assert.ok(styles.includes('.form-label{font-size:13px;font-weight:500'));
@@ -308,7 +315,8 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   assert.ok(workspaceCss.includes('.table thead th{font-weight:600;font-size:.69rem'));
   assert.ok(workspaceCss.includes('.table tbody td{font-weight:400;vertical-align:middle;font-size:.82rem'));
   const profile = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-customer-profile.ejs'), 'utf8');
-  assert.ok(profile.includes('.section-title{font-size:1rem;font-weight:600'));
+  assert.ok(profile.includes('.section-title{font-size:1.125rem;line-height:1.35;font-weight:600'));
+  assert.ok(profile.includes('font-size:14px;font-weight:400;line-height:1.55'));
   assert.ok(profile.includes('.label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500'));
   assert.ok(profile.includes('.value{font-weight:400'));
   assert.ok(profile.includes('font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif'));
