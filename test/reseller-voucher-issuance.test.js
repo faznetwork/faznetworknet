@@ -398,7 +398,11 @@ test('print page is authenticated and batch-scoped; no batch mutation routes exi
   const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'resellerPortalRoutes.js'), 'utf8');
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
   assert.match(server, /\/reseller\/hotspot\/voucher-batches\/:batchKey\/print",requireRole\(\["reseller"\]\),loadTenantScope,resellerHotspotController\.printBatchPage/);
-  assert.match(printView, /window\.print\(\)/);
+  const printScript = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-voucher-print.js'), 'utf8');
+  assert.match(printView, /reseller-voucher-print\.js/);
+  assert.doesNotMatch(printView, /<script>\s*\(/i);
+  assert.doesNotMatch(printView, /\sonclick=/i);
+  assert.match(printScript, /window\.print\(\)/);
   assert.match(printView, /repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(printView, /print-thermal-58/);
   assert.match(printView, /print-thermal-80/);
@@ -417,7 +421,7 @@ test('reseller workspace and printable voucher EJS templates compile; dashboard 
   const partials = ['reseller-sidebar.ejs','reseller-topbar.ejs','reseller-scripts.ejs'].map(name => fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', name), 'utf8'));
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
   [dashboard,vouchers,customers,payments,...partials,printView].forEach(source => ejs.compile(source));
-  for (const name of ['reseller-workspace.js','reseller-dashboard.js','reseller-vouchers.js','reseller-customers.js','reseller-payments.js']) {
+  for (const name of ['reseller-workspace.js','reseller-dashboard.js','reseller-vouchers.js','reseller-voucher-print.js','reseller-customers.js','reseller-payments.js']) {
     const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', name), 'utf8');
     new vm.Script(source);
   }
