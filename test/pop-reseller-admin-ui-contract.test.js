@@ -163,7 +163,7 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v9"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v10"></script>'));
   assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');"));
 });
 
@@ -214,7 +214,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-dual-pool-v9'));
+  assert.ok(admin.includes('pop-dual-pool-v10'));
 });
 
 

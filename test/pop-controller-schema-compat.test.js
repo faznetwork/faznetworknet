@@ -70,10 +70,16 @@ test('POP directory keeps reseller scoping on the schema-compatible projection',
 
 test('admin POP directory includes only reseller-owned POPs and returns reseller-only customer totals', async t => {
   const calls = [];
+  const fixturePops = [
+    { id: 1, name: 'FAZ Main (Direct)', reseller_id: null, customer_count: 21 },
+    { id: 3, name: 'Test POP', reseller_id: null, customer_count: 0 },
+    { id: 4, name: 'Kader', reseller_id: 2, reseller_name: 'Faz Network', customer_count: 1 }
+  ];
   t.mock.method(db, 'query', async (sql, values) => {
     calls.push({ sql, values });
     if (sql.includes('to_regclass')) return { rows: [{ available: false }] };
-    return { rows: [{ id: 4, name: 'Kader', reseller_id: 2, reseller_name: 'Faz Network', customer_count: 1 }] };
+    assert.match(sql, /p\\.reseller_id IS NOT NULL/);
+    return { rows: fixturePops.filter(pop => pop.reseller_id !== null) };
   });
   const res = responseRecorder();
   await controller.list({ auth: { role: 'super_admin' } }, res);
@@ -88,9 +94,15 @@ test('admin POP directory includes only reseller-owned POPs and returns reseller
 
 test('admin customer POP options expose only active reseller-owned PPPoE POPs', async t => {
   let captured;
+  const fixturePops = [
+    { id: 1, name: 'FAZ Main (Direct)', reseller_id: null, status: 'active', pppoe_enabled: true, pppoe_ip_pool: 'core-pool' },
+    { id: 3, name: 'Test POP', reseller_id: null, status: 'active', pppoe_enabled: true, pppoe_ip_pool: 'test-pool' },
+    { id: 4, name: 'Kader', reseller_id: 2, status: 'active', pppoe_enabled: true, pppoe_ip_pool: 'reseller-pool' }
+  ];
   t.mock.method(db, 'query', async (sql, values) => {
     captured = { sql, values };
-    return { rows: [{ id: 4, name: 'Kader', area_zone: 'North', reseller_id: 2 }] };
+    assert.match(sql, /p\\.reseller_id IS NOT NULL/);
+    return { rows: fixturePops.filter(pop => pop.reseller_id !== null && pop.status === 'active' && pop.pppoe_enabled && pop.pppoe_ip_pool) };
   });
   const res = responseRecorder();
   await controller.options({ auth: { role: 'admin' } }, res);
