@@ -155,12 +155,12 @@ async function list(req, res) {
          r.name AS reseller_name,
          r.username AS reseller_username,
          COUNT(DISTINCT c.id)::int AS customer_count,
-         COALESCE(hb.data->>'status'='active',FALSE) AS hotspot_enabled,
+         COALESCE(NULLIF(hb.data->>'status','')='active',(hb.data->>'is_active')::boolean,FALSE) AS hotspot_enabled,
          hb.data->>'hotspot_server' AS hotspot_server,
          hb.data->>'hotspot_interface' AS hotspot_interface,
          (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,
          hb.data->>'ip_pool' AS hotspot_ip_pool,
-         hb.data->>'status' AS hotspot_binding_status
+         COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
        FROM public.pops p
        LEFT JOIN public.resellers r ON r.id=p.reseller_id
        LEFT JOIN public.customers c ON c.pop_id=p.id
@@ -227,7 +227,7 @@ async function readPop(client, id) {
     COALESCE(to_jsonb(p)->>'commission_type','percentage') AS commission_type,
     COALESCE((to_jsonb(p)->>'commission_rate')::numeric,0) AS commission_rate,
     COALESCE(to_jsonb(p)->>'status','inactive') AS status,p.created_at,p.updated_at,
-    COALESCE(hb.data->>'status'='active',FALSE) AS hotspot_enabled,
+    COALESCE(NULLIF(hb.data->>'status','')='active',(hb.data->>'is_active')::boolean,FALSE) AS hotspot_enabled,
     hb.data->>'hotspot_server' AS hotspot_server,hb.data->>'hotspot_interface' AS hotspot_interface,
     (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,hb.data->>'ip_pool' AS hotspot_ip_pool,
     hb.data->>'status' AS hotspot_binding_status
@@ -333,16 +333,28 @@ async function update(req, res) {
           );
           const binding = bindingResult.rows[0]?.data || {};
           const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
+          const explicitEnablementChange = hasField('hotspot_enabled');
+          const bindingEnabled = binding.status != null && String(binding.status).trim() !== ''
+            ? String(binding.status).trim().toLowerCase() === 'active'
+            : binding.is_active === true;
           const config = {
-            enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
+            enabled: explicitEnablementChange ? data.hotspot_enabled : bindingEnabled,
             routerKey: binding.router_key || null,
-            server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
+            server: hasField('hotspot_server') ? (data.hotspot_server || null) : binding.hotspot_server,
             interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
             vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
             pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
           };
-          await upsertHotspotBinding(client, id, config);
-          if (config.enabled) {
+
+          // A false/missing legacy state is not permission to deactivate. Only an
+          // explicit Hotspot toggle to OFF may write status='inactive'.
+          if (explicitEnablementChange && data.hotspot_enabled === false) {
+            await upsertHotspotBinding(client, id, { enabled: false });
+          } else if (config.enabled) {
+            await upsertHotspotBinding(client, id, config);
+            await hotspotPackageSync.syncPopPackages(client, id);
+          } else if (explicitEnablementChange && data.hotspot_enabled === true) {
+            await upsertHotspotBinding(client, id, config);
             await hotspotPackageSync.syncPopPackages(client, id);
           }
           await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
