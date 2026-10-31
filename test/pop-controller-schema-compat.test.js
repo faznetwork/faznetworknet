@@ -191,7 +191,7 @@ test('POP update disables an existing Hotspot binding with a direct parameterize
         return { rows: [{ id: 11, name: 'POP', area_zone: 'West', reseller_id: null, pppoe_enabled: true, pppoe_ip_pool: 'Pool', status: 'active' }] };
       }
       if (sql.startsWith('SELECT to_jsonb(hb) AS data')) {
-        return { rows: [{ data: { status: 'active', router_key: 'core_mikrotik', hotspot_server: 'hs1', ip_pool: 'Pool1' } }] };
+        return { rows: [{ data: { status: null, is_active: true, router_key: 'core_mikrotik', hotspot_server: 'hs1', ip_pool: 'Pool1' } }] };
       }
       if (sql.startsWith('SELECT p.id,p.reseller_id')) return { rows: [{ id: 11, name: 'POP', hotspot_enabled: false }] };
       return { rows: [] };
