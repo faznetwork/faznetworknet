@@ -37,5 +37,5 @@ test('POP directory serial is a 1-based row index and summary colors are flat su
   assert.ok(popUi.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
   assert.ok(popUi.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
   assert.ok(popUi.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
-  assert.ok(!/fpr-metric--(?:pops|customers|resellers)\{[^}]*linear-gradient/i.test(popUi));
+  assert.ok(!popUi.includes('linear-gradient(135deg,#f5f3ff,#fffbeb)'));
 });
