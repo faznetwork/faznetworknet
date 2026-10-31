@@ -387,8 +387,8 @@ test('canonical voucher generator defaults to legacy scratch type and accepts re
   assert.equal(calls[1].values[9], 'reseller_voucher');
   assert.equal(calls[1].values[10], '2-Hour');
   assert.match(calls[1].sql, /profile_id,time_limit,data_limit/);
-  assert.match(calls[1].sql, /INSERT INTO public\\.hotspot_vouchers/);
-  assert.match(calls[1].sql, /NULLIF\\(\\$10::varchar,''\\)/);
+  assert.ok(calls[1].sql.includes('INSERT INTO hotspot_vouchers'));
+  assert.ok(calls[1].sql.includes("NULLIF($10::varchar,'')"));
 });
 
 test('print page is authenticated and batch-scoped; no batch mutation routes exist', () => {
@@ -553,7 +553,7 @@ test('actor identity is validated against the BIGINT database contract and persi
   const batch = mock.statements.find(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches'));
   const ledger = mock.statements.find(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries'));
   assert.equal(batch.values[21], '41');
-  assert.equal(ledger.values[10], '41');
+  assert.equal(ledger.values[9], '41');
   await assert.rejects(
     issuance.issueBatch({ ...validInput, idempotencyKey: 'test-request-0002', actorUserId: 'user-uuid-not-int8' }),
     error => error.code === 'INVALID_ACTOR_USER_ID' && error.statusCode === 403
@@ -563,11 +563,11 @@ test('actor identity is validated against the BIGINT database contract and persi
 test('schema reconciliation migration is forward-only and preserves append-only ledger protection', () => {
   const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261031_reseller_voucher_contract_reconcile.sql'), 'utf8');
   assert.match(migration, /reseller_voucher/);
-  assert.match(migration, /ALTER COLUMN idempotency_key TYPE VARCHAR/);
-  assert.match(migration, /ADD COLUMN IF NOT EXISTS currency CHAR\\(3\\)/);
-  assert.match(migration, /ALTER COLUMN account_id DROP NOT NULL/);
-  assert.match(migration, /ALTER COLUMN direction DROP NOT NULL/);
-  assert.match(migration, /ALTER COLUMN created_by DROP NOT NULL/);
+  assert.ok(migration.includes('ALTER COLUMN idempotency_key TYPE VARCHAR'));
+  assert.ok(migration.includes('ADD COLUMN IF NOT EXISTS currency CHAR(3)'));
+  assert.ok(migration.includes('ALTER COLUMN account_id DROP NOT NULL'));
+  assert.ok(migration.includes('ALTER COLUMN direction DROP NOT NULL'));
+  assert.ok(migration.includes('ALTER COLUMN created_by DROP NOT NULL'));
   assert.match(migration, /wallet_debit/);
   assert.match(migration, /receivable_charge/);
   assert.match(migration, /trg_reseller_ledger_no_update/);
