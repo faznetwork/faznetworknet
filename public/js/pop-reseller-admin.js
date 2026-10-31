@@ -591,11 +591,31 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     if (selectors.some(function (item) { return !item.element; })) throw new Error('Service-specific POP IP Pool selectors are unavailable.');
     selectors.forEach(function (item) { item.element.disabled = true; item.element.innerHTML = '<option value="">None / Unassigned</option>'; });
     try {
-      const pools = await apiRequest('/ip-pools');
-      if (!Array.isArray(pools)) throw new Error('The IP Pool endpoint returned an invalid pool list.');
-      state.ipPools = pools.filter(function (pool) {
-        return pool && String(pool.name || '').trim() && !/^default(?:[-_].*)?$/i.test(String(pool.name).trim());
-      }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      state.ipPools = [];
+      const pools = await apiRequest('/ip-pools').catch(function (error) {
+        console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.', {
+          event: 'pop_ip_pool_lookup_failed',
+          endpoint: '/api/ip-pools',
+          popId: pop && pop.id != null ? String(pop.id) : null,
+          status: error && error.status != null ? error.status : null,
+          errorName: error && error.name ? error.name : 'Error',
+          message: error && error.message ? error.message : String(error)
+        });
+        return [];
+      });
+      if (!Array.isArray(pools)) {
+        console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup returned an invalid response.', {
+          event: 'pop_ip_pool_lookup_invalid_response',
+          endpoint: '/api/ip-pools',
+          popId: pop && pop.id != null ? String(pop.id) : null,
+          errorName: 'InvalidResponse',
+          message: 'Expected an array of configured IP Pools.'
+        });
+      } else {
+        state.ipPools = pools.filter(function (pool) {
+          return pool && String(pool.name || '').trim() && !/^default(?:[-_].*)?$/i.test(String(pool.name).trim());
+        }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      }
       selectors.forEach(function (item) {
         state.ipPools.forEach(function (pool) {
           const option = document.createElement('option');
@@ -610,25 +630,6 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
           existing.dataset.currentAssignment = 'true';
           item.element.appendChild(existing);
         }
-        item.element.value = item.value;
-      });
-    } catch (error) {
-      state.ipPools = [];
-      console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.', {
-        event: 'pop_ip_pool_lookup_failed',
-        endpoint: '/api/ip-pools',
-        popId: pop && pop.id != null ? String(pop.id) : null,
-        status: error && error.status != null ? error.status : null,
-        errorName: error && error.name ? error.name : 'Error',
-        message: error && error.message ? error.message : String(error)
-      });
-      selectors.forEach(function (item) {
-        if (!item.value) return;
-        const existing = document.createElement('option');
-        existing.value = item.value;
-        existing.textContent = item.value + ' — current assignment (pool list unavailable)';
-        existing.dataset.currentAssignment = 'true';
-        item.element.appendChild(existing);
         item.element.value = item.value;
       });
     } finally {
