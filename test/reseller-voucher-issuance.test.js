@@ -487,10 +487,10 @@ test('voucher history and detail project validity defensively across schema vari
   assert.match(source, /to_jsonb\(b\)->>'margin_total'/);
   assert.equal((source.match(/COALESCE\(to_jsonb\(b\)->>'status', 'completed'\) AS status/g) || []).length, 2);
   assert.doesNotMatch(source, /b\.status/);
-  const batchSelects = [...source.matchAll(/\`SELECT([\\s\\S]*?)FROM public\\.reseller_voucher_batches b/g)].map(match => match[1]);
+  const batchSelects = [...source.matchAll(/SELECT([\s\S]*?)FROM public\.reseller_voucher_batches b/g)].map(match => match[1]);
   assert.equal(batchSelects.length, 2);
   for (const projection of batchSelects) {
-    assert.doesNotMatch(projection, /b\\.(?!id\\b|reseller_id\\b|created_at\\b)[a-z_]+/i);
+    assert.doesNotMatch(projection, /b\.(?!id\b|reseller_id\b|created_at\b)[a-z_]+/i);
   }
   assert.match(source, /WHERE b\.reseller_id=\$1/);
   assert.match(source, /ORDER BY b\.created_at DESC,b\.id DESC/);
