@@ -151,3 +151,16 @@ test('all shared reseller stylesheet consumers use cache token 20261101-4', () =
     assert.ok(!source.includes('reseller-workspace.css?v=20261101-3'));
   }
 });
+
+
+test('dynamic voucher package and receipt metadata do not apply blanket bold utilities', () => {
+  const voucherJs = read('public/js/reseller-vouchers.js');
+  assert.ok(voucherJs.includes('class="small text-success mt-2">Margin / voucher'));
+  assert.ok(voucherJs.includes('class="small text-secondary voucher-kicker">VOUCHER '));
+  assert.doesNotMatch(voucherJs, /class="small text-secondary fw-bold">VOUCHER/);
+  assert.doesNotMatch(voucherJs, /class="small text-success fw-semibold mt-2">Margin/);
+  const voucherView = read('views/reseller-vouchers.ejs');
+  assert.ok(voucherView.includes('.voucher-kicker{font-size:.7rem;letter-spacing:.05em;font-weight:500}'));
+  assert.ok(voucherView.includes('.pos-package strong{font-weight:600}'));
+  assert.ok(voucherView.includes('.pos-package .fw-semibold{font-weight:500}'));
+});
