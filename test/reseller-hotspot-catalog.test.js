@@ -77,3 +77,29 @@ test('POP package catalog contract migration is additive and maps legacy fields 
   assert.match(migration, /Review legacy validity values before retrying/);
   assert.doesNotMatch(migration, /\bDROP\s+(TABLE|COLUMN|INDEX)\b/i);
 });
+
+test('catalog includes established legacy bindings when status is null and is_active is true', async t => {
+  const statements = [];
+  const client = {
+    async query(sql) {
+      statements.push(sql);
+      if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [] };
+      if (sql.includes('FROM public.pops p')) return { rows: [{ id: 14, name: 'Legacy POP', status: 'active', reseller_id: 41 }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) {
+        return { rows: [{ id: 91, pop_id: 14, status: null, ip_pool: 'legacy-hotspot-pool', dns_name: null }] };
+      }
+      if (sql.includes('FROM public.pop_hotspot_packages')) {
+        return { rows: [{ id: 92, pop_id: 14, package_name: '30-Day', profile_key: '30-Day', validity_seconds: '2592000', retail_price: '150.00', wholesale_price: '105.00', is_active: true }] };
+      }
+      throw new Error('Unexpected catalog SQL: ' + sql);
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  const result = await catalogService.getCatalog(41);
+  assert.equal(result.pops[0].bindingConfigured, true);
+  assert.equal(result.pops[0].issuanceReady, true);
+  assert.equal(result.pops[0].packages.length, 1);
+  const bindingSql = statements.find(sql => sql.includes('FROM public.pop_hotspot_bindings'));
+  assert.match(bindingSql, /to_jsonb\(b\)->>'is_active'/);
+  assert.match(bindingSql, /to_jsonb\(b\)->>'status'/);
+});
