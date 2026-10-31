@@ -304,8 +304,11 @@ async function update(req, res) {
       const current = currentResult.rows[0];
       if (!current) return null;
       const merged = { ...current, ...data };
-      if (data.pppoe_enabled === true && !merged.pppoe_ip_pool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
-      if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !merged.pppoe_ip_pool) throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
+      const effectivePppoePool = data.pppoe_ip_pool !== undefined
+        ? data.pppoe_ip_pool
+        : (current.pppoe_ip_pool || current.mikrotik_ip_pool || null);
+      if (data.pppoe_enabled === true && !effectivePppoePool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
+      if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !effectivePppoePool) throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
       const fields=['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
       const requestedUpdates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
       const updates=requestedUpdates.filter(field=>{
