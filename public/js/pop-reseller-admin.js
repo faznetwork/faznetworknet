@@ -366,7 +366,14 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
         headers: { 'Idempotency-Key': form.elements.idempotencyKey.value },
         body: payload
       });
-      closeModal('fprWalletTopupModal');
+      const modalElement = document.getElementById('fprWalletTopupModal');
+      if (modalElement && modalElement.classList.contains('show')) {
+        const modalHidden = new Promise(function (resolve) {
+          modalElement.addEventListener('hidden.bs.modal', resolve, { once: true });
+        });
+        closeModal('fprWalletTopupModal');
+        await modalHidden;
+      }
       showToast(response.message || 'Wallet top-up posted successfully. Ledger and balance were updated.', 'success');
       await window.loadResellerAccess();
     } catch (error) {
