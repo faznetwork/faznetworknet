@@ -270,6 +270,10 @@ test('voucher batch history selects the canonical UUID reference and remains res
   assert.doesNotMatch(captured.sql, /pkg\.validity/);
   assert.match(captured.sql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
   assert.doesNotMatch(captured.sql, /b\.validity/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'margin_total'/);
+  assert.doesNotMatch(captured.sql, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
   assert.match(captured.sql, /WHERE b\.reseller_id=\$1/);
   assert.deepEqual(captured.values, [41, 50]);
 });
@@ -285,6 +289,10 @@ test('voucher batch detail resolves validity from its package and never selects 
   assert.ok(detailSql.includes("'N/A'"));
   assert.doesNotMatch(detailSql, /pkg\.validity/);
   assert.doesNotMatch(detailSql, /b\.validity/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'margin_total'/);
+  assert.doesNotMatch(detailSql, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
 });
 
 test('forward batch-key compatibility migration adds/backfills UUID without destructive DDL', () => {
@@ -296,6 +304,21 @@ test('forward batch-key compatibility migration adds/backfills UUID without dest
   assert.match(migration, /i\.indisunique AND i\.indisvalid/);
   assert.doesNotMatch(migration, /\bDROP\s+(TABLE|COLUMN|INDEX)\b/i);
   assert.doesNotMatch(migration, /DELETE FROM public\.(reseller_voucher_batches|reseller_voucher_issuance_items|reseller_ledger_entries)/i);
+});
+
+
+test('reseller dashboard renders assigned POPs as a full-width responsive SaaS card list', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-dashboard.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'reseller-workspace.css'), 'utf8');
+  assert.match(dashboard, /reseller-panel reseller-assigned-pops/);
+  assert.match(dashboard, /id="popGrid" class="pop-grid"/);
+  assert.match(css, /grid-column:1 \/ -1/);
+  assert.match(css, /padding:20px 24px/);
+  assert.match(css, /font-size:1\.25rem;font-weight:600/);
+  assert.match(css, /font-size:\.9375rem/);
+  assert.match(script, /pop-status-badge/);
+  assert.match(script, /pop\.pppoe_ip_pool \|\| pop\.mikrotik_ip_pool/);
 });
 
 test('reseller dashboard contains bounded generation and read-only reprint controls', () => {
@@ -458,17 +481,22 @@ test('voucher history and detail project validity defensively across schema vari
     "'N/A'"
   ]) assert.ok(source.includes(projection), 'missing defensive validity projection: ' + projection);
   assert.equal(source.includes('pkg.validity AS validity'), false);
+  assert.doesNotMatch(source, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
+  assert.match(source, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(source, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(source, /to_jsonb\(b\)->>'margin_total'/);
 });
 
-test('POP update schema readiness is aligned to public and does not hard-block optional PPPoE flag', () => {
+test('POP update no longer depends on POP information-schema metadata for standard fields', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
   assert.ok(source.includes("to_regclass('public.pop_hotspot_bindings')"));
   assert.ok(source.includes("table_schema = 'public'"));
   assert.equal(source.includes('table_schema = CURRENT_SCHEMA'), false);
+  assert.equal(source.includes('requirePopColumns'), false);
   const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
-  assert.ok(update.includes("field==='pppoe_enabled' && !schema.popColumns.has('pppoe_enabled')"));
+  assert.ok(update.includes('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE'));
+  assert.ok(update.includes('const updateColumns=[]'));
+  assert.ok(update.includes("field==='pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current,'pppoe_enabled')"));
   assert.ok(update.includes('console.warn('));
-  assert.ok(update.includes('requirePopColumns(schema,updateColumns)'));
   assert.ok(update.includes('mikrotik_ip_pool'));
-  assert.equal(update.includes("requirePopColumns(schema,['pppoe_enabled'])"), false);
 });
