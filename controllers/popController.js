@@ -184,7 +184,7 @@ async function validateResellerOwner(resellerId) {
 async function upsertHotspotBinding(client, popId, config) {
   if (!config.enabled) {
     await client.query(
-      "UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'",
+      "UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status IS DISTINCT FROM 'inactive'",
       [popId]
     );
     return;
