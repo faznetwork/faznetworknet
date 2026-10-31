@@ -182,17 +182,17 @@ async function validateResellerOwner(resellerId) {
 
 async function inspectPopSchema(client) {
   const result = await client.query(`SELECT
-    to_regclass('pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
+    to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
     COALESCE((
       SELECT array_agg(column_name)
       FROM information_schema.columns
-      WHERE table_schema = CURRENT_SCHEMA
+      WHERE table_schema = 'public'
         AND table_name = 'pops'
     ), ARRAY[]::text[]) AS pop_columns,
     COALESCE((
       SELECT array_agg(column_name)
       FROM information_schema.columns
-      WHERE table_schema = CURRENT_SCHEMA
+      WHERE table_schema = 'public'
         AND table_name = 'pop_hotspot_bindings'
     ), ARRAY[]::text[]) AS binding_columns`);
   const schema = result.rows?.[0] || {};
@@ -304,16 +304,25 @@ async function update(req, res) {
       const current = currentResult.rows[0];
       if (!current) return null;
       const merged = { ...current, ...data };
-      if (Object.prototype.hasOwnProperty.call(data,'pppoe_enabled')) requirePopColumns(schema,['pppoe_enabled']);
-      if (Object.prototype.hasOwnProperty.call(data,'pppoe_ip_pool')) requirePopColumns(schema,['pppoe_ip_pool']);
       if (data.pppoe_enabled === true && !merged.pppoe_ip_pool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
       if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !merged.pppoe_ip_pool) throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
       const fields=['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
-      const updates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
+      const requestedUpdates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
+      const updates=requestedUpdates.filter(field=>{
+        if(field==='pppoe_enabled' && !schema.popColumns.has('pppoe_enabled')){
+          console.warn('[POP] Skipping optional pppoe_enabled update because public.pops.pppoe_enabled is absent; other supported POP fields will still be saved.',{popId:id});
+          return false;
+        }
+        return true;
+      });
+      const updateColumns=updates.map(field=>{
+        if(field==='pppoe_ip_pool' && !schema.popColumns.has('pppoe_ip_pool') && schema.popColumns.has('mikrotik_ip_pool')) return 'mikrotik_ip_pool';
+        return field;
+      });
       if(updates.length){
-        requirePopColumns(schema,updates);
+        requirePopColumns(schema,updateColumns);
         const values=updates.map(field=>data[field]); values.push(id);
-        const assignments=updates.map((field,index)=>field+'=$'+(index+1));
+        const assignments=updateColumns.map((column,index)=>column+'=$'+(index+1));
         await client.query('UPDATE public.pops SET '+assignments.join(',')+',updated_at=NOW() WHERE id=$'+values.length,values);
       }
       const hotspotFields=['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
