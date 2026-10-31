@@ -70,6 +70,7 @@ test('POP directory keeps reseller scoping on the schema-compatible projection',
 
 test('admin POP directory includes only reseller-owned POPs and returns reseller-only customer totals', async t => {
   const calls = [];
+  // The direct/core and unassigned records must not enter reseller-facing projections.
   const fixturePops = [
     { id: 1, name: 'FAZ Main (Direct)', reseller_id: null, customer_count: 21 },
     { id: 3, name: 'Test POP', reseller_id: null, customer_count: 0 },
