@@ -141,10 +141,10 @@ test('POP schema inspection resolves the active schema and persists PPPoE, pool,
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.success, true);
   const inspection = calls.find(call => call.sql.includes('information_schema.columns'));
-  assert.match(inspection.sql, /to_regclass\('pop_hotspot_bindings'\)/);
-  assert.match(inspection.sql, /table_schema\s*=\s*CURRENT_SCHEMA/);
+  assert.match(inspection.sql, /to_regclass\('public\.pop_hotspot_bindings'\)/);
+  assert.match(inspection.sql, /table_schema\s*=\s*'public'/);
   assert.match(inspection.sql, /table_name\s*=\s*'pops'/);
-  assert.doesNotMatch(inspection.sql, /table_schema\s*=\s*'public'/);
+  assert.doesNotMatch(inspection.sql, /table_schema\s*=\s*CURRENT_SCHEMA/);
   const update = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
   assert.ok(update, 'POP UPDATE statement should execute');
   assert.deepEqual(update.values, [33, true, 'ResidentialPool', 14]);
