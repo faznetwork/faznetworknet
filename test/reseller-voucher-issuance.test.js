@@ -449,24 +449,26 @@ test('catalog gracefully falls back when optional binding/package schema version
 
 test('voucher history and detail project validity defensively across schema variants', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'services', 'resellerVoucherIssuanceService.js'), 'utf8');
-  assert.match(source, /to_jsonb\\(b\\)->>'validity'/);
-  assert.match(source, /to_jsonb\\(pkg\\)->>'validity'/);
-  assert.match(source, /to_jsonb\\(pkg\\)->>'duration'/);
-  assert.match(source, /to_jsonb\\(pkg\\)->>'validity_days'/);
-  assert.match(source, /to_jsonb\\(pkg\\)->>'validity_period'/);
-  assert.match(source, /'N/A'/);
-  assert.doesNotMatch(source, /pkg\\.validity\\s+AS\\s+validity/);
+  for (const projection of [
+    "to_jsonb(b)->>'validity'",
+    "to_jsonb(pkg)->>'validity'",
+    "to_jsonb(pkg)->>'duration'",
+    "to_jsonb(pkg)->>'validity_days'",
+    "to_jsonb(pkg)->>'validity_period'",
+    "'N/A'"
+  ]) assert.ok(source.includes(projection), 'missing defensive validity projection: ' + projection);
+  assert.equal(source.includes('pkg.validity AS validity'), false);
 });
 
 test('POP update schema readiness is aligned to public and does not hard-block optional PPPoE flag', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
-  assert.match(source, /to_regclass\\('public\\.pop_hotspot_bindings'\\)/);
-  assert.match(source, /table_schema = 'public'/);
-  assert.doesNotMatch(source, /table_schema = CURRENT_SCHEMA/);
+  assert.ok(source.includes("to_regclass('public.pop_hotspot_bindings')"));
+  assert.ok(source.includes("table_schema = 'public'"));
+  assert.equal(source.includes('table_schema = CURRENT_SCHEMA'), false);
   const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
-  assert.match(update, /field==='pppoe_enabled' && !schema\\.popColumns\\.has\\('pppoe_enabled'\\)/);
-  assert.match(update, /console\\.warn\\(/);
-  assert.match(update, /requirePopColumns\\(schema,updateColumns\\)/);
-  assert.match(update, /mikrotik_ip_pool/);
-  assert.doesNotMatch(update, /requirePopColumns\\(schema,\\['pppoe_enabled'\\]\\)/);
+  assert.ok(update.includes("field==='pppoe_enabled' && !schema.popColumns.has('pppoe_enabled')"));
+  assert.ok(update.includes('console.warn('));
+  assert.ok(update.includes('requirePopColumns(schema,updateColumns)'));
+  assert.ok(update.includes('mikrotik_ip_pool'));
+  assert.equal(update.includes("requirePopColumns(schema,['pppoe_enabled'])"), false);
 });
