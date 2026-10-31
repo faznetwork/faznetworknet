@@ -20,7 +20,7 @@ test('reseller dashboard exposes guidance without claiming a request was submitt
   const script = source('public/js/reseller-dashboard.js');
   assert.match(view, /id="resellerBalanceGuidance"/);
   assert.match(view, /id="resellerBalanceGuidanceModal"/);
-  assert.match(script, /data-billing-mode === 'postpaid'/);
+  assert.match(script, /trigger.dataset.billingMode === 'postpaid'/);
   assert.match(script, /does not submit a payment or create a request/);
 });
 
