@@ -26,7 +26,7 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v7"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v8"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
@@ -160,7 +160,7 @@ test('POP modal disables native focus-blocking validation and validates its requ
 });
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v7"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v8"></script>'));
   assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');"));
 });
 
@@ -208,7 +208,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
   assert.ok(ui.includes('pop.pppoe_enabled'));
-  assert.ok(admin.includes('pop-dual-pool-v7'));
+  assert.ok(admin.includes('pop-dual-pool-v8'));
 });
 
 
@@ -295,4 +295,28 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   assert.ok(profile.includes('.section-title{font-size:1rem;font-weight:600'));
   assert.ok(profile.includes('.label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500'));
   assert.ok(profile.includes('.value{font-weight:400'));
+});
+
+
+test('POP save surfaces Hotspot persistence failures and refreshes the directory', () => {
+  assert.ok(ui.includes('response.hotspot_persisted === false'));
+  assert.ok(ui.includes('Hotspot settings were not saved'));
+  assert.ok(ui.includes('const refreshed = await window.loadPopManagement();'));
+  assert.ok(ui.includes('hotspot_vlan_id: hotspotVlanInput && hotspotVlanInput.value ? Number(hotspotVlanInput.value) : null'));
+});
+
+test('Admin and shared portal shells use Inter as the UI font', () => {
+  const fontStack = "'Inter', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif";
+  assert.ok(admin.includes('family=Inter'));
+  assert.ok(admin.includes(fontStack));
+  assert.ok(!admin.includes('Plus Jakarta Sans'));
+  const layout = fs.readFileSync(path.join(__dirname, '..', 'views', 'layout.ejs'), 'utf8');
+  assert.ok(layout.includes('family=Inter'));
+  assert.ok(layout.includes(fontStack));
+});
+
+test('POP modal form controls use full-width layout and balanced one-rem gutters', () => {
+  assert.ok(ui.includes('#fprPopModal .modal-body{padding:1.5rem}'));
+  assert.ok(ui.includes('--bs-gutter-x:1rem;--bs-gutter-y:1rem'));
+  assert.ok(ui.includes('#fprPopModal .form-control,.faz-pop-reseller-view #fprPopModal .form-select{display:block;width:100%;min-width:0;box-sizing:border-box}'));
 });
