@@ -211,13 +211,14 @@ function requireHotspotBindingSchema(schema, fields) {
 }
 
 async function upsertHotspotBinding(client, popId, config, schema) {
+  const bindingSchema = schema || await inspectPopSchema(client);
   if (!config.enabled) {
-    requireHotspotBindingSchema(schema, ['pop_id','status','updated_at']);
+    requireHotspotBindingSchema(bindingSchema, ['pop_id','status','updated_at']);
     await client.query("UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'", [popId]);
     return;
   }
   if (!config.server || !config.pool) throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
-  requireHotspotBindingSchema(schema, ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']);
+  requireHotspotBindingSchema(bindingSchema, ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']);
   await client.query(`INSERT INTO public.pop_hotspot_bindings
     (pop_id,router_key,hotspot_server,hotspot_interface,vlan_id,ip_pool,status,updated_at)
     VALUES ($1,'core_mikrotik',$2,$3,$4,$5,'active',NOW())
