@@ -42,7 +42,8 @@ test('legacy profile metadata with a validity label remains mappable without rew
   const entry = resolveCatalogEntry('Legacy 30-Day', { price: 100, validityValue: 30, validityUnit: 'days', validityLabel: '30 days' });
   assert.deepEqual(entry, {
     profileKey: 'Legacy 30-Day', packageName: 'Legacy 30-Day', validitySeconds: '2592000',
-    retailPrice: '100.00'
+    retailPrice: '100.00',
+    wholesalePrice: '70.00'
   });
 });
 
