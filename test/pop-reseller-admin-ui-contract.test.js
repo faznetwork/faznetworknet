@@ -243,3 +243,54 @@ test('optional POP IP Pool lookup failure is structured, non-blocking, and does 
   assert.ok(!lookup.includes('showToast('));
   assert.ok(lookup.includes('finally {'));
 });
+
+
+test('POP bootstrap failures remain inline and never emit action toasts', () => {
+  const start = ui.indexOf('async function loadPopManagement()');
+  const end = ui.indexOf('async function loadResellerAccess()', start);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(!ui.slice(start, end).includes('showToast('));
+  const resellerEnd = ui.indexOf('window.loadPopManagement = loadPopManagement;', end);
+  assert.ok(resellerEnd > end);
+  assert.ok(!ui.slice(end, resellerEnd).includes('showToast('));
+});
+
+test('optional POP IP Pool lookup defaults to an empty list and only warns', () => {
+  const start = ui.indexOf('async function loadPopIpPools(form, pop)');
+  const end = ui.indexOf('function openResellerModal()', start);
+  assert.ok(start >= 0 && end > start);
+  const lookup = ui.slice(start, end);
+  assert.ok(lookup.includes('state.ipPools = [];'));
+  assert.ok(lookup.includes("event: 'pop_ip_pool_lookup_failed'"));
+  assert.ok(lookup.includes("console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.'"));
+  assert.ok(!lookup.includes('showToast('));
+  assert.ok(!lookup.includes('errorBanner('));
+});
+
+test('POP action failures remain toast-visible only inside the explicit action handler', () => {
+  const start = ui.indexOf("section.addEventListener('click', async function (event) {");
+  const end = ui.indexOf('function savePopForm(', start);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(ui.slice(start, end).includes("showToast(error.message || 'The requested action failed.', 'danger')"));
+});
+
+test('POP and reseller typography uses the approved semantic weight hierarchy', () => {
+  const stylesStart = ui.indexOf('function sharedStyles()');
+  const stylesEnd = ui.indexOf('function renderPopManagement', stylesStart);
+  const styles = ui.slice(stylesStart, stylesEnd);
+  assert.ok(styles.includes('fpr-metric-label{font-size:12px;color:#64748b;font-weight:500'));
+  assert.ok(styles.includes('fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700'));
+  assert.ok(styles.includes('fpr-table th{font-size:11px;font-weight:600'));
+  assert.ok(styles.includes('fpr-table td{vertical-align:middle;font-weight:400'));
+  assert.ok(styles.includes('.form-label{font-size:13px;font-weight:500'));
+  const workspaceCss = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'reseller-workspace.css'), 'utf8');
+  assert.ok(workspaceCss.includes('body{background:var(--fzn-bg);color:var(--fzn-ink);font-family:var(--reseller-font);font-size:14px;font-weight:400'));
+  assert.ok(workspaceCss.includes('.metric-label{font-size:.75rem;color:var(--fzn-muted);font-weight:500'));
+  assert.ok(workspaceCss.includes('.metric-value{min-width:0;overflow-wrap:anywhere;font-size:1.65rem;line-height:1.25;font-weight:700'));
+  assert.ok(workspaceCss.includes('.table thead th{font-size:.69rem;font-weight:600'));
+  assert.ok(workspaceCss.includes('.table tbody td{vertical-align:middle;font-size:.82rem;font-weight:400'));
+  const profile = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-customer-profile.ejs'), 'utf8');
+  assert.ok(profile.includes('.section-title{font-size:1rem;font-weight:600'));
+  assert.ok(profile.includes('.label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500'));
+  assert.ok(profile.includes('.value{font-weight:400'));
+});
