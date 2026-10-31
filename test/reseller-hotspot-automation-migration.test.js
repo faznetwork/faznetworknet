@@ -25,7 +25,7 @@ test('billing and package backfill uses canonical account columns and never over
   assert.match(sql, /billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status/);
   assert.match(sql, /ON CONFLICT \(reseller_id\) DO NOTHING/);
   assert.match(sql, /WHERE NOT EXISTS/);
-  assert.match(sql, /wholesale_price, status/);
+  assert.match(sql, /wholesale_price,status/);
   assert.match(sql, /cp\.retail_price,cp\.retail_price,'active'/);
   assert.match(sql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
   assert.doesNotMatch(sql, /\bUPDATE\s+public\.pop_hotspot_packages\b|\bDELETE\s+FROM\s+public\.pop_hotspot_packages\b/i);
