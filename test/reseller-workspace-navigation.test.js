@@ -120,7 +120,7 @@ test('reseller workspace pages share a consistent heading/body typography and co
 test('reseller typography enforces the semantic weight hierarchy', () => {
   const css = read('public/css/reseller-workspace.css');
   assert.ok(css.includes('body{background:var(--fzn-bg);color:var(--fzn-ink);font-family:var(--reseller-font);font-size:14px;font-weight:400'));
-  assert.ok(css.includes('.reseller-content p,.reseller-content .form-text,.reseller-content small,.reseller-content .small,.reseller-content .text-secondary,.reseller-content .text-muted{font-family:var(--reseller-font);font-size:inherit;font-weight:400'));
+  assert.ok(css.includes('.reseller-content p,.reseller-content .form-text,.reseller-content small,.reseller-content .small,.reseller-content .text-secondary,.reseller-content .text-muted{font-family:var(--reseller-font);font-weight:400;line-height:var(--reseller-body-line-height);color:#64748b}'));
   assert.ok(css.includes('.reseller-section-heading p{font-size:.8rem;line-height:1.55;color:#64748b;font-weight:400'));
   assert.ok(css.includes('.reseller-content label,.reseller-content .form-label{font-family:var(--reseller-font);font-weight:500}'));
   assert.ok(css.includes('--reseller-page-title-weight:700'));
