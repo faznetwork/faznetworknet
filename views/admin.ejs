@@ -2453,7 +2453,7 @@
                                     <label for="customerPopSearch" class="form-label">Search active POPs</label>
                                     <input type="search" id="customerPopSearch" class="form-control mb-2" placeholder="Search POP name or area…" autocomplete="off">
                                     <select id="customerPopSelect" class="form-select" aria-describedby="customerPopHelp"><option value="">Loading active POPs…</option></select>
-                                    <div id="customerPopHelp" class="form-text">FAZ Main (Direct) is selected by default for new customers. Changing an existing assignment is an administrator action.</div>
+                                    <div id="customerPopHelp" class="form-text">Choose a reseller-owned POP to assign this customer. Leave it empty to use the core/direct default. Changing an existing assignment is an administrator action.</div>
                                     <div id="customerPopStatus" class="small mt-2" role="status" aria-live="polite"></div>
                                     <button type="button" id="customerPopRetry" class="btn btn-sm btn-outline-secondary mt-2"><i class="bi bi-arrow-clockwise me-1"></i>Retry POP list</button>
                                 </div>
@@ -8186,9 +8186,7 @@ async function deletePlan(id,name){
             sorted.forEach(pop => select.add(new Option(String(pop.name || ('POP #' + pop.id)) + (pop.area_zone ? ' · ' + pop.area_zone : ''), String(pop.id))));
             if (selected && sorted.some(pop => String(pop.id) === selected)) select.value = selected;
             else if (!isEdit) {
-                const direct = sorted.find(pop => String(pop.name || '').trim().toLowerCase() === 'faz main (direct)');
-                if (direct) select.value = String(direct.id);
-                else setCustomerPopStatus('FAZ Main (Direct) was not found in active POPs. The canonical server default remains available.', 'error');
+                setCustomerPopStatus('Choose a reseller-owned POP to assign this customer. Leave the selection empty to use the core/direct default.', 'success');
             } else if (selected) {
                 select.add(new Option('Current assignment · POP #' + selected, selected, true, true));
                 setCustomerPopStatus('Current POP is not in the active options list; its assignment is preserved unless an administrator selects another POP.', 'error');
@@ -8242,13 +8240,13 @@ async function deletePlan(id,name){
                 await ensureCustomerPopOptions();
                 renderCustomerPopOptions(selectedId, isEdit);
                 if (!document.getElementById('customerPopStatus')?.classList.contains('text-danger')) {
-                    setCustomerPopStatus(isEdit ? 'Current customer POP loaded. Review before changing.' : 'Active POPs loaded. FAZ Main (Direct) is selected when available.', 'success');
+                    setCustomerPopStatus(isEdit ? 'Current customer POP loaded. Review before changing.' : 'Reseller-owned POPs loaded. Choose one to assign; leave empty for the core/direct default.', 'success');
                 }
                 return true;
             } catch (error) {
                 const select = document.getElementById('customerPopSelect');
-                if (select) select.replaceChildren(new Option(isEdit ? 'Keep current assignment (POP #' + (selectedId || 'unknown') + ')' : 'Use canonical default POP (FAZ Main Direct)', ''));
-                setCustomerPopStatus((error.message || 'POP options could not be loaded.') + ' The customer form remains available. ' + (isEdit ? 'Existing assignment will be preserved.' : 'The server will apply its canonical FAZ Main (Direct) default.') + ' Use Retry POP list when ready.', 'error');
+                if (select) select.replaceChildren(new Option(isEdit ? 'Keep current assignment (POP #' + (selectedId || 'unknown') + ')' : 'Use core/direct default routing', ''));
+                setCustomerPopStatus((error.message || 'POP options could not be loaded.') + ' The customer form remains available. ' + (isEdit ? 'Existing assignment will be preserved.' : 'The server will apply its canonical core/direct default when no reseller POP is selected.') + ' Use Retry POP list when ready.', 'error');
                 return false;
             }
         }
@@ -9905,6 +9903,6 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
 <script src="/js/hotspot-users-clean.js?v=hs-dashboard-ui-20261018" defer></script>
 <script src="/js/hotspot-server-profiles.js?v=1" defer></script>
 <script src="/js/hotspot-portal-settings.js?v=readonly-profile-sync-20261019" defer></script>
-<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v9"></script>
+<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v10"></script>
 </body>
 </html>

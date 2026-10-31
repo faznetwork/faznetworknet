@@ -105,11 +105,12 @@ async function options(req, res) {
       );
     } else {
       result = await db.query(
-        `SELECT id,name,area_zone,vlan_id,pppoe_enabled,pppoe_ip_pool
-         FROM public.pops
-         WHERE status='active' AND pppoe_enabled=TRUE
-           AND NULLIF(BTRIM(pppoe_ip_pool),'') IS NOT NULL
-         ORDER BY name ASC,id ASC`
+        `SELECT p.id,p.name,p.area_zone,p.vlan_id,p.pppoe_enabled,p.pppoe_ip_pool
+         FROM public.pops p
+         INNER JOIN public.resellers r ON r.id=p.reseller_id
+         WHERE p.reseller_id IS NOT NULL AND p.status='active' AND p.pppoe_enabled=TRUE
+           AND NULLIF(BTRIM(p.pppoe_ip_pool),'') IS NOT NULL
+         ORDER BY p.name ASC,p.id ASC`
       );
     }
     return res.json({ success: true, pops: result.rows });
@@ -162,10 +163,10 @@ async function list(req, res) {
          hb.data->>'ip_pool' AS hotspot_ip_pool,
          COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
        FROM public.pops p
-       LEFT JOIN public.resellers r ON r.id=p.reseller_id
+       INNER JOIN public.resellers r ON r.id=p.reseller_id
        LEFT JOIN public.customers c ON c.pop_id=p.id
        ${hotspotJoin}
-       ${reseller ? 'WHERE p.reseller_id=$1' : ''}
+       WHERE ${reseller ? 'p.reseller_id=$1' : 'p.reseller_id IS NOT NULL'}
        GROUP BY p.id,r.id,hb.data
        ORDER BY p.name ASC,p.id ASC`;
     const result = await db.query(sql, reseller ? [req.auth.resellerId] : []);

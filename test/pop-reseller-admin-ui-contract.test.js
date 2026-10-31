@@ -26,14 +26,16 @@ test('POP and reseller routes are registered in the existing SPA route lifecycle
   assert.ok(admin.includes("if (normalized.view === 'reseller-accounts') return '/admin/resellers/accounts';"));
   assert.ok(admin.includes("case 'pop-management': return callIfAvailable('loadPopManagement');"));
   assert.ok(admin.includes("case 'reseller-accounts': return callIfAvailable('loadResellerAccess');"));
-  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v9"></script>'));
+  assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v10"></script>'));
 });
 
 test('POP UI uses stable POP totals, direct POP protection and soft status toggles only', () => {
   assert.ok(ui.includes('Total POP Customers'));
   assert.ok(ui.includes('Number(pop.customer_count || 0)'));
-  assert.ok(ui.includes("const DIRECT_POP_NAME = 'FAZ Main (Direct)'"));
-  assert.ok(ui.includes("pop.name !== DIRECT_POP_NAME"));
+  assert.ok(!ui.includes('DIRECT_POP_NAME'));
+  assert.ok(!ui.includes('FAZ Main (Direct)'));
+  assert.ok(ui.includes("const owner = pop.reseller_name || '—';"));
+  assert.ok(ui.includes("state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0)"));
   assert.ok(ui.includes("method: 'PATCH', body: { status: nextStatus }"));
   assert.ok(ui.includes("if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(resellerId || ''))"));
   assert.ok(ui.includes("option.textContent = (currentOwner ? currentOwner.name : (pop.reseller_name || 'Current reseller')) + ' — current owner';"));
@@ -162,7 +164,7 @@ test('POP modal disables native focus-blocking validation and validates its requ
 
 test('POP admin asset uses the direct-save cache version and announces the loaded build', () => {
   assert.ok(admin.includes('<script src="/js/pop-reseller-admin.js?v=pop-dual-pool-v9"></script>'));
-  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');"));
+  assert.ok(ui.startsWith("console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');"));
 });
 
 test('POP click handler reads controls directly and dispatches create or update without page reload', () => {

@@ -1,9 +1,8 @@
-console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
+console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');
 (function () {
   'use strict';
 
   const API = '/api';
-  const DIRECT_POP_NAME = 'FAZ Main (Direct)';
   const state = { pops: [], resellers: [], ipPools: [], activeView: null, busy: false };
 
   function escapeHtml(value) {
@@ -214,7 +213,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
     const rows = state.pops.map(function (pop) {
-      const owner = pop.reseller_name || (pop.name === DIRECT_POP_NAME ? 'FAZ Direct' : 'FAZ Direct');
+      const owner = pop.reseller_name || '—';
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
       return '<tr>' +
         '<td><span>' + escapeHtml(pop.name) + '</span><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
@@ -253,7 +252,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       '<div class="col-12 col-md-6"><label class="form-label">Area / Zone</label><input class="form-control" name="area_zone" maxlength="150"></div>' +
       '<div class="col-12 col-md-6"><label class="form-label">Assign Reseller</label><select class="form-select" name="reseller_id" id="fprPopReseller"><option value="">FAZ Direct / Unassigned</option>' +
       state.resellers.filter(function (r) { return r.status === 'active'; }).map(function (r) { return '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + ' — ' + escapeHtml(r.email || r.username || '') + '</option>'; }).join('') +
-      '</select><div class="form-text" id="fprPopOwnerHelp">FAZ Main (Direct) is protected from third-party assignment.</div></div>' +
+      '</select><div class="form-text" id="fprPopOwnerHelp">Only reseller-owned POPs are managed in this workspace.</div></div>' +
       '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="pppoe_enabled" id="fprPppoeEnabled" checked><label class="form-check-label" for="fprPppoeEnabled">Enable PPPoE Broadband</label></div><label class="form-label" for="fprPppoeIpPool">PPPoE IP Pool</label><select class="form-select" name="pppoe_ip_pool" id="fprPppoeIpPool"><option value="">None / Unassigned</option></select><div class="form-text">Used only for PPPoE subscriber address assignment. Existing legacy POP pool values are migrated into this field.</div><label class="form-label mt-3" for="fprPopVlan">Legacy / PPPoE VLAN ID</label><input class="form-control" type="number" name="vlan_id" id="fprPopVlan" min="1" max="4094"></div></div>' +
       '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="hotspot_enabled" id="fprHotspotEnabled"><label class="form-check-label" for="fprHotspotEnabled">Enable Hotspot Wireless / Vouchers</label></div><div class="row g-3"><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotServer">Hotspot Server *</label><input class="form-control" name="hotspot_server" id="fprHotspotServer" maxlength="100" placeholder="hotspot1"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotInterface">Hotspot Interface</label><input class="form-control" name="hotspot_interface" id="fprHotspotInterface" maxlength="100" placeholder="bridge-hotspot"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotIpPool">Hotspot IP Pool *</label><select class="form-select" name="hotspot_ip_pool" id="fprHotspotIpPool"><option value="">None / Unassigned</option></select></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotVlan">Hotspot VLAN ID</label><input class="form-control" type="number" name="hotspot_vlan_id" id="fprHotspotVlan" min="1" max="4094"></div></div><div class="form-text mt-2">Hotspot pool is stored on the existing POP Hotspot binding and is never reused for PPPoE.</div></div></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
@@ -286,7 +285,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
 
   function resellerModalHtml() {
     const eligible = state.pops.filter(function (pop) {
-      return pop.name !== DIRECT_POP_NAME && pop.status === 'active' && pop.reseller_id == null && Number(pop.customer_count || 0) === 0;
+      return pop.status === 'active' && pop.reseller_id == null && Number(pop.customer_count || 0) === 0;
     });
     return '<div class="modal fade" id="fprResellerModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
       '<form id="fprResellerForm"><div class="modal-header"><h5 class="modal-title fw-bold">Invite Reseller</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
@@ -295,7 +294,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       '<div class="mb-3"><label class="form-label">Phone *</label><input class="form-control" name="phone" maxlength="40" required></div>' +
       '<div class="mb-2"><label class="form-label">Assign POP(s)</label><select class="form-select" name="assigned_pop_ids" id="fprInvitePops" multiple size="5">' +
       eligible.map(function (pop) { return '<option value="' + escapeHtml(pop.id) + '">' + escapeHtml(pop.name) + (pop.area_zone ? ' — ' + escapeHtml(pop.area_zone) : '') + '</option>'; }).join('') +
-      '</select><div class="form-text">Only active, unassigned, customer-free POPs are selectable. FAZ Main (Direct) is excluded. Leave empty to invite without POP assignment.</div></div></div>' +
+      '</select><div class="form-text">Only eligible unassigned POPs can be attached to an invitation. If none are available, leave this empty and assign a reseller-owned POP after the account is created.</div></div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprResellerSave">Queue Invitation</button></div></form></div></div></div>';
   }
 
@@ -383,9 +382,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     const idInput = container.querySelector('[name="id"]');
     const popId = idInput ? idInput.value : '';
     const current = popId ? state.pops.find(function (item) { return String(item.id) === String(popId); }) : null;
-    const resellerId = current && current.name === DIRECT_POP_NAME
-      ? null
-      : (resellerSelect && resellerSelect.value ? resellerSelect.value : null);
+    const resellerId = resellerSelect && resellerSelect.value ? resellerSelect.value : null;
 
     if (current && Number(current.customer_count || 0) > 0 && String(current.reseller_id || '') !== String(resellerId || '')) {
       const message = 'Ownership cannot be changed while this POP has customer records.';
@@ -610,10 +607,10 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
     form.elements.hotspot_ip_pool.value = pop ? pop.hotspot_ip_pool || '' : '';
     form.elements.commission_type.value = pop ? pop.commission_type || 'percentage' : 'percentage';
     form.elements.commission_rate.value = pop ? pop.commission_rate || 0 : 0;
-    const direct = Boolean(pop && pop.name === DIRECT_POP_NAME);
-    owner.disabled = direct || Boolean(pop && Number(pop.customer_count || 0) > 0);
-    form.querySelector('#fprPopOwnerHelp').textContent = direct ? 'FAZ Main (Direct) is permanently protected from third-party reseller assignment.' :
-      (owner.disabled ? 'Ownership is locked because this POP already has customer records.' : 'Select an active reseller or keep FAZ Direct / Unassigned.');
+    owner.disabled = Boolean(pop && Number(pop.customer_count || 0) > 0);
+    form.querySelector('#fprPopOwnerHelp').textContent = owner.disabled
+      ? 'Ownership is locked because this POP already has customer records.'
+      : 'Only reseller-owned POPs appear in this workspace. Unassigned and core POPs are managed separately.';
     form.querySelector('#fprPopFormError').innerHTML = '';
     await loadPopIpPools(form, pop);
     form.dataset.hotspotInitial = JSON.stringify({

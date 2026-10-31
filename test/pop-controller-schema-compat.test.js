@@ -67,6 +67,42 @@ test('POP directory keeps reseller scoping on the schema-compatible projection',
 
 
 
+
+test('admin POP directory includes only reseller-owned POPs and returns reseller-only customer totals', async t => {
+  const calls = [];
+  t.mock.method(db, 'query', async (sql, values) => {
+    calls.push({ sql, values });
+    if (sql.includes('to_regclass')) return { rows: [{ available: false }] };
+    return { rows: [{ id: 4, name: 'Kader', reseller_id: 2, reseller_name: 'Faz Network', customer_count: 1 }] };
+  });
+  const res = responseRecorder();
+  await controller.list({ auth: { role: 'super_admin' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.payload.pops.map(pop => pop.id), [4]);
+  assert.equal(res.payload.pops.reduce((sum, pop) => sum + pop.customer_count, 0), 1);
+  const directorySql = calls[1].sql;
+  assert.match(directorySql, /INNER JOIN public\.resellers r ON r\.id=p\.reseller_id/);
+  assert.match(directorySql, /WHERE p\.reseller_id IS NOT NULL/);
+  assert.doesNotMatch(directorySql, /LEFT JOIN public\.resellers/);
+});
+
+test('admin customer POP options expose only active reseller-owned PPPoE POPs', async t => {
+  let captured;
+  t.mock.method(db, 'query', async (sql, values) => {
+    captured = { sql, values };
+    return { rows: [{ id: 4, name: 'Kader', area_zone: 'North', reseller_id: 2 }] };
+  });
+  const res = responseRecorder();
+  await controller.options({ auth: { role: 'admin' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.payload.pops.map(pop => pop.id), [4]);
+  assert.match(captured.sql, /INNER JOIN public\.resellers r ON r\.id=p\.reseller_id/);
+  assert.match(captured.sql, /p\.reseller_id IS NOT NULL/);
+  assert.match(captured.sql, /p\.status='active'/);
+  assert.match(captured.sql, /p\.pppoe_enabled=TRUE/);
+  assert.deepEqual(captured.values, []);
+});
+
 test('POP Hotspot enablement materializes core profiles before the POP transaction commits', async t => {
   const calls = [];
   const client = {
