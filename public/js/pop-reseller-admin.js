@@ -1,4 +1,4 @@
-console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');
+console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');
 (function () {
   'use strict';
 
@@ -171,10 +171,10 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');
 
   function sharedStyles() {
     return '<style id="fazPopResellerStyles">' +
-      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-weight:400}' +
+      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
-      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}' +
+      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#eef2ff;border-color:#c7d2fe}.faz-pop-reseller-view .fpr-metric--customers{background:#ecfdf5;border-color:#a7f3d0}.faz-pop-reseller-view .fpr-metric--resellers{background:#f5f3ff;border-color:#ddd6fe}' +
       '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}' +
       '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
       '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
@@ -216,7 +216,8 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');
       const owner = pop.reseller_name || '—';
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
       return '<tr>' +
-        '<td><span>' + escapeHtml(pop.name) + '</span><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
+        '<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +
+        '<td><strong>' + escapeHtml(pop.name) + '</strong></td>' +
         '<td>' + escapeHtml(pop.area_zone || '—') + '</td>' +
         '<td>' + escapeHtml(owner) + '</td>' +
         '<td>' + escapeHtml(pop.pppoe_ip_pool || '—') + '</td>' +
@@ -233,12 +234,12 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V8 <<<');
       '<button class="btn btn-success" type="button" data-action="new-pop"><i class="bi bi-plus-lg me-2"></i>Create POP</button></div>' +
       (error ? errorBanner(error) : '') +
       '<div class="fpr-metrics">' +
-      '<article class="fpr-metric"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
-      '<article class="fpr-metric"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
-      '<article class="fpr-metric"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
+      '<article class="fpr-metric fpr-metric--pops"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--customers"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
+      '<article class="fpr-metric fpr-metric--resellers"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
       '<section class="fpr-card"><div class="fpr-card-head"><div>POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
-      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="10" class="text-center text-muted py-4">No POP records found.</td></tr>') +
+      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>#</th><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="11" class="text-center text-muted py-4">No POP records found.</td></tr>') +
       '</tbody></table></div></section>' +
       popModalHtml();
     bindSection(section, 'pop');
