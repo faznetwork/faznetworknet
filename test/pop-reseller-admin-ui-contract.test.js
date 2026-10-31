@@ -220,7 +220,7 @@ test('POP service pools remain segregated and legacy pool is not rendered as a s
   assert.ok(!ui.includes('pop.mikrotik_ip_pool'));
   const controller = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
   assert.ok(controller.includes('pppoe_ip_pool'));
-  assert.ok(controller.includes('hb.ip_pool AS hotspot_ip_pool'));
+  assert.ok(controller.includes("hb.data->>'ip_pool' AS hotspot_ip_pool"));
   assert.ok(controller.includes('status=\'inactive\''));
   const migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '20261031_dual_service_pop_ip_pools.sql'), 'utf8');
   assert.match(migration, /ADD COLUMN IF NOT EXISTS pppoe_ip_pool/);

@@ -181,6 +181,10 @@ test('idempotent replay returns the original scoped batch without another debit 
   const result = await issuance.issueBatch(validInput);
   assert.equal(result.replayed, true);
   assert.equal(result.batch.batchKey, BATCH_KEY);
+  const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
+  assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.match(detailSql, /pkg\.validity AS validity/);
+  assert.doesNotMatch(detailSql, /b\.validity/);
   assert.equal(mock.generated.length, 0);
   assert.equal(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')), false);
   assert.equal(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
@@ -259,8 +263,22 @@ test('voucher batch history selects the canonical UUID reference and remains res
   const rows = await issuance.listBatches(41);
   assert.equal(rows[0].batchKey, BATCH_KEY);
   assert.match(captured.sql, /b\.batch_key AS batch_key/);
+  assert.match(captured.sql, /pkg\.validity AS validity/);
+  assert.match(captured.sql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.doesNotMatch(captured.sql, /b\.validity/);
   assert.match(captured.sql, /WHERE b\.reseller_id=\$1/);
   assert.deepEqual(captured.values, [41, 50]);
+});
+
+
+test('voucher batch detail resolves validity from its package and never selects a batch validity column', async t => {
+  const mock = installIssueMocks(t);
+  const result = await issuance.getBatch(41, BATCH_KEY);
+  assert.equal(result.batch.validity, '2h');
+  const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
+  assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.match(detailSql, /pkg\.validity AS validity/);
+  assert.doesNotMatch(detailSql, /b\.validity/);
 });
 
 test('forward batch-key compatibility migration adds/backfills UUID without destructive DDL', () => {

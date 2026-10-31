@@ -68,12 +68,13 @@ function assertSameRequest(existing, input) {
 
 async function loadBatchDetail(client, resellerId, batchKey) {
   const batchResult = await client.query(
-    `SELECT id, batch_key, reseller_id, pop_id, billing_account_id,
-            package_id, profile_key, validity, quantity,
-            retail_unit_price, wholesale_unit_price, retail_total,
-            wholesale_total, margin_total, billing_mode, status, created_at
-     FROM public.reseller_voucher_batches
-     WHERE batch_key=$1::uuid AND reseller_id=$2
+    `SELECT b.id, b.batch_key, b.reseller_id, b.pop_id, b.billing_account_id,
+            b.package_id, b.profile_key, pkg.validity AS validity, b.quantity,
+            b.retail_unit_price, b.wholesale_unit_price, b.retail_total,
+            b.wholesale_total, b.margin_total, b.billing_mode, b.status, b.created_at
+     FROM public.reseller_voucher_batches b
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
      LIMIT 1`,
     [batchKey, resellerId]
   );
@@ -345,14 +346,15 @@ async function listBatches(resellerIdValue, limitValue = 50) {
   const resellerId = resellerKey(resellerIdValue);
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(Number(limitValue)) ? Number(limitValue) : 50));
   const result = await db.query(
-    `SELECT b.id,b.batch_key AS batch_key,b.pop_id,b.package_id,b.profile_key,b.validity,
-            b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
+    `SELECT b.id,b.batch_key AS batch_key,b.pop_id,b.package_id,b.profile_key,
+            pkg.validity AS validity,b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
             b.billing_mode,b.status,b.created_at,
             COUNT(i.id)::int AS issued_count
      FROM public.reseller_voucher_batches b
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
      LEFT JOIN public.reseller_voucher_issuance_items i ON i.batch_id=b.id
      WHERE b.reseller_id=$1
-     GROUP BY b.id
+     GROUP BY b.id,pkg.validity
      ORDER BY b.created_at DESC,b.id DESC
      LIMIT $2`,
     [resellerId,limit]

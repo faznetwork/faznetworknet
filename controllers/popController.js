@@ -80,19 +80,7 @@ function fail(res, error, operation) {
   });
 }
 
-const popProjection = `
-  SELECT p.id,p.reseller_id,p.name,p.area_zone,p.commission_type,p.commission_rate,
-         p.status,p.vlan_id,p.mikrotik_ip_pool,p.pppoe_enabled,p.pppoe_ip_pool,
-         p.created_at,p.updated_at,r.name AS reseller_name,r.username AS reseller_username,
-         COUNT(DISTINCT c.id)::int AS customer_count,
-         (hb.status='active') AS hotspot_enabled,
-         hb.hotspot_server,hb.hotspot_interface,hb.vlan_id AS hotspot_vlan_id,
-         hb.ip_pool AS hotspot_ip_pool,hb.status AS hotspot_binding_status
-  FROM public.pops p
-  LEFT JOIN public.resellers r ON r.id=p.reseller_id
-  LEFT JOIN public.customers c ON c.pop_id=p.id
-  LEFT JOIN public.pop_hotspot_bindings hb ON hb.pop_id=p.id
-`;
+
 
 async function options(req, res) {
   try {
@@ -132,10 +120,53 @@ async function options(req, res) {
 
 async function list(req, res) {
   try {
+    // The dual-service migration is forward-only and may not yet be present on
+    // every deployed database. Resolve optional columns through the row JSON
+    // representation so older POP table shapes remain readable without hiding
+    // genuine database errors.
+    const bindingAvailability = await db.query(
+      "SELECT to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS available"
+    );
+    const hasHotspotBindings = bindingAvailability.rows?.[0]?.available === true;
+    const hotspotJoin = hasHotspotBindings
+      ? `LEFT JOIN LATERAL (
+           SELECT to_jsonb(hb) AS data
+           FROM public.pop_hotspot_bindings hb
+           WHERE to_jsonb(hb)->>'pop_id' = p.id::text
+           LIMIT 1
+         ) hb ON TRUE`
+      : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS data) hb ON TRUE';
     const reseller = req.auth?.role === 'reseller';
-    const sql = popProjection +
-      (reseller ? ' WHERE p.reseller_id=$1' : '') +
-      ' GROUP BY p.id,r.id,hb.id ORDER BY p.name ASC,p.id ASC';
+    const sql = `SELECT
+         p.id,
+         p.reseller_id,
+         p.name,
+         p.area_zone,
+         COALESCE(to_jsonb(p)->>'commission_type','percentage') AS commission_type,
+         COALESCE((to_jsonb(p)->>'commission_rate')::numeric,0) AS commission_rate,
+         COALESCE(to_jsonb(p)->>'status','inactive') AS status,
+         (to_jsonb(p)->>'vlan_id')::integer AS vlan_id,
+         to_jsonb(p)->>'mikrotik_ip_pool' AS mikrotik_ip_pool,
+         COALESCE((to_jsonb(p)->>'pppoe_enabled')::boolean,TRUE) AS pppoe_enabled,
+         COALESCE(to_jsonb(p)->>'pppoe_ip_pool',to_jsonb(p)->>'mikrotik_ip_pool') AS pppoe_ip_pool,
+         p.created_at,
+         p.updated_at,
+         r.name AS reseller_name,
+         r.username AS reseller_username,
+         COUNT(DISTINCT c.id)::int AS customer_count,
+         COALESCE(hb.data->>'status'='active',FALSE) AS hotspot_enabled,
+         hb.data->>'hotspot_server' AS hotspot_server,
+         hb.data->>'hotspot_interface' AS hotspot_interface,
+         (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,
+         hb.data->>'ip_pool' AS hotspot_ip_pool,
+         hb.data->>'status' AS hotspot_binding_status
+       FROM public.pops p
+       LEFT JOIN public.resellers r ON r.id=p.reseller_id
+       LEFT JOIN public.customers c ON c.pop_id=p.id
+       ${hotspotJoin}
+       ${reseller ? 'WHERE p.reseller_id=$1' : ''}
+       GROUP BY p.id,r.id,hb.data
+       ORDER BY p.name ASC,p.id ASC`;
     const result = await db.query(sql, reseller ? [req.auth.resellerId] : []);
     return res.json({ success: true, pops: result.rows });
   } catch (error) {
