@@ -426,7 +426,11 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       }
 
       closeModal('fprPopModal');
-      showToast(popId ? 'POP updated successfully.' : 'POP created successfully.', 'success');
+      if (response.hotspot_persisted === false) {
+        showToast('POP saved, but Hotspot settings were not saved. Review the Hotspot Server and IP Pool, then retry.', 'warning');
+      } else {
+        showToast(popId ? 'POP and Hotspot settings updated successfully.' : 'POP created successfully.', 'success');
+      }
       const refreshed = await window.loadPopManagement();
       if (refreshed === false) {
         showToast('POP was saved, but the POP table could not be refreshed. Use Refresh to reload the latest records.', 'warning');
