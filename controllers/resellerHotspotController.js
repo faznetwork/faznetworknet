@@ -2,6 +2,7 @@
 
 const catalogService = require('../services/resellerHotspotCatalogService');
 const issuanceService = require('../services/resellerVoucherIssuanceService');
+const lifecycleService = require('../services/resellerVoucherLifecycleService');
 
 function sendError(res, error, operation, resellerId) {
   const databaseCode = /^[0-9A-Z]{5}$/.test(String(error.code || '')) ? String(error.code) : null;
@@ -98,6 +99,14 @@ async function getBatch(req, res) {
   }
 }
 
+async function lifecycle(req,res){
+  const id=resellerId(req);
+  try{
+    const result=await lifecycleService.listForReseller(id,req.query.limit);
+    return res.set('Cache-Control','no-store, no-cache, must-revalidate, private').json({success:true,...result});
+  }catch(error){return sendError(res,error,'Voucher lifecycle',id);}
+}
+
 async function printBatchPage(req, res) {
   const id = resellerId(req);
   try {
@@ -123,4 +132,4 @@ async function printBatchPage(req, res) {
   }
 }
 
-module.exports = { catalog, issueBatch, listBatches, getBatch, printBatchPage };
+module.exports = { catalog, issueBatch, listBatches, getBatch, lifecycle, printBatchPage };

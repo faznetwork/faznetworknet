@@ -61,7 +61,7 @@ test('global idempotency replay prevents a second settlement and ledger write',a
  const calls=mockTransaction(t,sql=>{
   if(sql.includes('pg_advisory_xact_lock'))return{rows:[]};
   if(sql.includes('WHERE idempotency_key'))return{rows:[{id:'2001',account_id:'801',reseller_id:41,account_type:'wallet',entry_type:'wallet_credit',amount:'25.50',settlement_id:'1001'}]};
-  if(sql.includes('WHERE id=$1 AND reseller_id=$2'))return{rows:[{id:'801',billing_mode:'prepaid'}]};
+  if(sql.includes('WHERE reseller_id=$1 LIMIT 1'))return{rows:[{id:'801',reseller_id:41,billing_mode:'prepaid'}]};
   throw new Error('Unexpected SQL: '+sql);
  });
  const result=await finance.walletTopup(input);assert.equal(result.replayed,true);assert.equal(result.ledgerEntryId,'2001');
@@ -71,6 +71,7 @@ test('global idempotency rejects a conflicting amount',async t=>{
  mockTransaction(t,sql=>{
   if(sql.includes('pg_advisory_xact_lock'))return{rows:[]};
   if(sql.includes('WHERE idempotency_key'))return{rows:[{id:'2001',account_id:'801',reseller_id:41,account_type:'wallet',entry_type:'wallet_credit',amount:'25.50',settlement_id:'1001'}]};
+  if(sql.includes('WHERE reseller_id=$1 LIMIT 1'))return{rows:[{id:'801',reseller_id:41,billing_mode:'prepaid'}]};
   throw new Error('Unexpected SQL: '+sql);
  });
  await assert.rejects(finance.walletTopup({...input,amount:'26.00'}),e=>e.code==='IDEMPOTENCY_KEY_CONFLICT');
@@ -79,4 +80,15 @@ test('finance amount and idempotency inputs are bounded',()=>{
  assert.throws(()=>finance.amountCents('0'),e=>e.code==='INVALID_AMOUNT');
  assert.throws(()=>finance.amountCents('1.999'),e=>e.code==='INVALID_AMOUNT');
  assert.throws(()=>finance.idempotencyKey('short'),e=>e.code==='INVALID_IDEMPOTENCY_KEY');
+});
+
+test('zero credit limit is allowed only when the outstanding receivable is zero', async t => {
+  const calls=mockTransaction(t,sql=>{
+    if(sql.includes('FOR UPDATE'))return{rows:[{id:'802',reseller_id:41,billing_mode:'postpaid',wallet_balance:'0.00',receivable_balance:'0.00',credit_limit:'100.00',currency:'BDT',account_status:'active'}]};
+    if(sql.includes('UPDATE public.reseller_billing_accounts'))return{rowCount:1,rows:[{id:'802',credit_limit:'0.00'}]};
+    throw new Error('Unexpected SQL: '+sql);
+  });
+  const result=await finance.updateCreditLimit({resellerId:41,actorUserId:9,creditLimit:'0.00'});
+  assert.equal(result.account.credit_limit,'0.00');
+  assert.ok(calls.some(c=>c.sql.includes('UPDATE public.reseller_billing_accounts')));
 });

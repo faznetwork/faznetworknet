@@ -20,6 +20,12 @@ function amountCents(value) {
   if (cents <= 0n) throw financeError('Amount must be greater than zero.', 400, 'INVALID_AMOUNT');
   return cents;
 }
+function nonNegativeCents(value, label) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/^(0|[1-9]\d{0,11})(?:\.(\d{1,2}))?$/);
+  if (!match) throw financeError((label || 'Amount') + ' must be a non-negative monetary value.', 400, 'INVALID_AMOUNT');
+  return BigInt(match[1]) * 100n + BigInt((match[2] || '').padEnd(2, '0') || '0');
+}
 function decimal(cents) {
   return (cents / 100n).toString() + '.' + (cents % 100n).toString().padStart(2, '0');
 }
@@ -47,6 +53,7 @@ function assertReplay(existing, input) {
   const same = String(existing.account_id) === String(input.accountId) &&
     Number(existing.reseller_id) === Number(input.resellerId) &&
     String(existing.entry_type) === input.entryType &&
+    String(existing.account_type) === input.accountType &&
     amountCents(existing.amount) === input.amountCents;
   if (!same) throw financeError('This global Idempotency-Key was already used for a different finance operation.', 409, 'IDEMPOTENCY_KEY_CONFLICT');
 }
@@ -76,18 +83,20 @@ async function post(input, mode) {
   return db.withTransaction(async client => {
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
     const prior = await client.query(
-      'SELECT id,account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
+      'SELECT id,COALESCE(account_id,billing_account_id) AS account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
       'FROM public.reseller_ledger_entries WHERE idempotency_key=$1 LIMIT 1',
       [key]
     );
     if (prior.rows?.length) {
       const existing = prior.rows[0];
-      assertReplay(existing, { accountId: existing.account_id, resellerId, entryType, amountCents: amount });
-      const accountResult = await client.query(
+      const currentAccount = await client.query(
         'SELECT id,reseller_id,billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status ' +
-        'FROM public.reseller_billing_accounts WHERE id=$1 AND reseller_id=$2 LIMIT 1',
-        [existing.account_id, resellerId]
+        'FROM public.reseller_billing_accounts WHERE reseller_id=$1 LIMIT 1',
+        [resellerId]
       );
+      if (!currentAccount.rows?.[0]) throw financeError('Reseller billing account was not found.', 404, 'BILLING_ACCOUNT_NOT_FOUND');
+      assertReplay(existing, { accountId: currentAccount.rows[0].id, resellerId, entryType, accountType, amountCents: amount });
+      const accountResult = currentAccount;
       return { replayed: true, ledgerEntryId: String(existing.id), settlementId: existing.settlement_id ? String(existing.settlement_id) : null, account: accountResult.rows?.[0] || null };
     }
 
@@ -99,7 +108,7 @@ async function post(input, mode) {
       409, 'BILLING_MODE_OPERATION_MISMATCH');
     }
     const amountText = decimal(amount);
-    if (mode === 'postpaid' && amount > amountCents(account.receivable_balance)) {
+    if (mode === 'postpaid' && amount > nonNegativeCents(account.receivable_balance, 'Receivable balance')) {
       throw financeError('Settlement amount exceeds the outstanding receivable balance.', 409, 'SETTLEMENT_EXCEEDS_RECEIVABLE');
     }
 
@@ -143,11 +152,11 @@ async function receivableSettlement(input) { return post(input, 'postpaid'); }
 async function updateCreditLimit(input) {
   const resellerId = Number(positiveId(input.resellerId, 'reseller'));
   const actor = actorId(input.actorUserId);
-  const limit = amountCents(input.creditLimit);
+  const limit = nonNegativeCents(input.creditLimit, 'Credit limit');
   return db.withTransaction(async client => {
     const account = await lockedAccount(client, resellerId);
     if (account.billing_mode !== 'postpaid') throw financeError('Credit limits apply only to postpaid reseller accounts.', 409, 'BILLING_MODE_OPERATION_MISMATCH');
-    if (limit < amountCents(account.receivable_balance)) {
+    if (limit < nonNegativeCents(account.receivable_balance, 'Receivable balance')) {
       throw financeError('Credit limit cannot be reduced below the current outstanding receivable balance.', 409, 'CREDIT_LIMIT_BELOW_RECEIVABLE');
     }
     const result = await client.query(

@@ -25,6 +25,7 @@ router.get('/customers/:id', controller.getCustomer);
 router.get('/hotspot/catalog', hotspotController.catalog);
 router.post('/hotspot/voucher-batches', hotspotController.issueBatch);
 router.get('/hotspot/voucher-batches', hotspotController.listBatches);
+router.get('/hotspot/vouchers/lifecycle', hotspotController.lifecycle);
 router.get('/hotspot/voucher-batches/:batchKey', hotspotController.getBatch);
 
 // No reseller batch edit, delete, cancel, void, disable, or mutation routes are registered.
