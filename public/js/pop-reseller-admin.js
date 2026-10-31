@@ -172,25 +172,29 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
 
   function sharedStyles() {
     return '<style id="fazPopResellerStyles">' +
-      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a}' +
+      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}' +
-      '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}' +
-      '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:800;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
+      '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}' +
+      '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
       '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
       '.faz-pop-reseller-view .fpr-card-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}' +
+      '.faz-pop-reseller-view .fpr-heading p,.faz-pop-reseller-view .fpr-muted{font-weight:400}' +
+      '.faz-pop-reseller-view .fpr-heading h1,.faz-pop-reseller-view .modal-title{font-weight:700}' +
+      '.faz-pop-reseller-view .fpr-card-head{font-weight:500}' +
+      '.faz-pop-reseller-view .badge{font-weight:600}' +
       '.faz-pop-reseller-view .fpr-table{margin:0;min-width:980px;font-size:13px}' +
-      '.faz-pop-reseller-view .fpr-table th{font-size:11px;text-transform:uppercase;letter-spacing:.035em;color:#64748b;white-space:nowrap;background:#f8fafc}' +
-      '.faz-pop-reseller-view .fpr-table td{vertical-align:middle}' +
+      '.faz-pop-reseller-view .fpr-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.035em;color:#64748b;white-space:nowrap;background:#f8fafc}' +
+      '.faz-pop-reseller-view .fpr-table td{vertical-align:middle;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-actions{display:flex;gap:6px;flex-wrap:wrap;min-width:145px}' +
       '.faz-pop-reseller-view .fpr-badges{display:flex;gap:5px;flex-wrap:wrap;max-width:260px}' +
-      '.faz-pop-reseller-view .fpr-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#065f46;font-size:11px;font-weight:700;max-width:100%;overflow-wrap:anywhere}' +
+      '.faz-pop-reseller-view .fpr-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#065f46;font-size:11px;font-weight:600;max-width:100%;overflow-wrap:anywhere}' +
       '.faz-pop-reseller-view .fpr-muted{color:#64748b}' +
       '.faz-pop-reseller-view .modal-content{border:0;border-radius:16px;overflow:hidden}' +
       '.faz-pop-reseller-view .modal-header{background:#f8fafc}' +
-      '.faz-pop-reseller-view .form-label{font-size:13px;font-weight:700;color:#334155}' +
-      '.faz-pop-reseller-view .form-control,.faz-pop-reseller-view .form-select{min-height:42px}' +
+      '.faz-pop-reseller-view .form-label{font-size:13px;font-weight:500;color:#334155}' +
+      '.faz-pop-reseller-view .form-control,.faz-pop-reseller-view .form-select{min-height:42px;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-loading{padding:40px 16px;text-align:center;color:#64748b}' +
       '@media(max-width:767.98px){.faz-pop-reseller-view .fpr-metrics{grid-template-columns:1fr;gap:9px}.faz-pop-reseller-view .fpr-metric{padding:12px}.faz-pop-reseller-view .fpr-heading .btn{width:100%}.faz-pop-reseller-view .modal-dialog{margin:10px auto;max-width:calc(100% - 20px)}.faz-pop-reseller-view .modal-footer .btn{flex:1;min-height:42px}}' +
       '</style>';
@@ -207,27 +211,27 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
       const owner = pop.reseller_name || (pop.name === DIRECT_POP_NAME ? 'FAZ Direct' : 'FAZ Direct');
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
       return '<tr>' +
-        '<td><strong>' + escapeHtml(pop.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
+        '<td><span>' + escapeHtml(pop.name) + '</span><div class="small fpr-muted">#' + escapeHtml(pop.id) + '</div></td>' +
         '<td>' + escapeHtml(pop.area_zone || '—') + '</td>' +
         '<td>' + escapeHtml(owner) + '</td>' +
         '<td>' + escapeHtml(pop.pppoe_ip_pool || '—') + '</td>' +
         '<td>' + escapeHtml(pop.hotspot_ip_pool || '—') + '</td>' +
         '<td><div class="fpr-badges">' + (pop.pppoe_enabled ? '<span class="fpr-badge">PPPoE</span>' : '') + (pop.hotspot_enabled ? '<span class="fpr-badge">Hotspot</span>' : '') + ((!pop.pppoe_enabled && !pop.hotspot_enabled) ? '<span class="small fpr-muted">No service enabled</span>' : '') + '</div></td>' +
         '<td>' + escapeHtml(commission) + '</td>' +
-        '<td><strong>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</strong></td>' +
+        '<td>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</td>' +
         '<td>' + statusPill(pop.status) + '</td>' +
         '<td><div class="fpr-actions"><button class="btn btn-sm btn-outline-primary" type="button" data-action="edit-pop" data-id="' + escapeHtml(pop.id) + '"><i class="bi bi-pencil me-1"></i>Edit</button>' +
         statusButton(pop.status, pop.id, 'pop') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
-      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage POP ownership, PPPoE broadband pools, Hotspot wireless bindings and commission settings.</p></div>' +
+      '<div class="fpr-heading"><div><div class="small text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage POP ownership, PPPoE broadband pools, Hotspot wireless bindings and commission settings.</p></div>' +
       '<button class="btn btn-success" type="button" data-action="new-pop"><i class="bi bi-plus-lg me-2"></i>Create POP</button></div>' +
       (error ? errorBanner(error) : '') +
       '<div class="fpr-metrics">' +
       '<article class="fpr-metric"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
       '<article class="fpr-metric"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
       '<article class="fpr-metric"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
-      '<section class="fpr-card"><div class="fpr-card-head"><div class="fw-bold">POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
+      '<section class="fpr-card"><div class="fpr-card-head"><div>POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
       '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="10" class="text-center text-muted py-4">No POP records found.</td></tr>') +
       '</tbody></table></div></section>' +
@@ -258,16 +262,16 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
       const status = String(reseller.invite_status || 'inactive').toLowerCase();
       const resend = reseller.status !== 'active' ? '<button type="button" class="btn btn-sm btn-outline-primary" data-action="resend-invite" data-id="' + escapeHtml(reseller.id) + '">Resend Invite</button>' : '';
       const cancel = (status === 'pending' || status === 'expired') ? '<button type="button" class="btn btn-sm btn-outline-danger" data-action="cancel-invite" data-id="' + escapeHtml(reseller.id) + '">Cancel Invite</button>' : '';
-      return '<tr><td><strong>' + escapeHtml(reseller.name) + '</strong><div class="small fpr-muted">#' + escapeHtml(reseller.id) + '</div></td>' +
+      return '<tr><td><span>' + escapeHtml(reseller.name) + '</span><div class="small fpr-muted">#' + escapeHtml(reseller.id) + '</div></td>' +
         '<td><div>' + escapeHtml(reseller.email || reseller.username || '—') + '</div><div class="small fpr-muted">' + escapeHtml(reseller.phone || '') + '</div></td>' +
         '<td><div class="fpr-badges">' + badges + '</div></td><td>' + statusPill(status) + '</td>' +
         '<td><div class="fpr-actions">' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller', status === 'pending' || status === 'expired') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
-      '<div class="fpr-heading"><div><div class="small fw-bold text-success text-uppercase">Access & Invitations</div><h1 class="h4 fw-bold mb-1">Reseller Accounts &amp; Access</h1><p class="text-muted small mb-0">Review reseller access, assigned POPs and invitation lifecycle.</p></div>' +
+      '<div class="fpr-heading"><div><div class="small text-success text-uppercase">Access & Invitations</div><h1 class="h4 fw-bold mb-1">Reseller Accounts &amp; Access</h1><p class="text-muted small mb-0">Review reseller access, assigned POPs and invitation lifecycle.</p></div>' +
       '<button class="btn btn-success" type="button" data-action="new-reseller"><i class="bi bi-person-plus me-2"></i>Invite Reseller</button></div>' +
       (error ? errorBanner(error) : '') +
-      '<section class="fpr-card"><div class="fpr-card-head"><div class="fw-bold">Reseller Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-resellers"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
+      '<section class="fpr-card"><div class="fpr-card-head"><div>Reseller Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-resellers"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
       '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Email / Login ID &amp; Phone</th><th>Assigned POPs</th><th>Invite Status</th><th>Actions</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="5" class="text-center text-muted py-4">No reseller accounts found.</td></tr>') +
       '</tbody></table></div></section>' + resellerModalHtml();
@@ -322,6 +326,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
       } catch (error) {
         const alertHost = section.querySelector('.fpr-heading');
         if (alertHost) alertHost.insertAdjacentHTML('afterend', errorBanner(error.message || 'The requested action failed.'));
+        showToast(error.message || 'The requested action failed.', 'danger');
         console.error('[POP/Reseller Admin UI] Action failed:', error);
       }
     });
@@ -609,6 +614,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
         item.element.value = item.value;
       });
     } catch (error) {
+      state.ipPools = [];
       console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.', {
         event: 'pop_ip_pool_lookup_failed',
         endpoint: '/api/ip-pools',
@@ -626,8 +632,6 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V6 <<<');
         item.element.appendChild(existing);
         item.element.value = item.value;
       });
-      const errorHost = form.querySelector('#fprPopFormError');
-      if (errorHost) errorHost.innerHTML = errorBanner('Configured MikroTik IP Pools could not be loaded. Existing PPPoE and Hotspot assignments were preserved. Retry before selecting a different pool.');
     } finally {
       selectors.forEach(function (item) { item.element.disabled = false; });
     }
