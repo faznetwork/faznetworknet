@@ -485,6 +485,12 @@ test('voucher history and detail project validity defensively across schema vari
   assert.match(source, /to_jsonb\(b\)->>'retail_total'/);
   assert.match(source, /to_jsonb\(b\)->>'wholesale_total'/);
   assert.match(source, /to_jsonb\(b\)->>'margin_total'/);
+  assert.equal((source.match(/COALESCE\(to_jsonb\(b\)->>'status', 'completed'\) AS status/g) || []).length, 2);
+  assert.doesNotMatch(source, /b\.status/);
+  assert.doesNotMatch(source, /SELECT[^\`]*b\.(?:batch_key|pop_id|billing_account_id|package_id|profile_key|quantity|retail_unit_price|wholesale_unit_price|billing_mode)/s);
+  assert.match(source, /WHERE b\.reseller_id=\$1/);
+  assert.match(source, /ORDER BY b\.created_at DESC,b\.id DESC/);
+  assert.doesNotMatch(source, /WHERE[^\`]*to_jsonb\(b\)|ORDER BY[^\`]*to_jsonb\(b\)/s);
 });
 
 test('POP update no longer depends on POP information-schema metadata for standard fields', () => {
