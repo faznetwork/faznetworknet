@@ -271,7 +271,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       return '<tr><td><span>' + escapeHtml(reseller.name) + '</span><div class="small fpr-muted">#' + escapeHtml(reseller.id) + '</div></td>' +
         '<td><div>' + escapeHtml(reseller.email || reseller.username || '—') + '</div><div class="small fpr-muted">' + escapeHtml(reseller.phone || '') + '</div></td>' +
         '<td><div class="fpr-badges">' + badges + '</div></td><td>' + statusPill(status) + '</td>' +
-        '<td><div class="fpr-actions">' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller', status === 'pending' || status === 'expired') + '</div></td></tr>';
+        '<td><div class="fpr-actions"><button type="button" class="btn btn-sm btn-outline-success" data-action="wallet-topup" data-id="' + escapeHtml(reseller.id) + '"><i class="bi bi-wallet2 me-1"></i>Top-up Wallet</button>' + resend + cancel + statusButton(reseller.status, reseller.id, 'reseller', status === 'pending' || status === 'expired') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
       '<div class="fpr-heading"><div><div class="small text-success text-uppercase">Access & Invitations</div><h1 class="h4 fw-bold mb-1">Reseller Accounts &amp; Access</h1><p class="text-muted small mb-0">Review reseller access, assigned POPs and invitation lifecycle.</p></div>' +
@@ -280,7 +280,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '<section class="fpr-card"><div class="fpr-card-head"><div>Reseller Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-resellers"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
       '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>Name</th><th>Email / Login ID &amp; Phone</th><th>Assigned POPs</th><th>Invite Status</th><th>Actions</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="5" class="text-center text-muted py-4">No reseller accounts found.</td></tr>') +
-      '</tbody></table></div></section>' + resellerModalHtml();
+      '</tbody></table></div></section>' + resellerModalHtml() + walletTopupModalHtml();
     bindSection(section, 'reseller');
   }
 
@@ -299,6 +299,92 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprResellerSave">Queue Invitation</button></div></form></div></div></div>';
   }
 
+
+  function walletTopupModalHtml() {
+    return '<div class="modal fade" id="fprWalletTopupModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
+      '<form id="fprWalletTopupForm" novalidate><div class="modal-header"><h5 class="modal-title">Prepaid Wallet Top-up</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+      '<div class="modal-body"><div id="fprWalletTopupError" aria-live="polite"></div><div id="fprWalletTopupAccount" class="small text-secondary mb-3"></div><input type="hidden" name="resellerId"><input type="hidden" name="idempotencyKey">' +
+      '<div class="mb-3"><label class="form-label" for="fprWalletTopupAmount">Amount (BDT) *</label><input class="form-control" id="fprWalletTopupAmount" name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" required></div>' +
+      '<div class="mb-3"><label class="form-label" for="fprWalletTopupProvider">Payment method *</label><select class="form-select" id="fprWalletTopupProvider" name="paymentProvider" required><option value="bKash">bKash</option><option value="Nagad">Nagad</option><option value="Bank">Bank</option><option value="Cash">Cash</option></select></div>' +
+      '<div class="mb-3"><label class="form-label" for="fprWalletTopupReference">TxID / Reference</label><input class="form-control" id="fprWalletTopupReference" name="externalReference" maxlength="120"></div>' +
+      '<div class="mb-2"><label class="form-label" for="fprWalletTopupNotes">Notes</label><textarea class="form-control" id="fprWalletTopupNotes" name="notes" rows="3" maxlength="2000"></textarea></div></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success" id="fprWalletTopupSubmit">Post Wallet Credit</button></div></form></div></div></div>';
+  }
+
+  function newIdempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'wallet-topup-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 18);
+  }
+
+  async function openWalletTopupModal(resellerId) {
+    const section = document.getElementById('view-reseller-accounts');
+    const form = section && section.querySelector('#fprWalletTopupForm');
+    if (!form) throw new Error('Wallet top-up form is unavailable. Refresh the reseller directory.');
+    form.reset();
+    form.elements.resellerId.value = String(resellerId);
+    form.elements.idempotencyKey.value = newIdempotencyKey();
+    form.querySelector('#fprWalletTopupError').innerHTML = '';
+    form.querySelector('#fprWalletTopupAccount').textContent = 'Checking billing account…';
+    const result = await apiRequest('/admin/reseller-finance/accounts/' + encodeURIComponent(resellerId), { method: 'GET' });
+    const account = result.account || null;
+    if (!account) throw new Error('Billing account details were not returned. No top-up was posted.');
+    if (account.account_status !== 'active') throw new Error('This reseller billing account is not active. No top-up was posted.');
+    if (account.billing_mode !== 'prepaid') throw new Error('This reseller uses postpaid billing. Use receivable settlement; wallet top-up is not permitted.');
+    form.querySelector('#fprWalletTopupAccount').textContent = 'Prepaid account · Current wallet: ' + formatMoney(account.wallet_balance, 'fixed') + ' · ' + (account.currency || 'BDT');
+    modalInstance('fprWalletTopupModal').show();
+  }
+
+  document.addEventListener('input', function (event) {
+    const form = event.target && event.target.closest ? event.target.closest('#fprWalletTopupForm') : null;
+    if (!form || !['amount','paymentProvider','externalReference','notes'].includes(event.target.name)) return;
+    form.elements.idempotencyKey.value = newIdempotencyKey();
+  });
+
+  document.addEventListener('submit', async function (event) {
+    const form = event.target;
+    if (!form || form.id !== 'fprWalletTopupForm') return;
+    event.preventDefault();
+    if (form.dataset.submitting === '1') return;
+    const submit = form.querySelector('#fprWalletTopupSubmit');
+    const errorHost = form.querySelector('#fprWalletTopupError');
+    const originalLabel = submit.textContent;
+    errorHost.innerHTML = '';
+    if (!form.reportValidity()) return;
+    const payload = {
+      amount: String(form.elements.amount.value).trim(),
+      paymentProvider: form.elements.paymentProvider.value,
+      externalReference: String(form.elements.externalReference.value || '').trim(),
+      notes: String(form.elements.notes.value || '').trim()
+    };
+    form.dataset.submitting = '1';
+    submit.disabled = true;
+    submit.setAttribute('aria-busy', 'true');
+    submit.textContent = 'Posting…';
+    try {
+      const response = await apiRequest('/admin/reseller-finance/accounts/' + encodeURIComponent(form.elements.resellerId.value) + '/wallet-topups', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': form.elements.idempotencyKey.value },
+        body: payload
+      });
+      closeModal('fprWalletTopupModal');
+      showToast(response.message || 'Wallet top-up posted successfully. Ledger and balance were updated.', 'success');
+      await window.loadResellerAccess();
+    } catch (error) {
+      errorHost.innerHTML = errorBanner(error.message || 'Wallet top-up failed. No success was reported.');
+      showToast(error.message || 'Wallet top-up failed.', 'danger');
+      console.error('[Reseller Finance UI] Wallet top-up failed:', {
+        resellerId: form.elements.resellerId.value,
+        status: error.status || null,
+        message: error.message || String(error)
+      });
+    } finally {
+      delete form.dataset.submitting;
+      submit.disabled = false;
+      submit.removeAttribute('aria-busy');
+      submit.textContent = originalLabel;
+    }
+  });
+
   function bindSection(section, kind) {
     if (section.dataset.fprBound === '1') return;
     section.dataset.fprBound = '1';
@@ -311,6 +397,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
         if (action === 'new-pop') return await openPopModal(null);
         if (action === 'edit-pop') return await openPopModal(state.pops.find(function (item) { return String(item.id) === String(id); }));
         if (action === 'new-reseller') return openResellerModal();
+        if (action === 'wallet-topup') return await openWalletTopupModal(id);
         if (action === 'refresh-pops') return window.loadPopManagement();
         if (action === 'refresh-resellers') return window.loadResellerAccess();
         if (action === 'toggle-pop') return toggleRecord('pop', id, button.dataset.status);
