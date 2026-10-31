@@ -243,7 +243,7 @@ async function create(req, res) {
       throw serviceError('Select a PPPoE IP Pool or disable the PPPoE service for this POP.');
     }
     const hotspotEnabled = data.hotspot_enabled === true;
-    const result = await db.withTransaction(async client => {
+    const pop = await db.withTransaction(async client => {
       const inserted = await client.query(
         `INSERT INTO public.pops
            (name,area_zone,reseller_id,vlan_id,pppoe_enabled,pppoe_ip_pool,commission_type,commission_rate)
@@ -272,7 +272,7 @@ async function update(req, res) {
   try {
     const data = parse(req.body, true);
     await validateResellerOwner(data.reseller_id);
-    const pop = await db.withTransaction(async client => {
+    const result = await db.withTransaction(async client => {
       const currentResult = await client.query('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',[id]);
       const current = currentResult.rows[0];
       if (!current) return null;
