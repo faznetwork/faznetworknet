@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const {api,escapeHtml,money,date,getJson,showError} = window.ResellerWorkspace;
+  const {api,escapeHtml,money,date,getJson} = window.ResellerWorkspace;
   const state = {catalog:null,pendingIdempotencyKey:null};
   const byId = id => document.getElementById(id);
   function alertBox(id,message) { const box=byId(id); if(box){box.textContent=message;box.classList.remove('d-none');} }
@@ -13,6 +13,19 @@
     if(account.status!=='active'){box.textContent='Your reseller billing account is '+account.status+'. Voucher issuance is unavailable.';return;}
     box.textContent=account.billingMode==='prepaid'?'Prepaid wallet balance: '+money(account.walletBalance)+' · Currency: '+escapeHtml(account.currency):'Postpaid receivable: '+money(account.receivableBalance)+' · Credit limit: '+money(account.creditLimit)+' · Available credit: '+money(Math.max(0,Number(account.creditLimit)-Number(account.receivableBalance)));
   }
+  function updateReadinessWarning(pop) {
+    const warning=byId('voucherReadinessWarning');
+    if(!warning)return;
+    if(!pop||pop.issuanceReady) {
+      warning.textContent='';
+      warning.classList.add('d-none');
+      return;
+    }
+    warning.textContent=pop.readinessReason==='IP_POOL_NOT_CONFIGURED'
+      ? 'Voucher generation is unavailable: this POP has no Hotspot IP Pool configured. Ask an administrator to assign an active Hotspot IP Pool, then refresh this page.'
+      : 'Voucher generation is unavailable: this POP does not have an active Hotspot binding. Ask an administrator to configure the Hotspot binding, then refresh this page.';
+    warning.classList.remove('d-none');
+  }
   function updatePricing() {
     const pkg=selectedPackage();const quantity=Number(byId('voucherQuantity').value);const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=500;
     const retail=pkg?Number(pkg.retailPrice):0;const wholesale=pkg?Number(pkg.wholesalePrice):0;const margin=retail-wholesale;const fmt=value=>pkg?money(value):'৳—';
@@ -22,6 +35,7 @@
     const shortfall=account?.billingMode==='prepaid'&&Number(account.walletBalance)<total;
     const overLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+total>Number(account.creditLimit));
     const pop=selectedPop();const canIssue=Boolean(pop?.issuanceReady&&pkg&&valid&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!shortfall&&!overLimit);
+    updateReadinessWarning(pop);
     byId('generateVouchersButton').disabled=!canIssue;
     const impact=byId('voucherImpact');
     if(!pkg||!valid)impact.textContent='Select an eligible package and a whole quantity from 1 to 500 to preview your account impact.';
@@ -38,7 +52,7 @@
   }
   function renderPackageOptions() {
     const pop=selectedPop();const select=byId('voucherPackage');const packages=pop?.packages||[];
-    select.innerHTML=packages.length?packages.map(pkg=>'<option value="'+escapeHtml(pkg.id)+'">'+escapeHtml(pkg.name)+' · '+escapeHtml(pkg.validity)+'</option>').join(''):'<option value="">No active packages for this POP</option>';
+    select.innerHTML=packages.length?packages.map(pkg=>'<option value="'+escapeHtml(pkg.id)+'">'+escapeHtml(pkg.name)+' ('+escapeHtml(pkg.validity)+') — '+escapeHtml(money(pkg.retailPrice))+' (Reseller Cost: '+escapeHtml(money(pkg.wholesalePrice))+')</option>').join(''):'<option value="">No active packages for this POP</option>';
     select.disabled=!packages.length;updatePricing();
   }
   function renderPopOptions() {
@@ -74,6 +88,7 @@
       const response=await fetch(api+'/hotspot/voucher-batches',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':state.pendingIdempotencyKey},body:JSON.stringify({popId:pop.id,packageId:pkg.id,quantity})});
       let result;try{result=await response.json();}catch(error){throw new Error('The server returned an invalid response.');}
       if(!response.ok||!result.success)throw new Error(result.message||'Voucher issuance failed.');
+      if(!Array.isArray(result.vouchers)||!result.batch?.batchKey)throw new Error('The server response did not include the issued voucher batch and printable receipt reference.');
       state.pendingIdempotencyKey=null;renderIssued(result);alertBox('voucherSuccess',result.message||'Voucher batch issued successfully.');
       if(result.account&&state.catalog?.account)Object.assign(state.catalog.account,{walletBalance:result.account.walletBalance,receivableBalance:result.account.receivableBalance,creditLimit:result.account.creditLimit});
       renderAccount();

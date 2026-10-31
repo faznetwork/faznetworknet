@@ -11,10 +11,13 @@ function resolveCatalogEntry(profileKey, metadata) {
   if (!key || key.toLowerCase() === 'default' || key.length > 120 || !asPlainObject(metadata)) return null;
 
   const retailPrice = Number(metadata.price);
-  if (!Number.isFinite(retailPrice) || retailPrice < 0) {
+  const retailCents = Math.round(retailPrice * 100);
+  if (!Number.isFinite(retailPrice) || retailPrice < 0 || !Number.isSafeInteger(retailCents)) {
     console.warn('[POP Hotspot packages] Skipping core profile with invalid retail price.', { profileKey: key });
     return null;
   }
+  const wholesaleCents = (BigInt(retailCents) * 70n + 50n) / 100n;
+  const wholesalePrice = (wholesaleCents / 100n).toString() + '.' + (wholesaleCents % 100n).toString().padStart(2, '0');
 
   let resolved;
   try {
@@ -45,7 +48,8 @@ function resolveCatalogEntry(profileKey, metadata) {
     profileKey: key,
     packageName,
     validitySeconds: String(durationMs / 1000),
-    retailPrice: retailPrice.toFixed(2)
+    retailPrice: (retailCents / 100).toFixed(2),
+    wholesalePrice
   };
 }
 
@@ -82,10 +86,10 @@ async function syncPopPackages(client, popId) {
     const inserted = await client.query(
       `INSERT INTO public.pop_hotspot_packages
          (pop_id,package_name,profile_key,validity_seconds,retail_price,wholesale_price,is_active)
-       VALUES ($1,$2,$3,$4::bigint,$5::numeric,$5::numeric,TRUE)
+       VALUES ($1,$2,$3,$4::bigint,$5::numeric,$6::numeric,TRUE)
        ON CONFLICT (pop_id,profile_key) DO NOTHING
        RETURNING id`,
-      [popId, entry.packageName, entry.profileKey, entry.validitySeconds, entry.retailPrice]
+      [popId, entry.packageName, entry.profileKey, entry.validitySeconds, entry.retailPrice, entry.wholesalePrice]
     );
     if (inserted.rows?.length) created += 1;
   }

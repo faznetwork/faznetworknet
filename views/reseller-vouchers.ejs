@@ -25,7 +25,9 @@
       <% if (pageMode === 'generate') { %>
       <section class="reseller-panel">
         <div class="reseller-section-heading"><div><h2>Generate Hotspot Vouchers</h2><p>Choose an assigned POP, review package margin and issue a secure voucher batch</p></div><span class="badge rounded-pill badge-soft"><i class="bi bi-shield-check me-1"></i>Server-verified pricing</span></div>
-        <div id="voucherError" class="alert alert-danger d-none" role="alert"></div><div id="voucherSuccess" class="alert alert-success d-none" role="status"></div>
+        <div id="voucherError" class="alert alert-danger d-none" role="alert" aria-live="assertive"></div>
+        <div id="voucherReadinessWarning" class="alert alert-warning d-none" role="alert" aria-live="assertive" aria-atomic="true"></div>
+        <div id="voucherSuccess" class="alert alert-success d-none" role="status" aria-live="polite"></div>
         <div class="row g-3">
           <div class="col-12 col-lg-6"><label for="voucherPop" class="form-label">Assigned POP</label><select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select></div>
           <div class="col-12 col-lg-6"><label for="voucherPackage" class="form-label">Hotspot package / profile</label><select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select></div>

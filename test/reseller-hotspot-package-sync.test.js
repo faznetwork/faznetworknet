@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { syncPopPackages, resolveCatalogEntry } = require('../services/resellerHotspotPackageSyncService');
 
-test('core Hotspot metadata is materialized as durable POP package rows at retail-equals-wholesale pricing', async () => {
+test('core Hotspot metadata is materialized with a 30 percent reseller margin', async () => {
   const statements = [];
   const client = {
     async query(sql, values = []) {
@@ -25,13 +25,16 @@ test('core Hotspot metadata is materialized as durable POP package rows at retai
   assert.equal(inserts.length, 2);
   assert.match(inserts[0].sql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
   assert.match(inserts[0].sql, /validity_seconds,retail_price,wholesale_price,is_active/);
+  assert.match(inserts[0].sql, /\$5::numeric,\$6::numeric/);
   assert.equal(inserts[0].values[0], 71);
   assert.equal(inserts[0].values[1], '1-Hour');
   assert.equal(inserts[0].values[2], '1-Hour');
   assert.equal(inserts[0].values[3], '3600');
   assert.equal(inserts[0].values[4], '10.00');
+  assert.equal(inserts[0].values[5], '7.00');
   assert.equal(inserts[1].values[3], '0');
   assert.equal(inserts[1].values[4], '20.00');
+  assert.equal(inserts[1].values[5], '14.00');
   assert.equal(statements.some(entry => /^UPDATE\s+public\.pop_hotspot_packages/i.test(entry.sql)), false);
 });
 
@@ -53,4 +56,21 @@ test('malformed core metadata fails the enclosing POP transaction explicitly', a
     syncPopPackages({ query: async () => ({ rows: [{ value: '{not-json' }] }) }, 71),
     /not valid JSON/
   );
+});
+
+test('wholesale rounding is performed at cent precision for fractional retail prices', () => {
+  const entry = resolveCatalogEntry('Five-Cent', {
+    price: 0.05, validityValue: 1, validityUnit: 'hours', validityLabel: '1 Hour'
+  });
+  assert.equal(entry.retailPrice, '0.05');
+  assert.equal(entry.wholesalePrice, '0.04');
+});
+
+test('forward-only commission migration reconciles only existing equal-price rows', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261031_reseller_hotspot_30_percent_commission.sql'), 'utf8');
+  assert.match(migration, /SET wholesale_price\s*=\s*ROUND\(retail_price\s*\*\s*0\.70,\s*2\)/i);
+  assert.match(migration, /WHERE wholesale_price\s*=\s*retail_price/i);
+  assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN|INDEX)/i);
 });
