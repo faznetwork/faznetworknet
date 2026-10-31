@@ -183,7 +183,9 @@ test('idempotent replay returns the original scoped batch without another debit 
   assert.equal(result.batch.batchKey, BATCH_KEY);
   const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
   assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
-  assert.match(detailSql, /pkg\.validity AS validity/);
+  assert.match(detailSql, /to_jsonb\\(pkg\\)->>'validity'/);
+  assert.ok(detailSql.includes("'N/A'"));
+  assert.doesNotMatch(detailSql, /pkg\\.validity/);
   assert.doesNotMatch(detailSql, /b\.validity/);
   assert.equal(mock.generated.length, 0);
   assert.equal(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')), false);
@@ -263,7 +265,9 @@ test('voucher batch history selects the canonical UUID reference and remains res
   const rows = await issuance.listBatches(41);
   assert.equal(rows[0].batchKey, BATCH_KEY);
   assert.match(captured.sql, /b\.batch_key AS batch_key/);
-  assert.match(captured.sql, /pkg\.validity AS validity/);
+  assert.match(captured.sql, /to_jsonb\\(pkg\\)->>'validity'/);
+  assert.ok(captured.sql.includes("'N/A'"));
+  assert.doesNotMatch(captured.sql, /pkg\\.validity/);
   assert.match(captured.sql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
   assert.doesNotMatch(captured.sql, /b\.validity/);
   assert.match(captured.sql, /WHERE b\.reseller_id=\$1/);
@@ -277,7 +281,9 @@ test('voucher batch detail resolves validity from its package and never selects 
   assert.equal(result.batch.validity, '2h');
   const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
   assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
-  assert.match(detailSql, /pkg\.validity AS validity/);
+  assert.match(detailSql, /to_jsonb\\(pkg\\)->>'validity'/);
+  assert.ok(detailSql.includes("'N/A'"));
+  assert.doesNotMatch(detailSql, /pkg\\.validity/);
   assert.doesNotMatch(detailSql, /b\.validity/);
 });
 
