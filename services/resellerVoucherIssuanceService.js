@@ -78,8 +78,33 @@ async function loadBatchDetail(client, resellerId, batchKey) {
               NULLIF(to_jsonb(pkg)->>'validity_period',''),
               'N/A'
             ) AS validity,
-            b.quantity,b.retail_unit_price,b.wholesale_unit_price,b.retail_total,
-            b.wholesale_total,b.margin_total,b.billing_mode,b.status,b.created_at
+            b.quantity,b.retail_unit_price,b.wholesale_unit_price,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+              0::numeric
+            ) AS retail_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+              0::numeric
+            ) AS wholesale_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'margin_total','')::numeric,
+              (
+                COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+                         0::numeric)
+                -
+                COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+                         0::numeric)
+              ),
+              0::numeric
+            ) AS margin_total,
+            b.billing_mode,b.status,b.created_at
      FROM public.reseller_voucher_batches b
      LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
      WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
@@ -363,7 +388,32 @@ async function listBatches(resellerIdValue, limitValue = 50) {
               NULLIF(to_jsonb(pkg)->>'validity_period',''),
               'N/A'
             ) AS validity,
-            b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
+            b.quantity,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+              0::numeric
+            ) AS retail_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+              0::numeric
+            ) AS wholesale_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'margin_total','')::numeric,
+              (
+                COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+                         0::numeric)
+                -
+                COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+                         0::numeric)
+              ),
+              0::numeric
+            ) AS margin_total,
             b.billing_mode,b.status,b.created_at,
             COALESCE(items.issued_count,0)::int AS issued_count
      FROM public.reseller_voucher_batches b
