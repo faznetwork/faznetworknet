@@ -304,7 +304,7 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   assert.ok(styles.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
   assert.ok(styles.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
   assert.ok(styles.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
-  assert.doesNotMatch(styles, /fpr-metric--(?:pops|customers|resellers)\\{[^}]*linear-gradient/i);
+  assert.ok(!styles.includes('linear-gradient'));
   assert.ok(styles.includes('fpr-table th{font-size:11px;font-weight:600'));
   assert.ok(styles.includes('fpr-table td{vertical-align:middle;font-weight:400'));
   assert.ok(styles.includes('.form-label{font-size:13px;font-weight:500'));
