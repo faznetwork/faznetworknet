@@ -66,6 +66,36 @@ test('POP directory keeps reseller scoping on the schema-compatible projection',
 });
 
 
+
+test('POP Hotspot enablement materializes core profiles before the POP transaction commits', async t => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.startsWith('INSERT INTO public.pops')) return { rows: [{ id: 71 }] };
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 71, name: 'New Hotspot POP', hotspot_enabled: true, hotspot_ip_pool: 'hs-pool' }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  const res = responseRecorder();
+  await controller.create({
+    body: {
+      name: 'New Hotspot POP', area_zone: 'North', reseller_id: null,
+      pppoe_enabled: false, hotspot_enabled: true, hotspot_server: 'hs1',
+      hotspot_interface: 'bridge-hotspot', hotspot_ip_pool: 'hs-pool'
+    }
+  }, res);
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.payload.hotspot_persisted, true);
+  const bindingIndex = calls.findIndex(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings'));
+  const metadataIndex = calls.findIndex(call => call.sql.includes("key='hotspot_profile_metadata'"));
+  assert.ok(bindingIndex >= 0);
+  assert.ok(metadataIndex > bindingIndex);
+});
+
 test('POP update executes the deterministic Hotspot upsert and returns the associated binding', async t => {
   const calls = [];
   const client = {

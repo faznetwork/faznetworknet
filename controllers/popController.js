@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const hotspotPackageSync = require('../services/resellerHotspotPackageSyncService');
 
 function validId(value) {
   const id = Number(value);
@@ -258,6 +259,9 @@ async function create(req, res) {
         enabled: hotspotEnabled, server: data.hotspot_server,
         interface: data.hotspot_interface, vlanId: data.hotspot_vlan_id, pool: data.hotspot_ip_pool
       });
+      if (hotspotEnabled) {
+        await hotspotPackageSync.syncPopPackages(client, id);
+      }
       return readPop(client, id);
     });
     return res.status(201).json({ success: true, pop, hotspot_persisted: true });
@@ -338,6 +342,9 @@ async function update(req, res) {
             pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
           };
           await upsertHotspotBinding(client, id, config);
+          if (config.enabled) {
+            await hotspotPackageSync.syncPopPackages(client, id);
+          }
           await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
         } catch (bindingError) {
           await client.query('ROLLBACK TO SAVEPOINT pop_hotspot_optional');
