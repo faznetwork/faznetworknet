@@ -20,6 +20,14 @@ function positiveId(value, label) {
   return text;
 }
 
+function actorUserKey(value, fallbackValue) {
+  const text = String(value ?? fallbackValue ?? '').trim();
+  if (!/^[1-9]\d{0,18}$/.test(text) || BigInt(text) > 9223372036854775807n) {
+    throw serviceError('The authenticated actor must be a valid positive database user ID.', 403, 'INVALID_ACTOR_USER_ID');
+  }
+  return text;
+}
+
 function toCents(value, label) {
   const text = String(value ?? '').trim();
   const match = text.match(/^(\d{1,12})(?:\.(\d{1,2}))?$/);
@@ -191,7 +199,7 @@ async function issueBatch(input) {
   const packageId = positiveId(input.packageId, 'package');
   const quantity = validateQuantity(input.quantity);
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
-  const actorUserId = String(input.actorUserId || resellerId).slice(0, 160);
+  const actorUserId = actorUserKey(input.actorUserId, resellerId);
 
   return db.withTransaction(async client => {
     const findExisting = async () => client.query(
