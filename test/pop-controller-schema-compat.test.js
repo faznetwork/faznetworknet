@@ -78,7 +78,7 @@ test('admin POP directory includes only reseller-owned POPs and returns reseller
   t.mock.method(db, 'query', async (sql, values) => {
     calls.push({ sql, values });
     if (sql.includes('to_regclass')) return { rows: [{ available: false }] };
-    assert.match(sql, /p\\.reseller_id IS NOT NULL/);
+    assert.match(sql, /p\.reseller_id IS NOT NULL/);
     return { rows: fixturePops.filter(pop => pop.reseller_id !== null) };
   });
   const res = responseRecorder();
@@ -101,7 +101,7 @@ test('admin customer POP options expose only active reseller-owned PPPoE POPs', 
   ];
   t.mock.method(db, 'query', async (sql, values) => {
     captured = { sql, values };
-    assert.match(sql, /p\\.reseller_id IS NOT NULL/);
+    assert.match(sql, /p\.reseller_id IS NOT NULL/);
     return { rows: fixturePops.filter(pop => pop.reseller_id !== null && pop.status === 'active' && pop.pppoe_enabled && pop.pppoe_ip_pool) };
   });
   const res = responseRecorder();
