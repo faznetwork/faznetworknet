@@ -24,9 +24,7 @@ function eligibleRow(overrides = {}) {
     package_id: '701',
     package_name: '2 Hour',
     profile_key: '2-Hour',
-    validity: '2h',
-    time_limit: '2h',
-    data_limit: '1G',
+    validity_seconds: 7200,
     retail_price: '50.00',
     wholesale_price: '30.00',
     billing_account_id: '801',
@@ -117,6 +115,10 @@ test('issuance uses one transaction client for the canonical generator, item map
   assert.equal(mock.generated[0].profileName, '2-Hour');
   assert.equal(mock.generated[0].price, 50);
   assert.ok(mock.statements.some(entry => /p\.reseller_id=\$2/.test(entry.sql) && /FOR UPDATE OF p,b,pkg,a/.test(entry.sql)));
+  const eligibilitySql = mock.statements.find(entry => entry.sql.includes('FROM public.pops p'))?.sql || '';
+  assert.match(eligibilitySql, /pkg\.is_active=TRUE/);
+  assert.match(eligibilitySql, /pkg\.validity_seconds/);
+  assert.doesNotMatch(eligibilitySql, /pkg\.(?:validity|status|time_limit|data_limit)(?![a-z_])/);
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_issuance_items')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')));
@@ -333,27 +335,29 @@ test('reseller dashboard contains bounded generation and read-only reprint contr
 });
 
 
-test('catalog reads stable POP columns and enriches only with available baseline voucher metadata', async t => {
+test('catalog exposes core packages without an IP pool and reports issuance readiness separately', async t => {
   const catalogService = require('../services/resellerHotspotCatalogService');
-  const calls = [];
-  t.mock.method(db, 'query', async (sql, values) => {
-    calls.push({ sql, values });
-    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
-    if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
-    if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: 'hs-pool' }] };
-    if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '2 Hour', profile_key: '2-Hour', validity: '2h', retail_price: '50.10', wholesale_price: '30.05' }] };
-    throw new Error('Unexpected catalog SQL: ' + sql);
-  });
+  const statements = [];
+  const client = {
+    async query(sql, values) {
+      statements.push({ sql, values });
+      if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
+      if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: null }] };
+      if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '30-Day', profile_key: '30-Day', validity_seconds: '2592000', retail_price: '150.00', wholesale_price: '150.00', is_active: true }] };
+      throw new Error('Unexpected catalog SQL: ' + sql);
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
   const result = await catalogService.getCatalog(41);
   assert.equal(result.pops.length, 1);
-  assert.equal(result.pops[0].id, 21);
-  assert.equal(result.pops[0].packages[0].expectedMargin, '20.05');
-  assert.equal(result.account.walletBalance, '100.00');
-  assert.deepEqual(calls.map(call => call.values), [[41], [41], [[21]], [[21]]]);
-  assert.match(calls[1].sql, /p\.status='active'/);
-  assert.match(calls[1].sql, /p\.reseller_id=\$1/);
-  assert.doesNotMatch(calls[1].sql, /area_zone|router_key|hotspot_server|display_order|time_limit|data_limit/);
-  assert.match(calls[2].sql, /SELECT id, pop_id, status, ip_pool/);
+  assert.equal(result.pops[0].packages.length, 1);
+  assert.equal(result.pops[0].packages[0].validity, '30 days');
+  assert.equal(result.pops[0].issuanceReady, false);
+  assert.equal(result.pops[0].readinessReason, 'IP_POOL_NOT_CONFIGURED');
+  assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /validity_seconds/);
+  assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /is_active/);
+  assert.doesNotMatch(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /\b(validity|status)\b/);
 });
 
 test('catalog rejects missing or invalid authenticated reseller identity', async () => {
@@ -451,22 +455,20 @@ test('voucher generation failure aborts the enclosing transaction before account
   assert.equal(statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
 });
 
-test('catalog gracefully falls back when optional binding/package schema versions are missing columns', async t => {
+test('catalog surfaces required package schema errors instead of silently returning an empty catalog', async t => {
   const catalogService = require('../services/resellerHotspotCatalogService');
-  const warnings = [];
-  t.mock.method(console, 'warn', (...args) => warnings.push(args));
-  t.mock.method(db, 'query', async sql => {
-    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
-    if (sql.includes('FROM public.pops p')) return { rows: [
-      { id: 21, name: 'North POP', status: 'active', reseller_id: 41 },
-      { id: 22, name: 'South POP', status: 'active', reseller_id: 41 }
-    ] };
-    if (sql.includes('FROM public.pop_hotspot_bindings')) { const error = new Error('column status does not exist'); error.code = '42703'; throw error; }
-    throw new Error('Package query must not run when bindings are unavailable: ' + sql);
-  });
-  const result = await catalogService.getCatalog(41);
-  assert.deepEqual(result.pops.map(pop => [pop.id, pop.bindingConfigured, pop.packages.length]), [[21, false, 0], [22, false, 0]]);
-  assert.ok(warnings.some(args => args[1]?.databaseCode === '42703'));
+  const schemaError = Object.assign(new Error('column validity_seconds does not exist'), { code: '42703' });
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [] };
+      if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: 'pool-a' }] };
+      if (sql.includes('FROM public.pop_hotspot_packages')) throw schemaError;
+      throw new Error('Unexpected SQL: ' + sql);
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  await assert.rejects(catalogService.getCatalog(41), error => error === schemaError);
 });
 
 

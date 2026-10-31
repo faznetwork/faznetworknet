@@ -32,6 +32,19 @@ function fromCents(value) {
   return (amount / 100n).toString() + '.' + (amount % 100n).toString().padStart(2, '0');
 }
 
+function formatValiditySeconds(value) {
+  let seconds;
+  try { seconds = BigInt(value ?? 0); } catch (_) { return 'Data / quota package'; }
+  if (seconds <= 0n) return 'Data / quota package';
+  for (const [unitSeconds, label] of [[86400n, 'day'], [3600n, 'hour'], [60n, 'minute']]) {
+    if (seconds % unitSeconds === 0n) {
+      const count = seconds / unitSeconds;
+      return count.toString() + ' ' + label + (count === 1n ? '' : 's');
+    }
+  }
+  return seconds.toString() + ' seconds';
+}
+
 function validateQuantity(value) {
   const quantity = Number(value);
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 500) {
@@ -200,7 +213,7 @@ async function issueBatch(input) {
               b.id AS binding_id, b.router_key, b.hotspot_server,
               b.hotspot_interface, b.vlan_id, b.ip_pool,
               pkg.id AS package_id, pkg.package_name, pkg.profile_key,
-              pkg.validity, pkg.time_limit, pkg.data_limit,
+              pkg.validity_seconds,
               pkg.retail_price, pkg.wholesale_price,
               a.id AS billing_account_id, a.billing_mode,
               a.wallet_balance, a.receivable_balance, a.credit_limit,
@@ -209,7 +222,7 @@ async function issueBatch(input) {
        INNER JOIN public.pop_hotspot_bindings b
          ON b.pop_id=p.id AND b.status='active'
        INNER JOIN public.pop_hotspot_packages pkg
-         ON pkg.pop_id=p.id AND pkg.status='active'
+         ON pkg.pop_id=p.id AND pkg.is_active=TRUE
        INNER JOIN public.reseller_billing_accounts a
          ON a.reseller_id=p.reseller_id
        WHERE p.id=$1
@@ -239,6 +252,8 @@ async function issueBatch(input) {
       return { ...detail, replayed: true };
     }
 
+    const validitySeconds = BigInt(eligible.validity_seconds || 0);
+    const validity = formatValiditySeconds(validitySeconds);
     const retailUnitCents = toCents(eligible.retail_price, 'retail price');
     const wholesaleUnitCents = toCents(eligible.wholesale_price, 'wholesale cost');
     if (wholesaleUnitCents > retailUnitCents) {
@@ -283,7 +298,7 @@ async function issueBatch(input) {
         batchKey,idempotencyKey,resellerId,popId,eligible.billing_account_id,
         eligible.binding_id,packageId,eligible.router_key,eligible.hotspot_server,
         eligible.hotspot_interface,eligible.vlan_id,eligible.ip_pool,
-        eligible.profile_key,eligible.validity,quantity,
+        eligible.profile_key,validity,quantity,
         fromCents(retailUnitCents),fromCents(wholesaleUnitCents),
         fromCents(retailTotalCents),wholesaleTotal,fromCents(marginTotalCents),
         eligible.billing_mode,actorUserId
@@ -296,9 +311,9 @@ async function issueBatch(input) {
       client,
       profileName: eligible.profile_key,
       profileId: eligible.profile_key,
-      validity: eligible.validity,
-      timeLimit: eligible.time_limit || '',
-      dataLimit: eligible.data_limit || '',
+      validity,
+      timeLimit: validitySeconds > 0n ? validitySeconds.toString() + 's' : '',
+      dataLimit: '',
       price: Number(eligible.retail_price),
       server: eligible.hotspot_server,
       quantity,

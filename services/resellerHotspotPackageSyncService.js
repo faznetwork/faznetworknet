@@ -25,40 +25,36 @@ function resolveCatalogEntry(profileKey, metadata) {
     });
     return null;
   }
-
-  const validity = String(
-    metadata.validityLabel ||
-    metadata.validity ||
-    (Number(metadata.validityValue) > 0 && metadata.validityUnit
-      ? Number(metadata.validityValue) + ' ' + String(metadata.validityUnit)
-      : '') ||
-    (Number(metadata.limitBytesTotal || metadata.limit_bytes_total) > 0
-      ? (Number(metadata.limitBytesTotal || metadata.limit_bytes_total) / 1073741824) + ' GB'
-      : '')
-  ).trim();
-  if (!validity || validity.length > 50) {
-    console.warn('[POP Hotspot packages] Skipping core profile without a valid package validity label.', { profileKey: key });
+  if (!resolved || resolved.type === 'INVALID') {
+    console.warn('[POP Hotspot packages] Skipping core profile with unsupported validity metadata.', { profileKey: key });
     return null;
   }
 
-  const timeLimit = String(metadata.timeLimit || metadata.time_limit || resolved.validity || '').trim() || null;
-  const dataLimit = String(metadata.dataLimit || metadata.data_limit || '').trim() || null;
+  const packageName = String(metadata.label || metadata.packageName || metadata.package_name || key).trim();
+  if (!packageName || packageName.length > 120) {
+    console.warn('[POP Hotspot packages] Skipping core profile with invalid package label.', { profileKey: key });
+    return null;
+  }
+  const durationMs = Number(resolved.durationMs || 0);
+  if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs % 1000 !== 0) {
+    console.warn('[POP Hotspot packages] Skipping core profile with invalid duration.', { profileKey: key });
+    return null;
+  }
+
   return {
     profileKey: key,
-    packageName: key,
-    validity,
-    timeLimit,
-    dataLimit,
+    packageName,
+    validitySeconds: String(durationMs / 1000),
     retailPrice: retailPrice.toFixed(2)
   };
 }
 
 async function syncPopPackages(client, popId) {
   if (!client || typeof client.query !== 'function') {
-    throw new TypeError('A transactional PostgreSQL client is required to synchronize POP Hotspot packages.');
+    throw new TypeError('A transactional PostgreSQL client is required to materialize POP Hotspot packages.');
   }
   const settings = await client.query(
-    "SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1"
+    "SELECT value FROM public.app_settings WHERE key='hotspot_profile_metadata' LIMIT 1"
   );
   const raw = settings.rows?.[0]?.value;
   if (raw == null || String(raw).trim() === '') {
@@ -85,11 +81,11 @@ async function syncPopPackages(client, popId) {
     }
     const inserted = await client.query(
       `INSERT INTO public.pop_hotspot_packages
-         (pop_id,package_name,profile_key,validity,time_limit,data_limit,retail_price,wholesale_price,status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::numeric,$7::numeric,'active')
+         (pop_id,package_name,profile_key,validity_seconds,retail_price,wholesale_price,is_active)
+       VALUES ($1,$2,$3,$4::bigint,$5::numeric,$5::numeric,TRUE)
        ON CONFLICT (pop_id,profile_key) DO NOTHING
        RETURNING id`,
-      [popId, entry.packageName, entry.profileKey, entry.validity, entry.timeLimit, entry.dataLimit, entry.retailPrice]
+      [popId, entry.packageName, entry.profileKey, entry.validitySeconds, entry.retailPrice]
     );
     if (inserted.rows?.length) created += 1;
   }

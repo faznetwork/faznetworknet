@@ -24,21 +24,22 @@ test('core Hotspot metadata is materialized as durable POP package rows at retai
   const inserts = statements.filter(entry => entry.sql.includes('INSERT INTO public.pop_hotspot_packages'));
   assert.equal(inserts.length, 2);
   assert.match(inserts[0].sql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
-  assert.match(inserts[0].sql, /retail_price,wholesale_price,status\)\s*VALUES[\s\S]*\$7::numeric,'active'/);
+  assert.match(inserts[0].sql, /validity_seconds,retail_price,wholesale_price,is_active/);
   assert.equal(inserts[0].values[0], 71);
   assert.equal(inserts[0].values[1], '1-Hour');
   assert.equal(inserts[0].values[2], '1-Hour');
-  assert.equal(inserts[0].values[3], '1 Hour');
-  assert.equal(inserts[0].values[6], '10.00');
-  assert.equal(inserts[1].values[6], '20.00');
+  assert.equal(inserts[0].values[3], '3600');
+  assert.equal(inserts[0].values[4], '10.00');
+  assert.equal(inserts[1].values[3], '0');
+  assert.equal(inserts[1].values[4], '20.00');
   assert.equal(statements.some(entry => /^UPDATE\s+public\.pop_hotspot_packages/i.test(entry.sql)), false);
 });
 
 test('legacy profile metadata with a validity label remains mappable without rewriting core metadata', () => {
-  const entry = resolveCatalogEntry('Legacy 30-Day', { price: 100, validityLabel: '30 days' });
+  const entry = resolveCatalogEntry('Legacy 30-Day', { price: 100, validityValue: 30, validityUnit: 'days', validityLabel: '30 days' });
   assert.deepEqual(entry, {
-    profileKey: 'Legacy 30-Day', packageName: 'Legacy 30-Day', validity: '30 days',
-    timeLimit: null, dataLimit: null, retailPrice: '100.00'
+    profileKey: 'Legacy 30-Day', packageName: 'Legacy 30-Day', validitySeconds: '2592000',
+    retailPrice: '100.00'
   });
 });
 

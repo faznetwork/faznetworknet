@@ -21,10 +21,11 @@
     const account=state.catalog?.account;const total=wholesale*(valid?quantity:0);
     const shortfall=account?.billingMode==='prepaid'&&Number(account.walletBalance)<total;
     const overLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+total>Number(account.creditLimit));
-    const canIssue=Boolean(pkg&&valid&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!shortfall&&!overLimit);
+    const pop=selectedPop();const canIssue=Boolean(pop?.issuanceReady&&pkg&&valid&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!shortfall&&!overLimit);
     byId('generateVouchersButton').disabled=!canIssue;
     const impact=byId('voucherImpact');
     if(!pkg||!valid)impact.textContent='Select an eligible package and a whole quantity from 1 to 500 to preview your account impact.';
+    else if(!pop?.issuanceReady)impact.textContent=pop?.readinessReason==='IP_POOL_NOT_CONFIGURED'?'Packages are visible, but voucher issuance is blocked until FAZ NETWORK configures this POP’s Hotspot IP Pool.':'Packages are visible, but an active Hotspot binding is required before voucher issuance.';
     else if(!account||account.status!=='active')impact.textContent='No active billing account is available. Voucher issuance is blocked.';
     else if(account.billingMode==='prepaid')impact.textContent='Confirmation: '+quantity+' vouchers will debit '+money(total)+' from your prepaid wallet. Current balance: '+money(account.walletBalance)+' · Estimated balance after issue: '+money(Number(account.walletBalance)-total)+'.';
     else impact.textContent='Confirmation: '+quantity+' vouchers will add '+money(total)+' to your postpaid receivable. Current receivable: '+money(account.receivableBalance)+' · Estimated receivable after issue: '+money(Number(account.receivableBalance)+total)+' · Credit limit: '+money(account.creditLimit)+'.';
@@ -42,7 +43,7 @@
   }
   function renderPopOptions() {
     const select=byId('voucherPop');const pops=state.catalog?.pops||[];
-    select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+(pop.bindingConfigured?(pop.packages?.length?'':' · No active hotspot packages'):' · Hotspot binding not configured')+'</option>').join(''):'<option value="">No eligible active POPs</option>';
+    select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+(pop.packages?.length?'':' · No active hotspot packages')+(!pop.bindingConfigured?' · Hotspot binding not configured':(!pop.issuanceReady?' · IP pool not configured':''))+'</option>').join(''):'<option value="">No eligible active POPs</option>';
     select.disabled=!pops.length;renderPackageOptions();renderAccount();
   }
   async function loadCatalog() {
@@ -66,6 +67,7 @@
     clearAlert('voucherError');clearAlert('voucherSuccess');
     const pop=selectedPop();const pkg=selectedPackage();const quantity=Number(byId('voucherQuantity').value);const button=byId('generateVouchersButton');
     if(!pop||!pkg||!Number.isSafeInteger(quantity)||quantity<1||quantity>500){alertBox('voucherError','Select an eligible POP and package, and enter a whole quantity from 1 to 500.');return;}
+    if(!pop.issuanceReady){alertBox('voucherError',pop.readinessReason==='IP_POOL_NOT_CONFIGURED'?'Voucher issuance is blocked because this POP has no configured Hotspot IP Pool. Contact FAZ NETWORK support.':'Voucher issuance requires an active Hotspot binding. Contact FAZ NETWORK support.');return;}
     if(!state.pendingIdempotencyKey){if(!window.crypto?.randomUUID){alertBox('voucherError','Secure request identifiers are unavailable in this browser. Refresh the page or contact support.');return;}state.pendingIdempotencyKey=window.crypto.randomUUID();}
     button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Issuing…';
     try {
