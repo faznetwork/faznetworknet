@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('reseller workspace exposes isolated authenticated page routes before customer profile route', () => {
   const server = read('server.js');
+  const dashboardController = read('controllers/resellerPortalController.js');
   const addRoute = server.indexOf('app.get("/reseller/customers/add"');
   const profileRoute = server.indexOf('app.get("/reseller/customers/:id"');
   assert.ok(addRoute >= 0 && profileRoute >= 0 && addRoute < profileRoute);
@@ -15,8 +16,13 @@ test('reseller workspace exposes isolated authenticated page routes before custo
     const line = server.split('\n').find(value => value.includes('app.get("' + route + '"'));
     assert.ok(line, 'Missing page route ' + route);
     assert.match(line, /requireRole\(\["reseller"\]\),loadTenantScope/);
-    assert.match(line, /Cache-Control/);
-    assert.match(line, /activePath:req.path/);
+    if (route === '/reseller/dashboard') {
+      assert.match(dashboardController, /res\.set\('Cache-Control','no-store, no-cache, must-revalidate, private'\)/);
+      assert.match(dashboardController, /activePath:req\.path,currentPath:req\.path/);
+    } else {
+      assert.match(line, /Cache-Control/);
+      assert.match(line, /activePath:req.path/);
+    }
   }
 });
 
@@ -66,11 +72,16 @@ test('reports and payments use existing scoped per-customer payment history only
 
 test('reseller workspace activePath is explicitly passed and partials safely default missing locals', () => {
   const server = read('server.js');
+  const dashboardController = read('controllers/resellerPortalController.js');
   const lines = server.split(String.fromCharCode(10));
   for (const route of ['/reseller/dashboard','/reseller/vouchers/generate','/reseller/vouchers/history','/reseller/customers','/reseller/customers/add','/reseller/payments']) {
     const line = lines.find(value => value.includes('app.get("' + route + '"'));
     assert.ok(line, 'Missing route ' + route);
-    assert.ok(line.includes('activePath:req.path'), 'Missing activePath local for ' + route);
+    if (route === '/reseller/dashboard') {
+      assert.ok(dashboardController.includes('activePath:req.path,currentPath:req.path'), 'Missing dashboard activePath locals in controller');
+    } else {
+      assert.ok(line.includes('activePath:req.path'), 'Missing activePath local for ' + route);
+    }
   }
   for (const partial of ['reseller-scripts.ejs','reseller-sidebar.ejs']) {
     const source = read(path.join('views/partials', partial));
