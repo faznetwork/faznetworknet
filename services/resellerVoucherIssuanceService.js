@@ -68,8 +68,13 @@ function assertSameRequest(existing, input) {
 
 async function loadBatchDetail(client, resellerId, batchKey) {
   const batchResult = await client.query(
-    `SELECT b.id, b.batch_key, b.reseller_id, b.pop_id, b.billing_account_id,
-            b.package_id, b.profile_key,
+    `SELECT b.id,
+            to_jsonb(b)->>'batch_key' AS batch_key,
+            b.reseller_id,
+            NULLIF(to_jsonb(b)->>'pop_id','')::bigint AS pop_id,
+            NULLIF(to_jsonb(b)->>'billing_account_id','')::bigint AS billing_account_id,
+            NULLIF(to_jsonb(b)->>'package_id','') AS package_id,
+            to_jsonb(b)->>'profile_key' AS profile_key,
             COALESCE(
               NULLIF(to_jsonb(b)->>'validity',''),
               NULLIF(to_jsonb(pkg)->>'validity',''),
@@ -78,16 +83,18 @@ async function loadBatchDetail(client, resellerId, batchKey) {
               NULLIF(to_jsonb(pkg)->>'validity_period',''),
               'N/A'
             ) AS validity,
-            b.quantity,b.retail_unit_price,b.wholesale_unit_price,
+            NULLIF(to_jsonb(b)->>'quantity','')::integer AS quantity,
+            NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric AS retail_unit_price,
+            NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric AS wholesale_unit_price,
             COALESCE(
               NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
               NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
-              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
               0::numeric
             ) AS retail_total,
             COALESCE(
               NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
-              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
               0::numeric
             ) AS wholesale_total,
             COALESCE(
@@ -95,18 +102,21 @@ async function loadBatchDetail(client, resellerId, batchKey) {
               (
                 COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
                          NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
-                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
                          0::numeric)
                 -
                 COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
-                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
                          0::numeric)
               ),
               0::numeric
             ) AS margin_total,
-            b.billing_mode,b.status,b.created_at
+            to_jsonb(b)->>'billing_mode' AS billing_mode,
+            COALESCE(to_jsonb(b)->>'status', 'completed') AS status,
+            b.created_at
      FROM public.reseller_voucher_batches b
-     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     LEFT JOIN public.pop_hotspot_packages pkg
+       ON pkg.id::text=to_jsonb(b)->>'package_id'
      WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
      LIMIT 1`,
     [batchKey, resellerId]
@@ -379,7 +389,11 @@ async function listBatches(resellerIdValue, limitValue = 50) {
   const resellerId = resellerKey(resellerIdValue);
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(Number(limitValue)) ? Number(limitValue) : 50));
   const result = await db.query(
-    `SELECT b.id,b.batch_key AS batch_key,b.pop_id,b.package_id,b.profile_key,
+    `SELECT b.id,
+            to_jsonb(b)->>'batch_key' AS batch_key,
+            NULLIF(to_jsonb(b)->>'pop_id','')::bigint AS pop_id,
+            NULLIF(to_jsonb(b)->>'package_id','') AS package_id,
+            to_jsonb(b)->>'profile_key' AS profile_key,
             COALESCE(
               NULLIF(to_jsonb(b)->>'validity',''),
               NULLIF(to_jsonb(pkg)->>'validity',''),
@@ -388,16 +402,16 @@ async function listBatches(resellerIdValue, limitValue = 50) {
               NULLIF(to_jsonb(pkg)->>'validity_period',''),
               'N/A'
             ) AS validity,
-            b.quantity,
+            NULLIF(to_jsonb(b)->>'quantity','')::integer AS quantity,
             COALESCE(
               NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
               NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
-              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
               0::numeric
             ) AS retail_total,
             COALESCE(
               NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
-              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
               0::numeric
             ) AS wholesale_total,
             COALESCE(
@@ -405,19 +419,22 @@ async function listBatches(resellerIdValue, limitValue = 50) {
               (
                 COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
                          NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
-                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * b.quantity,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
                          0::numeric)
                 -
                 COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
-                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * b.quantity,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
                          0::numeric)
               ),
               0::numeric
             ) AS margin_total,
-            b.billing_mode,b.status,b.created_at,
+            to_jsonb(b)->>'billing_mode' AS billing_mode,
+            COALESCE(to_jsonb(b)->>'status', 'completed') AS status,
+            b.created_at,
             COALESCE(items.issued_count,0)::int AS issued_count
      FROM public.reseller_voucher_batches b
-     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     LEFT JOIN public.pop_hotspot_packages pkg
+       ON pkg.id::text=to_jsonb(b)->>'package_id'
      LEFT JOIN (
        SELECT batch_id,COUNT(*)::int AS issued_count
        FROM public.reseller_voucher_issuance_items
