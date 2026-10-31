@@ -234,7 +234,8 @@ async function issueBatch(input) {
               a.currency, a.account_status
        FROM public.pops p
        INNER JOIN public.pop_hotspot_bindings b
-         ON b.pop_id=p.id AND b.status='active'
+         ON b.pop_id=p.id
+        AND COALESCE(NULLIF(to_jsonb(b)->>'status','')='active',(to_jsonb(b)->>'is_active')::boolean,FALSE)
        INNER JOIN public.pop_hotspot_packages pkg
          ON pkg.pop_id=p.id AND pkg.is_active=TRUE
        INNER JOIN public.reseller_billing_accounts a
