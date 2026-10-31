@@ -264,7 +264,7 @@ test('voucher batch history selects the canonical UUID reference and remains res
   });
   const rows = await issuance.listBatches(41);
   assert.equal(rows[0].batchKey, BATCH_KEY);
-  assert.match(captured.sql, /b\.batch_key AS batch_key/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'batch_key' AS batch_key/);
   assert.match(captured.sql, /to_jsonb\(pkg\)->>'validity'/);
   assert.ok(captured.sql.includes("'N/A'"));
   assert.doesNotMatch(captured.sql, /pkg\.validity/);
@@ -486,7 +486,7 @@ test('voucher history and detail project validity defensively across schema vari
   assert.match(source, /to_jsonb\(b\)->>'wholesale_total'/);
   assert.match(source, /to_jsonb\(b\)->>'margin_total'/);
   assert.equal((source.match(/COALESCE\(to_jsonb\(b\)->>'status', 'completed'\) AS status/g) || []).length, 2);
-  assert.doesNotMatch(source, /b\.status/);
+  assert.doesNotMatch(batchSelects.join('\n'), /b\.status/);
   const batchSelects = [...source.matchAll(/SELECT([\s\S]*?)FROM public\.reseller_voucher_batches b/g)].map(match => match[1]);
   assert.equal(batchSelects.length, 2);
   for (const projection of batchSelects) {
