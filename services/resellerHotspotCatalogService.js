@@ -84,8 +84,9 @@ async function getCatalog(resellerIdValue) {
 
     const popIds = pops.map(pop => pop.id);
     const bindingResult = await client.query(
-      `SELECT id, pop_id, status, ip_pool
-       FROM public.pop_hotspot_bindings
+      `SELECT id, pop_id, status, ip_pool,
+              COALESCE(NULLIF(to_jsonb(b)->>'dns_name',''), NULLIF(to_jsonb(b)->>'hotspot_dns_name','')) AS dns_name
+       FROM public.pop_hotspot_bindings b
        WHERE pop_id = ANY($1::integer[]) AND status='active'
        ORDER BY pop_id ASC, id ASC`,
       [popIds]
@@ -94,6 +95,7 @@ async function getCatalog(resellerIdValue) {
     for (const pop of pops) {
       const binding = bindingByPopId.get(String(pop.id));
       pop.bindingConfigured = Boolean(binding);
+      pop.dnsName = binding && binding.dns_name ? String(binding.dns_name).trim() : null;
       pop.issuanceReady = Boolean(binding && String(binding.ip_pool || '').trim());
       pop.readinessReason = !binding
         ? 'HOTSPOT_BINDING_NOT_CONFIGURED'

@@ -88,6 +88,8 @@ async function loadBatchDetail(client, resellerId, batchKey) {
             NULLIF(to_jsonb(b)->>'billing_account_id','')::bigint AS billing_account_id,
             NULLIF(to_jsonb(b)->>'package_id','') AS package_id,
             to_jsonb(b)->>'profile_key' AS profile_key,
+            pkg.package_name AS package_name,
+            COALESCE(NULLIF(to_jsonb(binding)->>'dns_name',''), NULLIF(to_jsonb(binding)->>'hotspot_dns_name','')) AS dns_name,
             COALESCE(
               NULLIF(to_jsonb(b)->>'validity',''),
               NULLIF(to_jsonb(pkg)->>'validity',''),
@@ -129,6 +131,7 @@ async function loadBatchDetail(client, resellerId, batchKey) {
             b.created_at
      FROM public.reseller_voucher_batches b
      LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     LEFT JOIN public.pop_hotspot_bindings binding ON binding.id=b.binding_id
      WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
      LIMIT 1`,
     [batchKey, resellerId]
@@ -153,6 +156,8 @@ async function loadBatchDetail(client, resellerId, batchKey) {
       popId: Number(batch.pop_id),
       packageId: String(batch.package_id),
       profileKey: batch.profile_key,
+      packageName: batch.package_name || batch.profile_key,
+      dnsName: batch.dns_name || null,
       validity: batch.validity,
       quantity: Number(batch.quantity),
       retailUnitPrice: String(batch.retail_unit_price),
@@ -169,6 +174,7 @@ async function loadBatchDetail(client, resellerId, batchKey) {
       username: row.username,
       password: row.password,
       profile: row.profile,
+      packageName: batch.package_name || batch.profile_key,
       validity: row.validity,
       timeLimit: row.time_limit || null,
       dataLimit: row.data_limit || null,

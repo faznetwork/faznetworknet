@@ -62,7 +62,14 @@ async function issueBatch(req, res) {
       replayed: result.replayed,
       message: result.replayed ? 'This voucher batch was already issued; the original batch is shown.' : 'Voucher batch issued successfully.',
       batch: result.batch,
-      vouchers: result.vouchers,
+      vouchers: result.vouchers.map(voucher => ({
+        id: voucher.id,
+        username: voucher.username,
+        password: voucher.password,
+        pin: voucher.username,
+        validity: voucher.validity,
+        package_name: voucher.packageName || result.batch.packageName || result.batch.profileKey
+      })),
       account: result.account || null
     });
   } catch (error) {

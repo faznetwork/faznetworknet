@@ -332,6 +332,10 @@ test('reseller dashboard contains bounded generation and read-only reprint contr
   assert.match(dashboard, /voucherHistoryRows/);
   assert.match(script, /\/reseller\/hotspot\/voucher-batches\//);
   assert.match(script, /Idempotency-Key/);
+  assert.match(dashboard, /btnIssueVouchers/);
+  assert.match(script, /X-Requested-With/);
+  assert.match(script, /new window\.QRCode/);
+  assert.match(script, /finally\{/);
 });
 
 
@@ -343,7 +347,7 @@ test('catalog exposes core packages without an IP pool and reports issuance read
       statements.push({ sql, values });
       if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
       if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
-      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: null }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: null, dns_name: 'wifi.example.test' }] };
       if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '30-Day', profile_key: '30-Day', validity_seconds: '2592000', retail_price: '150.00', wholesale_price: '150.00', is_active: true }] };
       throw new Error('Unexpected catalog SQL: ' + sql);
     }
@@ -354,6 +358,7 @@ test('catalog exposes core packages without an IP pool and reports issuance read
   assert.equal(result.pops[0].packages.length, 1);
   assert.equal(result.pops[0].packages[0].validity, '30 days');
   assert.equal(result.pops[0].issuanceReady, false);
+  assert.equal(result.pops[0].dnsName, 'wifi.example.test');
   assert.equal(result.pops[0].readinessReason, 'IP_POOL_NOT_CONFIGURED');
   assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /validity_seconds/);
   assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /is_active/);
@@ -390,6 +395,9 @@ test('print page is authenticated and batch-scoped; no batch mutation routes exi
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
   assert.match(server, /\/reseller\/hotspot\/voucher-batches\/:batchKey\/print",requireRole\(\["reseller"\]\),loadTenantScope,resellerHotspotController\.printBatchPage/);
   assert.match(printView, /window\.print\(\)/);
+  assert.match(printView, /repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(printView, /print-thermal-58/);
+  assert.match(printView, /print-thermal-80/);
   assert.doesNotMatch(routes, /router\.(delete|put)\([^\n]*voucher-batches/i);
   assert.doesNotMatch(routes, /router\.post\([^\n]*(cancel|void|delete|disable)/i);
 });

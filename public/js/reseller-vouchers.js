@@ -1,111 +1,46 @@
-(function () {
-  'use strict';
-  const {api,escapeHtml,money,date,getJson} = window.ResellerWorkspace;
-  const state = {catalog:null,pendingIdempotencyKey:null};
-  const byId = id => document.getElementById(id);
-  function alertBox(id,message) { const box=byId(id); if(box){box.textContent=message;box.classList.remove('d-none');} }
-  function clearAlert(id) { const box=byId(id); if(box){box.textContent='';box.classList.add('d-none');} }
-  function selectedPop() { return (state.catalog?.pops||[]).find(pop=>String(pop.id)===byId('voucherPop')?.value)||null; }
-  function selectedPackage() { const pop=selectedPop();return pop?.packages.find(pkg=>String(pkg.id)===byId('voucherPackage')?.value)||null; }
-  function renderAccount() {
-    const box=byId('voucherAccount');const account=state.catalog?.account;if(!box)return;
-    if(!account){box.textContent='No active reseller billing account is configured. Voucher issuance is unavailable; contact FAZ NETWORK support.';return;}
-    if(account.status!=='active'){box.textContent='Your reseller billing account is '+account.status+'. Voucher issuance is unavailable.';return;}
-    box.textContent=account.billingMode==='prepaid'?'Prepaid wallet balance: '+money(account.walletBalance)+' · Currency: '+escapeHtml(account.currency):'Postpaid receivable: '+money(account.receivableBalance)+' · Credit limit: '+money(account.creditLimit)+' · Available credit: '+money(Math.max(0,Number(account.creditLimit)-Number(account.receivableBalance)));
-  }
-  function updateReadinessWarning(pop) {
-    const warning=byId('voucherReadinessWarning');
-    if(!warning)return;
-    if(!pop||pop.issuanceReady) {
-      warning.textContent='';
-      warning.classList.add('d-none');
-      return;
-    }
-    warning.textContent=pop.readinessReason==='IP_POOL_NOT_CONFIGURED'
-      ? 'Voucher generation is unavailable: this POP has no Hotspot IP Pool configured. Ask an administrator to assign an active Hotspot IP Pool, then refresh this page.'
-      : 'Voucher generation is unavailable: this POP does not have an active Hotspot binding. Ask an administrator to configure the Hotspot binding, then refresh this page.';
-    warning.classList.remove('d-none');
-  }
-  function updatePricing() {
-    const pkg=selectedPackage();const quantity=Number(byId('voucherQuantity').value);const valid=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=500;
-    const retail=pkg?Number(pkg.retailPrice):0;const wholesale=pkg?Number(pkg.wholesalePrice):0;const margin=retail-wholesale;const fmt=value=>pkg?money(value):'৳—';
-    byId('voucherRetail').textContent=fmt(retail);byId('voucherWholesale').textContent=fmt(wholesale);byId('voucherMargin').textContent=fmt(margin);
-    byId('voucherRetailTotal').textContent=fmt(retail*(valid?quantity:0));byId('voucherCostTotal').textContent=fmt(wholesale*(valid?quantity:0));byId('voucherMarginTotal').textContent=fmt(margin*(valid?quantity:0));
-    const account=state.catalog?.account;const total=wholesale*(valid?quantity:0);
-    const shortfall=account?.billingMode==='prepaid'&&Number(account.walletBalance)<total;
-    const overLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+total>Number(account.creditLimit));
-    const pop=selectedPop();const canIssue=Boolean(pop?.issuanceReady&&pkg&&valid&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!shortfall&&!overLimit);
-    updateReadinessWarning(pop);
-    byId('generateVouchersButton').disabled=!canIssue;
-    const impact=byId('voucherImpact');
-    if(!pkg||!valid)impact.textContent='Select an eligible package and a whole quantity from 1 to 500 to preview your account impact.';
-    else if(!pop?.issuanceReady)impact.textContent=pop?.readinessReason==='IP_POOL_NOT_CONFIGURED'?'Packages are visible, but voucher issuance is blocked until FAZ NETWORK configures this POP’s Hotspot IP Pool.':'Packages are visible, but an active Hotspot binding is required before voucher issuance.';
-    else if(!account||account.status!=='active')impact.textContent='No active billing account is available. Voucher issuance is blocked.';
-    else if(account.billingMode==='prepaid')impact.textContent='Confirmation: '+quantity+' vouchers will debit '+money(total)+' from your prepaid wallet. Current balance: '+money(account.walletBalance)+' · Estimated balance after issue: '+money(Number(account.walletBalance)-total)+'.';
-    else impact.textContent='Confirmation: '+quantity+' vouchers will add '+money(total)+' to your postpaid receivable. Current receivable: '+money(account.receivableBalance)+' · Estimated receivable after issue: '+money(Number(account.receivableBalance)+total)+' · Credit limit: '+money(account.creditLimit)+'.';
-    if(pkg&&wholesale<=0)alertBox('voucherError','This package is not available for reseller issuance because wholesale price must be greater than ৳0. Promotional and free vouchers are issued by an administrator.');
-    else if(pkg&&margin<0)alertBox('voucherError','This package is not eligible because wholesale cost exceeds retail price.');
-    else if(!valid)alertBox('voucherError','Quantity must be a whole number from 1 to 500.');
-    else if(shortfall)alertBox('voucherError','Your prepaid wallet balance is insufficient for this batch.');
-    else if(overLimit)alertBox('voucherError','This batch would exceed your available postpaid credit limit.');
-    else clearAlert('voucherError');
-  }
-  function renderPackageOptions() {
-    const pop=selectedPop();const select=byId('voucherPackage');const packages=pop?.packages||[];
-    select.innerHTML=packages.length?packages.map(pkg=>'<option value="'+escapeHtml(pkg.id)+'">'+escapeHtml(pkg.name)+' ('+escapeHtml(pkg.validity)+') — '+escapeHtml(money(pkg.retailPrice))+' (Reseller Cost: '+escapeHtml(money(pkg.wholesalePrice))+')</option>').join(''):'<option value="">No active packages for this POP</option>';
-    select.disabled=!packages.length;updatePricing();
-  }
-  function renderPopOptions() {
-    const select=byId('voucherPop');const pops=state.catalog?.pops||[];
-    select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+(pop.packages?.length?'':' · No active hotspot packages')+(!pop.bindingConfigured?' · Hotspot binding not configured':(!pop.issuanceReady?' · IP pool not configured':''))+'</option>').join(''):'<option value="">No eligible active POPs</option>';
-    select.disabled=!pops.length;renderPackageOptions();renderAccount();
-  }
-  async function loadCatalog() {
-    try { state.catalog=await getJson(api+'/hotspot/catalog');renderPopOptions(); }
-    catch(error) { alertBox('voucherError',error.message);byId('voucherPop').innerHTML='<option value="">Catalog unavailable</option>';byId('voucherPackage').disabled=true; }
-  }
-  function renderIssued(result) {
-    const target=byId('voucherIssuedResult');const vouchers=result.vouchers||[];const batch=result.batch||{};
-    target.innerHTML='<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3"><div><h3 class="h6 fw-bold mb-1">Voucher batch issued</h3><div class="small text-secondary">Reference: '+escapeHtml(batch.batchKey||'')+'</div></div><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>Print / Reprint</a></div><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>#</th><th>Username / PIN</th><th>Password</th><th>Validity</th></tr></thead><tbody>'+vouchers.map((v,i)=>'<tr><td>'+(i+1)+'</td><td class="font-monospace">'+escapeHtml(v.username)+'</td><td class="font-monospace">'+escapeHtml(v.password)+'</td><td>'+escapeHtml(v.validity||batch.validity||'—')+'</td></tr>').join('')+'</tbody></table></div>';
-    target.classList.remove('d-none');
-  }
-  async function loadHistory() {
-    const body=byId('voucherHistoryRows');clearAlert('voucherHistoryError');body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr>';
-    try {
-      const result=await getJson(api+'/hotspot/voucher-batches?limit=100');const batches=result.batches||[];
-      if(!batches.length){body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">No voucher batches have been issued yet.</td></tr>';return;}
-      body.innerHTML=batches.map(batch=>'<tr><td>'+date(batch.createdAt)+'</td><td class="font-monospace small">'+escapeHtml(batch.batchKey)+'</td><td>POP #'+escapeHtml(batch.popId)+'</td><td>'+escapeHtml(batch.profileKey)+'</td><td>'+escapeHtml(batch.issuedCount)+' / '+escapeHtml(batch.quantity)+'</td><td>'+money(batch.wholesaleTotal)+'</td><td class="text-success fw-semibold">'+money(batch.marginTotal)+'</td><td><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>View / Print</a></td></tr>').join('');
-    } catch(error) { body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Voucher history could not be loaded.</td></tr>';alertBox('voucherHistoryError',error.message); }
-  }
-  async function issueBatch() {
-    clearAlert('voucherError');clearAlert('voucherSuccess');
-    const pop=selectedPop();const pkg=selectedPackage();const quantity=Number(byId('voucherQuantity').value);const button=byId('generateVouchersButton');
-    if(!pop||!pkg||!Number.isSafeInteger(quantity)||quantity<1||quantity>500){alertBox('voucherError','Select an eligible POP and package, and enter a whole quantity from 1 to 500.');return;}
-    if(!pop.issuanceReady){alertBox('voucherError',pop.readinessReason==='IP_POOL_NOT_CONFIGURED'?'Voucher issuance is blocked because this POP has no configured Hotspot IP Pool. Contact FAZ NETWORK support.':'Voucher issuance requires an active Hotspot binding. Contact FAZ NETWORK support.');return;}
-    if(!state.pendingIdempotencyKey){if(!window.crypto?.randomUUID){alertBox('voucherError','Secure request identifiers are unavailable in this browser. Refresh the page or contact support.');return;}state.pendingIdempotencyKey=window.crypto.randomUUID();}
-    button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Issuing…';
-    try {
-      const response=await fetch(api+'/hotspot/voucher-batches',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':state.pendingIdempotencyKey},body:JSON.stringify({popId:pop.id,packageId:pkg.id,quantity})});
-      let result;try{result=await response.json();}catch(error){throw new Error('The server returned an invalid response.');}
-      if(!response.ok||!result.success)throw new Error(result.message||'Voucher issuance failed.');
-      if(!Array.isArray(result.vouchers)||!result.batch?.batchKey)throw new Error('The server response did not include the issued voucher batch and printable receipt reference.');
-      state.pendingIdempotencyKey=null;renderIssued(result);alertBox('voucherSuccess',result.message||'Voucher batch issued successfully.');
-      if(result.account&&state.catalog?.account)Object.assign(state.catalog.account,{walletBalance:result.account.walletBalance,receivableBalance:result.account.receivableBalance,creditLimit:result.account.creditLimit});
-      renderAccount();
-    } catch(error) { alertBox('voucherError',error.message); }
-    finally { button.innerHTML='<i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch';updatePricing(); }
-  }
-  document.addEventListener('DOMContentLoaded',()=>{
-    if(byId('voucherPop')) {
-      byId('voucherPop').addEventListener('change',()=>{state.pendingIdempotencyKey=null;renderPackageOptions();});
-      byId('voucherPackage').addEventListener('change',()=>{state.pendingIdempotencyKey=null;updatePricing();});
-      byId('voucherQuantity').addEventListener('input',()=>{state.pendingIdempotencyKey=null;updatePricing();});
-      byId('generateVouchersButton').addEventListener('click',issueBatch);
-      loadCatalog();
-    }
-    if(byId('voucherHistoryRows')) {
-      byId('refreshVoucherHistory').addEventListener('click',loadHistory);
-      loadHistory();
-    }
-  });
+(function(){
+'use strict';
+const ws=window.ResellerWorkspace;
+if(!ws){console.error('[Reseller vouchers] Workspace helpers are unavailable.');return;}
+const {api,escapeHtml,money,date,getJson}=ws;
+const state={catalog:null,pendingKey:null,issued:null,busy:false};
+const el=id=>document.getElementById(id);
+const cents=value=>{const m=String(value==null?'0':value).trim().match(/^(\d{1,12})(?:\.(\d{1,2}))?$/);if(!m)throw new Error('Invalid financial amount received from catalog.');return BigInt(m[1])*100n+BigInt((m[2]||'').padEnd(2,'0')||'0');};
+const fmt=n=>'৳'+(n/100n).toString()+'.'+(n%100n).toString().padStart(2,'0');
+const pop=()=>state.catalog&&state.catalog.pops.find(p=>String(p.id)===el('voucherPop').value)||null;
+const pkg=()=>{const p=pop();return p&&(p.packages||[]).find(x=>String(x.id)===el('voucherPackage').value)||null;};
+function banner(id,message){const n=el(id);if(n){n.textContent=String(message||'Request failed.');n.classList.remove('d-none');}}
+function clear(id){const n=el(id);if(n){n.textContent='';n.classList.add('d-none');}}
+function errorText(e){const c=e&&e.code||'',m=e&&e.message||'Voucher issuance failed.';if(c==='HOTSPOT_IP_POOL_NOT_CONFIGURED'||c==='IP_POOL_NOT_CONFIGURED')return 'IP_POOL_NOT_CONFIGURED — Configure an active Hotspot IP Pool for this POP.';if(c==='INSUFFICIENT_WALLET_BALANCE')return 'INSUFFICIENT_WALLET_BALANCE — The prepaid wallet cannot cover this batch.';if(/timeout|timed out|ETIMEDOUT/i.test(m))return 'RouterOS/server timeout. Check router connectivity and batch history before retrying.';return (c?c+' — ':'')+m;}
+function readiness(p){const w=el('voucherReadinessWarning');if(!w)return;if(!p||p.issuanceReady){w.textContent='';w.classList.add('d-none');return;}w.textContent=p.readinessReason==='IP_POOL_NOT_CONFIGURED'?'IP_POOL_NOT_CONFIGURED — Packages are available, but the POP has no configured Hotspot IP Pool.':'HOTSPOT_BINDING_NOT_CONFIGURED — An active Hotspot binding is required.';w.classList.remove('d-none');}
+function account(){const a=state.catalog&&state.catalog.account,n=el('voucherAccount');if(!a){n.textContent='No active reseller billing account is configured.';return;}if(a.status!=='active'){n.textContent='Billing account status: '+a.status+'. Issuance blocked.';return;}n.textContent=a.billingMode==='prepaid'?'Prepaid wallet balance: '+money(a.walletBalance)+' '+escapeHtml(a.currency||'BDT'):'Postpaid receivable: '+money(a.receivableBalance)+' · Credit limit: '+money(a.creditLimit);}
+function renderPackages(){const p=pop(),items=p&&p.packages||[],grid=el('voucherPackageGrid');el('voucherPackage').value='';el('packageCount').textContent=items.length+' available';grid.innerHTML=items.length?items.map(x=>'<button type="button" class="pos-package" data-package-id="'+escapeHtml(x.id)+'" aria-pressed="false"><div class="d-flex justify-content-between gap-2"><strong>'+escapeHtml(x.name)+'</strong><span class="badge text-bg-light">Profile '+escapeHtml(x.profileKey||'—')+'</span></div><div class="small text-secondary mt-2">'+escapeHtml(x.validity||'Configured validity')+'</div><div class="d-flex justify-content-between mt-3 small"><span>Retail <b>'+money(x.retailPrice)+'</b></span><span class="text-success">Cost <b>'+money(x.wholesalePrice)+'</b></span></div><div class="small text-success fw-semibold mt-2">Margin / voucher '+money(x.expectedMargin||'0')+'</div></button>').join(''):'<div class="small text-secondary border rounded p-3">No active packages for this POP.</div>';
+grid.querySelectorAll('[data-package-id]').forEach(btn=>btn.addEventListener('click',()=>{el('voucherPackage').value=btn.dataset.packageId;grid.querySelectorAll('[data-package-id]').forEach(x=>x.setAttribute('aria-pressed',x===btn?'true':'false'));state.pendingKey=null;summary();}));
+readiness(p);summary();}
+function renderPops(){const items=state.catalog.pops,s=el('voucherPop');s.innerHTML=items.length?'<option value="">Choose a POP</option>'+items.map(p=>'<option value="'+escapeHtml(p.id)+'">'+escapeHtml(p.name)+(p.issuanceReady?' · Ready':' · Setup required')+'</option>').join(''):'<option value="">No eligible active POPs</option>';s.disabled=!items.length;if(items.length)s.value=String(items[0].id);el('popSyncBadge').textContent=items.length?'POP catalog synchronized':'No active POP';renderPackages();account();}
+function summary(){const x=pkg(),q=Number(el('voucherQuantity').value),valid=Number.isSafeInteger(q)&&q>=1&&q<=500,a=state.catalog&&state.catalog.account,p=pop();const retail=x?cents(x.retailPrice):0n,wholesale=x?cents(x.wholesalePrice):0n,margin=retail-wholesale,n=BigInt(valid?q:0),rt=retail*n,ct=wholesale*n,mt=margin*n;
+el('summaryRetail').textContent=x?fmt(rt):'৳—';el('summaryMargin').textContent=x?fmt(mt):'৳—';el('summaryDebit').textContent=x?fmt(ct):'৳—';
+let after='৳—',guard='Select a package to calculate this batch.',funds=true;
+if(x&&valid&&a&&a.status==='active'){if(a.billingMode==='prepaid'){const bal=cents(a.walletBalance);funds=bal>=ct;after=fmt(bal-ct);guard=funds?'Prepaid balance after issuance':'INSUFFICIENT_WALLET_BALANCE · short by '+fmt(ct-bal);}else{const rec=cents(a.receivableBalance),limit=cents(a.creditLimit);funds=rec+ct<=limit;after=fmt(limit-rec-ct);guard=funds?'Available credit after issuance':'POSTPAID_CREDIT_LIMIT_EXCEEDED';}}
+else if(x&&!valid)guard='Quantity must be a whole number from 1 to 500.';
+el('summaryAfter').textContent=after;el('summaryGuard').textContent=guard;
+el('btnIssueVouchers').disabled=!(p&&p.issuanceReady&&x&&valid&&a&&a.status==='active'&&wholesale>0n&&margin>=0n&&funds&&!state.busy);
+el('voucherImpact').textContent=x&&valid?q+' vouchers · '+fmt(rt)+' retail · '+fmt(ct)+' reseller cost.':'Choose a package and quantity from 1 to 500.';}
+async function loadCatalog(){try{state.catalog=await getJson(api+'/hotspot/catalog');if(!state.catalog||state.catalog.success!==true||!Array.isArray(state.catalog.pops))throw new Error('Hotspot catalog response is incomplete.');renderPops();}catch(e){banner('issuanceErrorBanner',errorText(e));el('voucherPop').innerHTML='<option value="">Catalog unavailable</option>';el('voucherPackageGrid').textContent='Unable to load packages. Refresh and retry.';}}
+function loginUrl(v,p){const host=String(p&&p.dnsName||'').trim(),origin=host?(/^https?:\/\//i.test(host)?host:'http://'+host):'http://login.hotspot';return origin.replace(/\/+$/,'')+'/login?username='+encodeURIComponent(v.username)+'&password='+encodeURIComponent(v.password);}
+function renderVouchers(r){const p=pop(),grid=el('voucherResultGrid');grid.innerHTML=r.vouchers.map((v,i)=>'<article class="pos-voucher"><div class="pos-qr" id="voucherQr'+i+'"></div><div><div class="small text-secondary fw-bold">VOUCHER '+(i+1)+'</div><div class="small text-secondary">'+(v.password===v.username?'PIN':'Username / PIN')+'</div><div class="pos-credential">'+escapeHtml(v.username)+'</div>'+(v.password===v.username?'':'<div class="small text-secondary mt-1">Password</div><div class="pos-credential">'+escapeHtml(v.password)+'</div>')+'<div class="small text-secondary mt-1">'+escapeHtml(v.validity||r.batch.validity||'—')+'</div></div></article>').join('');
+if(typeof window.QRCode!=='function'){banner('issuanceErrorBanner','Voucher batch issued, but QRCode library failed to load. Use the consolidated print page for QR and print.');return;}
+r.vouchers.forEach((v,i)=>new window.QRCode(el('voucherQr'+i),{text:loginUrl(v,p),width:96,height:96,correctLevel:window.QRCode.CorrectLevel.M}));}
+function preview(r){state.issued=r;el('resultBatchReference').textContent='Batch '+r.batch.batchKey;el('resultBatchSummary').textContent=r.vouchers.length+' credentials · '+r.batch.validity+' · '+r.batch.profileKey;el('printBatchMeta').textContent='Batch '+r.batch.batchKey+' · '+r.batch.validity;el('serverPrintLink').href='/reseller/hotspot/voucher-batches/'+encodeURIComponent(r.batch.batchKey)+'/print';renderVouchers(r);const m=window.bootstrap&&window.bootstrap.Modal.getOrCreateInstance(el('voucherBatchResultModal'));if(m)m.show();else banner('issuanceErrorBanner','Batch issued successfully. Open the consolidated print page to preview credentials.');}
+async function issue(){if(state.busy)return;clear('issuanceErrorBanner');clear('issuanceSuccessBanner');const p=pop(),x=pkg(),q=Number(el('voucherQuantity').value);if(!p||!Number.isSafeInteger(Number(p.id))||Number(p.id)<1||!x||!/^[1-9]\d*$/.test(String(x.id))||!Number.isSafeInteger(q)||q<1||q>500){banner('issuanceErrorBanner','Select a valid numeric POP, package and whole quantity from 1 to 500.');return;}if(!p.issuanceReady){banner('issuanceErrorBanner',p.readinessReason==='IP_POOL_NOT_CONFIGURED'?'IP_POOL_NOT_CONFIGURED — Configure the POP Hotspot IP Pool.':'HOTSPOT_BINDING_NOT_CONFIGURED — Configure an active binding.');return;}
+if(!state.pendingKey){if(!window.crypto||!window.crypto.randomUUID){banner('issuanceErrorBanner','Secure idempotency is unavailable in this browser.');return;}state.pendingKey=window.crypto.randomUUID();}
+const btn=el('btnIssueVouchers');state.busy=true;btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Connecting to RouterOS &amp; Issuing…';
+try{const response=await fetch(api+'/hotspot/voucher-batches',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','Idempotency-Key':state.pendingKey},body:JSON.stringify({popId:Number(p.id),packageId:String(x.id),quantity:q})});let result;try{result=await response.json();}catch(parseError){throw Object.assign(new Error('Server returned an unreadable response.'),{code:'INVALID_SERVER_RESPONSE'});}if(!response.ok||!result||result.success!==true)throw Object.assign(new Error(result&&result.message||'Voucher issuance failed.'),{code:result&&result.code||'ISSUANCE_FAILED',status:response.status});if(!Array.isArray(result.vouchers)||result.vouchers.length!==q||!result.batch||!result.batch.batchKey)throw Object.assign(new Error('Server response did not include the complete issued batch.'),{code:'INCOMPLETE_ISSUANCE_RESPONSE'});
+state.pendingKey=null;if(result.account&&state.catalog.account)Object.assign(state.catalog.account,result.account);account();summary();banner('issuanceSuccessBanner',result.message||'Voucher batch issued successfully.');preview(result);
+}catch(e){banner('issuanceErrorBanner',errorText(e));console.error('[Reseller vouchers] Issue failed:',{code:e.code||'NETWORK_ERROR',status:e.status||null,message:e.message});}
+finally{state.busy=false;btn.innerHTML='<i class="bi bi-lightning-charge-fill me-2"></i>Issue voucher batch';summary();}}
+function csv(){if(!state.issued)return;const rows=[['Username / PIN','Password','Package','Validity']];state.issued.vouchers.forEach(v=>rows.push([v.username,v.password,v.package_name||v.profile||state.issued.batch.profileKey,v.validity||state.issued.batch.validity]));const content=rows.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='voucher-batch-'+state.issued.batch.batchKey+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
+function print(format){document.body.classList.remove('print-thermal-58','print-thermal-80');if(format!=='a4')document.body.classList.add('print-'+format);window.print();window.setTimeout(()=>document.body.classList.remove('print-thermal-58','print-thermal-80'),1000);}
+async function history(){const body=el('voucherHistoryRows');clear('voucherHistoryError');body.innerHTML='<tr><td colspan="8">Loading voucher history…</td></tr>';try{const r=await getJson(api+'/hotspot/voucher-batches?limit=100'),items=r.batches||[];if(!items.length){body.innerHTML='<tr><td colspan="8">No voucher batches have been issued yet.</td></tr>';return;}body.innerHTML=items.map(b=>'<tr><td>'+date(b.createdAt)+'</td><td class="font-monospace">'+escapeHtml(b.batchKey)+'</td><td>POP #'+escapeHtml(b.popId)+'</td><td>'+escapeHtml(b.profileKey)+'</td><td>'+escapeHtml(b.issuedCount)+' / '+escapeHtml(b.quantity)+'</td><td>'+money(b.wholesaleTotal)+'</td><td>'+money(b.marginTotal)+'</td><td><a target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(b.batchKey)+'/print">View / Print</a></td></tr>').join('');}catch(e){body.innerHTML='<tr><td colspan="8">History could not be loaded.</td></tr>';banner('voucherHistoryError',errorText(e));}}
+document.addEventListener('DOMContentLoaded',()=>{if(el('voucherPop')){el('voucherPop').addEventListener('change',()=>{state.pendingKey=null;renderPackages();});el('voucherQuantity').addEventListener('input',()=>{state.pendingKey=null;summary();});document.querySelectorAll('[data-quantity-add]').forEach(b=>b.addEventListener('click',()=>{el('voucherQuantity').value=Math.min(500,Math.max(1,Number(el('voucherQuantity').value||0)+Number(b.dataset.quantityAdd)));state.pendingKey=null;summary();}));el('btnIssueVouchers').addEventListener('click',issue);el('exportVoucherCsv').addEventListener('click',csv);document.querySelectorAll('[data-print-format]').forEach(b=>b.addEventListener('click',()=>print(b.dataset.printFormat)));loadCatalog();}if(el('voucherHistoryRows')){el('refreshVoucherHistory').addEventListener('click',history);history();}});
 })();
