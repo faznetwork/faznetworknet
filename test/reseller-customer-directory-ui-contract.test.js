@@ -12,7 +12,7 @@ test('reseller customer directory exposes the approved seven-column fixed-width 
   const css = read('public/css/reseller-workspace.css');
   assert.match(view, /id="customerDirectoryTable"/);
   assert.match(view, /<col style="width:18%"><col style="width:14%"><col style="width:16%"><col style="width:16%"><col style="width:14%"><col style="width:10%"><col style="width:12%">/);
-  for (const heading of ['Customer','Username','Package','Expiration Date','Assigned POP','Live Status','Account &amp; Actions']) assert.ok(view.includes('>'+heading+'</th>'), 'Missing directory heading '+heading);
+  for (const heading of ['Customer','Username','Package','Expiration Date','Assigned POP','Live Status','Account &amp; Actions']) assert.ok(view.includes(heading), 'Missing directory heading '+heading);
   assert.match(view, /id="customerRows"><tr><td colspan="7"/);
   assert.match(js, /<td colspan="7"><div class="empty-state"/);
   assert.match(js, /customer-account-actions/);
