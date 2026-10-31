@@ -1,4 +1,4 @@
-console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');
+console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
 (function () {
   'use strict';
 
@@ -171,16 +171,16 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');
 
   function sharedStyles() {
     return '<style id="fazPopResellerStyles">' +
-      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:400}' +
+      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:var(--reseller-font,'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif);font-size:var(--reseller-body-size,14px);font-weight:var(--reseller-body-weight,400);line-height:var(--reseller-body-line-height,1.55)}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
-      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#eef2ff;border-color:#c7d2fe}.faz-pop-reseller-view .fpr-metric--customers{background:#ecfdf5;border-color:#a7f3d0}.faz-pop-reseller-view .fpr-metric--resellers{background:linear-gradient(135deg,#f5f3ff,#fffbeb);border-color:#ddd6fe}' +
+      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}.faz-pop-reseller-view .fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}.faz-pop-reseller-view .fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}' +
       '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}' +
       '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
       '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
       '.faz-pop-reseller-view .fpr-card-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:500}' +
       '.faz-pop-reseller-view .fpr-heading p,.faz-pop-reseller-view .fpr-muted{font-weight:400}' +
-      '.faz-pop-reseller-view .fpr-heading h1,.faz-pop-reseller-view .modal-title{font-weight:700}' +
+      '.faz-pop-reseller-view .fpr-heading h1,.faz-pop-reseller-view .modal-title{font-size:var(--reseller-heading-size,1.125rem);line-height:var(--reseller-heading-line-height,1.35);font-weight:var(--reseller-heading-weight,600);letter-spacing:var(--reseller-heading-letter-spacing,-.02em)}' +
       '.faz-pop-reseller-view .badge{font-weight:600}' +
       '.faz-pop-reseller-view .fpr-table{margin:0;min-width:980px;font-size:13px}' +
       '.faz-pop-reseller-view .fpr-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.035em;color:#64748b;white-space:nowrap;background:#f8fafc}' +
@@ -212,11 +212,11 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');
       element.remove();
     });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
-    const rows = state.pops.map(function (pop) {
+    const rows = state.pops.map(function (pop, index) {
       const owner = pop.reseller_name || '—';
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
       return '<tr>' +
-        '<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +
+        '<td class="text-secondary">' + (index + 1) + '</td>' +
         '<td><strong>' + escapeHtml(pop.name) + '</strong></td>' +
         '<td>' + escapeHtml(pop.area_zone || '—') + '</td>' +
         '<td>' + escapeHtml(owner) + '</td>' +
