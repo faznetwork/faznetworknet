@@ -66,209 +66,115 @@ test('POP directory keeps reseller scoping on the schema-compatible projection',
 });
 
 
-test('POP update persists dual-service fields and Hotspot binding when the complete schema exists', async t => {
-  const calls=[];
-  const schema={hotspot_bindings_available:true,
-    pop_columns:['id','name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','mikrotik_ip_pool','commission_type','commission_rate','status','created_at','updated_at'],
-    binding_columns:['id','pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']};
-  const client={async query(sql,values=[]){
-    calls.push({sql,values});
-    if(sql.includes('information_schema.columns')) return {rows:[schema]};
-    if(sql.startsWith('SELECT * FROM public.pops')) return {rows:[{id:4,name:'Old POP',area_zone:'North',reseller_id:null,pppoe_enabled:true,pppoe_ip_pool:'OldPool',status:'active'}]};
-    if(sql.startsWith('SELECT to_jsonb(hb) AS data')) return {rows:[{data:{status:'active',hotspot_server:'old-server',hotspot_interface:'ether2',vlan_id:20,ip_pool:'OldHotspotPool'}}]};
-    if(sql.startsWith('SELECT p.id,p.reseller_id')) return {rows:[{id:4,name:'Updated POP',pppoe_enabled:true,pppoe_ip_pool:'NewPPPoEPool',hotspot_enabled:true,hotspot_ip_pool:'NewHotspotPool'}]};
-    return {rows:[]};
-  }};
-  t.mock.method(db,'withTransaction',async callback=>callback(client));
-  const res=responseRecorder();
-  await controller.update({params:{id:'4'},body:{name:'Updated POP',pppoe_ip_pool:'NewPPPoEPool',hotspot_enabled:true,hotspot_server:'new-server',hotspot_interface:'ether3',hotspot_vlan_id:30,hotspot_ip_pool:'NewHotspotPool'}},res);
-  assert.equal(res.statusCode,200);
-  assert.equal(res.payload.success,true);
-  const popUpdate=calls.find(call=>call.sql.startsWith('UPDATE public.pops'));
-  assert.match(popUpdate.sql,/pppoe_ip_pool/);
-  assert.deepEqual(popUpdate.values,['Updated POP','NewPPPoEPool',4]);
-  assert.ok(calls.some(call=>call.sql.includes('INSERT INTO public.pop_hotspot_bindings')));
-});
-
-for (const scenario of [
-  {
-    name: 'missing Hotspot binding table',
-    schema: { hotspot_bindings_available: false, binding_columns: [] },
-    reason: 'table_missing'
-  },
-  {
-    name: 'malformed Hotspot binding schema',
-    schema: { hotspot_bindings_available: true, binding_columns: ['id', 'router_key'] },
-    reason: 'incompatible_schema'
-  }
-]) {
-  test('POP update succeeds when optional Hotspot binding storage is ' + scenario.name, async t => {
-    const calls = [];
-    const warnings = [];
-    const client = {
-      async query(sql, values = []) {
-        calls.push({ sql, values });
-        if (sql.includes('information_schema.columns')) return { rows: [scenario.schema] };
-        if (sql.startsWith('SELECT * FROM public.pops')) {
-          return { rows: [{ id: 4, name: 'Old POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'OldPool', status: 'active' }] };
-        }
-        if (sql.startsWith('SELECT p.id,p.reseller_id')) {
-          return { rows: [{ id: 4, name: 'Updated POP', area_zone: 'South', vlan_id: 30, pppoe_enabled: true, pppoe_ip_pool: 'NewPool', hotspot_enabled: false }] };
-        }
-        return { rows: [] };
-      }
-    };
-    t.mock.method(db, 'withTransaction', async callback => callback(client));
-    t.mock.method(console, 'warn', (...args) => warnings.push(args));
-    const res = responseRecorder();
-
-    await controller.update({
-      params: { id: '4' },
-      body: {
-        name: 'Updated POP',
-        area_zone: 'South',
-        vlan_id: 30,
-        hotspot_enabled: true,
-        hotspot_server: 'server',
-        hotspot_ip_pool: 'pool'
-      }
-    }, res);
-
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.payload.success, true);
-    assert.equal(res.payload.pop.name, 'Updated POP');
-    const primaryUpdate = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
-    assert.ok(primaryUpdate, 'primary POP UPDATE must execute');
-    assert.match(primaryUpdate.sql, /name/);
-    assert.ok(calls.some(call => call.sql === 'SAVEPOINT pop_hotspot_optional'));
-    assert.ok(calls.some(call => call.sql === 'RELEASE SAVEPOINT pop_hotspot_optional'));
-    assert.equal(calls.some(call => call.sql.includes('SELECT to_jsonb(hb) AS data')), false);
-    assert.ok(warnings.some(args => args[1]?.event === 'pop.hotspot_binding.skipped' && args[1]?.reason === scenario.reason));
-    assert.equal(calls.some(call => call.sql.includes('ROLLBACK TO SAVEPOINT')), false);
-  });
-}
-
-test('POP update rolls back an optional binding schema mismatch and commits the primary POP save', async t => {
+test('POP update executes the deterministic Hotspot upsert and returns the associated binding', async t => {
   const calls = [];
-  const warnings = [];
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
-      if (sql.includes('information_schema.columns')) {
-        return { rows: [{
-          hotspot_bindings_available: true,
-          binding_columns: ['id','pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']
-        }] };
-      }
       if (sql.startsWith('SELECT * FROM public.pops')) {
-        return { rows: [{ id: 9, name: 'Old POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'Pool' }] };
+        return { rows: [{ id: 4, name: 'Old POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'PPPoEPool', status: 'active' }] };
       }
-      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) {
-        const error = new Error('column hb.status does not exist');
-        error.code = '42703';
-        throw error;
-      }
+      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) return { rows: [] };
       if (sql.startsWith('SELECT p.id,p.reseller_id')) {
-        return { rows: [{ id: 9, name: 'Updated POP', area_zone: 'South', vlan_id: 20, hotspot_enabled: false }] };
+        return { rows: [{ id: 4, name: 'Updated POP', pppoe_enabled: true, pppoe_ip_pool: 'PPPoEPool', hotspot_enabled: true, hotspot_server: 'hs1', hotspot_ip_pool: 'HotspotPool', hotspot_binding_status: 'active' }] };
       }
       return { rows: [] };
     }
   };
   t.mock.method(db, 'withTransaction', async callback => callback(client));
-  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  const res = responseRecorder();
+
+  await controller.update({
+    params: { id: '4' },
+    body: {
+      name: 'Updated POP',
+      hotspot_enabled: true,
+      hotspot_server: 'hs1',
+      hotspot_interface: 'ether3',
+      hotspot_vlan_id: 30,
+      hotspot_ip_pool: 'HotspotPool'
+    }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  assert.equal(res.payload.hotspot_persisted, true);
+  assert.equal(res.payload.pop.hotspot_enabled, true);
+  assert.equal(res.payload.pop.hotspot_ip_pool, 'HotspotPool');
+
+  const upsert = calls.find(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings'));
+  assert.ok(upsert, 'direct binding upsert must execute');
+  assert.match(upsert.sql, /COALESCE\(\$2, 'core_mikrotik'\)/);
+  assert.match(upsert.sql, /ON CONFLICT \(pop_id\) DO UPDATE SET/);
+  assert.deepEqual(upsert.values, [4, null, 'hs1', 'ether3', 30, 'HotspotPool', null]);
+  assert.equal(calls.some(call => /information_schema\.columns|inspectHotspotBindingSchema/.test(call.sql)), false);
+  assert.ok(calls.some(call => call.sql === 'SAVEPOINT pop_hotspot_optional'));
+  assert.ok(calls.some(call => call.sql === 'RELEASE SAVEPOINT pop_hotspot_optional'));
+});
+
+test('POP update reports genuine Hotspot database constraint failures without hiding the failure', async t => {
+  const calls = [];
+  const errors = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.startsWith('SELECT * FROM public.pops')) {
+        return { rows: [{ id: 9, name: 'Before', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'Pool', status: 'active' }] };
+      }
+      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) return { rows: [] };
+      if (sql.includes('INSERT INTO public.pop_hotspot_bindings')) {
+        const error = new Error('hotspot binding violates check constraint');
+        error.code = '23514';
+        error.constraint = 'pop_hotspot_bindings_status_check';
+        throw error;
+      }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 9, name: 'Updated POP', hotspot_enabled: false, hotspot_ip_pool: null }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  t.mock.method(console, 'error', (...args) => errors.push(args));
   const res = responseRecorder();
 
   await controller.update({
     params: { id: '9' },
-    body: { name: 'Updated POP', area_zone: 'South', hotspot_enabled: true, hotspot_server: 'server', hotspot_ip_pool: 'pool' }
+    body: { name: 'Updated POP', hotspot_enabled: true, hotspot_server: 'bad-server', hotspot_ip_pool: 'bad-pool' }
   }, res);
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.success, true);
-  assert.ok(calls.some(call => call.sql.startsWith('UPDATE public.pops')));
+  assert.equal(res.payload.pop.name, 'Updated POP');
+  assert.equal(res.payload.hotspot_persisted, false);
   assert.ok(calls.some(call => call.sql === 'ROLLBACK TO SAVEPOINT pop_hotspot_optional'));
   assert.ok(calls.some(call => call.sql === 'RELEASE SAVEPOINT pop_hotspot_optional'));
-  assert.ok(warnings.some(args => args[1]?.event === 'pop.hotspot_binding.persistence_failed' && args[1]?.databaseCode === '42703'));
-  assert.equal(calls.some(call => call.sql.includes('FROM public.pop_hotspot_bindings hb') && call.sql.startsWith('SELECT p.id')), false);
+  assert.ok(errors.some(args => args[1]?.event === 'pop.hotspot_binding.persistence_failed' && args[1]?.databaseCode === '23514' && args[1]?.constraint === 'pop_hotspot_bindings_status_check'));
 });
 
-test('POP update uses the locked row and saves PPPoE, pool, and VLAN fields without inspecting POP columns', async t => {
+test('POP update disables an existing Hotspot binding with a direct parameterized update', async t => {
   const calls = [];
-  const schema = {
-    hotspot_bindings_available: false,
-    binding_columns: []
-  };
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
-      if (sql.includes('information_schema.columns')) return { rows: [schema] };
       if (sql.startsWith('SELECT * FROM public.pops')) {
-        return { rows: [{ id: 14, name: 'Schema POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: false, pppoe_ip_pool: null, status: 'active' }] };
+        return { rows: [{ id: 11, name: 'POP', area_zone: 'West', reseller_id: null, pppoe_enabled: true, pppoe_ip_pool: 'Pool', status: 'active' }] };
       }
-      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
-        return { rows: [{ id: 14, name: 'Schema POP', vlan_id: 33, pppoe_enabled: true, pppoe_ip_pool: 'ResidentialPool' }] };
+      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) {
+        return { rows: [{ data: { status: 'active', router_key: 'core_mikrotik', hotspot_server: 'hs1', ip_pool: 'Pool1' } }] };
       }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) return { rows: [{ id: 11, name: 'POP', hotspot_enabled: false }] };
       return { rows: [] };
     }
   };
   t.mock.method(db, 'withTransaction', async callback => callback(client));
   const res = responseRecorder();
 
-  await controller.update({
-    params: { id: '14' },
-    body: { pppoe_enabled: true, pppoe_ip_pool: 'ResidentialPool', vlan_id: 33 }
-  }, res);
+  await controller.update({ params: { id: '11' }, body: { hotspot_enabled: false } }, res);
 
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.payload.success, true);
-  const inspection = calls.find(call => call.sql.includes('information_schema.columns'));
-  assert.match(inspection.sql, /to_regclass\('public\.pop_hotspot_bindings'\)/);
-  assert.match(inspection.sql, /table_schema\s*=\s*'public'/);
-  assert.match(inspection.sql, /table_name\s*=\s*'pop_hotspot_bindings'/);
-  assert.doesNotMatch(inspection.sql, /table_name\s*=\s*'pops'/);
-  assert.doesNotMatch(inspection.sql, /table_schema\s*=\s*CURRENT_SCHEMA/);
-  const update = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
-  assert.ok(update, 'POP UPDATE statement should execute');
-  assert.deepEqual(update.values, [33, true, 'ResidentialPool', 14]);
-});
-
-
-test('POP update saves standard fields and maps legacy pool without a POP schema metadata gate', async t => {
-  const calls = [];
-  const schema = {
-    hotspot_bindings_available: false,
-    binding_columns: []
-  };
-  const client = {
-    async query(sql, values = []) {
-      calls.push({ sql, values });
-      if (sql.includes('information_schema.columns')) return { rows: [schema] };
-      if (sql.startsWith('SELECT * FROM public.pops')) {
-        return { rows: [{ id: 22, name: 'Legacy POP', area_zone: 'North', reseller_id: null, vlan_id: 10, mikrotik_ip_pool: 'OldPool', status: 'active' }] };
-      }
-      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
-        return { rows: [{ id: 22, name: 'Updated Legacy POP', vlan_id: 33, pppoe_ip_pool: 'NewPool' }] };
-      }
-      return { rows: [] };
-    }
-  };
-  t.mock.method(db, 'withTransaction', async callback => callback(client));
-  const warnings = [];
-  t.mock.method(console, 'warn', (...args) => warnings.push(args));
-  const res = responseRecorder();
-
-  await controller.update({
-    params: { id: '22' },
-    body: { name: 'Updated Legacy POP', area_zone: 'South', reseller_id: null, pppoe_enabled: true, pppoe_ip_pool: 'NewPool', vlan_id: 33 }
-  }, res);
-
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.payload.success, true);
-  const update = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
-  assert.ok(update);
-  assert.match(update.sql, /mikrotik_ip_pool/);
-  assert.doesNotMatch(update.sql, /pppoe_enabled/);
-  assert.deepEqual(update.values, ['Updated Legacy POP', 'South', null, 33, 'NewPool', 22]);
-  assert.equal(warnings.length, 1);
-  assert.equal(calls.some(call => call.sql.includes("table_name = 'pops'")), false);
+  assert.equal(res.payload.hotspot_persisted, true);
+  const disable = calls.find(call => call.sql.startsWith("UPDATE public.pop_hotspot_bindings SET status='inactive'"));
+  assert.ok(disable);
+  assert.deepEqual(disable.values, [11]);
+  assert.equal(calls.some(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings')), false);
 });
