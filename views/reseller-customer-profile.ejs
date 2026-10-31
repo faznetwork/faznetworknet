@@ -19,10 +19,10 @@
   <style>
     :root{--green:#0a3d2e;--hover:#0d4d3a;--accent:#10b981;--ink:#0f172a;--muted:#64748b;--bg:#f3f7f5}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;font-weight:400;line-height:1.55}
-    .topbar{background:linear-gradient(115deg,var(--green),var(--hover));color:#fff;padding:19px 0}.profile-brand-title{font-weight:600}
+    .topbar{background:linear-gradient(115deg,var(--green),var(--hover));color:#fff;padding:19px 0}.profile-brand-title{font-weight:600}.hero h1{font-weight:700;line-height:1.25}
     .page-wrap{max-width:1240px;margin:0 auto;padding:25px 20px 48px}
     .panel{background:#fff;border:1px solid #e2ebe6;border-radius:16px;padding:20px;box-shadow:0 4px 16px #0f172a08}
-    .section-title{font-size:1.125rem;line-height:1.35;font-weight:600;letter-spacing:-.02em;margin:0}.section-subtitle{font-size:.82rem;color:var(--muted);margin-top:4px}
+    .section-title{font-size:1.125rem;line-height:1.35;font-weight:600;letter-spacing:-.02em;margin:0}.section-subtitle{font-size:.82rem;line-height:1.5;color:#64748b;font-weight:400;margin-top:4px}.muted,.small{font-weight:400}.label{font-weight:500}.badge{font-size:11px;font-weight:500;line-height:1.35}.table tbody td{font-weight:400}
     .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
     .value{font-weight:400;margin-top:5px;overflow-wrap:anywhere}.info-cell{padding:13px;border:1px solid #edf2ef;border-radius:11px;height:100%;background:#fcfefd}
     .hero{background:linear-gradient(120deg,#0a3d2e,#0d4d3a);color:#fff;border-radius:17px;padding:23px}
@@ -43,7 +43,7 @@
     <div id="pageError" class="alert alert-danger" role="alert"></div>
     <section class="hero mb-4">
       <div class="d-flex justify-content-between gap-3 profile-heading">
-        <div><div class="small muted mb-1">CUSTOMER 360 · READ ONLY</div><h1 id="customerName" class="h3 fw-bold mb-1">Loading customer…</h1><div id="customerIdentity" class="muted small">Retrieving assigned customer profile</div></div>
+        <div><div class="small muted mb-1">CUSTOMER 360 · READ ONLY</div><h1 id="customerName" class="h3 mb-1">Loading customer…</h1><div id="customerIdentity" class="muted small">Retrieving assigned customer profile</div></div>
         <div class="text-md-end"><span id="accountStatus" class="badge text-bg-light">Loading</span><div id="liveStatus" class="small muted mt-2">Live status checking…</div></div>
       </div>
     </section>

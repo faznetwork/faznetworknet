@@ -115,3 +115,39 @@ test('reseller workspace pages share a consistent heading/body typography and co
   assert.ok(profile.includes('font-size:14px;font-weight:400;line-height:1.55'));
   assert.ok(profile.includes('.section-title{font-size:1.125rem;line-height:1.35;font-weight:600'));
 });
+
+
+test('reseller typography enforces the semantic weight hierarchy', () => {
+  const css = read('public/css/reseller-workspace.css');
+  assert.ok(css.includes('body{background:var(--fzn-bg);color:var(--fzn-ink);font-family:var(--reseller-font);font-size:14px;font-weight:400'));
+  assert.ok(css.includes('.reseller-content p,.reseller-content .form-text,.reseller-content small,.reseller-content .small,.reseller-content .text-secondary,.reseller-content .text-muted{font-family:var(--reseller-font);font-size:inherit;font-weight:400'));
+  assert.ok(css.includes('.reseller-section-heading p{font-size:.8rem;line-height:1.55;color:#64748b;font-weight:400'));
+  assert.ok(css.includes('.reseller-content label,.reseller-content .form-label{font-family:var(--reseller-font);font-weight:500}'));
+  assert.ok(css.includes('--reseller-page-title-weight:700'));
+  assert.ok(css.includes('.reseller-page-title{font-size:var(--reseller-heading-size);line-height:var(--reseller-heading-line-height);font-weight:var(--reseller-page-title-weight)'));
+  assert.ok(css.includes('.reseller-content h1,.reseller-content h2,.reseller-content h3{font-weight:600}'));
+  assert.ok(css.includes('.metric-card--pops .metric-foot,.metric-card--active .metric-foot,.metric-card--inactive .metric-foot,.metric-card--renewals .metric-foot{color:rgba(255,255,255,.82);font-weight:400}'));
+  assert.ok(css.includes('font-size:.72rem;font-weight:500;line-height:1.2;text-transform:capitalize}.pop-status-badge'));
+
+  const voucher = read('views/reseller-vouchers.ejs');
+  assert.ok(voucher.includes('.pos-kicker{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;font-weight:500'));
+  assert.ok(voucher.includes('.pos-chip{border:1px solid #cbd5e1;background:#fff;border-radius:9px;padding:8px 13px;font-weight:500}'));
+  assert.ok(voucher.includes('.pos-issue{width:100%;padding:14px;border:0;border-radius:11px;background:#16a34a;color:#fff;font-weight:600}'));
+  assert.ok(voucher.includes('.reseller-content .form-label.fw-semibold{font-weight:500}'));
+  assert.ok(voucher.includes('.pos-line .muted{font-weight:400;color:#cbd5e1}'));
+
+  const profile = read('views/reseller-customer-profile.ejs');
+  assert.ok(profile.includes('.section-subtitle{font-size:.82rem;line-height:1.5;color:#64748b;font-weight:400'));
+  assert.ok(profile.includes('.label{font-weight:500}'));
+  assert.ok(profile.includes('.hero h1{font-weight:700;line-height:1.25}'));
+  assert.doesNotMatch(profile, /class="h3 fw-bold mb-1"/);
+});
+
+test('all shared reseller stylesheet consumers use cache token 20261101-4', () => {
+  const consumers = ['reseller-dashboard.ejs','reseller-vouchers.ejs','reseller-customers.ejs','reseller-payments.ejs'];
+  for (const view of consumers) {
+    const source = read(path.join('views', view));
+    assert.match(source, /reseller-workspace\\.css\\?v=20261101-4/);
+    assert.doesNotMatch(source, /reseller-workspace\\.css\\?v=20261101-3/);
+  }
+});
