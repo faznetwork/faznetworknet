@@ -112,7 +112,8 @@ test('POP submit lifecycle blocks duplicate submissions and always restores the 
 });
 
 test('POP insert success and table reload failure are reported as separate outcomes', () => {
-  assert.ok(ui.includes("showToast(popId ? 'POP updated successfully.' : 'POP created successfully.', 'success')"));
+  assert.ok(ui.includes("showToast(popId ? 'POP and Hotspot settings updated successfully.' : 'POP created successfully.', 'success')"));
+  assert.ok(ui.includes("showToast('POP saved, but Hotspot settings were not saved. Review the Hotspot Server and IP Pool, then retry.', 'warning')"));
   assert.ok(ui.includes('const refreshed = await window.loadPopManagement();'));
   assert.ok(ui.includes('if (refreshed === false)'));
   assert.ok(ui.includes('POP was saved, but the POP table could not be refreshed.'));
