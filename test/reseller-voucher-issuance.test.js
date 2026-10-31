@@ -488,7 +488,7 @@ test('voucher history and detail project validity defensively across schema vari
   assert.equal((source.match(/COALESCE\(to_jsonb\(b\)->>'status', 'completed'\) AS status/g) || []).length, 2);
   const detailFunction = source.slice(source.indexOf('async function loadBatchDetail'), source.indexOf('async function issueBatch'));
   const listFunction = source.slice(source.indexOf('async function listBatches'), source.indexOf('async function getBatch'));
-  const batchSelects = [detailFunction, listFunction].map(section => section.match(/\`SELECT([\s\S]*?)FROM public\.reseller_voucher_batches b/)?.[1]);
+  const batchSelects = [detailFunction, listFunction].map(section => section.match(/`SELECT([\s\S]*?)FROM public\.reseller_voucher_batches b/)?.[1]);
   assert.equal(batchSelects.length, 2);
   assert.ok(batchSelects.every(Boolean), 'both history functions must expose a batch projection');
   assert.doesNotMatch(batchSelects.join('\n'), /b\.status/);
