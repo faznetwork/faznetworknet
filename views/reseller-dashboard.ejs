@@ -19,16 +19,17 @@
 <body>
   <%- include('partials/reseller-sidebar', { brandName, safeResellerName, activePath }) %>
   <div class="reseller-main">
-    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath }) %>
+    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath, billingAccount }) %>
     <main class="reseller-content">
       <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
       <section class="mb-4">
         <div class="reseller-section-heading"><div><h2>Network Overview</h2><p>Assigned POPs, subscriber activity and current-month PPPoE collections</p></div><span class="small text-secondary"><i class="bi bi-shield-check me-1"></i>Scoped to your assigned POPs</span></div>
-        <div class="row g-3">
-          <div class="col-6 col-xl-3"><article class="metric-card metric-card--pops"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-diagram-3"></i></span><span class="metric-label">Assigned POPs</span></div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your network locations</div></article></div>
-          <div class="col-6 col-xl-3"><article class="metric-card metric-card--active"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-people"></i></span><span class="metric-label">Active customers</span></div><div class="metric-value" id="metricActive">—</div><div class="metric-foot">Active and not expired</div></article></div>
-          <div class="col-6 col-xl-3"><article class="metric-card metric-card--inactive"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-person-exclamation"></i></span><span class="metric-label">Inactive / expired</span></div><div class="metric-value" id="metricInactive">—</div><div class="metric-foot">Inactive, left or expired</div></article></div>
-          <div class="col-6 col-xl-3"><article class="metric-card metric-card--renewals"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-cash-stack"></i></span><span class="metric-label">Monthly renewals</span></div><div class="metric-value" id="metricRenewals">—</div><div class="metric-foot" id="metricCollection">Collection: ৳—</div></article></div>
+        <div class="row row-cols-2 row-cols-xl-5 g-3>
+          <div class="col"><article class="metric-card metric-card--pops"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-diagram-3"></i></span><span class="metric-label">Assigned POPs</span></div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your network locations</div></article></div>
+          <div class="col"><article class="metric-card metric-card--active"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-people"></i></span><span class="metric-label">Active customers</span></div><div class="metric-value" id="metricActive">—</div><div class="metric-foot">Active and not expired</div></article></div>
+          <div class="col"><article class="metric-card metric-card--inactive"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-person-exclamation"></i></span><span class="metric-label">Inactive / expired</span></div><div class="metric-value" id="metricInactive">—</div><div class="metric-foot">Inactive, left or expired</div></article></div>
+          <div class="col"><article class="metric-card metric-card--renewals"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-cash-stack"></i></span><span class="metric-label">Monthly renewals</span></div><div class="metric-value" id="metricRenewals">—</div><div class="metric-foot" id="metricCollection">Collection: ৳—</div></article></div>
+          <div class="col"><article class="metric-card metric-card--account"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-wallet2"></i></span><span class="metric-label">ACCOUNT &amp; BALANCE</span></div><div class="metric-value" id="metricAccountBalance">৳—</div><div class="metric-foot" id="metricAccountFoot">Account status: —</div></article></div>
         </div>
       </section>
       <section class="reseller-panel reseller-assigned-pops">

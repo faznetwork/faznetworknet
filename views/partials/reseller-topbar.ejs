@@ -5,6 +5,10 @@
   </div>
   <div class="d-flex align-items-center gap-3">
     <span class="reseller-user-chip"><i class="bi bi-person-circle"></i><span><%= safeResellerName %></span></span>
+    <% if (typeof billingAccount !== 'undefined' && billingAccount) { %>
+      <% if (billingAccount.billing_mode === 'prepaid') { %><span class="badge rounded-pill text-bg-success">Wallet: ৳<%= Number(billingAccount.wallet_balance).toFixed(2) %></span>
+      <% } else if (billingAccount.billing_mode === 'postpaid') { %><span class="badge rounded-pill text-bg-success">Available Credit: ৳<%= Number(billingAccount.availableCredit).toFixed(2) %> | Due: ৳<%= Number(billingAccount.receivable_balance).toFixed(2) %></span><% } %>
+    <% } %>
     <button id="logoutButton" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-box-arrow-right me-1"></i><span class="d-none d-sm-inline">Sign out</span></button>
   </div>
 </header>

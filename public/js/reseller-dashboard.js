@@ -12,6 +12,13 @@
       document.getElementById('metricInactive').textContent = metrics.inactiveExpiredCustomerCount ?? 0;
       document.getElementById('metricRenewals').textContent = metrics.monthlyRenewalCount ?? 0;
       document.getElementById('metricCollection').textContent = 'Collection: ' + money(metrics.monthlyCollectionAmount);
+      const account = overview.billingAccount || {};
+      const prepaid = account.billing_mode === 'prepaid';
+      const amount = prepaid ? account.wallet_balance : account.availableCredit;
+      document.getElementById('metricAccountBalance').textContent = amount == null ? 'Unavailable' : money(amount);
+      document.getElementById('metricAccountFoot').textContent = prepaid
+        ? 'Status: ' + (account.account_status || 'Unknown')
+        : 'Credit Limit: ' + money(account.credit_limit);
       const pops = overview.pops || [];
       document.getElementById('popCount').textContent = pops.length + ' POP' + (pops.length === 1 ? '' : 's');
       if (!pops.length) {

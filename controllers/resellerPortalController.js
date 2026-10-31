@@ -27,6 +27,21 @@ async function overview(req, res) {
   try {
     const popIds = resellerPopIds(req);
     const resellerId = Number(req.auth?.resellerId);
+    if (!Number.isSafeInteger(resellerId) || resellerId < 1) throw Object.assign(new Error('Verified reseller identity is required.'), { statusCode: 403 });
+    const billingResult = await db.query(
+      'SELECT id,reseller_id,billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status FROM public.reseller_billing_accounts WHERE reseller_id=$1 LIMIT 1',
+      [resellerId]
+    );
+    const billingRow = billingResult.rows?.[0];
+    if (!billingRow) throw Object.assign(new Error('Reseller billing account is not configured.'), { statusCode: 409 });
+    const billingAccount = {
+      id: String(billingRow.id), billing_mode: String(billingRow.billing_mode),
+      wallet_balance: String(billingRow.wallet_balance ?? '0.00'),
+      credit_limit: String(billingRow.credit_limit ?? '0.00'),
+      receivable_balance: String(billingRow.receivable_balance ?? '0.00'),
+      availableCredit: (Number(billingRow.credit_limit || 0) - Number(billingRow.receivable_balance || 0)).toFixed(2),
+      currency: String(billingRow.currency || 'BDT'), account_status: String(billingRow.account_status || 'unknown')
+    };
     const popResult = await db.query(
       'SELECT id, name, area_zone, status, vlan_id, pppoe_enabled, pppoe_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
       [resellerId]
@@ -80,10 +95,39 @@ async function overview(req, res) {
         monthlyRenewalCount: Number(payments.renewal_count || 0),
         monthlyCollectionAmount: String(payments.collection_amount || '0.00')
       },
-      pops: popResult.rows
+      pops: popResult.rows,
+      billingAccount, walletBalance: billingAccount.wallet_balance,
+      creditLimit: billingAccount.credit_limit, receivableBalance: billingAccount.receivable_balance,
+      availableCredit: billingAccount.availableCredit
     });
   } catch (error) {
     return handleError(res, error, 'Overview');
+  }
+}
+
+async function renderDashboard(req, res) {
+  try {
+    const resellerId = Number(req.auth?.resellerId);
+    if (!Number.isSafeInteger(resellerId) || resellerId < 1) throw Object.assign(new Error('Verified reseller identity is required.'), { statusCode: 403 });
+    const result = await db.query(
+      'SELECT id,reseller_id,billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status FROM public.reseller_billing_accounts WHERE reseller_id=$1 LIMIT 1',
+      [resellerId]
+    );
+    const row = result.rows?.[0];
+    if (!row) throw Object.assign(new Error('Reseller billing account is not configured.'), { statusCode: 409 });
+    const billingAccount = {
+      id:String(row.id), billing_mode:String(row.billing_mode), wallet_balance:String(row.wallet_balance ?? '0.00'),
+      credit_limit:String(row.credit_limit ?? '0.00'), receivable_balance:String(row.receivable_balance ?? '0.00'),
+      availableCredit:(Number(row.credit_limit || 0)-Number(row.receivable_balance || 0)).toFixed(2),
+      currency:String(row.currency || 'BDT'), account_status:String(row.account_status || 'unknown')
+    };
+    res.set('Cache-Control','no-store, no-cache, must-revalidate, private');
+    return res.render('reseller-dashboard',{title:'Network Overview · Reseller Workspace',
+      resellerName:req.session.auth?.name||req.session.resellerName||'Reseller',
+      activePath:req.path,currentPath:req.path,billingAccount});
+  } catch(error) {
+    console.error('[Reseller Portal] Dashboard billing snapshot failed:',error);
+    return res.status(error.statusCode||503).send(error.statusCode?error.message:'Reseller dashboard is temporarily unavailable.');
   }
 }
 
@@ -248,4 +292,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, listCustomers, packages, createCustomer, getCustomer, liveSession, paymentHistory };
+module.exports = { overview, renderDashboard, listCustomers, packages, createCustomer, getCustomer, liveSession, paymentHistory };
