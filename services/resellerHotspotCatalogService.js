@@ -84,10 +84,11 @@ async function getCatalog(resellerIdValue) {
 
     const popIds = pops.map(pop => pop.id);
     const bindingResult = await client.query(
-      `SELECT id, pop_id, status, ip_pool,
+      `SELECT id, pop_id, status, is_active, ip_pool,
               COALESCE(NULLIF(to_jsonb(b)->>'dns_name',''), NULLIF(to_jsonb(b)->>'hotspot_dns_name','')) AS dns_name
        FROM public.pop_hotspot_bindings b
-       WHERE pop_id = ANY($1::integer[]) AND status='active'
+       WHERE pop_id = ANY($1::integer[])
+         AND COALESCE(NULLIF(to_jsonb(b)->>'status','')='active',(to_jsonb(b)->>'is_active')::boolean,FALSE)
        ORDER BY pop_id ASC, id ASC`,
       [popIds]
     );
