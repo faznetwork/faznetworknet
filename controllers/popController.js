@@ -180,15 +180,9 @@ async function validateResellerOwner(resellerId) {
   if (!owner.rows.length) throw serviceError('Selected reseller does not exist or is inactive.');
 }
 
-async function inspectPopSchema(client) {
+async function inspectHotspotBindingSchema(client) {
   const result = await client.query(`SELECT
     to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS hotspot_bindings_available,
-    COALESCE((
-      SELECT array_agg(column_name)
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'pops'
-    ), ARRAY[]::text[]) AS pop_columns,
     COALESCE((
       SELECT array_agg(column_name)
       FROM information_schema.columns
@@ -196,16 +190,10 @@ async function inspectPopSchema(client) {
         AND table_name = 'pop_hotspot_bindings'
     ), ARRAY[]::text[]) AS binding_columns`);
   const schema = result.rows?.[0] || {};
-  return { hotspotBindingsAvailable: schema.hotspot_bindings_available === true,
-    popColumns: new Set(schema.pop_columns || []), bindingColumns: new Set(schema.binding_columns || []) };
-}
-
-function requirePopColumns(schema, fields) {
-  const missing = fields.filter(field => !schema.popColumns.has(field));
-  if (missing.length) throw serviceError(
-    'POP schema is not ready. Missing required POP column(s): ' + missing.join(', ') + '. Apply the approved dual-service POP migration before saving these fields.',
-    503, 'POP_SCHEMA_NOT_READY'
-  );
+  return {
+    hotspotBindingsAvailable: schema.hotspot_bindings_available === true,
+    bindingColumns: new Set(schema.binding_columns || [])
+  };
 }
 
 function requireHotspotBindingSchema(schema, fields) {
@@ -221,7 +209,7 @@ function requireHotspotBindingSchema(schema, fields) {
 }
 
 async function upsertHotspotBinding(client, popId, config, schema) {
-  const bindingSchema = schema || await inspectPopSchema(client);
+  const bindingSchema = schema || await inspectHotspotBindingSchema(client);
   if (!config.enabled) {
     requireHotspotBindingSchema(bindingSchema, ['pop_id','status','updated_at']);
     await client.query("UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status<>'inactive'", [popId]);
@@ -239,7 +227,7 @@ async function upsertHotspotBinding(client, popId, config, schema) {
 }
 
 async function readPop(client, id, schema) {
-  const popSchema = schema || await inspectPopSchema(client);
+  const popSchema = schema || await inspectHotspotBindingSchema(client);
   const hotspotJoin = popSchema.hotspotBindingsAvailable
     ? `LEFT JOIN LATERAL (SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb
         WHERE to_jsonb(hb)->>'pop_id'=p.id::text LIMIT 1) hb ON TRUE`
@@ -299,39 +287,95 @@ async function update(req, res) {
     const data = parse(req.body, true);
     await validateResellerOwner(data.reseller_id);
     const pop = await db.withTransaction(async client => {
-      const schema = await inspectPopSchema(client);
       const currentResult = await client.query('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',[id]);
       const current = currentResult.rows[0];
       if (!current) return null;
-      const merged = { ...current, ...data };
       const effectivePppoePool = data.pppoe_ip_pool !== undefined
         ? data.pppoe_ip_pool
         : (current.pppoe_ip_pool || current.mikrotik_ip_pool || null);
       if (data.pppoe_enabled === true && !effectivePppoePool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
-      if (data.pppoe_ip_pool !== undefined && merged.pppoe_enabled && !effectivePppoePool) throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
+      if (data.pppoe_ip_pool !== undefined && (data.pppoe_enabled ?? current.pppoe_enabled ?? true) && !effectivePppoePool) {
+        throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
+      }
       const fields=['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
       const requestedUpdates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
-      const updates=requestedUpdates.filter(field=>{
-        if(field==='pppoe_enabled' && !schema.popColumns.has('pppoe_enabled')){
-          console.warn('[POP] Skipping optional pppoe_enabled update because public.pops.pppoe_enabled is absent; other supported POP fields will still be saved.',{popId:id});
-          return false;
+      const updateColumns=[];
+      const values=[];
+      for (const field of requestedUpdates) {
+        let column=field;
+        if (field==='pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current,'pppoe_enabled')) {
+          console.warn('[POP] Skipping optional pppoe_enabled update because the locked POP row has no such column; other submitted POP fields will still be saved.',{popId:id});
+          continue;
         }
-        return true;
-      });
-      const updateColumns=updates.map(field=>{
-        if(field==='pppoe_ip_pool' && !schema.popColumns.has('pppoe_ip_pool') && schema.popColumns.has('mikrotik_ip_pool')) return 'mikrotik_ip_pool';
-        return field;
-      });
-      if(updates.length){
-        requirePopColumns(schema,updateColumns);
-        const values=updates.map(field=>data[field]); values.push(id);
-        const assignments=updateColumns.map((column,index)=>column+'=$'+(index+1));
-        await client.query('UPDATE public.pops SET '+assignments.join(',')+',updated_at=NOW() WHERE id=$'+values.length,values);
+        if (field==='pppoe_ip_pool' && !Object.prototype.hasOwnProperty.call(current,'pppoe_ip_pool') &&
+            Object.prototype.hasOwnProperty.call(current,'mikrotik_ip_pool')) column='mikrotik_ip_pool';
+        updateColumns.push(column);
+        values.push(data[field]);
+      }
+      if (updateColumns.length) {
+        const assignments=updateColumns.map((column,index)=>column+'=
+    if(!pop) return res.status(404).json({success:false,message:'POP not found.'});
+    return res.json({success:true,pop});
+  } catch(error) {
+    return fail(res,error,'Update');
+  }
+}
+
+async function updateStatus(req, res) {
+  const id = validId(req.params.id);
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid POP ID.' });
+  if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive.' });
+  try {
+    const result = await db.query(
+      'UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',
+      [status,id]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop: result.rows[0], message: 'POP status updated. Customer records were preserved.' });
+  } catch (error) {
+    return fail(res, error, 'Status update');
+  }
+}
+
+module.exports = { options, list, create, update, updateStatus };
++(index+1));
+        if (Object.prototype.hasOwnProperty.call(current,'updated_at')) assignments.push('updated_at=NOW()');
+        values.push(id);
+        await client.query('UPDATE public.pops SET '+assignments.join(',')+' WHERE id=
+    if(!pop) return res.status(404).json({success:false,message:'POP not found.'});
+    return res.json({success:true,pop});
+  } catch(error) {
+    return fail(res,error,'Update');
+  }
+}
+
+async function updateStatus(req, res) {
+  const id = validId(req.params.id);
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid POP ID.' });
+  if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive.' });
+  try {
+    const result = await db.query(
+      'UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',
+      [status,id]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop: result.rows[0], message: 'POP status updated. Customer records were preserved.' });
+  } catch (error) {
+    return fail(res, error, 'Status update');
+  }
+}
+
+module.exports = { options, list, create, update, updateStatus };
++values.length,values);
       }
       const hotspotFields=['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
       const hotspotConfigChanged=hotspotFields.some(field=>Object.prototype.hasOwnProperty.call(data,field));
+      let bindingSchema=null;
       if(hotspotConfigChanged){
-        requireHotspotBindingSchema(schema,['pop_id','status']);
+        bindingSchema=await inspectHotspotBindingSchema(client);
+        requireHotspotBindingSchema(bindingSchema,['pop_id','status']);
         const bindingResult=await client.query('SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',[id]);
         const binding=bindingResult.rows[0]?.data||{};
         const hasField=field=>Object.prototype.hasOwnProperty.call(data,field);
@@ -342,9 +386,9 @@ async function update(req, res) {
           vlanId:hasField('hotspot_vlan_id')?data.hotspot_vlan_id:binding.vlan_id,
           pool:hasField('hotspot_ip_pool')?data.hotspot_ip_pool:binding.ip_pool
         };
-        await upsertHotspotBinding(client,id,config,schema);
+        await upsertHotspotBinding(client,id,config,bindingSchema);
       }
-      return readPop(client,id,schema);
+      return readPop(client,id,bindingSchema || undefined);
     });
     if(!pop) return res.status(404).json({success:false,message:'POP not found.'});
     return res.json({success:true,pop});
