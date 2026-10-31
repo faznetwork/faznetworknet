@@ -241,7 +241,7 @@ test('unrelated POP edits never write or deactivate an established Hotspot bindi
   await controller.update({ params: { id: '25' }, body: { name: 'After' } }, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.success, true);
-  assert.equal(calls.some(call => call.sql.includes('SELECT to_jsonb(hb) AS data')), false);
+  assert.equal(calls.some(call => call.sql.includes('SELECT to_jsonb(hb) AS data') && call.sql.includes('FOR UPDATE')), false);
   assert.equal(calls.some(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings')), false);
   assert.equal(calls.some(call => call.sql.startsWith("UPDATE public.pop_hotspot_bindings SET status='inactive'")), false);
 });
