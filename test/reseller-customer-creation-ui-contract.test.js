@@ -76,3 +76,13 @@ test('customer submit is not gated by asynchronous catalog loading and exposes r
   assert.match(script, /button\.disabled=false/);
   assert.match(script, /workspace dependency did not load/);
 });
+
+test('customer onboarding wires submit dispatch and clears stale catalogue failure once usable data is present', () => {
+  assert.match(script, /form\.addEventListener\('submit',submitCustomer\)/);
+  assert.match(script, /function catalogReady\(\)\{return activePops\(\)\.length>0&&state\.packages\.length>0;\}/);
+  assert.match(script, /if\(catalogReady\(\)\)[\s\S]*?state\.catalogStatus='ready'[\s\S]*?state\.catalogErrors=\[\]/);
+  assert.match(script, /if\(retry\)retry\.hidden=ready/);
+  assert.match(script, /newCustomerPackage'\)\.addEventListener\('change',updateExpiryPreview\)/);
+  assert.match(script, /byId\('newCustomerExpiryDate'\)\.value=expiry/);
+  assert.match(script, /payload\.expirationDate=expiry/);
+});

@@ -246,7 +246,7 @@ test('reseller portal exposes only voucher issuance as a write and keeps batch h
 test('reseller history SQL is always scoped by the authenticated reseller id', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'services', 'resellerVoucherIssuanceService.js'), 'utf8');
   assert.match(source, /WHERE b\.reseller_id=\$1/);
-  assert.match(source, /WHERE batch_key=\$1::uuid AND reseller_id=\$2/);
+  assert.match(source, /WHERE b\.batch_key=\$1::uuid AND b\.reseller_id=\$2/);
 });
 
 test('voucher batch history selects the canonical UUID reference and remains reseller-scoped', async t => {
