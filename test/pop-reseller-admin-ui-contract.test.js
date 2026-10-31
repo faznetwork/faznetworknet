@@ -287,7 +287,7 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   assert.ok(workspaceCss.includes('body{background:var(--fzn-bg);color:var(--fzn-ink);font-family:var(--reseller-font);font-size:14px;font-weight:400'));
   assert.ok(workspaceCss.includes('.metric-label{font-size:.75rem;color:var(--fzn-muted);font-weight:500'));
   assert.ok(workspaceCss.includes('.metric-value{min-width:0;overflow-wrap:anywhere;font-size:1.65rem;line-height:1.25;font-weight:700'));
-  assert.ok(workspaceCss.includes('.table thead th{font-size:.69rem;font-weight:600'));
+  assert.ok(workspaceCss.includes('.table thead th{font-weight:600;font-size:.69rem'));
   assert.ok(workspaceCss.includes('.table tbody td{vertical-align:middle;font-size:.82rem;font-weight:400'));
   const profile = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-customer-profile.ejs'), 'utf8');
   assert.ok(profile.includes('.section-title{font-size:1rem;font-weight:600'));
