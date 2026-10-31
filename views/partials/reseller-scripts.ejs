@@ -2,8 +2,8 @@
 const safeActivePath=typeof activePath !== 'undefined' ? String(activePath || '') : '';
 %>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/reseller-workspace.js?v=20261031-6"></script>
-<% if(safeActivePath==='/reseller/dashboard'){ %><script src="/js/reseller-dashboard.js?v=20261031-7"></script><% } %>
-<% if(safeActivePath.startsWith('/reseller/vouchers/')){ %><script src="/js/reseller-vouchers.js?v=20261031-7"></script><% } %>
-<% if(safeActivePath.startsWith('/reseller/customers')){ %><script src="/js/reseller-customers.js?v=20261101-1"></script><% } %>
-<% if(safeActivePath==='/reseller/payments'){ %><script src="/js/reseller-payments.js?v=20261031-6"></script><% } %>
+<script src="/js/reseller-workspace.js?v=20261101-2"></script>
+<% if(safeActivePath==='/reseller/dashboard'){ %><script src="/js/reseller-dashboard.js?v=20261101-2"></script><% } %>
+<% if(safeActivePath.startsWith('/reseller/vouchers/')){ %><script src="/js/reseller-vouchers.js?v=20261101-2"></script><% } %>
+<% if(safeActivePath.startsWith('/reseller/customers')){ %><script src="/js/reseller-customers.js?v=20261101-2"></script><% } %>
+<% if(safeActivePath==='/reseller/payments'){ %><script src="/js/reseller-payments.js?v=20261101-2"></script><% } %>
