@@ -30,6 +30,7 @@ test('reseller workspace pages use the shared shell and separated page assets', 
   }
   assert.match(read('public/css/reseller-workspace.css'), /--fzn-green:#0a3d2e/);
   assert.ok(read('public/css/reseller-workspace.css').includes(`--reseller-font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`));
+  assert.ok(read('public/css/reseller-workspace.css').includes('family=Inter'));
   assert.ok(!read('public/css/reseller-workspace.css').includes('Plus+Jakarta+Sans'));
   assert.ok(read('public/js/reseller-workspace.js').includes("Object.assign(document.body.style,{position:'fixed'"));
   assert.ok(read('public/js/reseller-workspace.js').includes('window.scrollTo(0,lockedScrollY)'));
