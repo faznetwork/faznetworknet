@@ -32,10 +32,10 @@ test('customer directory preserves customer profile routing and live-status look
 
 test('POP directory serial is a 1-based row index and summary colors are flat surfaces', () => {
   const popUi = read('public/js/pop-reseller-admin.js');
-  assert.match(popUi, /state\\.pops\\.map\\(function \\(pop, index\\)/);
-  assert.match(popUi, /\\(index \\+ 1\\)/);
-  assert.match(popUi, /fpr-metric--pops\\{background:#f0f7ff;border-color:#d0e2ff\\}/);
-  assert.match(popUi, /fpr-metric--customers\\{background:#f0fdf4;border-color:#bbf7d0\\}/);
-  assert.match(popUi, /fpr-metric--resellers\\{background:#faf5ff;border-color:#e9d5ff\\}/);
-  assert.doesNotMatch(popUi, /fpr-metric--(?:pops|customers|resellers)\\{[^}]*linear-gradient/i);
+  assert.ok(popUi.includes('state.pops.map(function (pop, index) {'));
+  assert.ok(popUi.includes('(index + 1)'));
+  assert.ok(popUi.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
+  assert.ok(popUi.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
+  assert.ok(popUi.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.ok(!/fpr-metric--(?:pops|customers|resellers)\{[^}]*linear-gradient/i.test(popUi));
 });
