@@ -89,7 +89,9 @@ test('customer onboarding wires submit dispatch and clears stale catalogue failu
 
 
 test('expiry hidden field is canonical strict ISO while the preview remains localized', () => {
-  assert.ok(script.includes("function normalizeIsoDate(value){const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);"));
+  assert.ok(script.includes('function normalizeIsoDate(value){'));
+  assert.ok(script.includes('days=[31,leap?29:28'));
+  assert.ok(script.includes("return String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');"));
   assert.ok(script.includes("const expiry=normalizeIsoDate(connection&&option?.value?addCalendarMonths(connection,months):'');"));
   assert.ok(script.includes("byId('newCustomerExpiryDate').value=expiry;"));
   assert.ok(script.includes("byId('newCustomerExpiryPreview').value=expiry?formatDate(expiry):"));
