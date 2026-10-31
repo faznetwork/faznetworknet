@@ -69,9 +69,17 @@ function assertSameRequest(existing, input) {
 async function loadBatchDetail(client, resellerId, batchKey) {
   const batchResult = await client.query(
     `SELECT b.id, b.batch_key, b.reseller_id, b.pop_id, b.billing_account_id,
-            b.package_id, b.profile_key, pkg.validity AS validity, b.quantity,
-            b.retail_unit_price, b.wholesale_unit_price, b.retail_total,
-            b.wholesale_total, b.margin_total, b.billing_mode, b.status, b.created_at
+            b.package_id, b.profile_key,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'duration',''),
+              NULLIF(to_jsonb(pkg)->>'validity_days',''),
+              NULLIF(to_jsonb(pkg)->>'validity_period',''),
+              'N/A'
+            ) AS validity,
+            b.quantity,b.retail_unit_price,b.wholesale_unit_price,b.retail_total,
+            b.wholesale_total,b.margin_total,b.billing_mode,b.status,b.created_at
      FROM public.reseller_voucher_batches b
      LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
      WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
@@ -347,14 +355,25 @@ async function listBatches(resellerIdValue, limitValue = 50) {
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(Number(limitValue)) ? Number(limitValue) : 50));
   const result = await db.query(
     `SELECT b.id,b.batch_key AS batch_key,b.pop_id,b.package_id,b.profile_key,
-            pkg.validity AS validity,b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'duration',''),
+              NULLIF(to_jsonb(pkg)->>'validity_days',''),
+              NULLIF(to_jsonb(pkg)->>'validity_period',''),
+              'N/A'
+            ) AS validity,
+            b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
             b.billing_mode,b.status,b.created_at,
-            COUNT(i.id)::int AS issued_count
+            COALESCE(items.issued_count,0)::int AS issued_count
      FROM public.reseller_voucher_batches b
      LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
-     LEFT JOIN public.reseller_voucher_issuance_items i ON i.batch_id=b.id
+     LEFT JOIN (
+       SELECT batch_id,COUNT(*)::int AS issued_count
+       FROM public.reseller_voucher_issuance_items
+       GROUP BY batch_id
+     ) items ON items.batch_id=b.id
      WHERE b.reseller_id=$1
-     GROUP BY b.id,pkg.validity
      ORDER BY b.created_at DESC,b.id DESC
      LIMIT $2`,
     [resellerId,limit]
