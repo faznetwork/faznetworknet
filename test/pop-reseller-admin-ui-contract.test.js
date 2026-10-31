@@ -196,7 +196,7 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('name="pppoe_enabled" id="fprPppoeEnabled"'));
   assert.ok(ui.includes('name="hotspot_enabled" id="fprHotspotEnabled"'));
   assert.ok(!ui.includes('name="mikrotik_ip_pool" id="fprPopIpPool"'));
-  assert.ok(ui.includes("const pools = await apiRequest('/ip-pools');"));
+  assert.ok(ui.includes("const pools = await apiRequest('/ip-pools').catch(function (error) {"));
   assert.ok(ui.includes("item.element.innerHTML = '<option value=\"\">None / Unassigned</option>';"));
   assert.ok(ui.includes("await loadPopIpPools(form, pop);"));
   assert.ok(ui.includes('item.element.value = item.value;'));
@@ -240,6 +240,7 @@ test('optional POP IP Pool lookup failure is structured, non-blocking, and does 
   assert.ok(lookup.includes("popId: pop && pop.id != null ? String(pop.id) : null"));
   assert.ok(lookup.includes('current assignment (pool list unavailable)'));
   assert.ok(lookup.includes('state.ipPools = [];'));
+  assert.ok(lookup.includes(".catch(function (error) {"));
   assert.ok(!lookup.includes('showToast('));
   assert.ok(lookup.includes('finally {'));
 });
@@ -261,6 +262,7 @@ test('optional POP IP Pool lookup defaults to an empty list and only warns', () 
   assert.ok(start >= 0 && end > start);
   const lookup = ui.slice(start, end);
   assert.ok(lookup.includes('state.ipPools = [];'));
+  assert.ok(lookup.includes(".catch(function (error) {"));
   assert.ok(lookup.includes("event: 'pop_ip_pool_lookup_failed'"));
   assert.ok(lookup.includes("console.warn('[POP Admin UI] Optional MikroTik IP Pool lookup failed.'"));
   assert.ok(!lookup.includes('showToast('));
