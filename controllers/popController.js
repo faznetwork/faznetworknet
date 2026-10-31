@@ -290,34 +290,69 @@ async function update(req, res) {
       const currentResult = await client.query('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',[id]);
       const current = currentResult.rows[0];
       if (!current) return null;
+
       const effectivePppoePool = data.pppoe_ip_pool !== undefined
         ? data.pppoe_ip_pool
         : (current.pppoe_ip_pool || current.mikrotik_ip_pool || null);
-      if (data.pppoe_enabled === true && !effectivePppoePool) throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
-      if (data.pppoe_ip_pool !== undefined && (data.pppoe_enabled ?? current.pppoe_enabled ?? true) && !effectivePppoePool) {
+      if (data.pppoe_enabled === true && !effectivePppoePool) {
+        throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
+      }
+      if (data.pppoe_ip_pool !== undefined &&
+          (data.pppoe_enabled ?? current.pppoe_enabled ?? true) && !effectivePppoePool) {
         throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
       }
-      const fields=['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
-      const requestedUpdates=fields.filter(field=>Object.prototype.hasOwnProperty.call(data,field));
-      const updateColumns=[];
-      const values=[];
+
+      const fields = ['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
+      const requestedUpdates = fields.filter(field => Object.prototype.hasOwnProperty.call(data, field));
+      const updateColumns = [];
+      const values = [];
       for (const field of requestedUpdates) {
-        let column=field;
-        if (field==='pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current,'pppoe_enabled')) {
-          console.warn('[POP] Skipping optional pppoe_enabled update because the locked POP row has no such column; other submitted POP fields will still be saved.',{popId:id});
+        let column = field;
+        if (field === 'pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current, 'pppoe_enabled')) {
+          console.warn('[POP] Skipping optional pppoe_enabled update because the locked POP row has no such column; other submitted POP fields will still be saved.', { popId: id });
           continue;
         }
-        if (field==='pppoe_ip_pool' && !Object.prototype.hasOwnProperty.call(current,'pppoe_ip_pool') &&
-            Object.prototype.hasOwnProperty.call(current,'mikrotik_ip_pool')) column='mikrotik_ip_pool';
+        if (field === 'pppoe_ip_pool' &&
+            !Object.prototype.hasOwnProperty.call(current, 'pppoe_ip_pool') &&
+            Object.prototype.hasOwnProperty.call(current, 'mikrotik_ip_pool')) {
+          column = 'mikrotik_ip_pool';
+        }
         updateColumns.push(column);
         values.push(data[field]);
       }
+
       if (updateColumns.length) {
-        const assignments=updateColumns.map((column,index)=>column+'=
-    if(!pop) return res.status(404).json({success:false,message:'POP not found.'});
-    return res.json({success:true,pop});
-  } catch(error) {
-    return fail(res,error,'Update');
+        const dollar = String.fromCharCode(36);
+        const assignments = updateColumns.map((column, index) => column + '=' + dollar + (index + 1));
+        if (Object.prototype.hasOwnProperty.call(current, 'updated_at')) assignments.push('updated_at=NOW()');
+        values.push(id);
+        await client.query('UPDATE public.pops SET ' + assignments.join(',') + ' WHERE id=' + dollar + values.length, values);
+      }
+
+      const hotspotFields = ['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
+      const hotspotConfigChanged = hotspotFields.some(field => Object.prototype.hasOwnProperty.call(data, field));
+      let bindingSchema = null;
+      if (hotspotConfigChanged) {
+        bindingSchema = await inspectHotspotBindingSchema(client);
+        requireHotspotBindingSchema(bindingSchema, ['pop_id','status']);
+        const bindingResult = await client.query('SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE', [id]);
+        const binding = bindingResult.rows[0]?.data || {};
+        const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
+        const config = {
+          enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
+          server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
+          interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
+          vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
+          pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
+        };
+        await upsertHotspotBinding(client, id, config, bindingSchema);
+      }
+      return readPop(client, id, bindingSchema || undefined);
+    });
+    if (!pop) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop });
+  } catch (error) {
+    return fail(res, error, 'Update');
   }
 }
 
