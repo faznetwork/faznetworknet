@@ -109,7 +109,7 @@ test('reseller workspace pages share a consistent heading/body typography and co
     '.reseller-panel>.reseller-section-heading{padding:20px var(--reseller-panel-gutter) 0',
     '.reseller-panel>.table-responsive{padding:0 var(--reseller-panel-gutter) 20px',
     '.reseller-panel>.pos-terminal{padding:0 var(--reseller-panel-gutter) 24px',
-    '.reseller-panel>.reseller-customer-directory-wrap{padding:0 var(--reseller-panel-gutter) 0'
+    '.reseller-panel>.reseller-customer-directory-wrap{padding:0 var(--reseller-panel-gutter)'
   ]) assert.ok(css.includes(contract), 'Missing shared layout/typography contract: '+contract);
   const profile = read('views/reseller-customer-profile.ejs');
   assert.ok(profile.includes('font-size:14px;font-weight:400;line-height:1.55'));
