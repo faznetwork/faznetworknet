@@ -495,7 +495,7 @@ test('POP update no longer depends on POP information-schema metadata for standa
   assert.equal(source.includes('requirePopColumns'), false);
   const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
   assert.ok(update.includes('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE'));
-  assert.ok(update.includes('const updateColumns=[]'));
+  assert.ok(update.includes('const updateColumns = []'));
   assert.ok(update.includes("field==='pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current,'pppoe_enabled')"));
   assert.ok(update.includes('console.warn('));
   assert.ok(update.includes('mikrotik_ip_pool'));
