@@ -87,7 +87,7 @@ test('Customer directory and Customer 360 add only read-only POP/reseller joins'
 
 
 test('POP create serializes every API contract field, including an explicit reseller assignment', () => {
-  const fields = ['name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled', 'pppoe_ip_pool', 'hotspot_enabled', 'hotspot_server', 'hotspot_interface', 'hotspot_vlan_id', 'hotspot_ip_pool', 'commission_type', 'commission_rate'];
+  const fields = ['name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled', 'pppoe_ip_pool', 'commission_type', 'commission_rate'];
   for (const field of fields) {
     assert.match(ui, new RegExp('\\b' + field + ':'));
   }
@@ -204,7 +204,10 @@ test('POP IP Pool editor loads configured MikroTik pools dynamically and preserv
   assert.ok(ui.includes('current assignment (not in active pool list)'));
   assert.ok(ui.includes('state.ipPools = [];'));
   assert.ok(ui.includes('pppoe_ip_pool: pppoePoolInput && pppoePoolInput.value ? pppoePoolInput.value : null'));
-  assert.ok(ui.includes('hotspot_ip_pool: hotspotPoolInput && hotspotPoolInput.value ? hotspotPoolInput.value : null'));
+  assert.ok(ui.includes('payload.hotspot_ip_pool = currentHotspot.pool;'));
+  assert.ok(ui.includes('payload.hotspot_server = currentHotspot.server;'));
+  assert.ok(ui.includes('payload.hotspot_interface = currentHotspot.interface;'));
+  assert.ok(ui.includes('payload.hotspot_vlan_id = currentHotspot.vlanId;'));
   assert.ok(ui.includes('pop.hotspot_ip_pool'));
   assert.ok(ui.includes('pop.pppoe_ip_pool'));
   assert.ok(ui.includes('pop.hotspot_enabled'));
@@ -303,7 +306,7 @@ test('POP save surfaces Hotspot persistence failures and refreshes the directory
   assert.ok(ui.includes('response.hotspot_persisted === false'));
   assert.ok(ui.includes('Hotspot settings were not saved'));
   assert.ok(ui.includes('const refreshed = await window.loadPopManagement();'));
-  assert.ok(ui.includes('hotspot_vlan_id: hotspotVlanInput && hotspotVlanInput.value ? Number(hotspotVlanInput.value) : null'));
+  assert.ok(ui.includes('payload.hotspot_vlan_id = currentHotspot.vlanId;'));
 });
 
 test('Admin and shared portal shells use Inter as the UI font', () => {
