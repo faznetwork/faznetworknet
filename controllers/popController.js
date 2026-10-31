@@ -230,7 +230,7 @@ async function readPop(client, id) {
     COALESCE(NULLIF(hb.data->>'status','')='active',(hb.data->>'is_active')::boolean,FALSE) AS hotspot_enabled,
     hb.data->>'hotspot_server' AS hotspot_server,hb.data->>'hotspot_interface' AS hotspot_interface,
     (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,hb.data->>'ip_pool' AS hotspot_ip_pool,
-    hb.data->>'status' AS hotspot_binding_status
+    COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
     FROM public.pops p ${hotspotJoin} WHERE p.id=$1 LIMIT 1`,[id]);
   return result.rows[0] || null;
 }
@@ -351,9 +351,6 @@ async function update(req, res) {
           if (explicitEnablementChange && data.hotspot_enabled === false) {
             await upsertHotspotBinding(client, id, { enabled: false });
           } else if (config.enabled) {
-            await upsertHotspotBinding(client, id, config);
-            await hotspotPackageSync.syncPopPackages(client, id);
-          } else if (explicitEnablementChange && data.hotspot_enabled === true) {
             await upsertHotspotBinding(client, id, config);
             await hotspotPackageSync.syncPopPackages(client, id);
           }
