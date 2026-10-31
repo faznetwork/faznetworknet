@@ -148,6 +148,50 @@ for (const scenario of [
   });
 }
 
+test('POP update rolls back an optional binding schema mismatch and commits the primary POP save', async t => {
+  const calls = [];
+  const warnings = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('information_schema.columns')) {
+        return { rows: [{
+          hotspot_bindings_available: true,
+          binding_columns: ['id','pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at']
+        }] };
+      }
+      if (sql.startsWith('SELECT * FROM public.pops')) {
+        return { rows: [{ id: 9, name: 'Old POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'Pool' }] };
+      }
+      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) {
+        const error = new Error('column hb.status does not exist');
+        error.code = '42703';
+        throw error;
+      }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 9, name: 'Updated POP', area_zone: 'South', vlan_id: 20, hotspot_enabled: false }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  const res = responseRecorder();
+
+  await controller.update({
+    params: { id: '9' },
+    body: { name: 'Updated POP', area_zone: 'South', hotspot_enabled: true, hotspot_server: 'server', hotspot_ip_pool: 'pool' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  assert.ok(calls.some(call => call.sql.startsWith('UPDATE public.pops')));
+  assert.ok(calls.some(call => call.sql === 'ROLLBACK TO SAVEPOINT pop_hotspot_optional'));
+  assert.ok(calls.some(call => call.sql === 'RELEASE SAVEPOINT pop_hotspot_optional'));
+  assert.ok(warnings.some(args => args[1]?.event === 'pop.hotspot_binding.persistence_failed' && args[1]?.databaseCode === '42703'));
+  assert.equal(calls.some(call => call.sql.includes('FROM public.pop_hotspot_bindings hb') && call.sql.startsWith('SELECT p.id')), false);
+});
+
 test('POP update uses the locked row and saves PPPoE, pool, and VLAN fields without inspecting POP columns', async t => {
   const calls = [];
   const schema = {
