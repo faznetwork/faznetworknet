@@ -41,5 +41,24 @@
       grid.innerHTML = '<div class="col-12 text-danger small">Assigned POPs and network metrics could not be loaded.</div>';
     }
   }
+
+  document.addEventListener('click', function (event) {
+    const trigger = event.target.closest('#resellerBalanceGuidance');
+    if (!trigger) return;
+    const message = document.getElementById('resellerBalanceGuidanceText');
+    if (message && trigger.dataset.billingMode === 'postpaid') {
+      message.textContent = 'Your account uses postpaid credit. Contact your FAZ NETWORK administrator to confirm the outstanding receivable and arrange settlement. This action does not submit a payment or create a request.';
+    } else if (message) {
+      message.textContent = 'For prepaid wallet top-up, contact your FAZ NETWORK administrator and share the payment method, amount and TxID/reference after payment. An administrator must verify and credit your wallet. This action does not submit a payment or create a request.';
+    }
+    const modal = document.getElementById('resellerBalanceGuidanceModal');
+    if (!modal || !window.bootstrap || !window.bootstrap.Modal) {
+      showError('Balance guidance dialog is unavailable. Please refresh the page and try again.');
+      console.error('[Reseller Dashboard] Bootstrap modal support is unavailable for balance guidance.');
+      return;
+    }
+    window.bootstrap.Modal.getOrCreateInstance(modal).show();
+  });
+
   document.addEventListener('DOMContentLoaded', () => { if (document.getElementById('popGrid')) loadDashboard(); });
 })();
