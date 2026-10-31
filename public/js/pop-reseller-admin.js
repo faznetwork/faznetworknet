@@ -192,6 +192,13 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V7 <<<');
       '.faz-pop-reseller-view .fpr-muted{color:#64748b}' +
       '.faz-pop-reseller-view .modal-content{border:0;border-radius:16px;overflow:hidden}' +
       '.faz-pop-reseller-view .modal-header{background:#f8fafc}' +
+      '.faz-pop-reseller-view #fprPopModal .modal-body{padding:1.5rem}' +
+      '.faz-pop-reseller-view #fprPopModal .modal-body .row.g-3{--bs-gutter-x:1rem;--bs-gutter-y:1rem;min-width:0}' +
+      '.faz-pop-reseller-view #fprPopModal .modal-body [class*="col-"]{min-width:0}' +
+      '.faz-pop-reseller-view #fprPopModal .form-label{display:block;width:100%;margin:0 0 .5rem;padding:0;line-height:1.45}' +
+      '.faz-pop-reseller-view #fprPopModal .form-control,.faz-pop-reseller-view #fprPopModal .form-select{display:block;width:100%;min-width:0;box-sizing:border-box}' +
+      '.faz-pop-reseller-view #fprPopModal .input-group{display:flex;flex-wrap:nowrap;width:100%;min-width:0}' +
+      '.faz-pop-reseller-view #fprPopModal .border.rounded-3{min-width:0}' +
       '.faz-pop-reseller-view .form-label{font-size:13px;font-weight:500;color:#334155}' +
       '.faz-pop-reseller-view .form-control,.faz-pop-reseller-view .form-select{min-height:42px;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-loading{padding:40px 16px;text-align:center;color:#64748b}' +
