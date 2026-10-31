@@ -379,6 +379,8 @@ test('Reseller workspace uses one shared panel gutter and consolidated Inter typ
   assert.ok(workspaceCss.includes('--reseller-panel-gutter:24px'));
   assert.ok(workspaceCss.includes('padding:20px var(--reseller-panel-gutter) 0'));
   assert.ok(workspaceCss.includes('padding:0 var(--reseller-panel-gutter) 20px'));
+  assert.ok(workspaceCss.includes('.reseller-panel.reseller-assigned-pops{padding:24px}'));
+  assert.ok(workspaceCss.includes('.reseller-panel.reseller-assigned-pops>.reseller-section-heading{padding:0'));
   assert.ok(workspaceCss.includes('--reseller-panel-gutter:16px'));
   assert.ok(workspaceCss.includes('--reseller-panel-gutter:12px'));
   assert.ok(!workspaceCss.includes('/* Shared reseller page grid and typography roles. */'));
