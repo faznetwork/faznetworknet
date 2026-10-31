@@ -333,19 +333,51 @@ async function update(req, res) {
       const hotspotConfigChanged = hotspotFields.some(field => Object.prototype.hasOwnProperty.call(data, field));
       let bindingSchema = null;
       if (hotspotConfigChanged) {
-        bindingSchema = await inspectHotspotBindingSchema(client);
-        requireHotspotBindingSchema(bindingSchema, ['pop_id','status']);
-        const bindingResult = await client.query('SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE', [id]);
-        const binding = bindingResult.rows[0]?.data || {};
-        const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
-        const config = {
-          enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
-          server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
-          interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
-          vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
-          pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
-        };
-        await upsertHotspotBinding(client, id, config, bindingSchema);
+        // Isolate optional binding writes with a savepoint: PostgreSQL marks the
+        // transaction failed after a schema mismatch until it is rolled back.
+        await client.query('SAVEPOINT pop_hotspot_optional');
+        try {
+          bindingSchema = await inspectHotspotBindingSchema(client);
+          const requiredColumns = data.hotspot_enabled === false
+            ? ['pop_id','status','updated_at']
+            : ['pop_id','router_key','hotspot_server','hotspot_interface','vlan_id','ip_pool','status','updated_at'];
+          const missingColumns = requiredColumns.filter(column => !bindingSchema.bindingColumns.has(column));
+          if (!bindingSchema.hotspotBindingsAvailable || missingColumns.length) {
+            console.warn('[POP] Optional Hotspot binding persistence skipped.', {
+              event: 'pop.hotspot_binding.skipped',
+              popId: id,
+              reason: bindingSchema.hotspotBindingsAvailable ? 'incompatible_schema' : 'table_missing',
+              missingColumns
+            });
+            bindingSchema = { hotspotBindingsAvailable: false, bindingColumns: new Set() };
+          } else {
+            const bindingResult = await client.query(
+              'SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',
+              [id]
+            );
+            const binding = bindingResult.rows[0]?.data || {};
+            const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
+            const config = {
+              enabled: hasField('hotspot_enabled') ? data.hotspot_enabled : binding.status === 'active',
+              server: hasField('hotspot_server') ? data.hotspot_server : binding.hotspot_server,
+              interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
+              vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
+              pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
+            };
+            await upsertHotspotBinding(client, id, config, bindingSchema);
+          }
+          await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
+        } catch (bindingError) {
+          await client.query('ROLLBACK TO SAVEPOINT pop_hotspot_optional');
+          await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
+          console.warn('[POP] Optional Hotspot binding persistence failed; primary POP update will be retained.', {
+            event: 'pop.hotspot_binding.persistence_failed',
+            popId: id,
+            databaseCode: bindingError.code || null,
+            message: bindingError.message
+          });
+          bindingSchema = { hotspotBindingsAvailable: false, bindingColumns: new Set() };
+        }
       }
       return readPop(client, id, bindingSchema || undefined);
     });
