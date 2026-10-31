@@ -208,3 +208,75 @@ test('POP update disables an existing Hotspot binding with a direct parameterize
   assert.deepEqual(disable.values, [11]);
   assert.equal(calls.some(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings')), false);
 });
+
+test('POP directory resolves a legacy is_active binding when status is absent', async t => {
+  let captured;
+  t.mock.method(db, 'query', async sql => {
+    if (sql.includes('to_regclass')) return { rows: [{ available: true }] };
+    captured = sql;
+    return { rows: [{ id: 18, name: 'Legacy binding POP', hotspot_enabled: true }] };
+  });
+  const res = responseRecorder();
+  await controller.list({ auth: { role: 'admin' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.match(captured, /COALESCE\(NULLIF\(hb\.data->>'status',''\)='active',\(hb\.data->>'is_active'\)::boolean,FALSE\)/);
+});
+
+test('unrelated POP edits never write or deactivate an established Hotspot binding', async t => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.startsWith('SELECT * FROM public.pops')) {
+        return { rows: [{ id: 25, name: 'Before', area_zone: 'North', reseller_id: null, pppoe_enabled: true, pppoe_ip_pool: 'pool-pppoe', status: 'active' }] };
+      }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 25, name: 'After', hotspot_enabled: true, hotspot_server: 'hs1', hotspot_interface: 'bridge-hotspot', hotspot_ip_pool: 'pool-hotspot' }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  const res = responseRecorder();
+  await controller.update({ params: { id: '25' }, body: { name: 'After' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.success, true);
+  assert.equal(calls.some(call => call.sql.includes('SELECT to_jsonb(hb) AS data')), false);
+  assert.equal(calls.some(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings')), false);
+  assert.equal(calls.some(call => call.sql.startsWith("UPDATE public.pop_hotspot_bindings SET status='inactive'")), false);
+});
+
+test('editing fields on a legacy is_active binding preserves its enabled state', async t => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.startsWith('SELECT * FROM public.pops')) {
+        return { rows: [{ id: 26, name: 'Legacy POP', area_zone: 'West', reseller_id: null, status: 'active' }] };
+      }
+      if (sql.startsWith('SELECT to_jsonb(hb) AS data')) {
+        return { rows: [{ data: { status: null, is_active: true, router_key: 'core_mikrotik', hotspot_server: 'hs-old', hotspot_interface: 'bridge-old', ip_pool: 'pool-old' } }] };
+      }
+      if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+        return { rows: [{ id: 26, name: 'Legacy POP', hotspot_enabled: true }] };
+      }
+      return { rows: [] };
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  const res = responseRecorder();
+  await controller.update({ params: { id: '26' }, body: { hotspot_server: 'hs-new' } }, res);
+  assert.equal(res.statusCode, 200);
+  const upsert = calls.find(call => call.sql.includes('INSERT INTO public.pop_hotspot_bindings'));
+  assert.ok(upsert);
+  assert.equal(upsert.values[2], 'hs-new');
+  assert.equal(upsert.values[5], 'pool-old');
+  assert.equal(calls.some(call => call.sql.startsWith("UPDATE public.pop_hotspot_bindings SET status='inactive'")), false);
+});
+
+test('startup schema bootstrap accepts reseller_voucher subscriber type', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const schema = fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
+  assert.match(schema, /hotspot_vouchers_subscriber_type_check[\s\S]*?reseller_voucher/);
+});
