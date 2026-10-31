@@ -171,7 +171,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V9 <<<');
 
   function sharedStyles() {
     return '<style id="fazPopResellerStyles">' +
-      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:400}' +
+      '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#eef2ff;border-color:#c7d2fe}.faz-pop-reseller-view .fpr-metric--customers{background:#ecfdf5;border-color:#a7f3d0}.faz-pop-reseller-view .fpr-metric--resellers{background:#f5f3ff;border-color:#ddd6fe}' +
