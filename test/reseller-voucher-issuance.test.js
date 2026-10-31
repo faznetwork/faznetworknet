@@ -445,3 +445,28 @@ test('catalog gracefully falls back when optional binding/package schema version
   assert.deepEqual(result.pops.map(pop => [pop.id, pop.bindingConfigured, pop.packages.length]), [[21, false, 0], [22, false, 0]]);
   assert.ok(warnings.some(args => args[1]?.databaseCode === '42703'));
 });
+
+
+test('voucher history and detail project validity defensively across schema variants', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'services', 'resellerVoucherIssuanceService.js'), 'utf8');
+  assert.match(source, /to_jsonb\\(b\\)->>'validity'/);
+  assert.match(source, /to_jsonb\\(pkg\\)->>'validity'/);
+  assert.match(source, /to_jsonb\\(pkg\\)->>'duration'/);
+  assert.match(source, /to_jsonb\\(pkg\\)->>'validity_days'/);
+  assert.match(source, /to_jsonb\\(pkg\\)->>'validity_period'/);
+  assert.match(source, /'N/A'/);
+  assert.doesNotMatch(source, /pkg\\.validity\\s+AS\\s+validity/);
+});
+
+test('POP update schema readiness is aligned to public and does not hard-block optional PPPoE flag', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
+  assert.match(source, /to_regclass\\('public\\.pop_hotspot_bindings'\\)/);
+  assert.match(source, /table_schema = 'public'/);
+  assert.doesNotMatch(source, /table_schema = CURRENT_SCHEMA/);
+  const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
+  assert.match(update, /field==='pppoe_enabled' && !schema\\.popColumns\\.has\\('pppoe_enabled'\\)/);
+  assert.match(update, /console\\.warn\\(/);
+  assert.match(update, /requirePopColumns\\(schema,updateColumns\\)/);
+  assert.match(update, /mikrotik_ip_pool/);
+  assert.doesNotMatch(update, /requirePopColumns\\(schema,\\['pppoe_enabled'\\]\\)/);
+});
