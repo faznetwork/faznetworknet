@@ -24,7 +24,7 @@ test('core Hotspot metadata is materialized as durable POP package rows at retai
   const inserts = statements.filter(entry => entry.sql.includes('INSERT INTO public.pop_hotspot_packages'));
   assert.equal(inserts.length, 2);
   assert.match(inserts[0].sql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
-  assert.match(inserts[0].sql, /wholesale_price\)\s*VALUES[\s\S]*\$7::numeric,'active'/);
+  assert.match(inserts[0].sql, /retail_price,wholesale_price,status\)\s*VALUES[\s\S]*\$7::numeric,'active'/);
   assert.equal(inserts[0].values[0], 71);
   assert.equal(inserts[0].values[1], '1-Hour');
   assert.equal(inserts[0].values[2], '1-Hour');
