@@ -91,7 +91,7 @@ test('production page route orders role, tenant scope, and ownership guards befo
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   assert.match(
     server,
-    /app\.get\("\/reseller\/customers\/:id",requireRole\(\["reseller"\]\),loadTenantScope,requireCustomerOwnership\(\{notFoundStatus:403\}\),\(req,res\)=>res\.set/
+    /app\.get\("\/reseller\/customers\/:id",requireRole\(\["reseller"\]\),loadTenantScope,loadResellerBillingAccount,requireCustomerOwnership\(\{notFoundStatus:403\}\),\(req,res\)=>res\.set/
   );
 });
 

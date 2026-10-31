@@ -162,6 +162,8 @@ test('login establishes only the specified reseller session identity', async t =
   const password = strongPassword();
   const passwordHash = await bcrypt.hash(password, 4);
   t.mock.method(db, 'query', async (sql, values) => {
+    if (sql.includes('INSERT INTO public.reseller_billing_accounts')) return { rows: [] };
+    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: 804, reseller_id: 704, billing_mode: 'prepaid', wallet_balance: '0.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
     assert.match(sql, /FROM resellers WHERE lower\(email\)=lower\(\$1\)/);
     assert.equal(values[0], 'login@example.com');
     return { rows: [{
@@ -263,6 +265,8 @@ test('legacy username login is used only when no email address matches', async t
   const passwordHash = await bcrypt.hash(password, 4);
   let calls = 0;
   t.mock.method(db, 'query', async (sql, values) => {
+    if (sql.includes('INSERT INTO public.reseller_billing_accounts')) return { rows: [] };
+    if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: 805, reseller_id: 709, billing_mode: 'prepaid', wallet_balance: '0.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
     calls += 1;
     if (calls === 1) {
       assert.match(sql, /lower\(email\)=lower\(\$1\)/);

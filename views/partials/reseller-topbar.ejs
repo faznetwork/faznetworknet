@@ -1,14 +1,15 @@
 <header class="reseller-topbar">
-  <div class="d-flex align-items-center gap-3 min-w-0">
+  <div class="d-flex align-items-center gap-3 reseller-topbar-brand">
     <button id="resellerSidebarToggle" class="btn btn-outline-success d-lg-none" type="button" aria-label="Open navigation" aria-controls="resellerSidebar" aria-expanded="false"><i class="bi bi-list"></i></button>
-    <div class="min-w-0"><div class="reseller-topbar-eyebrow"><%= brandName %></div><h1 class="reseller-page-title"><%= title %></h1></div>
+    <div class="reseller-topbar-heading"><div class="reseller-topbar-eyebrow"><%= brandName %></div><h1 class="reseller-page-title"><%= title %></h1></div>
   </div>
-  <div class="d-flex align-items-center gap-3">
+  <div class="d-flex align-items-center gap-3 reseller-topbar-actions">
     <span class="reseller-user-chip"><i class="bi bi-person-circle"></i><span><%= safeResellerName %></span></span>
     <% if (typeof billingAccount !== 'undefined' && billingAccount) { %>
       <% if (billingAccount.billing_mode === 'prepaid') { %><span class="badge rounded-pill text-bg-success">Wallet: ৳<%= Number(billingAccount.wallet_balance).toFixed(2) %></span>
       <% } else if (billingAccount.billing_mode === 'postpaid') { %><span class="badge rounded-pill text-bg-success">Available Credit: ৳<%= Number(billingAccount.availableCredit).toFixed(2) %> | Due: ৳<%= Number(billingAccount.receivable_balance).toFixed(2) %></span><% } %>
     <% } %>
+    <% if (typeof billingAccountUnavailable !== 'undefined' && billingAccountUnavailable) { %><span class="badge text-bg-warning">Balance temporarily unavailable</span><% } %>
     <button id="logoutButton" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-box-arrow-right me-1"></i><span class="d-none d-sm-inline">Sign out</span></button>
   </div>
 </header>

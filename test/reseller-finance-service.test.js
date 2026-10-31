@@ -21,10 +21,26 @@ test('prepaid top-up locks account and writes canonical wallet_credit ledger ent
  const result=await finance.walletTopup(input);assert.equal(result.replayed,false);
  assert.ok(calls.some(c=>/FOR UPDATE/.test(c.sql)));
  const ledger=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_ledger_entries'));
- assert.match(ledger.sql,/\(account_id,reseller_id,account_type,entry_type/);
- assert.doesNotMatch(ledger.sql,/billing_account_id/);
+ assert.match(ledger.sql,/\(billing_account_id,reseller_id,account_type,entry_type/);
+ assert.match(ledger.sql,/billing_account_id/);
  assert.equal(ledger.values[2],'wallet');assert.equal(ledger.values[3],'wallet_credit');
 });
+test('legacy authenticated admin can post wallet top-up with nullable audit actor',async t=>{
+ const calls=mockTransaction(t,sql=>{
+  if(sql.includes('pg_advisory_xact_lock')||sql.includes('WHERE idempotency_key'))return{rows:[]};
+  if(sql.includes('FOR UPDATE'))return{rows:[{id:'801',reseller_id:41,billing_mode:'prepaid',wallet_balance:'10.00',receivable_balance:'0.00',credit_limit:'0.00',currency:'BDT',account_status:'active'}]};
+  if(sql.includes('INSERT INTO public.reseller_settlements'))return{rows:[{id:'1003'}]};
+  if(sql.includes('UPDATE public.reseller_billing_accounts'))return{rowCount:1,rows:[{id:'801',wallet_balance:'35.50'}]};
+  if(sql.includes('INSERT INTO public.reseller_ledger_entries'))return{rowCount:1,rows:[{id:'2003'}]};
+  throw new Error('Unexpected SQL: '+sql);
+ });
+ await finance.walletTopup({...input,actorUserId:null});
+ const settlement=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_settlements'));
+ const ledger=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_ledger_entries'));
+ assert.equal(settlement.values[7],null);
+ assert.equal(ledger.values[9],null);
+});
+
 test('postpaid settlement is exclusive and reduces receivable',async t=>{
  const calls=mockTransaction(t,sql=>{
   if(sql.includes('pg_advisory_xact_lock')||sql.includes('WHERE idempotency_key'))return{rows:[]};

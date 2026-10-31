@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const invitationService = require('../services/resellerInvitationService');
 const { isResellerSession } = require('../middleware/rbac');
+const { ensureBillingAccount } = require('../services/resellerBillingAccountService');
 
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
@@ -225,6 +226,7 @@ async function login(req, res) {
     if (!reseller || reseller.status !== 'active' || !reseller.password_hash || !(await bcrypt.compare(password, reseller.password_hash))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials or inactive reseller account.' });
     }
+    await ensureBillingAccount(reseller.id);
     req.session.regenerate(error => {
       if (error) {
         console.error('[RESELLER AUTH] Session regeneration failed:', error.message);

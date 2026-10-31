@@ -154,12 +154,12 @@ test('reseller typography enforces the semantic weight hierarchy', () => {
   assert.doesNotMatch(profile, /class="h3 fw-bold mb-1"/);
 });
 
-test('all shared reseller stylesheet consumers use cache token 20261101-5', () => {
+test('all shared reseller stylesheet consumers use cache token 20261101-6', () => {
   const consumers = ['reseller-dashboard.ejs','reseller-vouchers.ejs','reseller-customers.ejs','reseller-payments.ejs'];
   for (const view of consumers) {
     const source = read(path.join('views', view));
-    assert.ok(source.includes('reseller-workspace.css?v=20261101-5'));
-    assert.ok(!source.includes('reseller-workspace.css?v=20261101-3'));
+    assert.ok(source.includes('reseller-workspace.css?v=20261101-6'));
+    assert.ok(!source.includes('reseller-workspace.css?v=20261101-5'));
   }
 });
 

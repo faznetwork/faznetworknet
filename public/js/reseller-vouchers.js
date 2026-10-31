@@ -51,7 +51,9 @@ function renderLifecycle(){
  body.innerHTML=rows.map(row=>{
   const tone=row.status==='UNUSED'?'success':row.status==='ACTIVE'?'primary':'secondary';
   const session=row.online?'Online':row.telemetryAvailable?'Offline':'Telemetry unavailable';
-  return '<tr><td class="font-monospace">'+escapeHtml(row.username)+'</td><td>'+escapeHtml(row.packageName)+'</td><td class="font-monospace">'+escapeHtml(row.batchKey)+'</td><td><span class="badge text-bg-'+tone+'">'+escapeHtml(row.status)+'</span></td><td>'+escapeHtml(row.uptime)+'</td><td>'+escapeHtml(row.remainingTime)+'</td><td>'+escapeHtml(session)+'</td></tr>';
+  const batchKey=String(row.batchKey||'');
+  const batchLabel=batchKey.length>8?batchKey.slice(0,8)+'…':batchKey;
+  return '<tr><td class="font-monospace">'+escapeHtml(row.username)+'</td><td title="'+escapeHtml(row.packageName)+'">'+escapeHtml(row.packageName)+'</td><td class="font-monospace" title="'+escapeHtml(batchKey)+'">'+escapeHtml(batchLabel)+'</td><td><span class="badge text-bg-'+tone+'">'+escapeHtml(row.status)+'</span></td><td>'+escapeHtml(row.uptime)+'</td><td>'+escapeHtml(row.remainingTime)+'</td><td>'+escapeHtml(session)+'</td></tr>';
  }).join('');
 }
 async function loadLifecycle(){

@@ -37,6 +37,7 @@ function idempotencyKey(value) {
   return key;
 }
 function actorId(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
   return positiveId(value, 'authenticated admin actor');
 }
 function normalizeProvider(value) {
@@ -83,7 +84,7 @@ async function post(input, mode) {
   return db.withTransaction(async client => {
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
     const prior = await client.query(
-      'SELECT id,COALESCE(account_id,billing_account_id) AS account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
+      'SELECT id,billing_account_id AS account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
       'FROM public.reseller_ledger_entries WHERE idempotency_key=$1 LIMIT 1',
       [key]
     );
@@ -114,9 +115,9 @@ async function post(input, mode) {
 
     const settlementResult = await client.query(
       'INSERT INTO public.reseller_settlements ' +
-      '(account_id,reseller_id,settlement_type,amount,payment_provider,external_reference,received_by,received_at,notes) ' +
-      'VALUES ($1,$2,$3,$4::numeric,$5,$6,$7,NOW(),$8) RETURNING id',
-      [account.id, resellerId, settlementType, amountText, provider, reference, actor, notes]
+      '(billing_account_id,reseller_id,idempotency_key,amount,currency,payment_method,external_reference,status,received_at,actor_user_id,notes) ' +
+      "VALUES ($1,$2,$3,$4::numeric,$5,$6,$7,'posted',NOW(),$8,$9) RETURNING id",
+      [account.id, resellerId, key, amountText, account.currency, provider, reference, actor, notes]
     );
     const settlement = settlementResult.rows?.[0];
     if (!settlement) throw financeError('Finance settlement record was not persisted.', 503, 'SETTLEMENT_PERSIST_FAILED');
@@ -139,7 +140,7 @@ async function post(input, mode) {
       : 'Admin receivable settlement' + (reference ? ' · ' + reference : '');
     const ledgerResult = await client.query(
       'INSERT INTO public.reseller_ledger_entries ' +
-      '(account_id,reseller_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id) ' +
+      '(billing_account_id,reseller_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id) ' +
       'VALUES ($1,$2,$3,$4,$5::numeric,$6,NULL,$7,$8,$9,$10) RETURNING id',
       [account.id, resellerId, accountType, entryType, amountText, account.currency, settlement.id, key, description, actor]
     );
@@ -180,13 +181,13 @@ async function inspect(resellerIdValue) {
   if (!account) return null;
   const [ledger, settlements] = await Promise.all([
     db.query(
-      'SELECT id,account_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id,created_at ' +
-      'FROM public.reseller_ledger_entries WHERE account_id=$1 ORDER BY id DESC LIMIT 100',
+      'SELECT id,billing_account_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id,created_at ' +
+      'FROM public.reseller_ledger_entries WHERE billing_account_id=$1 ORDER BY id DESC LIMIT 100',
       [account.id]
     ),
     db.query(
-      'SELECT id,account_id,settlement_type,amount,payment_provider,external_reference,received_by,received_at,notes ' +
-      'FROM public.reseller_settlements WHERE account_id=$1 ORDER BY id DESC LIMIT 100',
+      'SELECT id,billing_account_id,idempotency_key,amount,currency,payment_method,external_reference,status,actor_user_id,received_at,notes ' +
+      'FROM public.reseller_settlements WHERE billing_account_id=$1 ORDER BY id DESC LIMIT 100',
       [account.id]
     )
   ]);

@@ -36,3 +36,14 @@
 .metric-card--account .metric-foot{color:rgba(255,255,255,.82);font-weight:400}
 .metric-card--account #resellerBalanceGuidance{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.94);color:#065f46;font-weight:600}
 .metric-card--account #resellerBalanceGuidance:hover,.metric-card--account #resellerBalanceGuidance:focus{background:#fff;color:#064e3b}
+
+/* Reseller topbar responsive layout contract */
+.reseller-topbar-brand{min-width:0;flex:1 1 auto}
+.reseller-topbar-heading{min-width:0}
+.reseller-topbar-actions{min-width:0;flex:0 1 auto;flex-wrap:nowrap;justify-content:flex-end}
+@media(max-width:575.98px){
+  .reseller-topbar{align-items:flex-start;flex-wrap:wrap}
+  .reseller-topbar-actions{flex-wrap:wrap;max-width:100%;gap:8px!important}
+  .reseller-topbar-actions .badge{white-space:normal;overflow-wrap:anywhere;max-width:100%}
+}
+.voucher-history-page #voucherLifecycleTelemetry{padding-inline:1.5rem}

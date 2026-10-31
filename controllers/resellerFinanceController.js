@@ -6,7 +6,12 @@ function fail(res, error, operation) {
   return res.status(status).json({success:false,code:error.code||'FINANCE_OPERATION_FAILED',message:status>=500?'Finance operation failed. Contact support with the error code.':error.message});
 }
 function resellerId(req){const id=Number(req.params.resellerId);return Number.isSafeInteger(id)&&id>0?id:null;}
-function actorId(req){return req.auth?.userId||req.session?.userId||null;}
+function actorId(req){
+  const value=req.auth?.userId??req.session?.userId??null;
+  if(value===null||value===undefined||String(value).trim()==='')return null;
+  const id=Number(value);
+  return Number.isSafeInteger(id)&&id>0?id:null;
+}
 async function inspect(req,res){
   const id=resellerId(req);if(!id)return res.status(400).json({success:false,code:'INVALID_RESELLER_ID',message:'Invalid reseller ID.'});
   try{const result=await financeService.inspect(id);if(!result)return res.status(404).json({success:false,code:'BILLING_ACCOUNT_NOT_FOUND',message:'Reseller billing account not found.'});return res.set('Cache-Control','no-store').json({success:true,...result});}

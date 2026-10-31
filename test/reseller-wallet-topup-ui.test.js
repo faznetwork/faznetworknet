@@ -12,7 +12,7 @@ test('Account & Balance metric uses emerald-to-teal theme and cache-busted style
   assert.match(css, /\.metric-card--account\{background:linear-gradient\(135deg,#059669 0%,#0d9488 100%\)/);
   assert.match(css, /\.metric-card--account \.metric-icon\{[^}]*background:rgba\(255,255,255,\.18\)/);
   assert.match(css, /\.metric-card--account \.metric-value\{[^}]*color:#fff/);
-  assert.match(view, /reseller-workspace\.css\?v=20261101-5/);
+  assert.match(view, /reseller-workspace\.css\?v=20261101-6/);
 });
 
 test('reseller dashboard exposes guidance without claiming a request was submitted', () => {
