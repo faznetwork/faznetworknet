@@ -101,12 +101,15 @@ test('reseller workspace pages share a consistent heading/body typography and co
   for (const contract of [
     '--reseller-body-size:14px;--reseller-body-weight:400',
     '--reseller-heading-size:1.125rem;--reseller-heading-weight:600',
+    '--reseller-panel-gutter:24px',
+    '--reseller-panel-gutter:16px',
+    '--reseller-panel-gutter:12px',
     '.reseller-page-title{font-size:var(--reseller-heading-size)',
     '.reseller-section-heading h2{font-size:var(--reseller-heading-size)',
-    '.reseller-panel>.reseller-section-heading{padding:20px 24px 0',
-    '.reseller-panel>.table-responsive{padding:0 24px 20px',
-    '.reseller-panel>.pos-terminal{padding:0 24px 24px',
-    '.reseller-panel>.reseller-customer-directory-wrap{padding:0 24px 0'
+    '.reseller-panel>.reseller-section-heading{padding:20px var(--reseller-panel-gutter) 0',
+    '.reseller-panel>.table-responsive{padding:0 var(--reseller-panel-gutter) 20px',
+    '.reseller-panel>.pos-terminal{padding:0 var(--reseller-panel-gutter) 24px',
+    '.reseller-panel>.reseller-customer-directory-wrap{padding:0 var(--reseller-panel-gutter) 0'
   ]) assert.ok(css.includes(contract), 'Missing shared layout/typography contract: '+contract);
   const profile = read('views/reseller-customer-profile.ejs');
   assert.ok(profile.includes('font-size:14px;font-weight:400;line-height:1.55'));
