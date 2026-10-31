@@ -321,3 +321,13 @@ test('POP modal form controls use full-width layout and balanced one-rem gutters
   assert.ok(ui.includes('--bs-gutter-x:1rem;--bs-gutter-y:1rem'));
   assert.ok(ui.includes('#fprPopModal .form-control,.faz-pop-reseller-view #fprPopModal .form-select{display:block;width:100%;min-width:0;box-sizing:border-box}'));
 });
+
+test('POP editor preserves established Hotspot state and sends only intentional binding changes', () => {
+  assert.ok(ui.includes("form.dataset.hotspotInitial = JSON.stringify({"));
+  assert.ok(ui.includes("const initialHotspot = form && form.dataset.hotspotInitial"));
+  assert.ok(ui.includes("if (currentHotspot.enabled !== initialHotspot.enabled)"));
+  assert.ok(ui.includes("if (currentHotspot.enabled) {"));
+  assert.ok(ui.includes("payload.hotspot_enabled = currentHotspot.enabled;"));
+  assert.ok(ui.includes("if (currentHotspot.pool !== initialHotspot.pool) payload.hotspot_ip_pool = currentHotspot.pool;"));
+  assert.ok(ui.includes("if (currentHotspot.interface !== initialHotspot.interface) payload.hotspot_interface = currentHotspot.interface;"));
+});
