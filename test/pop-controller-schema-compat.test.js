@@ -90,25 +90,63 @@ test('POP update persists dual-service fields and Hotspot binding when the compl
   assert.ok(calls.some(call=>call.sql.includes('INSERT INTO public.pop_hotspot_bindings')));
 });
 
-test('POP update returns explicit schema readiness error instead of querying a missing Hotspot binding table', async t => {
-  const schema={hotspot_bindings_available:false,
-    pop_columns:['id','name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate','status'],
-    binding_columns:[]};
-  const calls=[];
-  const client={async query(sql,values=[]){
-    calls.push({sql,values});
-    if(sql.includes('information_schema.columns')) return {rows:[schema]};
-    if(sql.startsWith('SELECT * FROM public.pops')) return {rows:[{id:4,name:'Old POP',pppoe_enabled:true,pppoe_ip_pool:'OldPool',status:'active'}]};
-    return {rows:[]};
-  }};
-  t.mock.method(db,'withTransaction',async callback=>callback(client));
-  const res=responseRecorder();
-  await controller.update({params:{id:'4'},body:{hotspot_enabled:true,hotspot_server:'server',hotspot_ip_pool:'pool'}},res);
-  assert.equal(res.statusCode,503);
-  assert.equal(res.payload.code,'POP_SCHEMA_NOT_READY');
-  assert.match(res.payload.message,/Hotspot binding storage is not ready/i);
-  assert.equal(calls.some(call=>/FROM public\\.pop_hotspot_bindings|INTO public\\.pop_hotspot_bindings|UPDATE public\\.pop_hotspot_bindings/.test(call.sql)),false);
-});
+for (const scenario of [
+  {
+    name: 'missing Hotspot binding table',
+    schema: { hotspot_bindings_available: false, binding_columns: [] },
+    reason: 'table_missing'
+  },
+  {
+    name: 'malformed Hotspot binding schema',
+    schema: { hotspot_bindings_available: true, binding_columns: ['id', 'router_key'] },
+    reason: 'incompatible_schema'
+  }
+]) {
+  test('POP update succeeds when optional Hotspot binding storage is ' + scenario.name, async t => {
+    const calls = [];
+    const warnings = [];
+    const client = {
+      async query(sql, values = []) {
+        calls.push({ sql, values });
+        if (sql.includes('information_schema.columns')) return { rows: [scenario.schema] };
+        if (sql.startsWith('SELECT * FROM public.pops')) {
+          return { rows: [{ id: 4, name: 'Old POP', area_zone: 'North', reseller_id: null, vlan_id: 10, pppoe_enabled: true, pppoe_ip_pool: 'OldPool', status: 'active' }] };
+        }
+        if (sql.startsWith('SELECT p.id,p.reseller_id')) {
+          return { rows: [{ id: 4, name: 'Updated POP', area_zone: 'South', vlan_id: 30, pppoe_enabled: true, pppoe_ip_pool: 'NewPool', hotspot_enabled: false }] };
+        }
+        return { rows: [] };
+      }
+    };
+    t.mock.method(db, 'withTransaction', async callback => callback(client));
+    t.mock.method(console, 'warn', (...args) => warnings.push(args));
+    const res = responseRecorder();
+
+    await controller.update({
+      params: { id: '4' },
+      body: {
+        name: 'Updated POP',
+        area_zone: 'South',
+        vlan_id: 30,
+        hotspot_enabled: true,
+        hotspot_server: 'server',
+        hotspot_ip_pool: 'pool'
+      }
+    }, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.success, true);
+    assert.equal(res.payload.pop.name, 'Updated POP');
+    const primaryUpdate = calls.find(call => call.sql.startsWith('UPDATE public.pops'));
+    assert.ok(primaryUpdate, 'primary POP UPDATE must execute');
+    assert.match(primaryUpdate.sql, /name/);
+    assert.ok(calls.some(call => call.sql === 'SAVEPOINT pop_hotspot_optional'));
+    assert.ok(calls.some(call => call.sql === 'RELEASE SAVEPOINT pop_hotspot_optional'));
+    assert.equal(calls.some(call => call.sql.includes('SELECT to_jsonb(hb) AS data')), false);
+    assert.ok(warnings.some(args => args[1]?.event === 'pop.hotspot_binding.skipped' && args[1]?.reason === scenario.reason));
+    assert.equal(calls.some(call => call.sql.includes('ROLLBACK TO SAVEPOINT')), false);
+  });
+}
 
 test('POP update uses the locked row and saves PPPoE, pool, and VLAN fields without inspecting POP columns', async t => {
   const calls = [];
