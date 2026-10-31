@@ -112,7 +112,7 @@ test('admin customer POP options expose only active reseller-owned PPPoE POPs', 
   assert.match(captured.sql, /p\.reseller_id IS NOT NULL/);
   assert.match(captured.sql, /p\.status='active'/);
   assert.match(captured.sql, /p\.pppoe_enabled=TRUE/);
-  assert.deepEqual(captured.values, []);
+  assert.equal(captured.values, undefined);
 });
 
 test('POP Hotspot enablement materializes core profiles before the POP transaction commits', async t => {
