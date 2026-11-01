@@ -186,8 +186,12 @@ async function inspect(resellerIdValue) {
       [account.id]
     ),
     db.query(
-      'SELECT id,billing_account_id,idempotency_key,amount,currency,payment_method,external_reference,status,actor_user_id,received_at,notes ' +
-      'FROM public.reseller_settlements WHERE billing_account_id=$1 ORDER BY id DESC LIMIT 100',
+      'SELECT s.id,s.account_id AS billing_account_id,NULL::text AS idempotency_key,s.amount,a.currency,' +
+      's.payment_provider AS payment_method,s.external_reference,s.settlement_type,NULL::varchar AS status,' +
+      's.received_by AS actor_user_id,s.received_at,s.notes ' +
+      'FROM public.reseller_settlements s ' +
+      'INNER JOIN public.reseller_billing_accounts a ON a.id=s.account_id AND a.reseller_id=s.reseller_id ' +
+      'WHERE s.account_id=$1 ORDER BY s.id DESC LIMIT 100',
       [account.id]
     )
   ]);
