@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
-const controller = require("../controllers/rbacAuthController");
+const controller = require("../controllers/rbacAuthController");\nconst adminAuth = require("../middleware/adminAuth");
 
 const originalQuery = db.query;
 const originalTransaction = db.withTransaction;
@@ -23,7 +23,7 @@ function responseRecorder() {
     status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; },
     set() { return this; },
-    render(view, locals) { this.view = view; this.locals = locals; return this; }
+    render(view, locals) { this.view = view; this.locals = locals; return this; },\n    redirect(location) { this.redirectedTo = location; return this; }
   };
 }
 
@@ -33,6 +33,89 @@ test.afterEach(() => {
   for (const key of envKeys) {
     if (originalEnv[key] === undefined) delete process.env[key];
     else process.env[key] = originalEnv[key];
+  }
+});
+
+
+test("legacy shared credential binds only to its unique active super-admin database identity", async () => {
+  const adminAuth = require("../middleware/adminAuth");
+  const originalValidator = adminAuth.adminCredentialsValid;
+  const originalAdminUsername = process.env.ADMIN_USERNAME;
+  const originalAdminUser = process.env.ADMIN_USER;
+  process.env.ADMIN_USERNAME = "legacy.root";
+  delete process.env.ADMIN_USER;
+  adminAuth.adminCredentialsValid = async () => true;
+  const session = {
+    regenerate(callback) { callback(null); },
+    save(callback) { callback(null); }
+  };
+  const statements = [];
+  db.query = async (sql, args) => {
+    statements.push({ sql, args });
+    if (sql.includes("SELECT id,username,role,status FROM admin_users")) {
+      return { rows: [{ id: 11, username: "legacy.root", role: "super_admin", status: "active" }] };
+    }
+    if (sql.includes("UPDATE admin_users SET last_login_at")) return { rows: [], rowCount: 1 };
+    throw new Error("Unexpected legacy login query: " + sql);
+  };
+  const res = responseRecorder();
+  try {
+    await controller.login({ body: { username: "legacy.root", password: "legacy-secret" }, session }, res);
+    assert.equal(res.redirectedTo, "/admin");
+    assert.equal(session.userId, 11);
+    assert.equal(session.adminUser, "legacy.root");
+    assert.equal(session.role, "super_admin");
+    assert.equal(session.legacySuperAdmin, true);
+    assert.deepEqual(statements[0].args, ["legacy.root"]);
+  } finally {
+    adminAuth.adminCredentialsValid = originalValidator;
+    if (originalAdminUsername === undefined) delete process.env.ADMIN_USERNAME; else process.env.ADMIN_USERNAME = originalAdminUsername;
+    if (originalAdminUser === undefined) delete process.env.ADMIN_USER; else process.env.ADMIN_USER = originalAdminUser;
+  }
+});
+
+test("legacy shared credential fails closed when no active super-admin identity is mapped", async () => {
+  const adminAuth = require("../middleware/adminAuth");
+  const originalValidator = adminAuth.adminCredentialsValid;
+  const originalAdminUsername = process.env.ADMIN_USERNAME;
+  process.env.ADMIN_USERNAME = "legacy.missing";
+  adminAuth.adminCredentialsValid = async () => true;
+  let regenerated = false;
+  const session = { regenerate(callback) { regenerated = true; callback(null); } };
+  db.query = async () => ({ rows: [] });
+  const res = responseRecorder();
+  try {
+    await controller.login({ body: { username: "legacy.missing", password: "legacy-secret" }, session }, res);
+    assert.equal(res.statusCode, 403);
+    assert.match(res.locals.error, /not linked to an active super-admin/i);
+    assert.equal(regenerated, false);
+  } finally {
+    adminAuth.adminCredentialsValid = originalValidator;
+    if (originalAdminUsername === undefined) delete process.env.ADMIN_USERNAME; else process.env.ADMIN_USERNAME = originalAdminUsername;
+  }
+});
+
+test("legacy shared credential fails closed when identity mapping is ambiguous", async () => {
+  const adminAuth = require("../middleware/adminAuth");
+  const originalValidator = adminAuth.adminCredentialsValid;
+  const originalAdminUsername = process.env.ADMIN_USERNAME;
+  process.env.ADMIN_USERNAME = "legacy.duplicate";
+  adminAuth.adminCredentialsValid = async () => true;
+  let regenerated = false;
+  const session = { regenerate(callback) { regenerated = true; callback(null); } };
+  db.query = async () => ({ rows: [
+    { id: 11, username: "legacy.duplicate", role: "super_admin", status: "active" },
+    { id: 12, username: "legacy.duplicate", role: "super_admin", status: "active" }
+  ] });
+  const res = responseRecorder();
+  try {
+    await controller.login({ body: { username: "legacy.duplicate", password: "legacy-secret" }, session }, res);
+    assert.equal(res.statusCode, 503);
+    assert.match(res.locals.error, /mapping is ambiguous/i);
+    assert.equal(regenerated, false);
+  } finally {
+    adminAuth.adminCredentialsValid = originalValidator;
+    if (originalAdminUsername === undefined) delete process.env.ADMIN_USERNAME; else process.env.ADMIN_USERNAME = originalAdminUsername;
   }
 });
 
