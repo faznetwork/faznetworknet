@@ -5,8 +5,12 @@ const { ensureBillingAccount } = require('../services/resellerBillingAccountServ
 async function loadResellerBillingAccount(req, res, next) {
   try {
     const account = await ensureBillingAccount(req.auth?.resellerId);
-    req.billingAccount = account;
-    res.locals.billingAccount = account;
+    const billingAccount = account || null;
+    const billingAccountUnavailable = !billingAccount;
+    req.billingAccount = billingAccount;
+    req.billingAccountUnavailable = billingAccountUnavailable;
+    res.locals.billingAccount = billingAccount;
+    res.locals.billingAccountUnavailable = billingAccountUnavailable;
     return next();
   } catch (error) {
     console.error('[Reseller Billing] Shared account snapshot could not be loaded:', {
@@ -15,6 +19,7 @@ async function loadResellerBillingAccount(req, res, next) {
       message: error.message
     });
     req.billingAccount = null;
+    req.billingAccountUnavailable = true;
     res.locals.billingAccount = null;
     res.locals.billingAccountUnavailable = true;
     return next();
