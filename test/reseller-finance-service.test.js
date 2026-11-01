@@ -22,7 +22,7 @@ test('prepaid top-up writes the live settlement contract and canonical wallet_to
  assert.ok(calls.some(c=>/FOR UPDATE/.test(c.sql)));
  const settlement=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_settlements'));
  assert.match(settlement.sql,/\(account_id,reseller_id,settlement_type,amount,payment_provider,external_reference,received_by,received_at,notes\)/);
- assert.deepEqual(settlement.values,['801',41,'wallet_topup','25.50','cash','RCPT-1',9,'Counter receipt']);
+ assert.deepEqual(settlement.values,['801',41,'wallet_topup','25.50','cash','RCPT-1','9','Counter receipt']);
  const ledger=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_ledger_entries'));
  assert.match(ledger.sql,/\(account_id,billing_account_id,reseller_id,account_type,entry_type/);
  assert.equal(ledger.values[2],'wallet');assert.equal(ledger.values[3],'wallet_topup');
