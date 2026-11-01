@@ -108,3 +108,43 @@ test('zero credit limit is allowed only when the outstanding receivable is zero'
   assert.equal(result.account.credit_limit,'0.00');
   assert.ok(calls.some(c=>c.sql.includes('UPDATE public.reseller_billing_accounts')));
 });
+
+
+test('inspect reads settlement history using the deployed reseller settlement contract', async t => {
+  const calls = [];
+  const account = {
+    id: '801', reseller_id: 41, billing_mode: 'prepaid', wallet_balance: '10.00',
+    receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT',
+    account_status: 'active', created_at: '2026-10-31T00:00:00.000Z',
+    updated_at: '2026-10-31T00:00:00.000Z'
+  };
+  const ledgerRows = [{ id: '2001', billing_account_id: '801', entry_type: 'wallet_topup' }];
+  const settlementRows = [{
+    id: '1001', billing_account_id: '801', idempotency_key: null, amount: '10.00',
+    currency: 'BDT', payment_method: 'cash', external_reference: 'RCPT-1',
+    settlement_type: 'wallet_topup', status: null, actor_user_id: 9,
+    received_at: '2026-10-31T00:00:00.000Z', notes: 'Counter receipt'
+  }];
+  t.mock.method(db, 'query', async (sql, values) => {
+    calls.push({ sql, values });
+    if (sql.includes('FROM public.reseller_billing_accounts WHERE reseller_id=$1')) {
+      return { rows: [account] };
+    }
+    if (sql.includes('FROM public.reseller_ledger_entries')) return { rows: ledgerRows };
+    if (sql.includes('FROM public.reseller_settlements s')) return { rows: settlementRows };
+    throw new Error('Unexpected inspect SQL: ' + sql);
+  });
+
+  const result = await finance.inspect(41);
+  assert.equal(result.account.id, '801');
+  assert.deepEqual(result.ledgerEntries, ledgerRows);
+  assert.deepEqual(result.settlements, settlementRows);
+  const settlementQuery = calls.find(call => call.sql.includes('FROM public.reseller_settlements s'));
+  assert.ok(settlementQuery);
+  assert.match(settlementQuery.sql, /s\.account_id AS billing_account_id/);
+  assert.match(settlementQuery.sql, /s\.payment_provider AS payment_method/);
+  assert.match(settlementQuery.sql, /s\.received_by AS actor_user_id/);
+  assert.match(settlementQuery.sql, /s\.settlement_type/);
+  assert.doesNotMatch(settlementQuery.sql, /s?\.billing_account_id|s?\.payment_method|s?\.idempotency_key|s?\.status/);
+  assert.deepEqual(settlementQuery.values, ['801']);
+});
