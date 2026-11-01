@@ -35,9 +35,10 @@ function renewalRuleEvents(type,eventName){
  // other notification events isolated.
  return [...new Set([eventName,"renewal","payment","recharge"])];
 }
-function extractCustomerPhone(customer={}){
+function extractCustomerPhone(customer={},fallbacks=[]){
  const account=customer||{};
- return [account.whatsapp_phone,account.whatsapp,account.phone,account.mobile,account.account_phone,account.mobile_number,account.contact_no].map(value=>String(value||"").trim()).find(Boolean)||"";
+ const candidates=[account.whatsapp_phone,account.whatsapp,account.phone,account.mobile,account.account_phone,account.mobile_number,account.contact_no,...(Array.isArray(fallbacks)?fallbacks:[fallbacks])];
+ return candidates.map(value=>String(value||"").trim()).find(value=>Boolean(normalizeSmsPhone(value)))||"";
 }
 function isValidBdWhatsAppPhone(value){return /^8801[3-9]\d{8}$/.test(String(value||""));}
 function smsEvent(event){const map={payment:"payment_receipt",payment_receipt:"payment_receipt",recharge:"payment_receipt",renewal:"payment_receipt",welcome:"welcome",expiry_warning:"expiry_warning",line_expiry:"line_expiry",expired:"line_expiry"};return map[event]||event;}
@@ -81,7 +82,7 @@ function defaultEmailTemplate(event,context){
 
 async function dispatchNow({userType="pppoe",event="payment",to,recipient,phone,username,customer,customerName,message,variables={},channels,excludeChannels=[],useMessageDirectly=false,emailClient=null}={}){
  const settings=await settingsService.getAllSettings(),type=String(userType||"pppoe").toLowerCase(),rawEvent=String(event||"").trim().toLowerCase(),eventName=eventKey(event);
- const rawPhone=extractCustomerPhone(customer)||phone||to||recipient;
+ const rawPhone=extractCustomerPhone(customer,[phone,to,recipient]);
  const recipientPhone=normalizePhone(rawPhone);
  const smsPhone=normalizeSmsPhone(rawPhone);
  const validWhatsAppPhone=isValidBdWhatsAppPhone(recipientPhone);

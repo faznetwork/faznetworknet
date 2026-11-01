@@ -12,6 +12,7 @@ const EVENT_CONFIG={
 };
 const MODES=new Set(["disabled","personal_device","bulk_sms","custom_http","provider_preset"]);
 const HTTP_METHODS=new Set(["GET","POST_JSON","POST_FORM"]);
+function normalizeSmsRecipient(value){let digits=String(value||"").replace(/[^\d]/g,"");if(digits.startsWith("00880"))digits=digits.slice(2);if(digits.startsWith("8801")&&digits.length===13)digits="0"+digits.slice(3);else if(digits.startsWith("1")&&digits.length===10)digits="0"+digits;return /^01[3-9]\d{8}$/.test(digits)?digits:"";}
 function normalizeMethod(value){const method=String(value||"POST_JSON").toUpperCase();return method==="POST"?"POST_JSON":method;}
 const DEFAULT_MAPPING={to:"{to}",message:"{message}",token:"{token}",sender_id:"{sender_id}"};
 const LEGACY_BULK_MAPPING={phone:"{to}",to:"{to}",message:"{message}",sender_id:"{sender_id}",senderid:"{sender_id}",token:"{token}"};
@@ -85,7 +86,8 @@ function presetConfig(settings){
 async function sendSmsCore({to,phone,message,event="manual",variables={},token:overrideToken,settings:providedSettings}={}){
  const settings=providedSettings||await settingsService.getAllSettings();
  const mode=String(settings.sms_provider_mode||settings.sms_gateway_mode||"disabled");
- const recipient=safeText(phone||to,40),text=renderTemplate(message,variables);
+ const recipient=normalizeSmsRecipient(phone||to),text=renderTemplate(message,variables);
+ if(!recipient)throw new Error("Enter a valid Bangladesh mobile number before sending SMS.");
  if(mode==="disabled"||!MODES.has(mode)){if(mode==="disabled")return {success:true,skipped:true,reason:"sms_gateway_disabled"};throw new Error("Unsupported SMS gateway mode.");}
  if(!recipient||!text)throw new Error("SMS recipient and message are required.");
  const sender=safeText(settings.sms_sender_id,80),apiToken=String(overrideToken||settings.sms_api_key||"");
@@ -133,11 +135,11 @@ async function recordSmsDelivery({to,phone,message,event="manual",status,error,m
 async function sendSms(args={}){
  const input=args||{};
  let settings=input.settings||{};
- const recipient=safeText(input.phone||input.to,40),text=renderTemplate(input.message,input.variables||{});
+ const recipient=normalizeSmsRecipient(input.phone||input.to),text=renderTemplate(input.message,input.variables||{});
  let status="failed",error=null,result=null;
  try{
   if(!input.settings)settings=await settingsService.getAllSettings();
-  result=await sendSmsCore({...input,settings});
+  result=await sendSmsCore({...input,to:recipient,phone:recipient,settings});
   status=result?.skipped?"skipped":"sent";
   return result;
  }catch(err){
@@ -147,7 +149,7 @@ async function sendSms(args={}){
   const provider=result?.providerResponse||result?.provider_response||{};
   const httpStatus=Number(provider.httpStatus||provider.statusCode||0);
   if(!error&&result?.skipped)error=String(result.reason||"Message skipped");
-  await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null,userType:input.userType});
+  if(recipient)await recordSmsDelivery({to:recipient,phone:recipient,message:text,event:input.event||"manual",status,error,mode:settings.sms_provider_mode||settings.sms_gateway_mode||"disabled",method:result?.method||settings.sms_api_method||settings.sms_device_http_method,httpStatus:Number.isInteger(httpStatus)&&httpStatus>0?httpStatus:null,userType:input.userType});
  }
 }
 async function sendNotification({to,phone,message,event,variables={},useMessageDirectly=false,...extra}={}){
@@ -157,4 +159,4 @@ async function sendNotification({to,phone,message,event,variables={},useMessageD
  const rendered=useMessageDirectly?renderTemplate(message,resolved):eventTemplate(settings,event,resolved,message);
  return sendSms({to,phone,message:rendered,event,variables:resolved,settings,userType:extra.userType});
 }
-module.exports={sendSms,sendNotification,renderTemplate,eventTemplate,EVENT_CONFIG,parseMapping,DEFAULT_MAPPING};
+module.exports={sendSms,sendNotification,renderTemplate,eventTemplate,EVENT_CONFIG,parseMapping,DEFAULT_MAPPING,normalizeSmsRecipient};

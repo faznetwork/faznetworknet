@@ -207,7 +207,8 @@ async function activate(req,res){
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
       const customerName=String(account.customer_name||"গ্রাহক").trim()||"গ্রাহক";
       const expiryStr=expiry?new Date(expiry).toLocaleString("en-BD",{timeZone:"Asia/Dhaka"}):"প্যাকেজ অনুযায়ী";
-      notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:mac,customer:{username:mac,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:mac,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
+      const voucherCredential=String(account.username||"").trim();
+      notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:voucherCredential,customer:{username:voucherCredential,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:voucherCredential,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
     }
     return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
   }catch(error){

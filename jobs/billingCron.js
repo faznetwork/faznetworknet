@@ -3,6 +3,8 @@ const mikrotikService=require("../services/mikrotikService");
 const {logAuditAction}=require("../utils/auditLogger");
 
 const EXPIRED_PROFILE="EXPIRED-PROFILE";
+let expiryWarningInterval=null;
+const WARNING_RETRY_MINUTES=[15,30,60,180,360,360,360];
 
 
 async function runExpiryWarnings(){
@@ -23,15 +25,38 @@ async function runExpiryWarnings(){
         const username=String(customer.username||"").trim();if(!username||!customer.phone)continue;
         const expiry=String(customer.expiration_date||"").slice(0,10);
         const eventKey="expiry_warning:"+userType+":"+username.toLowerCase()+":"+expiry;
-        const claim=await db.query("INSERT INTO sms_notification_log(event_key,event_type,username,phone,status) VALUES($1,'expiry_warning',$2,$3,'pending') ON CONFLICT(event_key) DO NOTHING RETURNING event_key",[eventKey,username,customer.phone]);
+        const claim=await db.query(`INSERT INTO sms_notification_log(event_key,event_type,username,phone,status,attempt_count,next_attempt_at,lease_until,sms_status,whatsapp_status)
+          VALUES($1,'expiry_warning',$2,$3,'pending',1,NULL,NOW()+INTERVAL '2 minutes','pending','pending')
+          ON CONFLICT(event_key) DO UPDATE SET status='pending',phone=EXCLUDED.phone,
+            attempt_count=sms_notification_log.attempt_count+1,next_attempt_at=NULL,
+            lease_until=NOW()+INTERVAL '2 minutes'
+          WHERE sms_notification_log.status='pending'
+            AND sms_notification_log.attempt_count<8
+            AND COALESCE(sms_notification_log.next_attempt_at,'-infinity'::timestamptz)<=NOW()
+            AND COALESCE(sms_notification_log.lease_until,'-infinity'::timestamptz)<=NOW()
+          RETURNING event_key,attempt_count,sms_status,whatsapp_status`,[eventKey,username,customer.phone]);
         if(!claim.rows.length)continue;
+        const claimed=claim.rows[0];
+        const channels=['sms','whatsapp'].filter(channel=>['pending','failed'].includes(String(claimed[channel+'_status']||'pending')));
         try{
-          const result=await dispatch({userType,event:"expiry_warning",to:customer.phone,username,message:"Reminder from FAZ NETWORK: your internet service expires in 2 days. Please renew on time to avoid service interruption.",variables:{name:customer.full_name||username,username,amount:customer.amount,expiry_date:expiry}});
-          const delivered=Boolean(result.results?.some(item=>item.status==="fulfilled"&&item.result?.success!==false&&!item.result?.skipped));
-          if(delivered){await db.query("UPDATE sms_notification_log SET status='sent',sent_at=NOW() WHERE event_key=$1",[eventKey]);sent++;}
-          else await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]);
+          const result=await dispatch({userType,event:"expiry_warning",to:customer.phone,username,message:"Reminder from FAZ NETWORK: your internet service expires in 2 days. Please renew on time to avoid service interruption.",channels,variables:{name:customer.full_name||username,username,amount:customer.amount,expiry_date:expiry}});
+          const outcomes=Object.fromEntries((result.results||[]).map(item=>[item.channel,item.status||'failed']));
+          const smsStatus=outcomes.sms||claimed.sms_status||'pending',whatsappStatus=outcomes.whatsapp||claimed.whatsapp_status||'pending';
+          const retryNeeded=[smsStatus,whatsappStatus].some(status=>['pending','failed'].includes(status));
+          const exhausted=Number(claimed.attempt_count)>=8&&retryNeeded;
+          const terminal=!retryNeeded||exhausted;
+          const backoff=WARNING_RETRY_MINUTES[Math.min(Math.max(0,Number(claimed.attempt_count)-1),WARNING_RETRY_MINUTES.length-1)];
+          await db.query(`UPDATE sms_notification_log SET sms_status=$2,whatsapp_status=$3,
+            status=$4,sent_at=CASE WHEN $4 IN ('sent','complete') THEN COALESCE(sent_at,NOW()) ELSE sent_at END,
+            next_attempt_at=CASE WHEN $4='pending' THEN NOW()+($5::text||' minutes')::interval ELSE NULL END,
+            lease_until=NULL WHERE event_key=$1`,[eventKey,smsStatus,whatsappStatus,exhausted?'failed':terminal?(smsStatus==='sent'||whatsappStatus==='sent'?'sent':'complete'):'pending',backoff]);
+          if(smsStatus==='sent'||whatsappStatus==='sent')sent++;
         }catch(error){
-          await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]).catch(()=>{});
+          const exhausted=Number(claimed.attempt_count)>=8,backoff=WARNING_RETRY_MINUTES[Math.min(Math.max(0,Number(claimed.attempt_count)-1),WARNING_RETRY_MINUTES.length-1)];
+          await db.query(`UPDATE sms_notification_log SET sms_status=CASE WHEN sms_status IN ('sent','skipped') THEN sms_status ELSE 'failed' END,
+            whatsapp_status=CASE WHEN whatsapp_status IN ('sent','skipped') THEN whatsapp_status ELSE 'failed' END,
+            status=$2,next_attempt_at=CASE WHEN $2='pending' THEN NOW()+($3::text||' minutes')::interval ELSE NULL END,
+            lease_until=NULL WHERE event_key=$1`,[eventKey,exhausted?'failed':'pending',backoff]).catch(()=>{});
           console.warn("[Notification Hub] Expiry warning failed for "+username+":",error.message);
         }
       }
@@ -163,6 +188,9 @@ async function runBillingExpiration(){
 
 function startBillingCron(){
   runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Initial run failed:",error.message));
+  if(expiryWarningInterval)clearInterval(expiryWarningInterval);
+  expiryWarningInterval=setInterval(()=>runExpiryWarnings().catch(error=>console.error("[Notification Hub] Expiry warning retry scan failed:",error.message)),15*60*1000);
+  expiryWarningInterval.unref?.();
   return setInterval(
     ()=>runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Scheduled run failed:",error.message)),
     60*60*1000

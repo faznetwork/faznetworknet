@@ -161,13 +161,40 @@ async function list(req, res) {
          hb.data->>'hotspot_interface' AS hotspot_interface,
          (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,
          hb.data->>'ip_pool' AS hotspot_ip_pool,
-         COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
+         COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status,
+         COALESCE(voucher_sales.issued_count,0)::int AS voucher_issued_count,
+         COALESCE(voucher_status.active_count,0)::int AS voucher_active_count,
+         GREATEST(0,COALESCE(voucher_sales.issued_count,0)-COALESCE(voucher_status.active_count,0))::int AS voucher_inactive_count,
+         COALESCE(voucher_sales.gross_value,0)::numeric(14,2) AS voucher_gross_value,
+         COALESCE(voucher_sales.owner_income,0)::numeric(14,2) AS voucher_owner_income,
+         COALESCE(voucher_sales.reseller_commission,0)::numeric(14,2) AS voucher_reseller_commission,
+         COALESCE(voucher_sales.owner_income_month,0)::numeric(14,2) AS voucher_owner_income_month,
+         COALESCE(voucher_sales.owner_income_week,0)::numeric(14,2) AS voucher_owner_income_week
        FROM public.pops p
        INNER JOIN public.resellers r ON r.id=p.reseller_id
        LEFT JOIN public.customers c ON c.pop_id=p.id
        ${hotspotJoin}
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(b.quantity),0) AS issued_count,
+           COALESCE(SUM(b.retail_total),0) AS gross_value,
+           COALESCE(SUM(b.wholesale_total),0) AS owner_income,
+           COALESCE(SUM(b.margin_total),0) AS reseller_commission,
+           COALESCE(SUM(b.wholesale_total) FILTER (WHERE b.created_at >= (date_trunc('month',NOW() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka')),0) AS owner_income_month,
+           COALESCE(SUM(b.wholesale_total) FILTER (WHERE b.created_at >= NOW()-INTERVAL '7 days'),0) AS owner_income_week
+         FROM public.reseller_voucher_batches b
+         WHERE b.pop_id=p.id AND b.status='issued'
+       ) voucher_sales ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) FILTER (WHERE v.status='active') AS active_count
+         FROM public.reseller_voucher_batches b
+         INNER JOIN public.reseller_voucher_issuance_items item ON item.batch_id=b.id
+         INNER JOIN public.hotspot_vouchers v ON v.id=item.voucher_id
+         WHERE b.pop_id=p.id AND b.status='issued'
+       ) voucher_status ON TRUE
        WHERE ${reseller ? 'p.reseller_id=$1' : 'p.reseller_id IS NOT NULL'}
-       GROUP BY p.id,r.id,hb.data
+       GROUP BY p.id,r.id,hb.data,voucher_sales.issued_count,voucher_sales.gross_value,
+         voucher_sales.owner_income,voucher_sales.reseller_commission,
+         voucher_sales.owner_income_month,voucher_sales.owner_income_week,voucher_status.active_count
        ORDER BY p.name ASC,p.id ASC`;
     const result = await db.query(sql, reseller ? [req.auth.resellerId] : []);
     return res.json({ success: true, pops: result.rows });

@@ -3,7 +3,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
   'use strict';
 
   const API = '/api';
-  const state = { pops: [], resellers: [], ipPools: [], income: {}, activeView: null, busy: false };
+  const state = { pops: [], resellers: [], ipPools: [], activeView: null, busy: false };
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -173,16 +173,16 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
     return '<style id="fazPopResellerStyles">' +
       '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:var(--reseller-font,Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif);font-size:var(--reseller-body-size,14px);font-weight:var(--reseller-body-weight,400);line-height:var(--reseller-body-line-height,1.55)}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
-      '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
-      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:inset 0 1px 0 #fff,0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#e5eef8;border-color:#cfdeef}.faz-pop-reseller-view .fpr-metric--customers{background:#e5f1e9;border-color:#cde2d3}.faz-pop-reseller-view .fpr-metric--resellers{background:#eceafa;border-color:#d9d6f1}.faz-pop-reseller-view .fpr-metric--income{background:#e0f0ef;border-color:#c7e2df}.faz-pop-reseller-view .fpr-metric--monthly{background:#edf0e2;border-color:#dce2c9}.faz-pop-reseller-view .fpr-metric--weekly{background:#f4e8e8;border-color:#e9d1d2}' +
-      '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}' +
-      '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
+      '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
+      '.faz-pop-reseller-view .fpr-metric{background:#28476a;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:16px;min-width:0;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 3px 10px rgba(15,23,42,.12)}.faz-pop-reseller-view .fpr-metric--pops{background:#28476a}.faz-pop-reseller-view .fpr-metric--customers{background:#2d5b48}.faz-pop-reseller-view .fpr-metric--resellers{background:#44566c}.faz-pop-reseller-view .fpr-metric--issued{background:#285a60}.faz-pop-reseller-view .fpr-metric--active{background:#315d49}.faz-pop-reseller-view .fpr-metric--inactive{background:#634655}.faz-pop-reseller-view .fpr-metric--gross{background:#3b4d75}.faz-pop-reseller-view .fpr-metric--commission{background:#55446b}.faz-pop-reseller-view .fpr-metric--owner{background:#3d5d4a}.faz-pop-reseller-view .fpr-metric--monthly{background:#2c6260}.faz-pop-reseller-view .fpr-metric--weekly{background:#68533b}' +
+      '.faz-pop-reseller-view .fpr-metric-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#fff;font-weight:600;text-transform:uppercase;letter-spacing:.04em}.faz-pop-reseller-view .fpr-metric-icon{font-size:18px;color:#fff}' +
+      '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:600;color:#fff;overflow-wrap:anywhere;margin-top:5px}.faz-pop-reseller-view .fpr-metric .fpr-muted{color:#fff!important;opacity:1}' +
       '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
       '.faz-pop-reseller-view .fpr-card-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:500}' +
       '.faz-pop-reseller-view .fpr-heading p,.faz-pop-reseller-view .fpr-muted{font-weight:400}' +
       '.faz-pop-reseller-view .fpr-heading h1,.faz-pop-reseller-view .modal-title{font-size:var(--reseller-heading-size,1.125rem);line-height:var(--reseller-heading-line-height,1.35);font-weight:var(--reseller-heading-weight,600);letter-spacing:var(--reseller-heading-letter-spacing,-.02em)}' +
       '.faz-pop-reseller-view .badge{font-weight:600}' +
-      '.faz-pop-reseller-view .fpr-table{margin:0;min-width:980px;font-size:13px}' +
+      '.faz-pop-reseller-view .fpr-table{margin:0;min-width:1440px;font-size:13px}' +
       '.faz-pop-reseller-view .fpr-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.035em;color:#64748b;white-space:nowrap;background:#f8fafc}' +
       '.faz-pop-reseller-view .fpr-table td{vertical-align:middle;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-actions{display:flex;gap:6px;flex-wrap:wrap;min-width:145px}' +
@@ -201,6 +201,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '.faz-pop-reseller-view .form-label{font-size:13px;font-weight:500;color:#334155}' +
       '.faz-pop-reseller-view .form-control,.faz-pop-reseller-view .form-select{min-height:42px;font-weight:400}' +
       '.faz-pop-reseller-view .fpr-loading{padding:40px 16px;text-align:center;color:#64748b}' +
+      '@media(max-width:1199.98px){.faz-pop-reseller-view .fpr-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}' +
       '@media(max-width:767.98px){.faz-pop-reseller-view .fpr-metrics{grid-template-columns:1fr;gap:9px}.faz-pop-reseller-view .fpr-metric{padding:12px}.faz-pop-reseller-view .fpr-heading .btn{width:100%}.faz-pop-reseller-view .modal-dialog{margin:10px auto;max-width:calc(100% - 20px)}.faz-pop-reseller-view .modal-footer .btn{flex:1;min-height:42px}}' +
       '</style>';
   }
@@ -212,7 +213,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       element.remove();
     });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
-    const finance = state.income || {};
+    const sum = (key) => state.pops.reduce(function (total, pop) { return total + Number(pop[key] || 0); }, 0);
     const rows = state.pops.map(function (pop, index) {
       const owner = pop.reseller_name || '—';
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
@@ -226,24 +227,34 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
         '<td><div class="fpr-badges">' + (pop.pppoe_enabled ? '<span class="fpr-badge">PPPoE</span>' : '') + (pop.hotspot_enabled ? '<span class="fpr-badge">Hotspot</span>' : '') + ((!pop.pppoe_enabled && !pop.hotspot_enabled) ? '<span class="small fpr-muted">No service enabled</span>' : '') + '</div></td>' +
         '<td>' + escapeHtml(commission) + '</td>' +
         '<td>' + Number(pop.customer_count || 0).toLocaleString('en-BD') + '</td>' +
+        '<td>' + Number(pop.voucher_issued_count || 0).toLocaleString('en-BD') + '</td>' +
+        '<td>' + Number(pop.voucher_active_count || 0).toLocaleString('en-BD') + ' / ' + Number(pop.voucher_inactive_count || 0).toLocaleString('en-BD') + '</td>' +
+        '<td>' + formatMoney(pop.voucher_gross_value, 'fixed') + '</td>' +
+        '<td>' + formatMoney(pop.voucher_reseller_commission, 'fixed') + '</td>' +
+        '<td>' + formatMoney(pop.voucher_owner_income, 'fixed') + '</td>' +
         '<td>' + statusPill(pop.status) + '</td>' +
         '<td><div class="fpr-actions"><button class="btn btn-sm btn-outline-primary" type="button" data-action="edit-pop" data-id="' + escapeHtml(pop.id) + '"><i class="bi bi-pencil me-1"></i>Edit</button>' +
         statusButton(pop.status, pop.id, 'pop') + '</div></td></tr>';
     }).join('');
     section.innerHTML = sharedStyles() +
-      '<div class="fpr-heading"><div><div class="small text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage POP ownership, PPPoE broadband pools, Hotspot wireless bindings and commission settings.</p></div>' +
+      '<div class="fpr-heading"><div><div class="small text-success text-uppercase">Network Structure</div><h1 class="h4 fw-bold mb-1">POP Management</h1><p class="text-muted small mb-0">Manage POP ownership and service pools. Voucher finance uses issued reseller batches: owner share is charged to the wallet and the configured commission becomes reseller margin.</p></div>' +
       '<button class="btn btn-success" type="button" data-action="new-pop"><i class="bi bi-plus-lg me-2"></i>Create POP</button></div>' +
       (error ? errorBanner(error) : '') +
       '<div class="fpr-metrics">' +
-      '<article class="fpr-metric fpr-metric--pops"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
-      '<article class="fpr-metric fpr-metric--customers"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
-      '<article class="fpr-metric fpr-metric--resellers"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article>' +
-      '<article class="fpr-metric fpr-metric--income"><div class="fpr-metric-label">Total Income</div><div class="fpr-metric-value">৳' + Number(finance.totalIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">All recorded collections</div></article>' +
-      '<article class="fpr-metric fpr-metric--monthly"><div class="fpr-metric-label">Monthly Income</div><div class="fpr-metric-value">৳' + Number(finance.monthlyIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Collected this month</div></article>' +
-      '<article class="fpr-metric fpr-metric--weekly"><div class="fpr-metric-label">Weekly Income</div><div class="fpr-metric-value">৳' + Number(finance.weeklyIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Last 7 days</div></article></div>' +
+      '<article class="fpr-metric fpr-metric--pops"><div class="fpr-metric-head"><div class="fpr-metric-label">Total POPs</div><i class="bi bi-diagram-3 fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--customers"><div class="fpr-metric-head"><div class="fpr-metric-label">Total POP Customers</div><i class="bi bi-person-lines-fill fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">Customer records assigned to POPs</div></article>' +
+      '<article class="fpr-metric fpr-metric--resellers"><div class="fpr-metric-head"><div class="fpr-metric-label">Total Resellers</div><i class="bi bi-people fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--issued"><div class="fpr-metric-head"><div class="fpr-metric-label">Vouchers Issued</div><i class="bi bi-ticket-perforated fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + sum('voucher_issued_count').toLocaleString('en-BD') + '</div><div class="small fpr-muted">Reseller voucher batches</div></article>' +
+      '<article class="fpr-metric fpr-metric--active"><div class="fpr-metric-head"><div class="fpr-metric-label">Active Vouchers</div><i class="bi bi-wifi fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + sum('voucher_active_count').toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--inactive"><div class="fpr-metric-head"><div class="fpr-metric-label">Inactive Vouchers</div><i class="bi bi-wifi-off fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">' + sum('voucher_inactive_count').toLocaleString('en-BD') + '</div><div class="small fpr-muted">Unused, expired or archived</div></article>' +
+      '<article class="fpr-metric fpr-metric--gross"><div class="fpr-metric-head"><div class="fpr-metric-label">Gross Voucher Value</div><i class="bi bi-cash-stack fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">৳' + sum('voucher_gross_value').toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--commission"><div class="fpr-metric-head"><div class="fpr-metric-label">Reseller Commission</div><i class="bi bi-percent fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">৳' + sum('voucher_reseller_commission').toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Issued batch commission / margin</div></article>' +
+      '<article class="fpr-metric fpr-metric--owner"><div class="fpr-metric-head"><div class="fpr-metric-label">Owner Income</div><i class="bi bi-wallet2 fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">৳' + sum('voucher_owner_income').toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Charged to reseller wallet</div></article>' +
+      '<article class="fpr-metric fpr-metric--monthly"><div class="fpr-metric-head"><div class="fpr-metric-label">Monthly Owner Income</div><i class="bi bi-calendar3 fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">৳' + sum('voucher_owner_income_month').toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--weekly"><div class="fpr-metric-head"><div class="fpr-metric-label">Weekly Owner Income</div><i class="bi bi-calendar-week fpr-metric-icon" aria-hidden="true"></i></div><div class="fpr-metric-value">৳' + sum('voucher_owner_income_week').toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Last 7 days</div></article></div>' +
       '<section class="fpr-card"><div class="fpr-card-head"><div>POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
-      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>#</th><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="11" class="text-center text-muted py-4">No POP records found.</td></tr>') +
+      '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>#</th><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Vouchers Issued</th><th>Active / Inactive</th><th>Gross Voucher Value</th><th>Reseller Commission</th><th>Owner Income</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="16" class="text-center text-muted py-4">No POP records found.</td></tr>') +
       '</tbody></table></div></section>' +
       popModalHtml();
     bindSection(section, 'pop');
@@ -261,7 +272,8 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="pppoe_enabled" id="fprPppoeEnabled" checked><label class="form-check-label" for="fprPppoeEnabled">Enable PPPoE Broadband</label></div><label class="form-label" for="fprPppoeIpPool">PPPoE IP Pool</label><select class="form-select" name="pppoe_ip_pool" id="fprPppoeIpPool"><option value="">None / Unassigned</option></select><div class="form-text">Used only for PPPoE subscriber address assignment. Existing legacy POP pool values are migrated into this field.</div><label class="form-label mt-3" for="fprPopVlan">Legacy / PPPoE VLAN ID</label><input class="form-control" type="number" name="vlan_id" id="fprPopVlan" min="1" max="4094"></div></div>' +
       '<div class="col-12"><div class="border rounded-3 p-3"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="hotspot_enabled" id="fprHotspotEnabled"><label class="form-check-label" for="fprHotspotEnabled">Enable Hotspot Wireless / Vouchers</label></div><div class="row g-3"><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotServer">Hotspot Server *</label><input class="form-control" name="hotspot_server" id="fprHotspotServer" maxlength="100" placeholder="hotspot1"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotInterface">Hotspot Interface</label><input class="form-control" name="hotspot_interface" id="fprHotspotInterface" maxlength="100" placeholder="bridge-hotspot"></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotIpPool">Hotspot IP Pool *</label><select class="form-select" name="hotspot_ip_pool" id="fprHotspotIpPool"><option value="">None / Unassigned</option></select></div><div class="col-12 col-md-6"><label class="form-label" for="fprHotspotVlan">Hotspot VLAN ID</label><input class="form-control" type="number" name="hotspot_vlan_id" id="fprHotspotVlan" min="1" max="4094"></div></div><div class="form-text mt-2">Hotspot pool is stored on the existing POP Hotspot binding and is never reused for PPPoE.</div></div></div>' +
       '<div class="col-6 col-md-3"><label class="form-label">Commission Type</label><select class="form-select" name="commission_type"><option value="percentage">Percentage</option><option value="fixed">Fixed (৳)</option></select></div>' +
-      '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div></div></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">Commission Rate</label><input class="form-control" type="number" name="commission_rate" min="0" step="0.01" value="0" required></div>' +
+      '<div class="col-12"><div class="form-text">For reseller voucher batches, a commission above 0 sets the reseller share per voucher (percentage of retail price or fixed taka). The remaining amount is the owner share and is charged to the reseller wallet. At 0, the package wholesale price remains in effect.</div></div></div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="fprPopSave" data-action="save-pop">Save POP</button></div></form></div></div></div>';
   }
 
@@ -810,10 +822,9 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
     const section = rootView('view-pop-management', 'POP Management');
     section.innerHTML = sharedStyles() + '<div class="fpr-loading"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading POP and reseller data…</div>';
     try {
-      const results = await Promise.all([apiRequest('/pops'), apiRequest('/resellers'), apiRequest('/dashboard/business-overview')]);
+      const results = await Promise.all([apiRequest('/pops'), apiRequest('/resellers')]);
       state.pops = Array.isArray(results[0].pops) ? results[0].pops : [];
       state.resellers = Array.isArray(results[1].resellers) ? results[1].resellers : [];
-      state.income = results[2].financial || {};
       renderPopManagement(section, '');
     } catch (error) {
       renderPopManagement(section, error.message || 'Unable to load POP data.');

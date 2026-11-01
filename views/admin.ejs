@@ -46,30 +46,32 @@
         .business-overview-title{margin:3px 0 4px;color:#17283d;font-family:var(--bo-heading);font-size:1.42rem;font-weight:600;letter-spacing:-.025em}
         .business-overview-description{margin:0;color:#65758b;font-size:.86rem;line-height:1.5}
         .business-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
-        .business-kpi{--kpi-bg:#e5eef8;--kpi-border:#cfdeef;--kpi-ink:#213b5a;position:relative;display:flex;min-width:0;min-height:154px;flex-direction:column;overflow:hidden;padding:17px;border:1px solid var(--kpi-border);border-radius:13px;background-color:var(--kpi-bg);color:var(--kpi-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 4px 12px rgba(15,23,42,.045)}
-        .business-kpi::after{position:absolute;right:-20px;bottom:-40px;width:112px;height:112px;border:1px solid rgba(37,59,82,.08);border-radius:50%;content:"";pointer-events:none}
+        .business-kpi{--kpi-bg:#27496d;--kpi-border:rgba(255,255,255,.16);--kpi-ink:#fff;position:relative;display:flex;min-width:0;min-height:154px;flex-direction:column;overflow:hidden;padding:17px;border:1px solid var(--kpi-border);border-radius:13px;background-color:var(--kpi-bg);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
+        .business-kpi::after{position:absolute;right:-20px;bottom:-40px;width:112px;height:112px;border:1px solid rgba(255,255,255,.1);border-radius:50%;content:"";pointer-events:none}
         .business-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-        .business-kpi-label{color:var(--kpi-ink);font-family:var(--bo-heading);font-size:.72rem;font-weight:600;letter-spacing:.045em;line-height:1.35;text-transform:uppercase}
-        .business-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.72);border-radius:10px;background-color:rgba(255,255,255,.54);color:var(--kpi-ink);font-size:.95rem}
-        .business-kpi-value{display:block;margin:13px 0 11px;color:var(--kpi-ink);font-family:var(--font-ui);font-size:clamp(1.48rem,2vw,1.9rem);font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.035em;line-height:1.15;overflow-wrap:anywhere}
-        .business-kpi-badge{position:relative;z-index:1;align-self:flex-start;max-width:100%;margin-top:auto;padding:4px 8px;border:1px solid rgba(36,55,75,.12);border-radius:999px;background-color:rgba(255,255,255,.55);color:var(--kpi-ink);font-size:.7rem;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
-        .business-kpi-quick-actions{position:relative;z-index:2;display:flex;gap:10px;margin-top:8px}.business-kpi-quick-actions button{padding:0;border:0;background:none;color:var(--kpi-ink);font:500 .72rem var(--font-ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
-        .business-kpi-navy{--kpi-bg:#e5eef8;--kpi-border:#cfdeef;--kpi-ink:#28466a}.business-kpi-forest{--kpi-bg:#e5f1e9;--kpi-border:#cde2d3;--kpi-ink:#28543a}.business-kpi-teal{--kpi-bg:#e0f0ef;--kpi-border:#c7e2df;--kpi-ink:#245653}.business-kpi-indigo{--kpi-bg:#eceafa;--kpi-border:#d9d6f1;--kpi-ink:#494779}.business-kpi-burgundy{--kpi-bg:#f4e8e8;--kpi-border:#e9d1d2;--kpi-ink:#74434b}.business-kpi-slate{--kpi-bg:#e9edf1;--kpi-border:#d6dde5;--kpi-ink:#435366}.business-kpi-olive{--kpi-bg:#edf0e2;--kpi-border:#dce2c9;--kpi-ink:#515c36}
+        .business-kpi-label{color:#fff;font-family:var(--bo-heading);font-size:.72rem;font-weight:600;letter-spacing:.045em;line-height:1.35;text-transform:uppercase}
+        .business-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.28);border-radius:10px;background-color:rgba(255,255,255,.1);color:#fff;font-size:.95rem}
+        .business-kpi-value{display:block;margin:13px 0 11px;color:#fff;font-family:var(--font-ui);font-size:clamp(1.48rem,2vw,1.9rem);font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.035em;line-height:1.15;overflow-wrap:anywhere}
+        .business-kpi-badge{position:relative;z-index:1;align-self:flex-start;max-width:100%;margin-top:auto;padding:4px 8px;border:1px solid rgba(255,255,255,.24);border-radius:999px;background-color:rgba(255,255,255,.1);color:#fff;font-size:.7rem;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
+        .business-kpi-quick-actions{position:relative;z-index:2;display:flex;gap:10px;margin-top:8px}.business-kpi-quick-actions button{padding:0;border:0;background:none;color:#fff;font:500 .72rem var(--font-ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+        .business-kpi-navy{--kpi-bg:#27496d}.business-kpi-forest{--kpi-bg:#2c5f4b}.business-kpi-teal{--kpi-bg:#2a6468}.business-kpi-indigo{--kpi-bg:#454b78}.business-kpi-burgundy{--kpi-bg:#70454f}.business-kpi-slate{--kpi-bg:#47586b}.business-kpi-olive{--kpi-bg:#535d3a}
         .business-kpi[role="button"],#view-main-dashboard .noc-kpi[role="button"]{cursor:pointer;transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
         .business-kpi[role="button"]:hover,#view-main-dashboard .noc-kpi[role="button"]:hover{transform:translateY(-2px);filter:saturate(1.06);box-shadow:0 8px 18px rgba(15,23,42,.1)}
         .business-kpi[role="button"]:focus-visible,#view-main-dashboard .noc-kpi[role="button"]:focus-visible{outline:3px solid #7da895;outline-offset:3px}
-        #view-main-dashboard .noc-kpi{border-color:#dce4ec;border-radius:13px;background:#eef3f8;color:#30445a;box-shadow:inset 0 1px 0 #fff,0 4px 12px rgba(15,23,42,.045)}
-        #view-main-dashboard .noc-kpi:before{width:3px;background:#5d8d72}.noc-purple{background:#eeecf8!important}.noc-purple:before{background:#7d75b5!important}.noc-blue{background:#e5f0f2!important}.noc-blue:before{background:#4d8d8a!important}.noc-amber{background:#f4ede1!important}.noc-amber:before{background:#b2874d!important}
-        #view-main-dashboard .noc-kpi-top{align-items:center;color:#526477;font-family:var(--font-heading);font-size:.68rem;font-weight:600;letter-spacing:.055em}
-        #view-main-dashboard .noc-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.85);border-radius:10px;background:#ffffff8c;color:#405b72;font-size:.95rem}
-        #view-main-dashboard .noc-kpi-value{color:#263c52;font-family:var(--font-ui);font-weight:600;letter-spacing:-.025em}
-        #view-main-dashboard .noc-kpi-sub{color:#617286}
-        #view-main-dashboard .noc-kpi-actions{border-color:#d7e0e8;color:#617286}
-        #view-main-dashboard .noc-kpi-actions button,#view-main-dashboard .noc-kpi-action-link{color:#315f52;font-weight:600}
-        #view-main-dashboard .noc-kpi-action-link:hover{color:#193f34}
-        #view-main-dashboard .noc-interface-pill{border-color:#d4e0e8;background:#ffffffa6;color:#466276}
-        #view-main-dashboard .noc-throughput .traffic-download{color:#26764e}#view-main-dashboard .noc-throughput .traffic-upload{color:#625e9a}
-        #view-main-dashboard .noc-fiber-meta,#view-main-dashboard .noc-traffic-stats span,#view-main-dashboard .noc-progress-row span{color:#718196}
+        #view-main-dashboard .noc-kpi{border-color:rgba(255,255,255,.16);border-radius:13px;background:#354f6d;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
+        #view-main-dashboard .noc-kpi *{color:#fff!important}
+        #view-main-dashboard .noc-kpi .badge{background-color:rgba(255,255,255,.1)!important;border-color:rgba(255,255,255,.3)!important}
+        #view-main-dashboard .noc-kpi:before{width:3px;background:#fff}.noc-purple{background:#4a4c72!important}.noc-purple:before{background:#fff!important}.noc-blue{background:#2b6265!important}.noc-blue:before{background:#fff!important}.noc-amber{background:#6b5140!important}.noc-amber:before{background:#fff!important}
+        #view-main-dashboard .noc-kpi-top{align-items:center;color:#fff;font-family:var(--font-heading);font-size:.68rem;font-weight:600;letter-spacing:.055em}
+        #view-main-dashboard .noc-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.28);border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:.95rem}
+        #view-main-dashboard .noc-kpi-value{color:#fff;font-family:var(--font-ui);font-weight:600;letter-spacing:-.025em}
+        #view-main-dashboard .noc-kpi-sub{color:#fff}
+        #view-main-dashboard .noc-kpi-actions{border-color:rgba(255,255,255,.25);color:#fff}
+        #view-main-dashboard .noc-kpi-actions button,#view-main-dashboard .noc-kpi-action-link{color:#fff;font-weight:600}
+        #view-main-dashboard .noc-kpi-action-link:hover{color:#fff;text-decoration:underline}
+        #view-main-dashboard .noc-interface-pill{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.1);color:#fff}
+        #view-main-dashboard .noc-throughput .traffic-download,#view-main-dashboard .noc-throughput .traffic-upload{color:#fff}
+        #view-main-dashboard .noc-fiber-meta,#view-main-dashboard .noc-traffic-stats span,#view-main-dashboard .noc-progress-row span{color:#fff}
         #view-main-dashboard .noc-panel,#view-main-dashboard> .noc-panel{border:1px solid #e0e6ec;border-radius:13px;background-color:#fff;color:#26384b;box-shadow:0 4px 14px rgba(15,23,42,.04)}
         #view-main-dashboard .noc-panel .card-custom-header{border-color:#e7ebf0;background-color:#f7f9fb;color:#30445a;font-weight:500}
         #view-main-dashboard .noc-panel .card-body,#view-main-dashboard .noc-panel .card-body strong{color:#304256}
@@ -82,8 +84,8 @@
         #view-main-dashboard .noc-table th,#view-main-dashboard .table-light{--bs-table-bg:#f4f7f9;--bs-table-color:#64758a;background-color:#f4f7f9!important;color:#64758a!important;border-color:#e5eaf0}
         #view-main-dashboard .noc-table td,#view-main-dashboard #recentPaymentsBody td{border-color:#e8edf2;color:#394b5e}
         #view-main-dashboard .noc-empty{color:#8190a1}
-        #view-main-dashboard .noc-kpi .badge,#view-main-dashboard .noc-panel .badge{border:1px solid #dce5eb;background-color:#edf3f5!important;color:#496275!important}
-        #view-main-dashboard #dashboardTrafficStatus.bg-success,#view-main-dashboard #dashboardRouterStatus.bg-success{background-color:#dceee2!important;color:#286244!important}
+        #view-main-dashboard .noc-kpi .badge{border:1px solid rgba(255,255,255,.3);background-color:rgba(255,255,255,.1)!important;color:#fff!important}#view-main-dashboard .noc-panel .badge{border:1px solid #dce5eb;background-color:#edf3f5!important;color:#496275!important}
+        #view-main-dashboard #dashboardTrafficStatus.bg-success,#view-main-dashboard #dashboardRouterStatus.bg-success{background-color:rgba(255,255,255,.1)!important;color:#fff!important;border:1px solid rgba(255,255,255,.28)}
         #view-main-dashboard #nocRxLine{stroke:#45916c}#view-main-dashboard #nocTxLine{stroke:#7772b2}
         @media(max-width:1199.98px){.business-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
         @media(max-width:767.98px){.business-overview{padding:16px;border-radius:14px}.business-overview-heading{align-items:flex-start;flex-direction:column;gap:5px}.business-overview-title{font-size:1.26rem}.business-kpi-grid{grid-template-columns:1fr;gap:10px}.business-kpi{min-height:132px;padding:13px}.business-kpi-value{font-size:1.42rem;margin:12px 0 10px}.business-kpi-label{font-size:.65rem}.business-kpi-icon{width:30px;height:30px;flex-basis:30px}}
@@ -1167,6 +1169,19 @@
 .dashboard-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;min-width:0;align-items:stretch}
 .dashboard-kpi-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:13px;min-width:0;min-height:172px;height:auto;padding:18px 18px 20px;border:1px solid #e2e8f0;border-radius:15px;overflow:hidden;text-align:left;color:#0f172a;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;touch-action:manipulation}
 .dashboard-kpi-card:before,.dashboard-kpi-card:after{display:none}
+.dashboard-kpi-card.kpi-gradient-violet{background:#454b78;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-cyan{background:#2a6468;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-crimson{background:#70454f;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-amber{background:#69533c;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-pink{background:#68465d;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-emerald{background:#2c5f4b;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-indigo{background:#3f5075;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-teal{background:#285c5b;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card.kpi-gradient-purple{background:#55476f;border-color:rgba(255,255,255,.2);color:#fff}
+.dashboard-kpi-card .dashboard-kpi-icon{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.28);color:#fff}
+.dashboard-kpi-card .dashboard-kpi-open,.dashboard-kpi-card .dashboard-kpi-value,.dashboard-kpi-card .dashboard-kpi-title,.dashboard-kpi-card .dashboard-kpi-subtitle{color:#fff}
+.dashboard-kpi-card .dashboard-kpi-skeleton{background:rgba(255,255,255,.22);animation:none}
+.dashboard-kpi-card:hover{border-color:rgba(255,255,255,.35);filter:none;box-shadow:0 7px 18px rgba(15,23,42,.16)}
 .dashboard-kpi-card:hover{transform:translateY(-2px);border-color:#cbd5e1;box-shadow:0 7px 18px rgba(15,23,42,.07);filter:none}
 .dashboard-kpi-card:active{transform:translateY(0)}
 .dashboard-kpi-card:focus-visible{outline:3px solid #10b981;outline-offset:3px}
@@ -7382,7 +7397,7 @@ async function deletePlan(id,name){
                                 <div class="customer-search-wrap customer-toolbar-search">
                                     <div class="input-group">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-secondary"></i></span>
-                                        <input id="customerLiveSearch" type="search" value="" readonly autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
+                                        <input id="customerLiveSearch" name="customer-filter-query" type="search" value="" readonly autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" autocapitalize="none" spellcheck="false" class="form-control border-start-0 ps-0" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="scheduleCustomerSearch(this.value)" aria-label="Search by customer name, phone, PPPoE username or IP">
                                     </div>
                                 </div>
                                 <div class="customer-toolbar-actions">
@@ -7450,7 +7465,9 @@ async function deletePlan(id,name){
                     }
                 };
                 customerSearchInput.addEventListener('pointerdown', enableCustomerSearch, { once: true });
-                customerSearchInput.addEventListener('focus', enableCustomerSearch, { once: true });
+                customerSearchInput.addEventListener('keydown', event => {
+                    if (!event.ctrlKey && !event.metaKey && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete')) enableCustomerSearch();
+                });
             }
             document.getElementById('customerPopFilter')?.addEventListener('change',()=>filterCustomerRows(document.getElementById('customerLiveSearch')?.value||''));
             updateLanguage(lang);

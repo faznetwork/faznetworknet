@@ -224,6 +224,8 @@ async function issueBatch(input) {
 
     const eligibleResult = await client.query(
       `SELECT p.id AS pop_id, p.name AS pop_name, p.reseller_id,
+              COALESCE(p.commission_type,'percentage') AS commission_type,
+              COALESCE(p.commission_rate,0)::numeric AS commission_rate,
               b.id AS binding_id, b.router_key, b.hotspot_server,
               b.hotspot_interface, b.vlan_id, b.ip_pool,
               pkg.id AS package_id, pkg.package_name, pkg.profile_key,
@@ -270,7 +272,18 @@ async function issueBatch(input) {
     const validitySeconds = BigInt(eligible.validity_seconds || 0);
     const validity = formatValiditySeconds(validitySeconds);
     const retailUnitCents = toCents(eligible.retail_price, 'retail price');
-    const wholesaleUnitCents = toCents(eligible.wholesale_price, 'wholesale cost');
+    const configuredCommissionCents = toCents(eligible.commission_rate || 0, 'POP commission rate');
+    let resellerCommissionUnitCents = retailUnitCents - toCents(eligible.wholesale_price, 'wholesale cost');
+    let wholesaleUnitCents = toCents(eligible.wholesale_price, 'wholesale cost');
+    if (configuredCommissionCents > 0n) {
+      resellerCommissionUnitCents = eligible.commission_type === 'percentage'
+        ? (retailUnitCents * configuredCommissionCents + 5000n) / 10000n
+        : configuredCommissionCents;
+      if (resellerCommissionUnitCents >= retailUnitCents) {
+        throw serviceError('POP commission must leave a positive owner share below the voucher retail price.', 409, 'INVALID_POP_COMMISSION');
+      }
+      wholesaleUnitCents = retailUnitCents - resellerCommissionUnitCents;
+    }
     if (wholesaleUnitCents > retailUnitCents) {
       throw serviceError('Voucher issuance rejected because wholesale cost exceeds retail price.', 409, 'NEGATIVE_MARGIN');
     }
@@ -282,7 +295,7 @@ async function issueBatch(input) {
 
     const retailTotalCents = retailUnitCents * BigInt(quantity);
     const wholesaleTotalCents = wholesaleUnitCents * BigInt(quantity);
-    const marginTotalCents = retailTotalCents - wholesaleTotalCents;
+    const marginTotalCents = resellerCommissionUnitCents * BigInt(quantity);
     const maxBatchTotalCents = 99999999999999n; // NUMERIC(14,2) maximum
     if (retailTotalCents > maxBatchTotalCents || wholesaleTotalCents > maxBatchTotalCents || marginTotalCents > maxBatchTotalCents) {
       throw serviceError('The selected quantity and package price exceed the supported batch financial range.', 422, 'BATCH_TOTAL_EXCEEDS_LIMIT');
