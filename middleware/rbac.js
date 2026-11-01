@@ -97,10 +97,10 @@ function requireRole(allowedRoles) {
       }
     }
 
-    // Migrate older shared-admin sessions by resolving their username only to
+    // Migrate older super-admin sessions by resolving their username only to
     // one active super-admin identity before it can become a finance actor.
     if (!resellerSession && req.session?.isAdmin === true && !adminUserId &&
-        req.session?.legacySuperAdmin === true && role === 'super_admin') {
+        role === 'super_admin') {
       try {
         const result = await db.query(
           "SELECT id FROM admin_users WHERE lower(username)=lower($1) AND lower(role) IN ('super_admin','superadmin') AND lower(status)='active' ORDER BY id LIMIT 2",
