@@ -18,6 +18,7 @@ router.get('/overview', controller.overview);
 router.get('/customers', controller.listCustomers);
 router.get('/packages', controller.packages);
 router.post('/customers', controller.createCustomer);
+router.post('/customers/:id/renew', controller.renewCustomer);
 router.get('/customers/:id/live-session', controller.liveSession);
 router.get('/customers/:id/payments', controller.paymentHistory);
 router.get('/customers/:id', controller.getCustomer);

@@ -3,6 +3,7 @@
 const db = require('../db');
 const customerController = require('./customerController');
 const { ensureBillingAccount } = require('../services/resellerBillingAccountService');
+const resellerFinanceService = require('../services/resellerFinanceService');
 
 function resellerPopIds(req) {
   const ids = req.tenantScope?.popIds;
@@ -216,6 +217,92 @@ async function getCustomer(req, res) {
   }
 }
 
+async function renewCustomer(req, res) {
+  const customerId = String(req.params.id || '').trim();
+  const resellerId = Number(req.auth?.resellerId);
+  const idempotencyKey = req.get?.('Idempotency-Key') || req.headers?.['idempotency-key'];
+  if (!/^[1-9]\d{0,18}$/.test(customerId)) return res.status(400).json({ success:false, message:'A valid customer ID is required.' });
+  if (!idempotencyKey) return res.status(400).json({ success:false, code:'INVALID_IDEMPOTENCY_KEY', message:'A renewal request key is required. Please retry from the customer directory.' });
+  try {
+    const outcome = await db.withTransaction(async client => {
+      const result = await client.query(
+        `SELECT c.id,c.full_name,c.username,c.password,c.phone,c.package_name,c.profile,c.monthly_bill,
+                c.expiration_date,c.billing_cycle,c.billing_duration_days,c.router_id,c.status,
+                c.provisioning_status,c.pop_id,
+                COALESCE(pkg.price,c.monthly_bill) AS charge,
+                COALESCE(pkg.profile_name,pkg.plan_name,c.profile) AS router_profile,
+                pu.caller_id
+         FROM customers c
+         INNER JOIN pops p ON p.id=c.pop_id AND p.reseller_id=$2
+         LEFT JOIN packages pkg ON LOWER(pkg.plan_name)=LOWER(c.package_name)
+                              OR LOWER(pkg.profile_name)=LOWER(c.profile)
+         LEFT JOIN pppoe_users pu ON LOWER(pu.username)=LOWER(c.username)
+         WHERE c.id=$1 AND c.pop_id=ANY($3::bigint[])
+         ORDER BY pkg.id ASC LIMIT 1 FOR UPDATE OF c`,
+        [customerId, resellerId, resellerPopIds(req)]
+      );
+      const customer = result.rows[0];
+      if (!customer) return { kind:'not_found' };
+      const existing = await resellerFinanceService.findCustomerCharge(client, resellerId, customer.id, idempotencyKey);
+      if (existing) {
+        const dateMatch = String(existing.existing.description || '').match(/through (\d{4}-\d{2}-\d{2})$/);
+        if (!dateMatch) throw Object.assign(new Error('The previous renewal charge is missing its expiration record.'), { statusCode:409, code:'RENEWAL_REPLAY_INCOMPLETE' });
+        return { kind:'renewal', customer, expirationDate:dateMatch[1], billing:{ replayed:true, ledgerEntryId:String(existing.existing.id), billingMode:existing.existing.account_type==='wallet'?'prepaid':'postpaid' } };
+      }
+      const price = Number(customer.charge || 0);
+      if (!Number.isFinite(price) || price <= 0) throw Object.assign(new Error('This customer has no positive package price configured.'), { statusCode:409, code:'ZERO_PACKAGE_PRICE' });
+      const expirationDate = customerController.nextBillingExpiryDate(customer.expiration_date, customer.billing_cycle, customer.billing_duration_days);
+      const billingInput = {
+        resellerId, customerId:customer.id, amount:String(price.toFixed(2)), idempotencyKey,
+        description:'Manual renewal for customer ' + customer.username + ' through ' + expirationDate,
+        actorUserId:resellerId
+      };
+      const prepared = await resellerFinanceService.prepareCustomerCharge(client, billingInput);
+      const billing = await resellerFinanceService.postCustomerCharge(client, billingInput, prepared);
+      await client.query(
+        `UPDATE customers SET expiration_date=$1::date,paid_until=$1::date,billing_status='paid',
+           last_paid_at=NOW(),provisioning_status='pending',updated_at=NOW() WHERE id=$2`,
+        [expirationDate, customer.id]
+      );
+      return { kind:'renewal', customer, expirationDate, billing };
+    });
+    if (outcome.kind==='not_found') return res.status(404).json({ success:false, message:'Customer was not found in your assigned POPs.' });
+
+    const { customer, expirationDate, billing } = outcome;
+    try {
+      const router = await customerController.getCustomerRouterService(customer);
+      const comment = customerController.buildExpirationComment(customer.full_name, customer.phone, expirationDate);
+      await router.updateSecret(customer.username, {
+        password:customer.password, profile:customer.router_profile || customer.profile,
+        comment, disabled:false
+      });
+      await router.kickActiveUser(customer.username).catch(() => null);
+      await db.withTransaction(async client => {
+        await client.query(
+          `UPDATE customers SET status='active',provisioning_status='provisioned',updated_at=NOW() WHERE id=$1`,
+          [customer.id]
+        );
+        await client.query(
+          `INSERT INTO pppoe_users(username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,caller_id,billing_status,last_paid_at,paid_until,synced_at,updated_at)
+           VALUES($1,$2,$3,'pppoe',false,$4,$5,$6,$7,'active',$8,'paid',NOW(),$7,NOW(),NOW())
+           ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=false,
+             comment=EXCLUDED.comment,phone=EXCLUDED.phone,router_id=EXCLUDED.router_id,expiry_date=EXCLUDED.expiry_date,
+             status='active',caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),billing_status='paid',
+             last_paid_at=NOW(),paid_until=EXCLUDED.paid_until,synced_at=NOW(),updated_at=NOW()`,
+          [customer.username,customer.password,customer.router_profile||customer.profile,comment,customer.phone,customer.router_id,expirationDate,customer.caller_id||null]
+        );
+      });
+    } catch (routerError) {
+      console.error('[Reseller Renewal] Router provisioning remains pending:', routerError.message);
+      return res.status(503).json({ success:false, code:'RENEWAL_PROVISIONING_PENDING', charged:true, expirationDate, message:'Wallet charged and renewal recorded. Router provisioning is pending; retry this request to finish without charging again.' });
+    }
+    return res.json({ success:true, replayed:Boolean(billing.replayed), expirationDate, billing:{ billingMode:billing.billingMode, ledgerEntryId:billing.ledgerEntryId, ...(billing.account ? { walletBalance:String(billing.account.wallet_balance), receivableBalance:String(billing.account.receivable_balance) } : {}) }, message:'Customer renewed successfully.' });
+  } catch (error) {
+    if (error.code==='INSUFFICIENT_WALLET_BALANCE') return res.status(400).json({ success:false, code:error.code, message:error.message });
+    return res.status(error.statusCode || 503).json({ success:false, code:error.code, message:error.statusCode ? error.message : 'Customer renewal is temporarily unavailable.' });
+  }
+}
+
 async function liveSession(req, res) {
   // Reuse the established target-router status resolver after this router has
   // authenticated the reseller and loaded the reseller's POP tenant scope.
@@ -270,4 +357,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, renderDashboard, listCustomers, packages, createCustomer, getCustomer, liveSession, paymentHistory };
+module.exports = { overview, renderDashboard, listCustomers, packages, createCustomer, getCustomer, renewCustomer, liveSession, paymentHistory };

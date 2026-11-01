@@ -173,6 +173,107 @@ async function updateCreditLimit(input) {
     return { account: result.rows[0], updatedBy: actor };
   });
 }
+function customerChargeKey(value) {
+  const key = String(value ?? '').trim();
+  if (!/^[A-Za-z0-9._:-]{8,120}$/.test(key)) {
+    throw financeError('A valid Idempotency-Key header (8–120 safe characters) is required.', 400, 'INVALID_IDEMPOTENCY_KEY');
+  }
+  return key;
+}
+async function prepareCustomerCharge(client, input) {
+  const resellerId = Number(positiveId(input.resellerId, 'reseller'));
+  const customerId = positiveId(input.customerId, 'customer');
+  const amount = amountCents(input.amount);
+  const key = customerChargeKey(input.idempotencyKey);
+  const prior = await client.query(
+    'SELECT id,billing_account_id,reseller_id,customer_id,account_type,entry_type,amount,description ' +
+    'FROM public.reseller_ledger_entries WHERE reseller_id=$1 AND idempotency_key=$2 LIMIT 1',
+    [resellerId, key]
+  );
+  if (prior.rows?.length) {
+    const existing = prior.rows[0];
+    const amountMatches = amountCents(existing.amount) === amount;
+    const sameOperation = String(existing.customer_id) === customerId && amountMatches &&
+      ['wallet_debit', 'receivable_charge'].includes(String(existing.entry_type));
+    if (!sameOperation) throw financeError('This Idempotency-Key was already used for a different customer billing operation.', 409, 'IDEMPOTENCY_KEY_CONFLICT');
+    return { replayed: true, existing, resellerId, customerId, amount, key };
+  }
+
+  const account = await lockedAccount(client, resellerId);
+  if (amount <= 0n) throw financeError('The customer package must have a positive chargeable price.', 409, 'ZERO_PACKAGE_PRICE');
+  if (account.billing_mode === 'prepaid') {
+    if (amount > nonNegativeCents(account.wallet_balance, 'Wallet balance')) {
+      throw financeError('Insufficient wallet balance for this customer package.', 400, 'INSUFFICIENT_WALLET_BALANCE');
+    }
+  } else if (nonNegativeCents(account.receivable_balance, 'Receivable balance') + amount > nonNegativeCents(account.credit_limit, 'Credit limit')) {
+    throw financeError('This customer package exceeds your available postpaid credit limit.', 409, 'POSTPAID_CREDIT_LIMIT_EXCEEDED');
+  }
+  return { replayed: false, account, resellerId, customerId, amount, amountText: decimal(amount), key };
+}
+async function findCustomerCharge(client, resellerIdValue, customerIdValue, keyValue) {
+  const resellerId = Number(positiveId(resellerIdValue, 'reseller'));
+  const customerId = positiveId(customerIdValue, 'customer');
+  const key = customerChargeKey(keyValue);
+  const prior = await client.query(
+    'SELECT id,billing_account_id,reseller_id,customer_id,account_type,entry_type,amount,description ' +
+    'FROM public.reseller_ledger_entries WHERE reseller_id=$1 AND idempotency_key=$2 LIMIT 1',
+    [resellerId, key]
+  );
+  if (!prior.rows?.length) return null;
+  const existing = prior.rows[0];
+  if (String(existing.customer_id) !== customerId || !['wallet_debit', 'receivable_charge'].includes(String(existing.entry_type))) {
+    throw financeError('This Idempotency-Key was already used for a different customer billing operation.', 409, 'IDEMPOTENCY_KEY_CONFLICT');
+  }
+  return { replayed: true, existing, resellerId, customerId, key };
+}
+async function postCustomerCharge(client, input, prepared) {
+  const charge = prepared || await prepareCustomerCharge(client, input);
+  if (charge.replayed) return { replayed: true, ledgerEntryId: String(charge.existing.id), description: charge.existing.description || null };
+  const { account, resellerId, customerId, amountText, key } = charge;
+  const amountValue = decimal(charge.amount);
+  const prepaid = account.billing_mode === 'prepaid';
+  const update = await client.query(
+    prepaid
+      ? `UPDATE public.reseller_billing_accounts
+         SET wallet_balance=wallet_balance-$1::numeric,updated_at=NOW()
+         WHERE id=$2 AND reseller_id=$3 AND account_status='active'
+           AND billing_mode='prepaid' AND wallet_balance >= $1::numeric
+         RETURNING id,wallet_balance,receivable_balance,credit_limit,currency`
+      : `UPDATE public.reseller_billing_accounts
+         SET receivable_balance=receivable_balance+$1::numeric,updated_at=NOW()
+         WHERE id=$2 AND reseller_id=$3 AND account_status='active'
+           AND billing_mode='postpaid' AND receivable_balance+$1::numeric <= credit_limit
+         RETURNING id,wallet_balance,receivable_balance,credit_limit,currency`,
+    [amountText, account.id, resellerId]
+  );
+  if (update.rowCount !== 1) {
+    throw financeError(prepaid ? 'Insufficient wallet balance for this customer package.' : 'This customer package exceeds your available postpaid credit limit.', prepaid ? 400 : 409, prepaid ? 'INSUFFICIENT_WALLET_BALANCE' : 'POSTPAID_CREDIT_LIMIT_EXCEEDED');
+  }
+  const entryType = prepaid ? 'wallet_debit' : 'receivable_charge';
+  const accountType = prepaid ? 'wallet' : 'receivable';
+  const description = String(input.description || 'Customer package charge').slice(0, 500);
+  const actor = String(input.actorUserId ?? resellerId).trim();
+  const ledger = await client.query(
+    `INSERT INTO public.reseller_ledger_entries
+       (account_id,billing_account_id,reseller_id,account_type,entry_type,amount,currency,
+        customer_id,batch_id,settlement_id,idempotency_key,description,actor_user_id)
+     VALUES ($1,$1,$2,$3,$4,$5::numeric,$6,$7,NULL,NULL,$8,$9,$10)
+     RETURNING id`,
+    [account.id, resellerId, accountType, entryType, amountValue, account.currency, customerId, key, description, actor]
+  );
+  if (ledger.rowCount !== 1) throw financeError('The reseller customer charge could not be recorded in the ledger.', 503, 'LEDGER_POST_FAILED');
+  return {
+    replayed: false,
+    ledgerEntryId: String(ledger.rows[0].id),
+    description,
+    billingMode: account.billing_mode,
+    account: update.rows[0]
+  };
+}
+async function chargeCustomer(client, input) {
+  const prepared = await prepareCustomerCharge(client, input);
+  return postCustomerCharge(client, input, prepared);
+}
 async function inspect(resellerIdValue) {
   const resellerId = Number(positiveId(resellerIdValue, 'reseller'));
   const accountResult = await db.query(
@@ -184,7 +285,7 @@ async function inspect(resellerIdValue) {
   if (!account) return null;
   const [ledger, settlements] = await Promise.all([
     db.query(
-      'SELECT id,billing_account_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id,created_at ' +
+      'SELECT id,billing_account_id,account_type,entry_type,amount,currency,customer_id,batch_id,settlement_id,idempotency_key,description,actor_user_id,created_at ' +
       'FROM public.reseller_ledger_entries WHERE billing_account_id=$1 ORDER BY id DESC LIMIT 100',
       [account.id]
     ),
@@ -200,4 +301,4 @@ async function inspect(resellerIdValue) {
   ]);
   return { account, ledgerEntries: ledger.rows || [], settlements: settlements.rows || [] };
 }
-module.exports = { walletTopup, receivableSettlement, updateCreditLimit, inspect, amountCents, idempotencyKey };
+module.exports = { walletTopup, receivableSettlement, updateCreditLimit, inspect, amountCents, idempotencyKey, prepareCustomerCharge, postCustomerCharge, chargeCustomer, findCustomerCharge };

@@ -1,6 +1,7 @@
 const db = require("../db");
 const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const mikrotikService = require("../services/mikrotikService");
+const resellerFinanceService = require("../services/resellerFinanceService");
 const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 
@@ -301,7 +302,18 @@ async function createCustomer(req, res) {
         ]
       );
       if (!inserted.rows.length) throw new Error("Customer insert did not return the created record.");
-      return { kind: "created", inserted: inserted.rows[0] };
+      let billing = null;
+      if (isReseller) {
+        billing = await resellerFinanceService.chargeCustomer(client, {
+          resellerId: req.auth.resellerId,
+          customerId: inserted.rows[0].id,
+          amount: packageDefinition.price,
+          idempotencyKey: 'reseller-customer-initial:' + String(inserted.rows[0].id),
+          description: 'Initial activation for customer ' + customer.username,
+          actorUserId: req.auth.resellerId
+        });
+      }
+      return { kind: "created", inserted: inserted.rows[0], billing };
     });
 
     if (creation.kind === "inactive_pop") {
@@ -398,7 +410,13 @@ async function createCustomer(req, res) {
         expirationDate: customer.expirationDate,
         status: dateStatus(customer.expirationDate),
         effectiveProfile: customer.effectiveProfile
-      }
+      },
+      ...(creation.billing ? { billing: {
+        billingMode: creation.billing.billingMode,
+        ledgerEntryId: creation.billing.ledgerEntryId,
+        walletBalance: creation.billing.account?.wallet_balance == null ? undefined : String(creation.billing.account.wallet_balance),
+        receivableBalance: creation.billing.account?.receivable_balance == null ? undefined : String(creation.billing.account.receivable_balance)
+      } } : {})
     });
   } catch (error) {
     return errorResponse(res, error);
@@ -1529,4 +1547,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik, nextBillingExpiryDate, buildExpirationComment, getCustomerRouterService };
