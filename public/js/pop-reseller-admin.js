@@ -3,7 +3,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
   'use strict';
 
   const API = '/api';
-  const state = { pops: [], resellers: [], ipPools: [], activeView: null, busy: false };
+  const state = { pops: [], resellers: [], ipPools: [], income: {}, activeView: null, busy: false };
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -174,7 +174,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '.faz-pop-reseller-view{min-width:0;width:100%;max-width:100%;overflow-x:clip;color:#0f172a;font-family:var(--reseller-font,Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif);font-size:var(--reseller-body-size,14px);font-weight:var(--reseller-body-weight,400);line-height:var(--reseller-body-line-height,1.55)}' +
       '.faz-pop-reseller-view .fpr-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}' +
       '.faz-pop-reseller-view .fpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}' +
-      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}.faz-pop-reseller-view .fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}.faz-pop-reseller-view .fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}' +
+      '.faz-pop-reseller-view .fpr-metric{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;min-width:0;box-shadow:inset 0 1px 0 #fff,0 2px 8px rgba(15,23,42,.04)}.faz-pop-reseller-view .fpr-metric--pops{background:#e5eef8;border-color:#cfdeef}.faz-pop-reseller-view .fpr-metric--customers{background:#e5f1e9;border-color:#cde2d3}.faz-pop-reseller-view .fpr-metric--resellers{background:#eceafa;border-color:#d9d6f1}.faz-pop-reseller-view .fpr-metric--income{background:#e0f0ef;border-color:#c7e2df}.faz-pop-reseller-view .fpr-metric--monthly{background:#edf0e2;border-color:#dce2c9}.faz-pop-reseller-view .fpr-metric--weekly{background:#f4e8e8;border-color:#e9d1d2}' +
       '.faz-pop-reseller-view .fpr-metric-label{font-size:12px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}' +
       '.faz-pop-reseller-view .fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700;color:#0f172a;overflow-wrap:anywhere;margin-top:5px}' +
       '.faz-pop-reseller-view .fpr-card{border:1px solid #e2e8f0;border-radius:14px;background:#fff;overflow:hidden}' +
@@ -212,6 +212,7 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       element.remove();
     });
     const totalCustomers = state.pops.reduce(function (sum, pop) { return sum + Number(pop.customer_count || 0); }, 0);
+    const finance = state.income || {};
     const rows = state.pops.map(function (pop, index) {
       const owner = pop.reseller_name || '—';
       const commission = formatMoney(pop.commission_rate, pop.commission_type);
@@ -236,7 +237,10 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
       '<div class="fpr-metrics">' +
       '<article class="fpr-metric fpr-metric--pops"><div class="fpr-metric-label">Total POPs</div><div class="fpr-metric-value">' + state.pops.length.toLocaleString('en-BD') + '</div></article>' +
       '<article class="fpr-metric fpr-metric--customers"><div class="fpr-metric-label">Total POP Customers</div><div class="fpr-metric-value">' + totalCustomers.toLocaleString('en-BD') + '</div><div class="small fpr-muted">All customer records assigned to POPs</div></article>' +
-      '<article class="fpr-metric fpr-metric--resellers"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article></div>' +
+      '<article class="fpr-metric fpr-metric--resellers"><div class="fpr-metric-label">Total Resellers</div><div class="fpr-metric-value">' + state.resellers.length.toLocaleString('en-BD') + '</div></article>' +
+      '<article class="fpr-metric fpr-metric--income"><div class="fpr-metric-label">Total Income</div><div class="fpr-metric-value">৳' + Number(finance.totalIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">All recorded collections</div></article>' +
+      '<article class="fpr-metric fpr-metric--monthly"><div class="fpr-metric-label">Monthly Income</div><div class="fpr-metric-value">৳' + Number(finance.monthlyIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Collected this month</div></article>' +
+      '<article class="fpr-metric fpr-metric--weekly"><div class="fpr-metric-label">Weekly Income</div><div class="fpr-metric-value">৳' + Number(finance.weeklyIncome||0).toLocaleString('en-BD',{maximumFractionDigits:2}) + '</div><div class="small fpr-muted">Last 7 days</div></article></div>' +
       '<section class="fpr-card"><div class="fpr-card-head"><div>POP Directory</div><button class="btn btn-sm btn-outline-secondary" type="button" data-action="refresh-pops"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>' +
       '<div class="table-responsive"><table class="table table-hover fpr-table"><thead><tr><th>#</th><th>Name</th><th>Area / Zone</th><th>Reseller Owner</th><th>PPPoE IP Pool</th><th>Hotspot IP Pool</th><th>Services</th><th>Commission</th><th>Customers</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="11" class="text-center text-muted py-4">No POP records found.</td></tr>') +
@@ -806,9 +810,10 @@ console.log('>>> RUNNING DUAL-SERVICE POP ADMIN BUILD V10 <<<');
     const section = rootView('view-pop-management', 'POP Management');
     section.innerHTML = sharedStyles() + '<div class="fpr-loading"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading POP and reseller data…</div>';
     try {
-      const results = await Promise.all([apiRequest('/pops'), apiRequest('/resellers')]);
+      const results = await Promise.all([apiRequest('/pops'), apiRequest('/resellers'), apiRequest('/dashboard/business-overview')]);
       state.pops = Array.isArray(results[0].pops) ? results[0].pops : [];
       state.resellers = Array.isArray(results[1].resellers) ? results[1].resellers : [];
+      state.income = results[2].financial || {};
       renderPopManagement(section, '');
     } catch (error) {
       renderPopManagement(section, error.message || 'Unable to load POP data.');

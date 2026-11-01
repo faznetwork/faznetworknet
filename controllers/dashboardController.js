@@ -68,7 +68,9 @@ exports.businessOverview=async(_req,res)=>{
   try{
     const [financial,customers,hotspot,infrastructure,operations]=await Promise.all([
       db.query(`WITH clock AS (SELECT (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today),
-        paid AS (SELECT COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= date_trunc('month',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka' AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS monthly_income,
+        paid AS (SELECT COALESCE(SUM(t.amount),0)::numeric(14,2) AS total_income,
+        COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= ((c.today-6)::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS weekly_income,
+        COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= date_trunc('month',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka' AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS monthly_income,
         COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= date_trunc('year',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka' AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS yearly_income,
         COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= (c.today::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS today_collection
         FROM transactions t CROSS JOIN clock c WHERE LOWER(t.status) IN ('processed','paid','success') OR t.used=TRUE),
@@ -89,7 +91,7 @@ exports.businessOverview=async(_req,res)=>{
         (SELECT COUNT(*)::int FROM support_tickets WHERE status IN ('open','in_progress')) AS open_tickets`)
     ]);
     const f=financial.rows[0]||{},c=customers.rows[0]||{},h=hotspot.rows[0]||{},i=infrastructure.rows[0]||{},o=operations.rows[0]||{};
-    return res.json({success:true,generatedAt:new Date().toISOString(),financial:{monthlyIncome:Number(f.monthly_income||0),yearlyIncome:Number(f.yearly_income||0),todayCollection:Number(f.today_collection||0),outstandingDue:Number(f.outstanding_due||0),dueAccounts:Number(f.due_accounts||0)},customers:{activePppoe:Number(c.active_pppoe_current||0),totalPppoe:Number(c.total_pppoe||0),activeHotspot:Number(h.active_hotspot||0),totalHotspot:Number(h.total_hotspot||0)},infrastructure:{activePops:Number(i.active_pops||0),activeResellers:Number(i.active_resellers||0),activeStaff:Number(i.active_staff||0)},operations:{expiringSoon:Number(o.expiring_soon||0)+Number(o.expiring_hotspot||0),openTickets:Number(o.open_tickets||0)}});
+    return res.json({success:true,generatedAt:new Date().toISOString(),financial:{totalIncome:Number(f.total_income||0),weeklyIncome:Number(f.weekly_income||0),monthlyIncome:Number(f.monthly_income||0),yearlyIncome:Number(f.yearly_income||0),todayCollection:Number(f.today_collection||0),outstandingDue:Number(f.outstanding_due||0),dueAccounts:Number(f.due_accounts||0)},customers:{activePppoe:Number(c.active_pppoe_current||0),totalPppoe:Number(c.total_pppoe||0),activeHotspot:Number(h.active_hotspot||0),totalHotspot:Number(h.total_hotspot||0)},infrastructure:{activePops:Number(i.active_pops||0),activeResellers:Number(i.active_resellers||0),activeStaff:Number(i.active_staff||0)},operations:{expiringSoon:Number(o.expiring_soon||0)+Number(o.expiring_hotspot||0),openTickets:Number(o.open_tickets||0)}});
   }catch(error){console.error('[Dashboard Business Overview]',error?.message||error);return res.status(503).json({success:false,message:'Business overview is temporarily unavailable.'});}
 };
 
