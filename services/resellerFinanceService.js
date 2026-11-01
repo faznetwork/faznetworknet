@@ -36,8 +36,11 @@ function idempotencyKey(value) {
   }
   return key;
 }
-function actorId(value) {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
+function actorId(value, required = false) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    if (required) throw financeError('An authenticated admin actor is required to post a finance settlement.', 401, 'AUTHENTICATED_ACTOR_REQUIRED');
+    return null;
+  }
   return positiveId(value, 'authenticated admin actor');
 }
 function normalizeProvider(value) {
@@ -72,10 +75,10 @@ async function lockedAccount(client, resellerId) {
 }
 async function post(input, mode) {
   const resellerId = Number(positiveId(input.resellerId, 'reseller'));
-  const actor = actorId(input.actorUserId);
+  const actor = actorId(input.actorUserId, true);
   const amount = amountCents(input.amount);
   const key = idempotencyKey(input.idempotencyKey);
-  const entryType = mode === 'prepaid' ? 'wallet_credit' : 'receivable_payment';
+  const entryType = mode === 'prepaid' ? 'wallet_topup' : 'receivable_settlement';
   const settlementType = mode === 'prepaid' ? 'wallet_topup' : 'receivable_payment';
   const accountType = mode === 'prepaid' ? 'wallet' : 'receivable';
   const provider = normalizeProvider(input.paymentProvider);
@@ -84,7 +87,7 @@ async function post(input, mode) {
   return db.withTransaction(async client => {
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
     const prior = await client.query(
-      'SELECT id,billing_account_id AS account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
+      'SELECT id,COALESCE(account_id,billing_account_id) AS account_id,reseller_id,account_type,entry_type,amount,settlement_id,idempotency_key ' +
       'FROM public.reseller_ledger_entries WHERE idempotency_key=$1 LIMIT 1',
       [key]
     );
@@ -115,9 +118,9 @@ async function post(input, mode) {
 
     const settlementResult = await client.query(
       'INSERT INTO public.reseller_settlements ' +
-      '(billing_account_id,reseller_id,idempotency_key,amount,currency,payment_method,external_reference,status,received_at,actor_user_id,notes) ' +
-      "VALUES ($1,$2,$3,$4::numeric,$5,$6,$7,'posted',NOW(),$8,$9) RETURNING id",
-      [account.id, resellerId, key, amountText, account.currency, provider, reference, actor, notes]
+      '(account_id,reseller_id,settlement_type,amount,payment_provider,external_reference,received_by,received_at,notes) ' +
+      'VALUES ($1,$2,$3,$4::numeric,$5,$6,$7,NOW(),$8) RETURNING id',
+      [account.id, resellerId, settlementType, amountText, provider, reference, actor, notes]
     );
     const settlement = settlementResult.rows?.[0];
     if (!settlement) throw financeError('Finance settlement record was not persisted.', 503, 'SETTLEMENT_PERSIST_FAILED');
@@ -140,8 +143,8 @@ async function post(input, mode) {
       : 'Admin receivable settlement' + (reference ? ' · ' + reference : '');
     const ledgerResult = await client.query(
       'INSERT INTO public.reseller_ledger_entries ' +
-      '(billing_account_id,reseller_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id) ' +
-      'VALUES ($1,$2,$3,$4,$5::numeric,$6,NULL,$7,$8,$9,$10) RETURNING id',
+      '(account_id,billing_account_id,reseller_id,account_type,entry_type,amount,currency,batch_id,settlement_id,idempotency_key,description,actor_user_id) ' +
+      'VALUES ($1,$1,$2,$3,$4,$5::numeric,$6,NULL,$7,$8,$9,$10) RETURNING id',
       [account.id, resellerId, accountType, entryType, amountText, account.currency, settlement.id, key, description, actor]
     );
     if (ledgerResult.rowCount !== 1) throw financeError('Append-only finance ledger posting failed.', 503, 'LEDGER_POST_FAILED');
