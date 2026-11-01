@@ -63,6 +63,36 @@ async function collect(iface){
 }
 exports.stats=async(req,res)=>{res.set("Cache-Control","private, max-age=2, stale-while-revalidate=5");const iface=String(req.query.interface||"aggregate").trim().slice(0,100)||"aggregate";if(cache&&Date.now()-cacheAt<5000&&cache.iface===iface)return res.json(cache.payload);if(!inflight){inflight=collect(iface).then(x=>{cache={iface,payload:x};cacheAt=Date.now();return x;}).catch(e=>{console.error("[Dashboard Stats]",e.message||e);return cache?.payload||{success:false,message:"Dashboard metrics unavailable"};}).finally(()=>{inflight=null;});}const fallback=cache?.payload||{success:true,generatedAt:new Date().toISOString(),subscribers:{total:0,online:0,availability:0},traffic:{interface:iface,rxMbps:0,txMbps:0,available:false},router:{online:false},billing:{todayAmount:0,todayTransactions:0,mtdAmount:0},fiber:{total:0,online:0,warnings:0,urgent:[],activePonPorts:0,totalPonPorts:4},expiring:[],recentPayments:[]};return res.json(await Promise.race([inflight,new Promise(resolve=>setTimeout(()=>resolve(fallback),1500))]));};
 
+exports.businessOverview=async(_req,res)=>{
+  res.set("Cache-Control","private, max-age=30, stale-while-revalidate=60");
+  try{
+    const [financial,customers,hotspot,infrastructure,operations]=await Promise.all([
+      db.query(`WITH clock AS (SELECT (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today),
+        paid AS (SELECT COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= date_trunc('month',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka' AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS monthly_income,
+        COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= date_trunc('year',c.today::timestamp) AT TIME ZONE 'Asia/Dhaka' AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS yearly_income,
+        COALESCE(SUM(t.amount) FILTER (WHERE t.created_at >= (c.today::timestamp AT TIME ZONE 'Asia/Dhaka') AND t.created_at < ((c.today+1)::timestamp AT TIME ZONE 'Asia/Dhaka')),0)::numeric(14,2) AS today_collection
+        FROM transactions t CROSS JOIN clock c WHERE LOWER(t.status) IN ('processed','paid','success') OR t.used=TRUE),
+        due AS (SELECT COALESCE(SUM(cu.monthly_bill),0)::numeric(14,2) AS outstanding_due,COUNT(*)::int AS due_accounts FROM customers cu CROSS JOIN clock c WHERE cu.status='active' AND (COALESCE(cu.billing_status,'unpaid')<>'paid' OR cu.paid_until IS NULL OR cu.paid_until<c.today))
+        SELECT paid.*,due.* FROM paid CROSS JOIN due`),
+      db.query(`SELECT COUNT(*)::int AS total_pppoe,
+        COUNT(*) FILTER (WHERE status='active')::int AS active_pppoe,
+        COUNT(*) FILTER (WHERE status='active' AND (expiration_date IS NULL OR expiration_date >= (NOW() AT TIME ZONE 'Asia/Dhaka')::date))::int AS active_pppoe_current
+        FROM customers`),
+      db.query(`SELECT COUNT(*) FILTER (WHERE status='active' AND (expires_at IS NULL OR expires_at>NOW()))::int AS active_hotspot,
+        COUNT(*)::int AS total_hotspot FROM hotspot_vouchers`),
+      db.query(`SELECT (SELECT COUNT(*)::int FROM pops WHERE status='active') AS active_pops,
+        (SELECT COUNT(*)::int FROM resellers WHERE status='active') AS active_resellers,
+        (SELECT COUNT(*)::int FROM hr_employees WHERE status='active') AS active_staff`),
+      db.query(`WITH clock AS (SELECT NOW() AS now_at, (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today)
+        SELECT (SELECT COUNT(*)::int FROM customers cu CROSS JOIN clock c WHERE cu.status='active' AND cu.expiration_date BETWEEN c.today AND c.today+1) AS expiring_soon,
+        (SELECT COUNT(*)::int FROM hotspot_vouchers v CROSS JOIN clock c WHERE v.status='active' AND v.expires_at>c.now_at AND v.expires_at<=c.now_at+INTERVAL '48 hours') AS expiring_hotspot,
+        (SELECT COUNT(*)::int FROM support_tickets WHERE status IN ('open','in_progress')) AS open_tickets`)
+    ]);
+    const f=financial.rows[0]||{},c=customers.rows[0]||{},h=hotspot.rows[0]||{},i=infrastructure.rows[0]||{},o=operations.rows[0]||{};
+    return res.json({success:true,generatedAt:new Date().toISOString(),financial:{monthlyIncome:Number(f.monthly_income||0),yearlyIncome:Number(f.yearly_income||0),todayCollection:Number(f.today_collection||0),outstandingDue:Number(f.outstanding_due||0),dueAccounts:Number(f.due_accounts||0)},customers:{activePppoe:Number(c.active_pppoe_current||0),totalPppoe:Number(c.total_pppoe||0),activeHotspot:Number(h.active_hotspot||0),totalHotspot:Number(h.total_hotspot||0)},infrastructure:{activePops:Number(i.active_pops||0),activeResellers:Number(i.active_resellers||0),activeStaff:Number(i.active_staff||0)},operations:{expiringSoon:Number(o.expiring_soon||0)+Number(o.expiring_hotspot||0),openTickets:Number(o.open_tickets||0)}});
+  }catch(error){console.error('[Dashboard Business Overview]',error?.message||error);return res.status(503).json({success:false,message:'Business overview is temporarily unavailable.'});}
+};
+
 /**
  * Database-only Hotspot dashboard overview. This handler is intentionally read-only:
  * no RouterOS calls, writes, provisioning, or mutations to live subscriber/payment data.
