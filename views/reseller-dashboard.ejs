@@ -1,317 +1,43 @@
-<!doctype html>
 <%
   const brand = typeof brandSettings !== 'undefined' && brandSettings ? brandSettings : {};
   const brandName = String(brand.company_name || 'FAZ NETWORK');
   const safeResellerName = String(resellerName || 'Reseller');
+  const activePath = String(currentPath || '');
 %>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title><%= brandName %> · Reseller Portal</title>
+  <title><%= title || brandName %></title>
   <% if (brand.favicon_url) { %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <style>
-    :root{--fzn-green:#0a3d2e;--fzn-hover:#0d4d3a;--fzn-accent:#10b981;--fzn-ink:#0f172a;--fzn-muted:#64748b;--fzn-bg:#f3f7f5}
-    *{box-sizing:border-box}body{margin:0;background:var(--fzn-bg);color:var(--fzn-ink);font-family:Inter,"Segoe UI",Arial,sans-serif}
-    .topbar{background:linear-gradient(115deg,var(--fzn-green),var(--fzn-hover));color:#fff;padding:20px 0;box-shadow:0 8px 24px #0a3d2e1c}
-    .brand-mark{width:42px;height:42px;border-radius:12px;background:#ffffff1c;display:grid;place-items:center;font-size:1.35rem}
-    .eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:#a7f3d0;font-weight:800}
-    .page-wrap{max-width:1440px;margin:0 auto;padding:26px 22px 48px}
-    .section-title{font-size:1.05rem;font-weight:800;margin:0}.section-subtitle{font-size:.84rem;color:var(--fzn-muted);margin-top:4px}
-    .metric-card,.panel{background:#fff;border:1px solid #e2ebe6;border-radius:16px;box-shadow:0 4px 16px #0f172a08}
-    .metric-card{height:100%;padding:19px}.metric-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:#e7f7ef;color:var(--fzn-green);font-size:1.15rem}
-    .metric-label{font-size:.78rem;color:var(--fzn-muted);font-weight:700;margin-top:15px}.metric-value{font-size:1.75rem;font-weight:850;letter-spacing:-.04em;margin-top:3px}
-    .metric-foot{font-size:.76rem;color:var(--fzn-muted);margin-top:3px}.panel{padding:20px}.table thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;background:#f8fafc;border-bottom-color:#e2e8f0;white-space:nowrap}
-    .table tbody td{vertical-align:middle;font-size:.87rem}.badge-soft{background:#e7f7ef;color:#075b43}.badge-muted{background:#eef2f7;color:#475569}
-    .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:#94a3b8}.status-dot.online{background:#10b981}.status-dot.offline{background:#64748b}
-    .pop-card{height:100%;border:1px solid #e2ebe6;border-radius:13px;padding:15px;background:linear-gradient(145deg,#fff,#f8fcfa)}
-    .pop-name{font-weight:800;color:var(--fzn-green)}.pop-meta{font-size:.8rem;color:var(--fzn-muted);margin-top:6px}
-    .btn-fzn{background:var(--fzn-green);color:#fff;border:0}.btn-fzn:hover{background:var(--fzn-hover);color:#fff}
-    .form-control:focus,.form-select:focus{border-color:#34d399;box-shadow:0 0 0 .2rem #10b98120}
-    .empty-state{padding:32px 16px;text-align:center;color:var(--fzn-muted)}.empty-state i{font-size:1.8rem;color:#94a3b8}
-    #pageError{display:none}.loading-row{color:#94a3b8}
-    @media(max-width:767px){.page-wrap{padding:18px 12px 34px}.topbar{padding:16px 0}.metric-value{font-size:1.55rem}.panel{padding:15px}.header-actions{width:100%;justify-content:space-between}}
-  </style>
+  <link rel="stylesheet" href="/css/reseller-workspace.css?v=20261101-3">
 </head>
 <body>
-  <header class="topbar">
-    <div class="container-fluid px-3 px-lg-4 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-      <div class="d-flex align-items-center gap-3">
-        <div class="brand-mark"><i class="bi bi-diagram-3-fill"></i></div>
-        <div><div class="eyebrow"><%= brandName %></div><div class="fw-bold fs-5">Reseller Workspace</div></div>
-      </div>
-      <nav class="d-flex align-items-center gap-2 flex-wrap" aria-label="Reseller workspace">
-        <a class="btn btn-sm btn-outline-light" href="#voucher-generation"><i class="bi bi-ticket-perforated me-1"></i>Hotspot Vouchers</a>
-        <a class="btn btn-sm btn-outline-light" href="#voucher-history"><i class="bi bi-clock-history me-1"></i>Batch History</a>
-      </nav>
-      <div class="d-flex align-items-center gap-3 header-actions">
-        <div class="text-end"><div class="small text-white-50">Signed in as</div><div class="fw-semibold"><%= safeResellerName %></div></div>
-        <button id="logoutButton" class="btn btn-sm btn-outline-light" type="button"><i class="bi bi-box-arrow-right me-1"></i>Sign out</button>
-      </div>
-    </div>
-  </header>
-
-  <main class="page-wrap">
-    <div id="pageError" class="alert alert-danger mb-4" role="alert"></div>
-    <section class="mb-4">
-      <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap mb-3">
-        <div><h1 class="h4 fw-bold mb-1">Network overview</h1><div class="text-secondary small">Your assigned POPs, customer activity and current-month collections</div></div>
-        <div class="small text-secondary"><i class="bi bi-shield-lock me-1"></i>Customer directory · read-only</div>
-      </div>
-      <div class="row g-3">
-        <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-diagram-3"></i></div><div class="metric-label">Assigned POPs</div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your POP locations</div></div></div>
-        <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-people"></i></div><div class="metric-label">Active customers</div><div class="metric-value" id="metricActive">—</div><div class="metric-foot">Active and not expired</div></div></div>
-        <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-person-exclamation"></i></div><div class="metric-label">Inactive / expired</div><div class="metric-value" id="metricInactive">—</div><div class="metric-foot">Inactive, left or expired</div></div></div>
-        <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-icon"><i class="bi bi-cash-stack"></i></div><div class="metric-label">Monthly renewals</div><div class="metric-value" id="metricRenewals">—</div><div class="metric-foot" id="metricCollection">Collection: ৳—</div></div></div>
-      </div>
-    </section>
-
-    <section class="panel mb-4">
-      <div class="d-flex align-items-center justify-content-between gap-3 mb-3"><div><h2 class="section-title">Assigned POPs</h2><div class="section-subtitle">Network locations assigned to your reseller account</div></div><span class="badge rounded-pill badge-soft" id="popCount">Loading</span></div>
-      <div id="popGrid" class="row g-3"><div class="col-12 text-secondary small">Loading assigned POPs…</div></div>
-    </section>
-
-    <section class="panel mb-4" id="voucher-generation">
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-        <div><div class="eyebrow text-success mb-1">Reseller sales workspace</div><h2 class="section-title">Hotspot Vouchers</h2><div class="section-subtitle">Choose an assigned POP, select a package, review your margin and billing impact, then issue a batch</div></div>
-        <span class="badge rounded-pill badge-soft"><i class="bi bi-shield-check me-1"></i>Server-verified pricing</span>
-      </div>
-      <div id="voucherError" class="alert alert-danger d-none" role="alert"></div>
-      <div id="voucherSuccess" class="alert alert-success d-none" role="status"></div>
-      <div class="row g-3">
-        <div class="col-12"><div class="small fw-bold text-success">STEP 1 · SELECT YOUR NETWORK LOCATION</div></div>
-        <div class="col-12 col-lg-6">
-          <label for="voucherPop" class="form-label fw-semibold">Assigned POP</label>
-          <select id="voucherPop" class="form-select" required><option value="">Loading eligible POPs…</option></select>
+  <%- include('partials/reseller-sidebar', { brandName, safeResellerName, activePath }) %>
+  <div class="reseller-main">
+    <%- include('partials/reseller-topbar', { brandName, safeResellerName, title, activePath }) %>
+    <main class="reseller-content">
+      <div id="workspaceError" class="alert alert-danger d-none" role="alert" aria-live="polite"></div>
+      <section class="mb-4">
+        <div class="reseller-section-heading"><div><h2>Network Overview</h2><p>Assigned POPs, subscriber activity and current-month PPPoE collections</p></div><span class="small text-secondary"><i class="bi bi-shield-check me-1"></i>Scoped to your assigned POPs</span></div>
+        <div class="row g-3">
+          <div class="col-6 col-xl-3"><article class="metric-card metric-card--pops"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-diagram-3"></i></span><span class="metric-label">Assigned POPs</span></div><div class="metric-value" id="metricPops">—</div><div class="metric-foot">Your network locations</div></article></div>
+          <div class="col-6 col-xl-3"><article class="metric-card metric-card--active"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-people"></i></span><span class="metric-label">Active customers</span></div><div class="metric-value" id="metricActive">—</div><div class="metric-foot">Active and not expired</div></article></div>
+          <div class="col-6 col-xl-3"><article class="metric-card metric-card--inactive"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-person-exclamation"></i></span><span class="metric-label">Inactive / expired</span></div><div class="metric-value" id="metricInactive">—</div><div class="metric-foot">Inactive, left or expired</div></article></div>
+          <div class="col-6 col-xl-3"><article class="metric-card metric-card--renewals"><div class="metric-card-heading"><span class="metric-icon"><i class="bi bi-cash-stack"></i></span><span class="metric-label">Monthly renewals</span></div><div class="metric-value" id="metricRenewals">—</div><div class="metric-foot" id="metricCollection">Collection: ৳—</div></article></div>
         </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 2 · CHOOSE A HOTSPOT PACKAGE</div></div>
-        <div class="col-12 col-lg-6">
-          <label for="voucherPackage" class="form-label fw-semibold">Hotspot package / profile</label>
-          <select id="voucherPackage" class="form-select" required disabled><option value="">Select a POP first</option></select>
-        </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 3 · REVIEW PACKAGE PRICE & MARGIN</div></div>
-        <div class="col-12 col-md-8">
-          <div class="p-3 rounded-3 border bg-light h-100" aria-live="polite">
-            <div class="small text-secondary fw-semibold mb-2">Selected package pricing</div>
-            <div class="row g-2">
-              <div class="col-4"><div class="small text-secondary">Retail / unit</div><div class="fw-bold" id="voucherRetail">৳—</div></div>
-              <div class="col-4"><div class="small text-secondary">Wholesale / unit</div><div class="fw-bold" id="voucherWholesale">৳—</div></div>
-              <div class="col-4"><div class="small text-secondary">Margin / unit</div><div class="fw-bold text-success" id="voucherMargin">৳—</div></div>
-              <div class="col-12"><hr class="my-1"></div>
-              <div class="col-4"><div class="small text-secondary">Retail total</div><div class="fw-semibold" id="voucherRetailTotal">৳—</div></div>
-              <div class="col-4"><div class="small text-secondary">Your cost</div><div class="fw-semibold" id="voucherCostTotal">৳—</div></div>
-              <div class="col-4"><div class="small text-secondary">Expected margin</div><div class="fw-bold text-success" id="voucherMarginTotal">৳—</div></div>
-            </div>
-          </div>
-        </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 4 · SET BATCH QUANTITY</div></div>
-        <div class="col-12 col-md-4">
-          <label for="voucherQuantity" class="form-label fw-semibold">Quantity</label>
-          <input id="voucherQuantity" class="form-control" type="number" min="1" max="500" step="1" value="10" required>
-          <div class="form-text">Minimum 1 · Maximum 500 vouchers per batch</div>
-        </div>
-
-        <div class="col-12"><div class="small fw-bold text-success">STEP 5 · CONFIRM WALLET / CREDIT IMPACT</div></div>
-        <div class="col-12">
-          <div id="voucherAccount" class="small text-secondary p-3 border rounded-3">Loading reseller billing account…</div>
-          <div id="voucherImpact" class="small p-3 mt-2 border rounded-3 bg-light" aria-live="polite">Select a package and quantity to preview the billing impact.</div>
-        </div>
-        <div class="col-12"><div class="small fw-bold text-success">STEP 6 · ISSUE YOUR VOUCHER BATCH</div></div>
-        <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap">
-          <div class="small text-secondary"><i class="bi bi-info-circle me-1"></i>Prices, account eligibility and reseller identity are recalculated and verified by the server at issue time.</div>
-          <button id="generateVouchersButton" class="btn btn-fzn px-4" type="button" disabled><i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch</button>
-        </div>
-      </div>
-      <div id="voucherIssuedResult" class="mt-4 d-none"></div>
-    </section>
-
-    <section class="panel mb-4" id="voucher-history">
-      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-        <div><h2 class="section-title">Voucher History & Reprint</h2><div class="section-subtitle">Your own issued batches · read-only history</div></div>
-        <button id="refreshVoucherHistory" class="btn btn-sm btn-outline-success" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Refresh history</button>
-      </div>
-      <div id="voucherHistoryError" class="alert alert-danger d-none" role="alert"></div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead><tr><th>Issued date</th><th>Batch reference</th><th>POP</th><th>Package</th><th>Quantity</th><th>Total cost</th><th>Margin</th><th>Action</th></tr></thead>
-          <tbody id="voucherHistoryRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
-        <div><h2 class="section-title">Customer directory</h2><div class="section-subtitle">Only customers assigned to your POPs are shown</div></div>
-        <div class="d-flex gap-2 flex-wrap"><input id="customerSearch" class="form-control form-control-sm" style="width:min(260px,65vw)" type="search" placeholder="Search name or username" aria-label="Search customers"><select id="popFilter" class="form-select form-select-sm" style="width:auto;min-width:150px" aria-label="Filter by POP"><option value="">All assigned POPs</option></select></div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead><tr><th>Customer</th><th>Username</th><th>Package</th><th>Expiration date</th><th>Assigned POP</th><th>Live status</th><th>Account</th><th></th></tr></thead>
-          <tbody id="customerRows"><tr><td colspan="8" class="text-center text-secondary py-4">Loading customer directory…</td></tr></tbody>
-        </table>
-      </div>
-      <div id="customerCount" class="small text-secondary mt-3"></div>
-    </section>
-    <footer class="text-center small text-secondary mt-4">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Portal</footer>
-  </main>
-
-  <script>
-    const api='/api/reseller-portal';
-    const state={customers:[],pops:[],voucherCatalog:null,pendingVoucherIdempotencyKey:null};
-    const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-    const money=value=>'৳'+Number(value||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
-    const date=value=>{if(!value)return '—';const raw=String(value).slice(0,10);const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:escapeHtml(raw)};
-    async function getJson(url){const response=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'});let data;try{data=await response.json()}catch(error){throw new Error('The server returned an invalid response.')}if(!response.ok||!data.success)throw new Error(data.message||'Unable to load reseller data.');return data}
-    function showError(message){const box=document.getElementById('pageError');box.textContent=message;box.style.display='block'}
-    function renderPops(pops){
-      const grid=document.getElementById('popGrid');const filter=document.getElementById('popFilter');
-      document.getElementById('popCount').textContent=pops.length+' POP'+(pops.length===1?'':'s');
-      if(!pops.length){grid.innerHTML='<div class="col-12"><div class="empty-state"><i class="bi bi-diagram-3 d-block mb-2"></i>No POPs are currently assigned to this account.</div></div>';return}
-      grid.innerHTML=pops.map(pop=>'<div class="col-12 col-md-6 col-xl-4"><div class="pop-card"><div class="d-flex justify-content-between gap-2"><div class="pop-name">'+escapeHtml(pop.name)+'</div><span class="badge badge-soft">'+escapeHtml(pop.status||'active')+'</span></div><div class="pop-meta">'+escapeHtml(pop.area_zone||'Area not specified')+'</div><div class="pop-meta"><i class="bi bi-diagram-2 me-1"></i>VLAN: '+escapeHtml(pop.vlan_id??'—')+'</div><div class="pop-meta"><i class="bi bi-hdd-network me-1"></i>IP Pool: '+escapeHtml(pop.mikrotik_ip_pool||'—')+'</div></div></div>').join('');
-      filter.innerHTML='<option value="">All assigned POPs</option>'+pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+'</option>').join('');
-    }
-    function renderCustomers(){
-      const query=document.getElementById('customerSearch').value.trim().toLowerCase();
-      const popId=document.getElementById('popFilter').value;
-      const rows=state.customers.filter(c=>(!popId||String(c.pop_id)===popId)&&(!query||[c.full_name,c.username,c.package_name,c.pop_name].some(v=>String(v||'').toLowerCase().includes(query))));
-      const body=document.getElementById('customerRows');
-      if(!rows.length){body.innerHTML='<tr><td colspan="8"><div class="empty-state"><i class="bi bi-search d-block mb-2"></i>No matching customers found.</div></td></tr>'}
-      else body.innerHTML=rows.map(c=>{
-        const status=String(c.status||'').toLowerCase();
-        const badge=status==='active'?'badge-soft':'badge-muted';
-        return '<tr data-customer-id="'+escapeHtml(c.id)+'"><td class="fw-semibold">'+escapeHtml(c.full_name)+'</td><td class="font-monospace small">'+escapeHtml(c.username)+'</td><td>'+escapeHtml(c.package_name)+'</td><td>'+date(c.expiration_date)+'</td><td>'+escapeHtml(c.pop_name)+'</td><td class="live-cell"><span class="text-secondary small loading-row">Checking…</span></td><td><span class="badge '+badge+'">'+escapeHtml(c.status)+'</span></td><td><a class="btn btn-sm btn-outline-success" href="/reseller/customers/'+encodeURIComponent(c.id)+'">View profile</a></td></tr>';
-      }).join('');
-      document.getElementById('customerCount').textContent='Showing '+rows.length+' of '+state.customers.length+' assigned customers';
-      refreshVisibleLiveStatuses(rows);
-    }
-    async function refreshVisibleLiveStatuses(rows){
-      const queue=[...rows];const worker=async()=>{while(queue.length){const customer=queue.shift();const cell=document.querySelector('tr[data-customer-id="'+CSS.escape(String(customer.id))+'"] .live-cell');if(!cell)continue;try{const result=await getJson(api+'/customers/'+encodeURIComponent(customer.id)+'/live-session');if(!result.liveStatusAvailable){cell.innerHTML='<span class="badge text-bg-secondary">Status Unavailable</span>';continue}const online=Boolean(result.live?.online);cell.innerHTML='<span class="small"><span class="status-dot '+(online?'online':'offline')+'"></span>'+(online?'Online':'Offline')+'</span>'}catch(error){cell.innerHTML='<span class="badge text-bg-secondary">Status Unavailable</span>'}}};await Promise.all(Array.from({length:Math.min(4,queue.length)},worker));
-    }
-    async function loadDashboard(){
-      try{
-        const [overview,directory]=await Promise.all([getJson(api+'/overview'),getJson(api+'/customers')]);
-        const m=overview.metrics||{};
-        document.getElementById('metricPops').textContent=m.assignedPopCount??0;
-        document.getElementById('metricActive').textContent=m.activeCustomerCount??0;
-        document.getElementById('metricInactive').textContent=m.inactiveExpiredCustomerCount??0;
-        document.getElementById('metricRenewals').textContent=m.monthlyRenewalCount??0;
-        document.getElementById('metricCollection').textContent='Collection: '+money(m.monthlyCollectionAmount);
-        state.pops=overview.pops||[];state.customers=directory.customers||[];
-        renderPops(state.pops);renderCustomers();
-      }catch(error){showError(error.message);document.getElementById('customerRows').innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Customer directory could not be loaded.</td></tr>'}
-    }
-    document.getElementById('customerSearch').addEventListener('input',renderCustomers);
-    document.getElementById('popFilter').addEventListener('change',renderCustomers);
-    document.getElementById('logoutButton').addEventListener('click',async()=>{
-      const button=document.getElementById('logoutButton');button.disabled=true;
-      try{const response=await fetch('/api/resellers/logout',{method:'POST'});const result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Sign out failed.');window.location.assign('/reseller/login')}
-      catch(error){showError(error.message);button.disabled=false}
-    });
-
-    function voucherAlert(id,message){const box=document.getElementById(id);box.textContent=message;box.classList.remove('d-none')}
-    function clearVoucherAlert(id){const box=document.getElementById(id);box.textContent='';box.classList.add('d-none')}
-    function selectedVoucherPop(){return (state.voucherCatalog?.pops||[]).find(pop=>String(pop.id)===document.getElementById('voucherPop').value)||null}
-    function selectedVoucherPackage(){const pop=selectedVoucherPop();return pop?.packages.find(pkg=>String(pkg.id)===document.getElementById('voucherPackage').value)||null}
-    function renderVoucherAccount(){
-      const box=document.getElementById('voucherAccount');const account=state.voucherCatalog?.account;
-      if(!account){box.textContent='No active reseller billing account is configured. Voucher issuance is unavailable; contact FAZ NETWORK support.';return}
-      if(account.status!=='active'){box.textContent='Your reseller billing account is '+account.status+'. Voucher issuance is unavailable.';return}
-      box.textContent=account.billingMode==='prepaid'
-        ? 'Prepaid wallet balance: '+money(account.walletBalance)+' · Currency: '+escapeHtml(account.currency)
-        : 'Postpaid receivable: '+money(account.receivableBalance)+' · Credit limit: '+money(account.creditLimit)+' · Available credit: '+money(Math.max(0,Number(account.creditLimit)-Number(account.receivableBalance)));
-    }
-    function updateVoucherPricing(){
-      const pkg=selectedVoucherPackage();const quantity=Number(document.getElementById('voucherQuantity').value);
-      const validQuantity=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=500;
-      const retail=pkg?Number(pkg.retailPrice):0;const wholesale=pkg?Number(pkg.wholesalePrice):0;
-      const margin=retail-wholesale;const fmt=value=>pkg?money(value):'৳—';
-      document.getElementById('voucherRetail').textContent=fmt(retail);
-      document.getElementById('voucherWholesale').textContent=fmt(wholesale);
-      document.getElementById('voucherMargin').textContent=fmt(margin);
-      document.getElementById('voucherRetailTotal').textContent=fmt(retail*(validQuantity?quantity:0));
-      document.getElementById('voucherCostTotal').textContent=fmt(wholesale*(validQuantity?quantity:0));
-      document.getElementById('voucherMarginTotal').textContent=fmt(margin*(validQuantity?quantity:0));
-      const account=state.voucherCatalog?.account;
-      const totalCost=wholesale*(validQuantity?quantity:0);
-      const prepaidShortfall=account?.billingMode==='prepaid'&&Number(account.walletBalance)<totalCost;
-      const postpaidLimit=account?.billingMode==='postpaid'&&(Number(account.receivableBalance)+totalCost>Number(account.creditLimit));
-      const canIssue=Boolean(pkg&&validQuantity&&account&&account.status==='active'&&margin>=0&&wholesale>0&&!prepaidShortfall&&!postpaidLimit);
-      document.getElementById('generateVouchersButton').disabled=!canIssue;
-      const impact=document.getElementById('voucherImpact');
-      if(!pkg||!validQuantity){impact.textContent='Select an eligible package and a whole quantity from 1 to 500 to preview your account impact.';}
-      else if(!account||account.status!=='active'){impact.textContent='No active billing account is available. Voucher issuance is blocked.';}
-      else if(account.billingMode==='prepaid'){
-        const afterBalance=Number(account.walletBalance)-totalCost;
-        impact.textContent='Confirmation: '+quantity+' vouchers will debit '+money(totalCost)+' from your prepaid wallet. Current balance: '+money(account.walletBalance)+' · Estimated balance after issue: '+money(afterBalance)+'.';
-      }else{
-        const afterReceivable=Number(account.receivableBalance)+totalCost;
-        impact.textContent='Confirmation: '+quantity+' vouchers will add '+money(totalCost)+' to your postpaid receivable. Current receivable: '+money(account.receivableBalance)+' · Estimated receivable after issue: '+money(afterReceivable)+' · Credit limit: '+money(account.creditLimit)+'.';
-      }
-      if(pkg&&wholesale<=0)voucherAlert('voucherError','This package is not available for reseller issuance because wholesale price must be greater than ৳0. Promotional and free vouchers are issued by an administrator.');
-      else if(pkg&&margin<0)voucherAlert('voucherError','This package is not eligible because wholesale cost exceeds retail price.');
-      else if(!validQuantity)voucherAlert('voucherError','Quantity must be a whole number from 1 to 500.');
-      else if(prepaidShortfall)voucherAlert('voucherError','Your prepaid wallet balance is insufficient for this batch.');
-      else if(postpaidLimit)voucherAlert('voucherError','This batch would exceed your available postpaid credit limit.');
-      else clearVoucherAlert('voucherError');
-    }
-    function renderVoucherPackageOptions(){
-      const pop=selectedVoucherPop();const select=document.getElementById('voucherPackage');
-      const packages=pop?.packages||[];
-      select.innerHTML=packages.length?packages.map(pkg=>'<option value="'+escapeHtml(pkg.id)+'">'+escapeHtml(pkg.name)+' · '+escapeHtml(pkg.validity)+'</option>').join(''):'<option value="">No active packages for this POP</option>';
-      select.disabled=!packages.length;updateVoucherPricing();
-    }
-    function renderVoucherPopOptions(){
-      const select=document.getElementById('voucherPop');const pops=state.voucherCatalog?.pops||[];
-      select.innerHTML=pops.length?pops.map(pop=>'<option value="'+escapeHtml(pop.id)+'">'+escapeHtml(pop.name)+'</option>').join(''):'<option value="">No eligible active POPs</option>';
-      select.disabled=!pops.length;renderVoucherPackageOptions();renderVoucherAccount();
-    }
-    async function loadVoucherCatalog(){
-      try{
-        state.voucherCatalog=await getJson(api+'/hotspot/catalog');
-        renderVoucherPopOptions();
-      }catch(error){voucherAlert('voucherError',error.message);document.getElementById('voucherPop').innerHTML='<option value="">Catalog unavailable</option>';document.getElementById('voucherPackage').disabled=true}
-    }
-    function renderVoucherIssued(result){
-      const target=document.getElementById('voucherIssuedResult');const vouchers=result.vouchers||[];const batch=result.batch||{};
-      target.innerHTML='<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3"><div><h3 class="h6 fw-bold mb-1">Voucher batch issued</h3><div class="small text-secondary">Reference: '+escapeHtml(batch.batchKey||'')+'</div></div><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>Print / Reprint</a></div>'+
-        '<div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>#</th><th>Username / PIN</th><th>Password</th><th>Validity</th></tr></thead><tbody>'+vouchers.map((v,i)=>'<tr><td>'+(i+1)+'</td><td class="font-monospace">'+escapeHtml(v.username)+'</td><td class="font-monospace">'+escapeHtml(v.password)+'</td><td>'+escapeHtml(v.validity||batch.validity||'—')+'</td></tr>').join('')+'</tbody></table></div>';
-      target.classList.remove('d-none');
-    }
-    async function loadVoucherHistory(){
-      const body=document.getElementById('voucherHistoryRows');clearVoucherAlert('voucherHistoryError');
-      body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">Loading voucher history…</td></tr>';
-      try{
-        const result=await getJson(api+'/hotspot/voucher-batches?limit=100');const batches=result.batches||[];
-        if(!batches.length){body.innerHTML='<tr><td colspan="8" class="text-center text-secondary py-4">No voucher batches have been issued yet.</td></tr>';return}
-        body.innerHTML=batches.map(batch=>'<tr><td>'+date(batch.createdAt)+'</td><td class="font-monospace small">'+escapeHtml(batch.batchKey)+'</td><td>POP #'+escapeHtml(batch.popId)+'</td><td>'+escapeHtml(batch.profileKey)+'</td><td>'+escapeHtml(batch.issuedCount)+' / '+escapeHtml(batch.quantity)+'</td><td>'+money(batch.wholesaleTotal)+'</td><td class="text-success fw-semibold">'+money(batch.marginTotal)+'</td><td><a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="/reseller/hotspot/voucher-batches/'+encodeURIComponent(batch.batchKey)+'/print"><i class="bi bi-printer me-1"></i>View / Print</a></td></tr>').join('');
-      }catch(error){body.innerHTML='<tr><td colspan="8" class="text-center text-danger py-4">Voucher history could not be loaded.</td></tr>';voucherAlert('voucherHistoryError',error.message)}
-    }
-    document.getElementById('voucherPop').addEventListener('change',()=>{state.pendingVoucherIdempotencyKey=null;renderVoucherPackageOptions()});
-    document.getElementById('voucherPackage').addEventListener('change',()=>{state.pendingVoucherIdempotencyKey=null;updateVoucherPricing()});
-    document.getElementById('voucherQuantity').addEventListener('input',()=>{state.pendingVoucherIdempotencyKey=null;updateVoucherPricing()});
-    document.getElementById('generateVouchersButton').addEventListener('click',async event=>{clearVoucherAlert('voucherError');clearVoucherAlert('voucherSuccess');
-      const pop=selectedVoucherPop();const pkg=selectedVoucherPackage();const quantity=Number(document.getElementById('voucherQuantity').value);const button=document.getElementById('generateVouchersButton');
-      if(!pop||!pkg||!Number.isSafeInteger(quantity)||quantity<1||quantity>500){voucherAlert('voucherError','Select an eligible POP and package, and enter a whole quantity from 1 to 500.');return}
-      if(!state.pendingVoucherIdempotencyKey){if(!window.crypto?.randomUUID){voucherAlert('voucherError','Secure request identifiers are unavailable in this browser. Refresh the page or contact support.');return}state.pendingVoucherIdempotencyKey=window.crypto.randomUUID()}
-      button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Issuing…';
-      try{
-        const response=await fetch(api+'/hotspot/voucher-batches',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':state.pendingVoucherIdempotencyKey},body:JSON.stringify({popId:pop.id,packageId:pkg.id,quantity})});
-        let result;try{result=await response.json()}catch(parseError){throw new Error('The server returned an invalid response.')}
-        if(!response.ok||!result.success)throw new Error(result.message||'Voucher issuance failed.');
-        state.pendingVoucherIdempotencyKey=null;renderVoucherIssued(result);voucherAlert('voucherSuccess',result.message||'Voucher batch issued successfully.');
-        if(result.account&&state.voucherCatalog?.account){Object.assign(state.voucherCatalog.account,{walletBalance:result.account.walletBalance,receivableBalance:result.account.receivableBalance,creditLimit:result.account.creditLimit})}
-        renderVoucherAccount();await loadVoucherHistory();
-      }catch(error){voucherAlert('voucherError',error.message)}
-      finally{button.innerHTML='<i class="bi bi-ticket-perforated me-2"></i>Generate voucher batch';updateVoucherPricing()}
-    });
-    document.getElementById('refreshVoucherHistory').addEventListener('click',loadVoucherHistory);
-    async function loadVoucherPortal(){await Promise.all([loadVoucherCatalog(),loadVoucherHistory()])}
-
-    loadDashboard();
-    loadVoucherPortal();
-  </script>
+      </section>
+      <section class="reseller-panel reseller-assigned-pops">
+        <div class="reseller-section-heading"><div><h2>Assigned POPs</h2><p>Network locations assigned to your reseller account</p></div><span class="badge rounded-pill badge-soft" id="popCount">Loading</span></div>
+        <div id="popGrid" class="pop-grid"><div class="text-secondary small">Loading assigned POPs…</div></div>
+      </section>
+</main>
+    <footer class="reseller-footer">© <%= new Date().getFullYear() %> <%= brandName %> · Reseller Workspace</footer>
+  </div>
+  <%- include('partials/reseller-scripts', { activePath }) %>
 </body>
 </html>

@@ -71,7 +71,7 @@ test("schema allows the shared scratch voucher type and first-login activation m
  const schema=read("db/schema.sql");
  assert.match(schema,/subscriber_type VARCHAR\(24\) NOT NULL DEFAULT 'legacy'/);
  assert.match(schema,/activation_type VARCHAR\(24\) NOT NULL DEFAULT 'legacy'/);
- assert.match(schema,/CHECK \(subscriber_type IN \('direct_subscriber', 'scratch_voucher', 'admin_voucher', 'mfs', 'legacy'\)\)/);
+ assert.match(schema,/CHECK \(subscriber_type IN \('direct_subscriber', 'scratch_voucher', 'admin_voucher', 'mfs', 'legacy', 'reseller_voucher'\)\)/);
 });
 
 test("scratch voucher claims reject live MAC conflicts and release stale bindings",()=>{

@@ -16,7 +16,7 @@ async function generateVoucherBatch({ client, profileName, validity, price, serv
       const username = String(userPrefix || "").replace(/[^a-zA-Z0-9_-]/g, "").toUpperCase() + randomPin(charLength);
       const password = passwordEqualsUsername ? username : randomPin(8);
       const result = await client.query(
-        "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock,batch_id,transaction_id,profile_id,time_limit,data_limit) VALUES ($1,$2,$3,$4,$5,'unused',$6,COALESCE(NULLIF($10::text,''),'scratch_voucher'),'first_login',$7,false,$8,$9::bigint,NULLIF($11::text,''),NULLIF($12::text,''),NULLIF($13::text,'')) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at,batch_id,transaction_id,profile_id,time_limit,data_limit",
+        "INSERT INTO hotspot_vouchers (username,password,profile,validity,price,status,comment,subscriber_type,activation_type,server,mac_lock,batch_id,transaction_id,profile_id,time_limit,data_limit) VALUES ($1,$2,$3,$4,$5,'unused',$6,COALESCE(NULLIF($10::varchar,''),'scratch_voucher'),'first_login',$7,false,$8,$9::bigint,NULLIF($11::text,''),NULLIF($12::text,''),NULLIF($13::text,'')) ON CONFLICT DO NOTHING RETURNING id,username,password,profile,validity,price,status,created_at,batch_id,transaction_id,profile_id,time_limit,data_limit",
         [username,password,String(profileName),String(validity || ""),Number(price),String(comment),String(server || "all"),batchId,transactionId,String(subscriberType),String(profileId || ""),String(timeLimit || ""),String(dataLimit || "")]
       );
       inserted = result.rows?.[0] || null;

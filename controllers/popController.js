@@ -1,77 +1,398 @@
 'use strict';
-const db=require('../db');
-function validId(v){const id=Number(v);return Number.isSafeInteger(id)&&id>0?id:null;}
-function fail(res,e,op){console.error('[POP API] '+op+':',e.message);return res.status(e.statusCode||503).json({success:false,message:e.statusCode?e.message:'POP operation failed.'});}
-function parse(b={},partial=false){
- const d={};
- for(const k of ['name','area_zone','reseller_id','vlan_id','mikrotik_ip_pool','commission_type','commission_rate']){
-  if(partial&&!Object.prototype.hasOwnProperty.call(b,k))continue;
-  if(k==='name'||k==='area_zone')d[k]=String(b[k]||'').trim();
-  else if(k==='reseller_id')d[k]=b[k]==null||b[k]===''?null:validId(b[k]);
-  else if(k==='vlan_id')d[k]=b[k]==null||b[k]===''?null:Number(b[k]);
-  else if(k==='mikrotik_ip_pool')d[k]=String(b[k]||'').trim()||null;
-  else if(k==='commission_type')d[k]=String(b[k]||'percentage').trim().toLowerCase();
-  else if(k==='commission_rate')d[k]=Number(b[k]??0);
- }
- if(d.name!==undefined&&(!d.name||d.name.length>100))throw Object.assign(new Error('POP name is required and limited to 100 characters.'),{statusCode:400});
- if(d.area_zone!==undefined&&d.area_zone.length>150)throw Object.assign(new Error('Area/zone is limited to 150 characters.'),{statusCode:400});
- if(d.reseller_id===null&&b.reseller_id!=null&&b.reseller_id!=='')throw Object.assign(new Error('Invalid reseller_id.'),{statusCode:400});
- if(d.vlan_id!==undefined&&d.vlan_id!==null&&(!Number.isInteger(d.vlan_id)||d.vlan_id<1||d.vlan_id>4094))throw Object.assign(new Error('VLAN ID must be between 1 and 4094.'),{statusCode:400});
- if(d.commission_type!==undefined&&!['percentage','fixed'].includes(d.commission_type))throw Object.assign(new Error('Invalid commission_type.'),{statusCode:400});
- if(d.commission_rate!==undefined&&(!Number.isFinite(d.commission_rate)||d.commission_rate<0||(d.commission_type==='percentage'&&d.commission_rate>100)))throw Object.assign(new Error('Invalid commission_rate.'),{statusCode:400});
- return d;
+
+const db = require('../db');
+const hotspotPackageSync = require('../services/resellerHotspotPackageSyncService');
+
+function validId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
-async function options(req,res){
- try{
-  const role=req.auth?.role;
-  if(!['super_admin','admin','reseller'].includes(role))return res.status(403).json({success:false,message:'You are not authorized to view POP options.'});
-  let result;
-  if(role==='reseller'){
-   const resellerId=Number(req.auth?.resellerId);
-   if(!Number.isSafeInteger(resellerId)||resellerId<1)return res.status(403).json({success:false,message:'Verified reseller identity is required.'});
-   result=await db.query("SELECT id,name,area_zone,vlan_id,mikrotik_ip_pool FROM pops WHERE reseller_id=$1 AND status='active' ORDER BY name ASC,id ASC",[resellerId]);
-  }else{
-   result=await db.query("SELECT id,name,area_zone,vlan_id,mikrotik_ip_pool FROM pops WHERE status='active' ORDER BY name ASC,id ASC");
+
+function serviceError(message, statusCode = 400, code) {
+  return Object.assign(new Error(message), { statusCode, ...(code ? { code } : {}) });
+}
+
+function parseBoolean(value, field) {
+  if (value === true || value === 1 || ['true', '1', 'on', 'yes'].includes(String(value).toLowerCase())) return true;
+  if (value === false || value === 0 || ['false', '0', 'off', 'no'].includes(String(value).toLowerCase())) return false;
+  throw serviceError(field + ' must be a boolean value.');
+}
+
+function parse(body = {}, partial = false) {
+  const data = {};
+  const fields = [
+    'name', 'area_zone', 'reseller_id', 'vlan_id', 'pppoe_enabled',
+    'pppoe_ip_pool', 'hotspot_enabled', 'hotspot_server',
+    'hotspot_interface', 'hotspot_vlan_id', 'hotspot_ip_pool',
+    'commission_type', 'commission_rate'
+  ];
+  for (const field of fields) {
+    const supplied = Object.prototype.hasOwnProperty.call(body, field);
+    if (partial && !supplied) continue;
+    if (!partial && !supplied && (field === 'pppoe_enabled' || field === 'hotspot_enabled')) {
+      data[field] = field === 'pppoe_enabled';
+      continue;
+    }
+    const value = body[field];
+    if (field === 'name' || field === 'area_zone' || field === 'hotspot_server' || field === 'hotspot_interface') {
+      data[field] = String(value || '').trim();
+    } else if (field === 'reseller_id') {
+      data[field] = value == null || value === '' ? null : validId(value);
+      if (value != null && value !== '' && data[field] === null) throw serviceError('Invalid reseller_id.');
+    } else if (field === 'vlan_id' || field === 'hotspot_vlan_id') {
+      data[field] = value == null || value === '' ? null : Number(value);
+      if (data[field] !== null && (!Number.isInteger(data[field]) || data[field] < 1 || data[field] > 4094)) {
+        throw serviceError('VLAN ID must be between 1 and 4094.');
+      }
+    } else if (field === 'pppoe_enabled' || field === 'hotspot_enabled') {
+      data[field] = parseBoolean(value, field);
+    } else if (field === 'pppoe_ip_pool') {
+      const supplied = Object.prototype.hasOwnProperty.call(body, 'pppoe_ip_pool')
+        ? body.pppoe_ip_pool
+        : body.mikrotik_ip_pool;
+      if (!partial || Object.prototype.hasOwnProperty.call(body, 'pppoe_ip_pool') || Object.prototype.hasOwnProperty.call(body, 'mikrotik_ip_pool')) {
+        data.pppoe_ip_pool = String(supplied || '').trim() || null;
+      }
+    } else if (field === 'hotspot_ip_pool') {
+      data.hotspot_ip_pool = String(value || '').trim() || null;
+    } else if (field === 'commission_type') {
+      data[field] = String(value || 'percentage').trim().toLowerCase();
+    } else if (field === 'commission_rate') {
+      data[field] = Number(value ?? 0);
+    }
   }
-  return res.json({success:true,pops:result.rows});
- }catch(e){
-  console.error('[POP API] Active options lookup failed:',e);
-  return res.status(503).json({success:false,message:'Unable to load POP options. Please try again.'});
- }
+
+  if (data.name !== undefined && (!data.name || data.name.length > 100)) throw serviceError('POP name is required and limited to 100 characters.');
+  if (data.area_zone !== undefined && data.area_zone.length > 150) throw serviceError('Area/zone is limited to 150 characters.');
+  if (data.hotspot_server !== undefined && data.hotspot_server.length > 100) throw serviceError('Hotspot Server is limited to 100 characters.');
+  if (data.hotspot_interface !== undefined && data.hotspot_interface.length > 100) throw serviceError('Hotspot Interface is limited to 100 characters.');
+  if (data.commission_type !== undefined && !['percentage', 'fixed'].includes(data.commission_type)) throw serviceError('Invalid commission_type.');
+  if (data.commission_rate !== undefined && (!Number.isFinite(data.commission_rate) || data.commission_rate < 0 ||
+      (data.commission_type === 'percentage' && data.commission_rate > 100))) throw serviceError('Invalid commission_rate.');
+  return data;
 }
-async function list(req,res){
- try{
-  const reseller=req.auth?.role==='reseller';
-  const sql='SELECT p.id,p.reseller_id,p.name,p.area_zone,p.commission_type,p.commission_rate,p.status,p.vlan_id,p.mikrotik_ip_pool,p.created_at,p.updated_at,r.name AS reseller_name,r.username AS reseller_username,COUNT(c.id)::int AS customer_count FROM pops p LEFT JOIN resellers r ON r.id=p.reseller_id LEFT JOIN customers c ON c.pop_id=p.id '+(reseller?'WHERE p.reseller_id=$1 ':'')+'GROUP BY p.id,r.id ORDER BY p.name ASC,p.id ASC';
-  const result=await db.query(sql,reseller?[req.auth.resellerId]:[]);
-  return res.json({success:true,pops:result.rows});
- }catch(e){return fail(res,e,'List');}
+
+function fail(res, error, operation) {
+  console.error('[POP API] ' + operation + ':', error);
+  return res.status(error.statusCode || 503).json({
+    success: false,
+    code: error.code || (error.statusCode ? 'POP_VALIDATION_FAILED' : 'POP_OPERATION_FAILED'),
+    message: error.statusCode ? error.message : 'POP operation failed.'
+  });
 }
-async function create(req,res){
- try{
-  const d=parse(req.body);
-  if(d.reseller_id!==null){const owner=await db.query("SELECT id FROM resellers WHERE id=$1 AND status='active' LIMIT 1",[d.reseller_id]);if(!owner.rows.length)return res.status(400).json({success:false,message:'Selected reseller does not exist or is inactive.'});}
-  const r=await db.query('INSERT INTO pops(name,area_zone,reseller_id,vlan_id,mikrotik_ip_pool,commission_type,commission_rate) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,reseller_id,name,area_zone,vlan_id,mikrotik_ip_pool,commission_type,commission_rate,status,created_at,updated_at',[d.name,d.area_zone,d.reseller_id,d.vlan_id,d.mikrotik_ip_pool,d.commission_type,d.commission_rate]);
-  return res.status(201).json({success:true,pop:r.rows[0]});
- }catch(e){return fail(res,e,'Create');}
+
+
+
+async function options(req, res) {
+  try {
+    const role = req.auth?.role;
+    if (!['super_admin', 'admin', 'reseller'].includes(role)) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to view POP options.' });
+    }
+    let result;
+    if (role === 'reseller') {
+      const resellerId = Number(req.auth?.resellerId);
+      if (!Number.isSafeInteger(resellerId) || resellerId < 1) {
+        return res.status(403).json({ success: false, message: 'Verified reseller identity is required.' });
+      }
+      result = await db.query(
+        `SELECT id,name,area_zone,vlan_id,pppoe_enabled,pppoe_ip_pool
+         FROM public.pops
+         WHERE reseller_id=$1 AND status='active'
+           AND pppoe_enabled=TRUE AND NULLIF(BTRIM(pppoe_ip_pool),'') IS NOT NULL
+         ORDER BY name ASC,id ASC`,
+        [resellerId]
+      );
+    } else {
+      result = await db.query(
+        `SELECT p.id,p.name,p.area_zone,p.vlan_id,p.pppoe_enabled,p.pppoe_ip_pool
+         FROM public.pops p
+         INNER JOIN public.resellers r ON r.id=p.reseller_id
+         WHERE p.reseller_id IS NOT NULL AND p.status='active' AND p.pppoe_enabled=TRUE
+           AND NULLIF(BTRIM(p.pppoe_ip_pool),'') IS NOT NULL
+         ORDER BY p.name ASC,p.id ASC`
+      );
+    }
+    return res.json({ success: true, pops: result.rows });
+  } catch (error) {
+    console.error('[POP API] Active PPPoE options lookup failed:', error);
+    return res.status(503).json({ success: false, code: 'POP_OPTIONS_UNAVAILABLE', message: 'Unable to load eligible PPPoE POP options. Please retry.' });
+  }
 }
-async function update(req,res){
- const id=validId(req.params.id);if(!id)return res.status(400).json({success:false,message:'Invalid POP ID.'});
- try{
-  const d=parse(req.body,true),keys=Object.keys(d);if(!keys.length)return res.status(400).json({success:false,message:'Provide at least one POP property.'});
-  if(d.reseller_id!=null){const owner=await db.query("SELECT id FROM resellers WHERE id=$1 AND status='active' LIMIT 1",[d.reseller_id]);if(!owner.rows.length)return res.status(400).json({success:false,message:'Selected reseller does not exist or is inactive.'});}
-  const cols={name:'name',area_zone:'area_zone',reseller_id:'reseller_id',vlan_id:'vlan_id',mikrotik_ip_pool:'mikrotik_ip_pool',commission_type:'commission_type',commission_rate:'commission_rate'};
-  const values=keys.map(k=>d[k]),sets=keys.map((k,i)=>cols[k]+'=$'+(i+1));values.push(id);
-  const r=await db.query('UPDATE pops SET '+sets.join(',')+',updated_at=NOW() WHERE id=$'+values.length+' RETURNING id,reseller_id,name,area_zone,vlan_id,mikrotik_ip_pool,commission_type,commission_rate,status,updated_at',values);
-  if(!r.rows.length)return res.status(404).json({success:false,message:'POP not found.'});
-  return res.json({success:true,pop:r.rows[0]});
- }catch(e){return fail(res,e,'Update');}
+
+async function list(req, res) {
+  try {
+    // The dual-service migration is forward-only and may not yet be present on
+    // every deployed database. Resolve optional columns through the row JSON
+    // representation so older POP table shapes remain readable without hiding
+    // genuine database errors.
+    const bindingAvailability = await db.query(
+      "SELECT to_regclass('public.pop_hotspot_bindings') IS NOT NULL AS available"
+    );
+    const hasHotspotBindings = bindingAvailability.rows?.[0]?.available === true;
+    const hotspotJoin = hasHotspotBindings
+      ? `LEFT JOIN LATERAL (
+           SELECT to_jsonb(hb) AS data
+           FROM public.pop_hotspot_bindings hb
+           WHERE to_jsonb(hb)->>'pop_id' = p.id::text
+           LIMIT 1
+         ) hb ON TRUE`
+      : 'LEFT JOIN LATERAL (SELECT NULL::jsonb AS data) hb ON TRUE';
+    const reseller = req.auth?.role === 'reseller';
+    const sql = `SELECT
+         p.id,
+         p.reseller_id,
+         p.name,
+         p.area_zone,
+         COALESCE(to_jsonb(p)->>'commission_type','percentage') AS commission_type,
+         COALESCE((to_jsonb(p)->>'commission_rate')::numeric,0) AS commission_rate,
+         COALESCE(to_jsonb(p)->>'status','inactive') AS status,
+         (to_jsonb(p)->>'vlan_id')::integer AS vlan_id,
+         to_jsonb(p)->>'mikrotik_ip_pool' AS mikrotik_ip_pool,
+         COALESCE((to_jsonb(p)->>'pppoe_enabled')::boolean,TRUE) AS pppoe_enabled,
+         COALESCE(to_jsonb(p)->>'pppoe_ip_pool',to_jsonb(p)->>'mikrotik_ip_pool') AS pppoe_ip_pool,
+         p.created_at,
+         p.updated_at,
+         r.name AS reseller_name,
+         r.username AS reseller_username,
+         COUNT(DISTINCT c.id)::int AS customer_count,
+         COALESCE(NULLIF(hb.data->>'status','')='active',(hb.data->>'is_active')::boolean,FALSE) AS hotspot_enabled,
+         hb.data->>'hotspot_server' AS hotspot_server,
+         hb.data->>'hotspot_interface' AS hotspot_interface,
+         (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,
+         hb.data->>'ip_pool' AS hotspot_ip_pool,
+         COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
+       FROM public.pops p
+       INNER JOIN public.resellers r ON r.id=p.reseller_id
+       LEFT JOIN public.customers c ON c.pop_id=p.id
+       ${hotspotJoin}
+       WHERE ${reseller ? 'p.reseller_id=$1' : 'p.reseller_id IS NOT NULL'}
+       GROUP BY p.id,r.id,hb.data
+       ORDER BY p.name ASC,p.id ASC`;
+    const result = await db.query(sql, reseller ? [req.auth.resellerId] : []);
+    return res.json({ success: true, pops: result.rows });
+  } catch (error) {
+    return fail(res, error, 'List');
+  }
 }
-async function updateStatus(req,res){
- const id=validId(req.params.id),status=String(req.body?.status||'').toLowerCase();
- if(!id)return res.status(400).json({success:false,message:'Invalid POP ID.'});
- if(!['active','inactive'].includes(status))return res.status(400).json({success:false,message:'Status must be active or inactive.'});
- try{const r=await db.query('UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',[status,id]);if(!r.rows.length)return res.status(404).json({success:false,message:'POP not found.'});return res.json({success:true,pop:r.rows[0],message:'POP status updated. Customer records were preserved.'});}
- catch(e){return fail(res,e,'Status update');}
+
+async function validateResellerOwner(resellerId) {
+  if (resellerId == null) return;
+  const owner = await db.query("SELECT id FROM public.resellers WHERE id=$1 AND status='active' LIMIT 1", [resellerId]);
+  if (!owner.rows.length) throw serviceError('Selected reseller does not exist or is inactive.');
 }
-module.exports={options,list,create,update,updateStatus};
+
+async function upsertHotspotBinding(client, popId, config) {
+  if (!config.enabled) {
+    await client.query(
+      "UPDATE public.pop_hotspot_bindings SET status='inactive',updated_at=NOW() WHERE pop_id=$1 AND status IS DISTINCT FROM 'inactive'",
+      [popId]
+    );
+    return;
+  }
+
+  if (!config.server || !config.pool) {
+    throw serviceError('Enable Hotspot only after setting a Hotspot Server and Hotspot IP Pool.');
+  }
+
+  await client.query(`INSERT INTO public.pop_hotspot_bindings (
+      pop_id, router_key, hotspot_server, hotspot_interface, vlan_id, ip_pool, status, updated_at
+    ) VALUES (
+      $1, COALESCE($2, 'core_mikrotik'), $3, $4, $5, $6, COALESCE($7, 'active'), NOW()
+    )
+    ON CONFLICT (pop_id) DO UPDATE SET
+      router_key = EXCLUDED.router_key,
+      hotspot_server = EXCLUDED.hotspot_server,
+      hotspot_interface = EXCLUDED.hotspot_interface,
+      vlan_id = EXCLUDED.vlan_id,
+      ip_pool = EXCLUDED.ip_pool,
+      status = EXCLUDED.status,
+      updated_at = NOW()`,
+    [popId, config.routerKey || null, config.server, config.interface || null,
+      config.vlanId ?? null, config.pool, config.status || null]
+  );
+}
+
+async function readPop(client, id) {
+  const hotspotJoin = `LEFT JOIN LATERAL (
+    SELECT to_jsonb(hb) AS data
+    FROM public.pop_hotspot_bindings hb
+    WHERE hb.pop_id = p.id
+    LIMIT 1
+  ) hb ON TRUE`;
+  const result = await client.query(`SELECT p.id,p.reseller_id,p.name,p.area_zone,
+    (to_jsonb(p)->>'vlan_id')::integer AS vlan_id,
+    COALESCE((to_jsonb(p)->>'pppoe_enabled')::boolean,TRUE) AS pppoe_enabled,
+    COALESCE(to_jsonb(p)->>'pppoe_ip_pool',to_jsonb(p)->>'mikrotik_ip_pool') AS pppoe_ip_pool,
+    to_jsonb(p)->>'mikrotik_ip_pool' AS mikrotik_ip_pool,
+    COALESCE(to_jsonb(p)->>'commission_type','percentage') AS commission_type,
+    COALESCE((to_jsonb(p)->>'commission_rate')::numeric,0) AS commission_rate,
+    COALESCE(to_jsonb(p)->>'status','inactive') AS status,p.created_at,p.updated_at,
+    COALESCE(NULLIF(hb.data->>'status','')='active',(hb.data->>'is_active')::boolean,FALSE) AS hotspot_enabled,
+    hb.data->>'hotspot_server' AS hotspot_server,hb.data->>'hotspot_interface' AS hotspot_interface,
+    (hb.data->>'vlan_id')::integer AS hotspot_vlan_id,hb.data->>'ip_pool' AS hotspot_ip_pool,
+    COALESCE(NULLIF(hb.data->>'status',''),CASE WHEN (hb.data->>'is_active')::boolean IS TRUE THEN 'active' END) AS hotspot_binding_status
+    FROM public.pops p ${hotspotJoin} WHERE p.id=$1 LIMIT 1`,[id]);
+  return result.rows[0] || null;
+}
+
+async function create(req, res) {
+  try {
+    const data = parse(req.body);
+    await validateResellerOwner(data.reseller_id);
+    const pppoeEnabled = data.pppoe_enabled !== false;
+    if (pppoeEnabled && !data.pppoe_ip_pool) {
+      throw serviceError('Select a PPPoE IP Pool or disable the PPPoE service for this POP.');
+    }
+    const hotspotEnabled = data.hotspot_enabled === true;
+    const pop = await db.withTransaction(async client => {
+      const inserted = await client.query(
+        `INSERT INTO public.pops
+           (name,area_zone,reseller_id,vlan_id,pppoe_enabled,pppoe_ip_pool,commission_type,commission_rate)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id`,
+        [data.name,data.area_zone,data.reseller_id,data.vlan_id,data.pppoe_enabled ?? true,
+          data.pppoe_ip_pool,data.commission_type ?? 'percentage',data.commission_rate ?? 0]
+      );
+      const id = inserted.rows[0]?.id;
+      if (!id) throw new Error('POP insert did not return its new identity.');
+      await upsertHotspotBinding(client, id, {
+        enabled: hotspotEnabled, server: data.hotspot_server,
+        interface: data.hotspot_interface, vlanId: data.hotspot_vlan_id, pool: data.hotspot_ip_pool
+      });
+      if (hotspotEnabled) {
+        await hotspotPackageSync.syncPopPackages(client, id);
+      }
+      return readPop(client, id);
+    });
+    return res.status(201).json({ success: true, pop, hotspot_persisted: true });
+  } catch (error) {
+    return fail(res, error, 'Create');
+  }
+}
+
+async function update(req, res) {
+  const id = validId(req.params.id);
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid POP ID.' });
+  try {
+    const data = parse(req.body, true);
+    await validateResellerOwner(data.reseller_id);
+    const result = await db.withTransaction(async client => {
+      const currentResult = await client.query('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE',[id]);
+      const current = currentResult.rows[0];
+      if (!current) return null;
+
+      const effectivePppoePool = data.pppoe_ip_pool !== undefined
+        ? data.pppoe_ip_pool
+        : (current.pppoe_ip_pool || current.mikrotik_ip_pool || null);
+      if (data.pppoe_enabled === true && !effectivePppoePool) {
+        throw serviceError('Select a PPPoE IP Pool before enabling PPPoE for this POP.');
+      }
+      if (data.pppoe_ip_pool !== undefined &&
+          (data.pppoe_enabled ?? current.pppoe_enabled ?? true) && !effectivePppoePool) {
+        throw serviceError('A PPPoE IP Pool is required while the PPPoE service is enabled.');
+      }
+
+      const fields = ['name','area_zone','reseller_id','vlan_id','pppoe_enabled','pppoe_ip_pool','commission_type','commission_rate'];
+      const requestedUpdates = fields.filter(field => Object.prototype.hasOwnProperty.call(data, field));
+      const updateColumns = [];
+      const values = [];
+      for (const field of requestedUpdates) {
+        let column = field;
+        if (field === 'pppoe_enabled' && !Object.prototype.hasOwnProperty.call(current, 'pppoe_enabled')) {
+          console.warn('[POP] Skipping optional pppoe_enabled update because the locked POP row has no such column; other submitted POP fields will still be saved.', { popId: id });
+          continue;
+        }
+        if (field === 'pppoe_ip_pool' &&
+            !Object.prototype.hasOwnProperty.call(current, 'pppoe_ip_pool') &&
+            Object.prototype.hasOwnProperty.call(current, 'mikrotik_ip_pool')) {
+          column = 'mikrotik_ip_pool';
+        }
+        updateColumns.push(column);
+        values.push(data[field]);
+      }
+
+      if (updateColumns.length) {
+        const dollar = String.fromCharCode(36);
+        const assignments = updateColumns.map((column, index) => column + '=' + dollar + (index + 1));
+        if (Object.prototype.hasOwnProperty.call(current, 'updated_at')) assignments.push('updated_at=NOW()');
+        values.push(id);
+        await client.query('UPDATE public.pops SET ' + assignments.join(',') + ' WHERE id=' + dollar + values.length, values);
+      }
+
+      const hotspotFields = ['hotspot_enabled','hotspot_server','hotspot_interface','hotspot_vlan_id','hotspot_ip_pool'];
+      const hotspotConfigChanged = hotspotFields.some(field => Object.prototype.hasOwnProperty.call(data, field));
+      let hotspotPersisted = true;
+      if (hotspotConfigChanged) {
+        // Keep the primary POP update independent while making Hotspot persistence
+        // deterministic against the verified public.pop_hotspot_bindings contract.
+        await client.query('SAVEPOINT pop_hotspot_optional');
+        try {
+          const bindingResult = await client.query(
+            'SELECT to_jsonb(hb) AS data FROM public.pop_hotspot_bindings hb WHERE hb.pop_id=$1 FOR UPDATE',
+            [id]
+          );
+          const binding = bindingResult.rows[0]?.data || {};
+          const hasField = field => Object.prototype.hasOwnProperty.call(data, field);
+          const explicitEnablementChange = hasField('hotspot_enabled');
+          const bindingEnabled = binding.status != null && String(binding.status).trim() !== ''
+            ? String(binding.status).trim().toLowerCase() === 'active'
+            : binding.is_active === true;
+          const config = {
+            enabled: explicitEnablementChange ? data.hotspot_enabled : bindingEnabled,
+            routerKey: binding.router_key || null,
+            server: hasField('hotspot_server') ? (data.hotspot_server || null) : binding.hotspot_server,
+            interface: hasField('hotspot_interface') ? (data.hotspot_interface || null) : binding.hotspot_interface,
+            vlanId: hasField('hotspot_vlan_id') ? data.hotspot_vlan_id : binding.vlan_id,
+            pool: hasField('hotspot_ip_pool') ? data.hotspot_ip_pool : binding.ip_pool
+          };
+
+          // A false/missing legacy state is not permission to deactivate. Only an
+          // explicit Hotspot toggle to OFF may write status='inactive'.
+          if (explicitEnablementChange && data.hotspot_enabled === false) {
+            await upsertHotspotBinding(client, id, { enabled: false });
+          } else if (config.enabled) {
+            await upsertHotspotBinding(client, id, config);
+            await hotspotPackageSync.syncPopPackages(client, id);
+          }
+          await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
+        } catch (bindingError) {
+          await client.query('ROLLBACK TO SAVEPOINT pop_hotspot_optional');
+          await client.query('RELEASE SAVEPOINT pop_hotspot_optional');
+          hotspotPersisted = false;
+          console.error('[POP] Hotspot binding persistence failed; primary POP update is retained.', {
+            event: 'pop.hotspot_binding.persistence_failed',
+            popId: id,
+            databaseCode: bindingError.code || null,
+            constraint: bindingError.constraint || null,
+            message: bindingError.message
+          });
+        }
+      }
+      return { pop: await readPop(client, id), hotspotPersisted };
+    });
+    if (!result || !result.pop) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop: result.pop, hotspot_persisted: result.hotspotPersisted });
+  } catch (error) {
+    return fail(res, error, 'Update');
+  }
+}
+
+async function updateStatus(req, res) {
+  const id = validId(req.params.id);
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid POP ID.' });
+  if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive.' });
+  try {
+    const result = await db.query(
+      'UPDATE pops SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,name,status',
+      [status,id]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'POP not found.' });
+    return res.json({ success: true, pop: result.rows[0], message: 'POP status updated. Customer records were preserved.' });
+  } catch (error) {
+    return fail(res, error, 'Status update');
+  }
+}
+
+module.exports = { options, list, create, update, updateStatus };

@@ -960,7 +960,7 @@ WHERE subscriber_type='scratch_voucher' AND status='unused' AND batch_id IS NULL
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS activation_type VARCHAR(24) NOT NULL DEFAULT 'legacy';
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_subscriber_type_check;
 ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_subscriber_type_check
-  CHECK (subscriber_type IN ('direct_subscriber', 'scratch_voucher', 'admin_voucher', 'mfs', 'legacy'));
+  CHECK (subscriber_type IN ('direct_subscriber', 'scratch_voucher', 'admin_voucher', 'mfs', 'legacy', 'reseller_voucher'));
 ALTER TABLE hotspot_vouchers DROP CONSTRAINT IF EXISTS hotspot_vouchers_activation_type_check;
 ALTER TABLE hotspot_vouchers ADD CONSTRAINT hotspot_vouchers_activation_type_check
   CHECK (activation_type IN ('preassigned','first_login','legacy'));

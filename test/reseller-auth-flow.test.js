@@ -29,11 +29,21 @@ function strongPassword() {
 test('invite creates an inactive reseller and queues email inside the transaction', async t => {
   let queued = false;
   let insertedValues;
+  const transactionStatements = [];
   t.mock.method(db, 'withTransaction', async callback => callback({
     async query(sql, values) {
-      assert.match(sql, /INSERT INTO resellers/);
-      insertedValues = values;
-      return { rows: [{ id: 702, name: 'North POP Partner', email: 'partner@example.com', phone: '01700000000', status: 'inactive' }] };
+      transactionStatements.push(sql);
+      if (sql.includes('INSERT INTO resellers')) {
+        insertedValues = values;
+        return { rows: [{ id: 702, name: 'North POP Partner', email: 'partner@example.com', phone: '01700000000', status: 'inactive' }] };
+      }
+      if (sql.includes('INSERT INTO public.reseller_billing_accounts')) {
+        assert.match(sql, /billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status/);
+        assert.match(sql, /ON CONFLICT \(reseller_id\) DO NOTHING/);
+        assert.deepEqual(values, [702]);
+        return { rows: [] };
+      }
+      throw new Error('Unexpected reseller invite SQL: ' + sql);
     }
   }));
   t.mock.method(invitationService, 'queueInvitation', async payload => {
@@ -53,9 +63,42 @@ test('invite creates an inactive reseller and queues email inside the transactio
   assert.equal(res.payload.success, true);
   assert.equal(res.payload.reseller.status, 'inactive');
   assert.equal(queued, true);
+  assert.equal(transactionStatements.length, 2);
+  assert.match(transactionStatements[0], /INSERT INTO resellers/);
+  assert.match(transactionStatements[1], /INSERT INTO public\.reseller_billing_accounts/);
   assert.equal(insertedValues[1], 'partner@example.com');
   assert.equal(insertedValues[2], '01700000000');
   assert.match(insertedValues[3], /^[a-f0-9]{64}$/);
+});
+
+
+test('invite rolls back reseller creation and does not queue email when billing account provisioning fails', async t => {
+  const statements = [];
+  let invitationQueued = false;
+  t.mock.method(db, 'withTransaction', async callback => {
+    const client = {
+      async query(sql) {
+        statements.push(sql);
+        if (sql.includes('INSERT INTO resellers')) {
+          return { rows: [{ id: 709, name: 'Billing Failure Partner', email: 'billing-failure@example.com', phone: '01700000000', status: 'inactive' }] };
+        }
+        if (sql.includes('INSERT INTO public.reseller_billing_accounts')) {
+          throw new Error('simulated billing account insert failure');
+        }
+        throw new Error('Unexpected SQL: ' + sql);
+      }
+    };
+    return callback(client);
+  });
+  t.mock.method(invitationService, 'queueInvitation', async () => { invitationQueued = true; });
+  const res = responseRecorder();
+  await controller.invite({
+    body: { name: 'Billing Failure Partner', email: 'billing-failure@example.com', phone: '01700000000', assigned_pop_ids: [] }
+  }, res);
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.payload.success, false);
+  assert.equal(statements.length, 2);
+  assert.equal(invitationQueued, false);
 });
 
 test('invite rejects malformed email before opening a database transaction', async t => {
@@ -256,6 +299,7 @@ test('POP assignment locks customer writes and accepts only an empty active unas
       if (sql.startsWith('INSERT INTO resellers')) {
         return { rows: [{ id: 810, name: 'North Partner', email: 'north@example.com', phone: '01700000000', status: 'inactive' }] };
       }
+      if (sql.includes('INSERT INTO public.reseller_billing_accounts')) return { rows: [] };
       if (sql.startsWith('UPDATE pops')) return { rows: [{ id: 811 }] };
       return { rows: [] };
     }
@@ -271,5 +315,6 @@ test('POP assignment locks customer writes and accepts only an empty active unas
   assert.match(statements[0], /LOCK TABLE customers IN SHARE ROW EXCLUSIVE MODE/);
   assert.match(statements[1], /FROM pops p WHERE p.id=ANY/);
   assert.match(statements[2], /INSERT INTO resellers/);
-  assert.match(statements[3], /UPDATE pops SET reseller_id/);
+  assert.match(statements[3], /INSERT INTO public\.reseller_billing_accounts/);
+  assert.match(statements[4], /UPDATE pops SET reseller_id/);
 });

@@ -24,9 +24,7 @@ function eligibleRow(overrides = {}) {
     package_id: '701',
     package_name: '2 Hour',
     profile_key: '2-Hour',
-    validity: '2h',
-    time_limit: '2h',
-    data_limit: '1G',
+    validity_seconds: 7200,
     retail_price: '50.00',
     wholesale_price: '30.00',
     billing_account_id: '801',
@@ -117,10 +115,26 @@ test('issuance uses one transaction client for the canonical generator, item map
   assert.equal(mock.generated[0].profileName, '2-Hour');
   assert.equal(mock.generated[0].price, 50);
   assert.ok(mock.statements.some(entry => /p\.reseller_id=\$2/.test(entry.sql) && /FOR UPDATE OF p,b,pkg,a/.test(entry.sql)));
+  const eligibilitySql = mock.statements.find(entry => entry.sql.includes('FROM public.pops p'))?.sql || '';
+  assert.match(eligibilitySql, /pkg\.is_active=TRUE/);
+  assert.match(eligibilitySql, /pkg\.validity_seconds/);
+  assert.match(eligibilitySql, /to_jsonb\(b\)->>'status'/);
+  assert.match(eligibilitySql, /to_jsonb\(b\)->>'is_active'/);
+  assert.doesNotMatch(eligibilitySql, /pkg\.(?:validity|status|time_limit|data_limit)(?![a-z_])/);
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_issuance_items')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')));
+});
+
+test('Hotspot voucher issuance rejects a missing Hotspot pool before generating vouchers', async t => {
+  const mock = installIssueMocks(t, { eligible: { ip_pool: null } });
+  await assert.rejects(
+    issuance.issueBatch(validInput),
+    error => error.code === 'HOTSPOT_IP_POOL_NOT_CONFIGURED' && error.statusCode === 409
+  );
+  assert.equal(mock.generated.length, 0);
+  assert.equal(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches')), false);
 });
 
 test('cross-reseller POP/package selection is rejected before voucher generation', async t => {
@@ -171,6 +185,12 @@ test('idempotent replay returns the original scoped batch without another debit 
   const result = await issuance.issueBatch(validInput);
   assert.equal(result.replayed, true);
   assert.equal(result.batch.batchKey, BATCH_KEY);
+  const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
+  assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.match(detailSql, /to_jsonb\(pkg\)->>'validity'/);
+  assert.ok(detailSql.includes("'N/A'"));
+  assert.doesNotMatch(detailSql, /pkg\.validity/);
+  assert.doesNotMatch(detailSql, /b\.validity/);
   assert.equal(mock.generated.length, 0);
   assert.equal(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')), false);
   assert.equal(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
@@ -232,49 +252,119 @@ test('reseller portal exposes only voucher issuance as a write and keeps batch h
 test('reseller history SQL is always scoped by the authenticated reseller id', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'services', 'resellerVoucherIssuanceService.js'), 'utf8');
   assert.match(source, /WHERE b\.reseller_id=\$1/);
-  assert.match(source, /WHERE batch_key=\$1::uuid AND reseller_id=\$2/);
+  assert.match(source, /WHERE b\.batch_key=\$1::uuid AND b\.reseller_id=\$2/);
+});
+
+test('voucher batch history selects the canonical UUID reference and remains reseller-scoped', async t => {
+  let captured;
+  t.mock.method(db, 'query', async (sql, values) => {
+    captured = { sql, values };
+    return { rows: [{
+      id: '9001', batch_key: BATCH_KEY, pop_id: 21, package_id: '701',
+      profile_key: '2-Hour', validity: '2h', quantity: 1, issued_count: 1,
+      retail_total: '50.00', wholesale_total: '30.00', margin_total: '20.00',
+      billing_mode: 'prepaid', status: 'issued', created_at: new Date('2026-10-30T10:00:00Z')
+    }] };
+  });
+  const rows = await issuance.listBatches(41);
+  assert.equal(rows[0].batchKey, BATCH_KEY);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'batch_key' AS batch_key/);
+  assert.match(captured.sql, /to_jsonb\(pkg\)->>'validity'/);
+  assert.ok(captured.sql.includes("'N/A'"));
+  assert.doesNotMatch(captured.sql, /pkg\.validity/);
+  assert.match(captured.sql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.doesNotMatch(captured.sql, /b\.validity/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(captured.sql, /to_jsonb\(b\)->>'margin_total'/);
+  assert.doesNotMatch(captured.sql, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
+  assert.match(captured.sql, /WHERE b\.reseller_id=\$1/);
+  assert.deepEqual(captured.values, [41, 50]);
+});
+
+
+test('voucher batch detail resolves validity from its package and never selects a batch validity column', async t => {
+  const mock = installIssueMocks(t);
+  const result = await issuance.getBatch(41, BATCH_KEY);
+  assert.equal(result.batch.validity, '2h');
+  const detailSql = mock.statements.find(entry => entry.sql.includes('FROM public.reseller_voucher_batches b') && entry.sql.includes('batch_key=$1::uuid'))?.sql || '';
+  assert.match(detailSql, /LEFT JOIN public\.pop_hotspot_packages pkg ON pkg\.id=b\.package_id/);
+  assert.match(detailSql, /to_jsonb\(pkg\)->>'validity'/);
+  assert.ok(detailSql.includes("'N/A'"));
+  assert.doesNotMatch(detailSql, /pkg\.validity/);
+  assert.doesNotMatch(detailSql, /b\.validity/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(detailSql, /to_jsonb\(b\)->>'margin_total'/);
+  assert.doesNotMatch(detailSql, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
+});
+
+test('forward batch-key compatibility migration adds/backfills UUID without destructive DDL', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261031_reseller_voucher_batch_key_compat.sql'), 'utf8');
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS batch_key UUID/);
+  assert.match(migration, /SET batch_key = gen_random_uuid\(\)/);
+  assert.match(migration, /ALTER COLUMN batch_key SET NOT NULL/);
+  assert.match(migration, /CREATE UNIQUE INDEX uq_reseller_voucher_batches_batch_key_compat/);
+  assert.match(migration, /i\.indisunique AND i\.indisvalid/);
+  assert.doesNotMatch(migration, /\bDROP\s+(TABLE|COLUMN|INDEX)\b/i);
+  assert.doesNotMatch(migration, /DELETE FROM public\.(reseller_voucher_batches|reseller_voucher_issuance_items|reseller_ledger_entries)/i);
+});
+
+
+test('reseller dashboard renders assigned POPs as a full-width responsive SaaS card list', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-dashboard.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'reseller-workspace.css'), 'utf8');
+  assert.match(dashboard, /reseller-panel reseller-assigned-pops/);
+  assert.match(dashboard, /id="popGrid" class="pop-grid"/);
+  assert.match(css, /grid-column:1 \/ -1/);
+  assert.match(css, /padding:20px 24px/);
+  assert.match(css, /font-size:1\.25rem;font-weight:600/);
+  assert.match(css, /font-size:\.9375rem/);
+  assert.match(script, /pop-status-badge/);
+  assert.match(script, /pop\.pppoe_ip_pool \|\| pop\.mikrotik_ip_pool/);
 });
 
 test('reseller dashboard contains bounded generation and read-only reprint controls', () => {
-  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
   assert.match(dashboard, /id="voucherQuantity"[^>]*min="1"[^>]*max="500"/);
-  assert.match(dashboard, /retail_price|retailPrice/);
-  assert.match(dashboard, /wholesale_price|wholesalePrice/);
+  assert.match(script, /retailPrice/);
+  assert.match(script, /wholesalePrice/);
   assert.match(dashboard, /voucherHistoryRows/);
-  assert.match(dashboard, /\/reseller\/hotspot\/voucher-batches\//);
-  assert.match(dashboard, /Idempotency-Key/);
+  assert.match(script, /\/reseller\/hotspot\/voucher-batches\//);
+  assert.match(script, /Idempotency-Key/);
+  assert.match(dashboard, /btnIssueVouchers/);
+  assert.match(script, /X-Requested-With/);
+  assert.match(script, /new window\.QRCode/);
+  assert.match(script, /finally\{/);
 });
 
 
-test('catalog returns only the authenticated reseller POP/package rows and exact margin', async t => {
+test('catalog exposes core packages without an IP pool and reports issuance readiness separately', async t => {
   const catalogService = require('../services/resellerHotspotCatalogService');
-  const calls = [];
-  t.mock.method(db, 'query', async (sql, values) => {
-    calls.push({ sql, values });
-    if (sql.includes('FROM public.reseller_billing_accounts')) {
-      return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
+  const statements = [];
+  const client = {
+    async query(sql, values) {
+      statements.push({ sql, values });
+      if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [{ id: '801', billing_mode: 'prepaid', wallet_balance: '100.00', receivable_balance: '0.00', credit_limit: '0.00', currency: 'BDT', account_status: 'active' }] };
+      if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: null, dns_name: 'wifi.example.test' }] };
+      if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: [{ id: '701', pop_id: 21, package_name: '30-Day', profile_key: '30-Day', validity_seconds: '2592000', retail_price: '150.00', wholesale_price: '150.00', is_active: true }] };
+      throw new Error('Unexpected catalog SQL: ' + sql);
     }
-    if (sql.includes('FROM public.pops p')) {
-      return { rows: [{
-        pop_id: 21, pop_name: 'North POP', area_zone: 'North',
-        binding_id: '501', router_key: 'core_mikrotik', hotspot_server: 'hotspot1',
-        hotspot_interface: 'bridge-hotspot', vlan_id: 120, ip_pool: 'hs-pool',
-        package_id: '701', package_name: '2 Hour', profile_key: '2-Hour',
-        validity: '2h', time_limit: '2h', data_limit: '1G',
-        retail_price: '50.10', wholesale_price: '30.05'
-      }] };
-    }
-    throw new Error('Unexpected catalog SQL: ' + sql);
-  });
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
   const result = await catalogService.getCatalog(41);
   assert.equal(result.pops.length, 1);
-  assert.equal(result.pops[0].id, 21);
-  assert.equal(result.pops[0].packages[0].expectedMargin, '20.05');
-  assert.equal(result.account.walletBalance, '100.00');
-  assert.deepEqual(calls.map(call => call.values), [[41], [41]]);
-  assert.match(calls[1].sql, /p\.status='active'/);
-  assert.match(calls[1].sql, /b\.status='active'/);
-  assert.match(calls[1].sql, /pkg\.status='active'/);
+  assert.equal(result.pops[0].packages.length, 1);
+  assert.equal(result.pops[0].packages[0].validity, '30 days');
+  assert.equal(result.pops[0].issuanceReady, false);
+  assert.equal(result.pops[0].dnsName, 'wifi.example.test');
+  assert.equal(result.pops[0].readinessReason, 'IP_POOL_NOT_CONFIGURED');
+  assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /validity_seconds/);
+  assert.match(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /is_active/);
+  assert.doesNotMatch(statements.find(call => call.sql.includes('FROM public.pop_hotspot_packages')).sql, /\b(validity|status)\b/);
 });
 
 test('catalog rejects missing or invalid authenticated reseller identity', async () => {
@@ -299,6 +389,8 @@ test('canonical voucher generator defaults to legacy scratch type and accepts re
   assert.equal(calls[1].values[9], 'reseller_voucher');
   assert.equal(calls[1].values[10], '2-Hour');
   assert.match(calls[1].sql, /profile_id,time_limit,data_limit/);
+  assert.ok(calls[1].sql.includes('INSERT INTO hotspot_vouchers'));
+  assert.ok(calls[1].sql.includes("NULLIF($10::varchar,'')"));
 });
 
 test('print page is authenticated and batch-scoped; no batch mutation routes exist', () => {
@@ -307,6 +399,9 @@ test('print page is authenticated and batch-scoped; no batch mutation routes exi
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
   assert.match(server, /\/reseller\/hotspot\/voucher-batches\/:batchKey\/print",requireRole\(\["reseller"\]\),loadTenantScope,resellerHotspotController\.printBatchPage/);
   assert.match(printView, /window\.print\(\)/);
+  assert.match(printView, /repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(printView, /print-thermal-58/);
+  assert.match(printView, /print-thermal-80/);
   assert.doesNotMatch(routes, /router\.(delete|put)\([^\n]*voucher-batches/i);
   assert.doesNotMatch(routes, /router\.post\([^\n]*(cancel|void|delete|disable)/i);
 });
@@ -316,12 +411,16 @@ test('reseller workspace and printable voucher EJS templates compile; dashboard 
   const ejs = require('ejs');
   const vm = require('node:vm');
   const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-dashboard.ejs'), 'utf8');
+  const vouchers = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const customers = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-customers.ejs'), 'utf8');
+  const payments = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-payments.ejs'), 'utf8');
+  const partials = ['reseller-sidebar.ejs','reseller-topbar.ejs','reseller-scripts.ejs'].map(name => fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', name), 'utf8'));
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
-  ejs.compile(dashboard);
-  ejs.compile(printView);
-  const scriptMatch = dashboard.match(/<script>([\s\S]*?)<\/script>/);
-  assert.ok(scriptMatch, 'reseller dashboard script block must exist');
-  new vm.Script(scriptMatch[1]);
+  [dashboard,vouchers,customers,payments,...partials,printView].forEach(source => ejs.compile(source));
+  for (const name of ['reseller-workspace.js','reseller-dashboard.js','reseller-vouchers.js','reseller-customers.js','reseller-payments.js']) {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', name), 'utf8');
+    new vm.Script(source);
+  }
 });
 
 
@@ -366,4 +465,114 @@ test('voucher generation failure aborts the enclosing transaction before account
   assert.equal(rollbackObserved, true);
   assert.equal(statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')), false);
   assert.equal(statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries')), false);
+});
+
+test('catalog surfaces required package schema errors instead of silently returning an empty catalog', async t => {
+  const catalogService = require('../services/resellerHotspotCatalogService');
+  const schemaError = Object.assign(new Error('column validity_seconds does not exist'), { code: '42703' });
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM public.reseller_billing_accounts')) return { rows: [] };
+      if (sql.includes('FROM public.pops p')) return { rows: [{ id: 21, name: 'North POP', status: 'active', reseller_id: 41 }] };
+      if (sql.includes('FROM public.pop_hotspot_bindings')) return { rows: [{ id: '501', pop_id: 21, status: 'active', ip_pool: 'pool-a' }] };
+      if (sql.includes('FROM public.pop_hotspot_packages')) throw schemaError;
+      throw new Error('Unexpected SQL: ' + sql);
+    }
+  };
+  t.mock.method(db, 'withTransaction', async callback => callback(client));
+  await assert.rejects(catalogService.getCatalog(41), error => error === schemaError);
+});
+
+
+test('voucher history and detail project validity defensively across schema variants', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'services', 'resellerVoucherIssuanceService.js'), 'utf8');
+  for (const projection of [
+    "to_jsonb(b)->>'validity'",
+    "to_jsonb(pkg)->>'validity'",
+    "to_jsonb(pkg)->>'duration'",
+    "to_jsonb(pkg)->>'validity_days'",
+    "to_jsonb(pkg)->>'validity_period'",
+    "'N/A'"
+  ]) assert.ok(source.includes(projection), 'missing defensive validity projection: ' + projection);
+  assert.equal(source.includes('pkg.validity AS validity'), false);
+  assert.doesNotMatch(source, /b\.retail_total|b\.wholesale_total|b\.margin_total/);
+  assert.match(source, /to_jsonb\(b\)->>'retail_total'/);
+  assert.match(source, /to_jsonb\(b\)->>'wholesale_total'/);
+  assert.match(source, /to_jsonb\(b\)->>'margin_total'/);
+  assert.equal((source.match(/COALESCE\(to_jsonb\(b\)->>'status', 'completed'\) AS status/g) || []).length, 2);
+  const detailFunction = source.slice(source.indexOf('async function loadBatchDetail'), source.indexOf('async function issueBatch'));
+  const listFunction = source.slice(source.indexOf('async function listBatches'), source.indexOf('async function getBatch'));
+  const batchSelects = [detailFunction, listFunction].map(section => section.match(/`SELECT([\s\S]*?)FROM public\.reseller_voucher_batches b/)?.[1]);
+  assert.equal(batchSelects.length, 2);
+  assert.ok(batchSelects.every(Boolean), 'both history functions must expose a batch projection');
+  assert.doesNotMatch(batchSelects.join('\n'), /b\.status/);
+  for (const projection of batchSelects) {
+    assert.doesNotMatch(projection, /b\.(?!id\b|reseller_id\b|created_at\b)[a-z_]+/i);
+  }
+  assert.match(source, /WHERE b\.reseller_id=\$1/);
+  assert.match(source, /ORDER BY b\.created_at DESC,b\.id DESC/);
+  assert.doesNotMatch(source, /WHERE[^\`]*to_jsonb\(b\)|ORDER BY[^\`]*to_jsonb\(b\)/s);
+});
+
+test('POP update uses deterministic Hotspot SQL without runtime schema discovery', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'popController.js'), 'utf8');
+  assert.equal(source.includes('information_schema.columns'), false);
+  assert.equal(source.includes('inspectHotspotBindingSchema'), false);
+  assert.ok(source.includes("INSERT INTO public.pop_hotspot_bindings"));
+  assert.ok(source.includes("COALESCE($2, 'core_mikrotik')"));
+  assert.ok(source.includes("ON CONFLICT (pop_id) DO UPDATE SET"));
+  const update = source.slice(source.indexOf('async function update(req, res)'), source.indexOf('async function updateStatus'));
+  assert.ok(update.includes('SELECT * FROM public.pops WHERE id=$1 FOR UPDATE'));
+  assert.ok(update.includes('SAVEPOINT pop_hotspot_optional'));
+  assert.ok(update.includes('hotspot_persisted: result.hotspotPersisted'));
+  assert.ok(update.includes('console.error('));
+  assert.ok(update.includes('mikrotik_ip_pool'));
+});
+
+
+test('reseller POS package selection uses delegated canonical state and recalculates financial totals', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-vouchers.js'), 'utf8');
+  const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-vouchers.ejs'), 'utf8');
+  const scripts = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'reseller-scripts.ejs'), 'utf8');
+  assert.match(script, /selectedPackageId:null/);
+  assert.match(script, /voucherPackageGrid'\)\.addEventListener\('click'/);
+  assert.match(script, /state\.selectedPackageId=String\(selected\.id\)/);
+  assert.match(script, /state\.retailPrice=String\(selected\.retailPrice\)/);
+  assert.match(script, /state\.wholesalePrice=String\(selected\.wholesalePrice\)/);
+  assert.match(script, /state\.margin=decimal\(/);
+  assert.match(script, /issueButton\.disabled=!canIssue/);
+  assert.match(script, /summary\(\);\}\);el\('btnIssueVouchers'\)/);
+  assert.match(view, /class="pos-package-scroll mb-3"/);
+  assert.match(view, /max-height:380px;overflow-y:auto/);
+  assert.doesNotMatch(view, /voucherPrefix|Username prefix/);
+  assert.match(scripts, /reseller-vouchers\.js\?v=20261101-2/);
+});
+
+
+test('actor identity is validated against the BIGINT database contract and persisted consistently', async t => {
+  const mock = installIssueMocks(t);
+  await issuance.issueBatch(validInput);
+  const batch = mock.statements.find(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches'));
+  const ledger = mock.statements.find(entry => entry.sql.startsWith('INSERT INTO public.reseller_ledger_entries'));
+  assert.equal(batch.values[21], '41');
+  assert.equal(ledger.values[9], '41');
+  await assert.rejects(
+    issuance.issueBatch({ ...validInput, idempotencyKey: 'test-request-0002', actorUserId: 'user-uuid-not-int8' }),
+    error => error.code === 'INVALID_ACTOR_USER_ID' && error.statusCode === 403
+  );
+});
+
+test('schema reconciliation migration is forward-only and preserves append-only ledger protection', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261031_reseller_voucher_contract_reconcile.sql'), 'utf8');
+  assert.match(migration, /reseller_voucher/);
+  assert.ok(migration.includes('ALTER COLUMN idempotency_key TYPE VARCHAR'));
+  assert.ok(migration.includes('ADD COLUMN IF NOT EXISTS currency CHAR(3)'));
+  assert.ok(migration.includes('ALTER COLUMN account_id DROP NOT NULL'));
+  assert.ok(migration.includes('ALTER COLUMN direction DROP NOT NULL'));
+  assert.ok(migration.includes('ALTER COLUMN created_by DROP NOT NULL'));
+  assert.match(migration, /wallet_debit/);
+  assert.match(migration, /receivable_charge/);
+  assert.match(migration, /trg_reseller_ledger_no_update/);
+  assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN)\\b/i);
+  assert.doesNotMatch(migration, /\\b(DELETE FROM|TRUNCATE)\\b/i);
 });

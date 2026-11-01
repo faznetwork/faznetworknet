@@ -1,94 +1,153 @@
 'use strict';
 
 const db = require('../db');
+const { syncPopPackages } = require('./resellerHotspotPackageSyncService');
 
 function moneyCents(value) {
   const match = String(value ?? '').trim().match(/^(\d{1,12})(?:\.(\d{1,2}))?$/);
   if (!match) throw Object.assign(new Error('The configured POP package price is invalid.'), { statusCode: 503, code: 'INVALID_PACKAGE_PRICE' });
   return BigInt(match[1]) * 100n + BigInt((match[2] || '').padEnd(2, '0') || '0');
 }
-
 function moneyFromCents(value) {
   const amount = BigInt(value);
   return (amount / 100n).toString() + '.' + (amount % 100n).toString().padStart(2, '0');
 }
-
 function resellerKey(value) {
   const id = Number(value);
-  if (!Number.isSafeInteger(id) || id < 1) {
+  if (!Number.isSafeInteger(id) || id < 1 || id > 2147483647) {
     throw Object.assign(new Error('Verified reseller identity is required.'), { statusCode: 403, code: 'RESELLER_ID_REQUIRED' });
   }
   return id;
 }
-
-async function getCatalog(resellerIdValue) {
-  const resellerId = resellerKey(resellerIdValue);
-  const [accountResult, catalogueResult] = await Promise.all([
-    db.query(
-      `SELECT id, billing_mode, wallet_balance, receivable_balance, credit_limit,
-              currency, account_status
-       FROM public.reseller_billing_accounts
-       WHERE reseller_id=$1
-       LIMIT 1`,
-      [resellerId]
-    ),
-    db.query(
-      `SELECT p.id AS pop_id, p.name AS pop_name, p.area_zone,
-              pkg.id AS package_id, pkg.package_name, pkg.profile_key,
-              pkg.validity, pkg.time_limit, pkg.data_limit,
-              pkg.retail_price, pkg.wholesale_price
-       FROM public.pops p
-       INNER JOIN public.pop_hotspot_bindings b
-         ON b.pop_id=p.id AND b.status='active'
-       INNER JOIN public.pop_hotspot_packages pkg
-         ON pkg.pop_id=p.id AND pkg.status='active'
-       WHERE p.reseller_id=$1
-         AND p.status='active'
-       ORDER BY p.name ASC, pkg.display_order ASC, pkg.package_name ASC, pkg.id ASC`,
-      [resellerId]
-    )
-  ]);
-
-  const popsById = new Map();
-  for (const row of catalogueResult.rows || []) {
-    const key = String(row.pop_id);
-    let pop = popsById.get(key);
-    if (!pop) {
-      pop = {
-        id: Number(row.pop_id),
-        name: row.pop_name,
-        areaZone: row.area_zone || '',
-        packages: []
-      };
-      popsById.set(key, pop);
+function formatValiditySeconds(value) {
+  let seconds;
+  try { seconds = BigInt(value ?? 0); } catch (_) { return 'Data / quota package'; }
+  if (seconds <= 0n) return 'Data / quota package';
+  for (const [unitSeconds, label] of [[86400n, 'day'], [3600n, 'hour'], [60n, 'minute']]) {
+    if (seconds % unitSeconds === 0n) {
+      const count = seconds / unitSeconds;
+      return count.toString() + ' ' + label + (count === 1n ? '' : 's');
     }
-    pop.packages.push({
-      id: String(row.package_id),
-      name: row.package_name,
-      profileKey: row.profile_key,
-      validity: row.validity,
-      timeLimit: row.time_limit || null,
-      dataLimit: row.data_limit || null,
-      retailPrice: String(row.retail_price),
-      wholesalePrice: String(row.wholesale_price),
-      expectedMargin: moneyFromCents(moneyCents(row.retail_price) - moneyCents(row.wholesale_price))
-    });
   }
-
-  const account = accountResult.rows?.[0] || null;
+  return seconds.toString() + ' seconds';
+}
+function packageFromRow(row) {
+  const retailPrice = String(row.retail_price);
+  const wholesalePrice = String(row.wholesale_price);
   return {
-    success: true,
-    account: account ? {
-      id: String(account.id),
-      billingMode: account.billing_mode,
-      walletBalance: String(account.wallet_balance),
-      receivableBalance: String(account.receivable_balance),
-      creditLimit: String(account.credit_limit),
-      currency: account.currency,
-      status: account.account_status
-    } : null,
-    pops: Array.from(popsById.values())
+    id: String(row.id),
+    name: row.package_name,
+    profileKey: row.profile_key,
+    validity: formatValiditySeconds(row.validity_seconds),
+    validitySeconds: String(row.validity_seconds),
+    timeLimit: BigInt(row.validity_seconds || 0) > 0n ? String(row.validity_seconds) + 's' : null,
+    dataLimit: null,
+    retailPrice,
+    wholesalePrice,
+    expectedMargin: moneyFromCents(moneyCents(retailPrice) - moneyCents(wholesalePrice))
   };
 }
+async function getCatalog(resellerIdValue) {
+  const resellerId = resellerKey(resellerIdValue);
+  return db.withTransaction(async client => {
+    const [accountResult, popResult] = await Promise.all([
+      client.query(`SELECT id, billing_mode, wallet_balance, receivable_balance, credit_limit,
+                           currency, account_status
+                    FROM public.reseller_billing_accounts
+                    WHERE reseller_id=$1
+                    LIMIT 1`, [resellerId]),
+      client.query(`SELECT p.id, p.name, p.status, p.reseller_id
+                    FROM public.pops p
+                    WHERE p.reseller_id=$1 AND p.status='active'
+                    ORDER BY p.name ASC, p.id ASC`, [resellerId])
+    ]);
+    const account = accountResult.rows?.[0] || null;
+    const pops = (popResult.rows || []).map(row => ({
+      id: Number(row.id),
+      name: row.name,
+      bindingConfigured: false,
+      issuanceReady: false,
+      readinessReason: 'HOTSPOT_BINDING_NOT_CONFIGURED',
+      packages: []
+    }));
+    if (!pops.length) {
+      return {
+        success: true,
+        account: account ? {
+          id: String(account.id), billingMode: account.billing_mode,
+          walletBalance: String(account.wallet_balance), receivableBalance: String(account.receivable_balance),
+          creditLimit: String(account.credit_limit), currency: account.currency, status: account.account_status
+        } : null,
+        pops
+      };
+    }
 
-module.exports = { getCatalog };
+    const popIds = pops.map(pop => pop.id);
+    const bindingResult = await client.query(
+      `SELECT id, pop_id, to_jsonb(b)->>'status' AS status, to_jsonb(b)->>'ip_pool' AS ip_pool,
+              COALESCE(NULLIF(to_jsonb(b)->>'dns_name',''), NULLIF(to_jsonb(b)->>'hotspot_dns_name','')) AS dns_name
+       FROM public.pop_hotspot_bindings b
+       WHERE pop_id = ANY($1::integer[])
+         AND COALESCE(NULLIF(to_jsonb(b)->>'status','')='active',(to_jsonb(b)->>'is_active')::boolean,FALSE)
+       ORDER BY pop_id ASC, id ASC`,
+      [popIds]
+    );
+    const bindingByPopId = new Map((bindingResult.rows || []).map(row => [String(row.pop_id), row]));
+    for (const pop of pops) {
+      const binding = bindingByPopId.get(String(pop.id));
+      pop.bindingConfigured = Boolean(binding);
+      pop.dnsName = binding && binding.dns_name ? String(binding.dns_name).trim() : null;
+      pop.issuanceReady = Boolean(binding && String(binding.ip_pool || '').trim());
+      pop.readinessReason = !binding
+        ? 'HOTSPOT_BINDING_NOT_CONFIGURED'
+        : pop.issuanceReady ? null : 'IP_POOL_NOT_CONFIGURED';
+    }
+
+    const readPackages = async () => client.query(
+      `SELECT id, pop_id, package_name, profile_key, validity_seconds,
+              retail_price, wholesale_price, is_active
+       FROM public.pop_hotspot_packages
+       WHERE pop_id = ANY($1::integer[])
+       ORDER BY pop_id ASC, id ASC`,
+      [popIds]
+    );
+    let packageResult = await readPackages();
+    const packageRowsByPopId = new Map();
+    for (const row of packageResult.rows || []) {
+      const key = String(row.pop_id);
+      if (!packageRowsByPopId.has(key)) packageRowsByPopId.set(key, []);
+      packageRowsByPopId.get(key).push(row);
+    }
+
+    // Core metadata is the sole source for initial POP package materialization.
+    // Existing POP rows (including inactive rows and price overrides) are never overwritten.
+    for (const pop of pops) {
+      if (!pop.bindingConfigured || (packageRowsByPopId.get(String(pop.id)) || []).length) continue;
+      const syncResult = await syncPopPackages(client, pop.id);
+      if (syncResult.reason && syncResult.reason !== 'core_profile_metadata_not_configured') {
+        throw Object.assign(new Error('Core Hotspot package metadata could not be materialized for POP ' + pop.id + '.'), {
+          statusCode: 503, code: 'HOTSPOT_PACKAGE_MATERIALIZATION_FAILED'
+        });
+      }
+    }
+
+    packageResult = await readPackages();
+    const popById = new Map(pops.map(pop => [String(pop.id), pop]));
+    for (const row of packageResult.rows || []) {
+      if (row.is_active !== true) continue;
+      const pop = popById.get(String(row.pop_id));
+      if (pop && pop.bindingConfigured) pop.packages.push(packageFromRow(row));
+    }
+
+    return {
+      success: true,
+      account: account ? {
+        id: String(account.id), billingMode: account.billing_mode,
+        walletBalance: String(account.wallet_balance), receivableBalance: String(account.receivable_balance),
+        creditLimit: String(account.credit_limit), currency: account.currency, status: account.account_status
+      } : null,
+      pops
+    };
+  });
+}
+module.exports = { getCatalog, formatValiditySeconds };

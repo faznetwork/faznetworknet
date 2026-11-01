@@ -28,7 +28,7 @@ async function overview(req, res) {
     const popIds = resellerPopIds(req);
     const resellerId = Number(req.auth?.resellerId);
     const popResult = await db.query(
-      'SELECT id, name, area_zone, status, vlan_id, mikrotik_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
+      'SELECT id, name, area_zone, status, vlan_id, pppoe_enabled, pppoe_ip_pool FROM pops WHERE reseller_id=$1 ORDER BY name ASC, id ASC',
       [resellerId]
     );
 
@@ -107,14 +107,64 @@ async function listCustomers(req, res) {
   }
 }
 
+async function packages(req, res) {
+  try {
+    // Read-only catalog: do not open MikroTik connections while rendering the form.
+    const result = await db.query(`SELECT id, plan_name AS name,
+      COALESCE(profile_name, plan_name) AS profile_name, price, duration_months
+      FROM packages
+      WHERE LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE '%default%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) <> 'vpn'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'template%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'internal%'
+        AND LOWER(COALESCE(profile_name, plan_name, '')) NOT LIKE 'system%'
+      ORDER BY plan_name ASC, id ASC`);
+    return res.json({ success: true, packages: result.rows.map(row => ({
+      id: String(row.id), name: row.name, profileName: row.profile_name,
+      price: Number(row.price || 0), durationMonths: Number(row.duration_months || 1)
+    })) });
+  } catch (error) { return handleError(res, error, 'Package catalog'); }
+}
+async function createCustomer(req, res) {
+  const resellerId = Number(req.auth?.resellerId);
+  const scopedResellerId = Number(req.tenantScope?.resellerId);
+  const popIds = resellerPopIds(req);
+  const requestedPopId = Number(req.body?.pop_id);
+
+  if (!Number.isSafeInteger(resellerId) || resellerId < 1 || resellerId !== scopedResellerId) {
+    return res.status(403).json({ success: false, message: 'Verified reseller identity and tenant scope do not match.' });
+  }
+  if (!Number.isSafeInteger(requestedPopId) || requestedPopId < 1) {
+    return res.status(400).json({ success: false, message: 'Select one of your assigned active POPs before creating a customer.' });
+  }
+  if (!popIds.includes(requestedPopId)) {
+    return res.status(403).json({ success: false, message: 'The selected POP is not assigned to your reseller account.' });
+  }
+
+  // POP ownership is checked again under a database row lock by the existing
+  // customer creation transaction. Never accept tenant/network ownership fields
+  // from the browser; VLAN and MikroTik IP Pool remain POP-owned configuration.
+  const body = { ...(req.body || {}), pop_id: requestedPopId };
+  delete body.reseller_id;
+  delete body.vlan_id;
+  delete body.mikrotik_ip_pool;
+  delete body.pppoe_ip_pool;
+  delete body.pppoe_enabled;
+  req.body = body;
+  return customerController.createCustomer(req, res);
+}
+
 async function getCustomer(req, res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const key = customerKey(req.params.id);
   if (!key) return res.status(400).json({ success: false, message: 'Customer identifier is required.' });
 
   try {
     const popIds = resellerPopIds(req);
     const scoped = await db.query(
-      `SELECT c.id, c.full_name, c.username, c.phone, c.email,
+      `SELECT c.id, c.full_name, c.username, c.password AS pppoe_password, c.phone, c.email,
               c.package_name, c.profile, c.status, c.expiration_date,
               c.monthly_bill, c.connection_date, c.installation_address,
               c.pop_id, p.name AS pop_name, p.area_zone AS pop_area_zone
@@ -198,4 +248,4 @@ async function paymentHistory(req, res) {
   }
 }
 
-module.exports = { overview, listCustomers, getCustomer, liveSession, paymentHistory };
+module.exports = { overview, listCustomers, packages, createCustomer, getCustomer, liveSession, paymentHistory };

@@ -28,9 +28,12 @@ test('administrator role normalization recognizes all supported spellings', () =
   }
 });
 
-test('administrator Add Customer selector is visible and defaults to FAZ Main Direct', () => {
+test('administrator Add Customer selector offers reseller POPs without exposing the core/direct POP', () => {
   assert.match(adminView, /id="customerPopAdminControls"/);
-  assert.match(adminView, /faz main \(direct\)/);
+  assert.match(adminView, /fetch\('\/api\/pops\/options'/);
+  assert.match(adminView, /Choose a reseller-owned POP to assign this customer/);
+  assert.match(adminView, /leave the selection empty to use the core\/direct default/i);
+  assert.doesNotMatch(adminView, /toLowerCase\(\) === 'faz main \(direct\)'/);
   assert.match(adminView, /loadCustomerPopOptions\('', false\)/);
   assert.match(adminView, /adminControls\?\.classList\.remove\('d-none'\)/);
 });

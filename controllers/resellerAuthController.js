@@ -77,6 +77,13 @@ async function invite(req, res) {
         [name, email, phone, hash, expiresAt]
       );
       if (!inserted.rows.length) throw new Error('Reseller invitation record was not created.');
+      await client.query(
+        `INSERT INTO public.reseller_billing_accounts
+           (reseller_id,billing_mode,wallet_balance,receivable_balance,credit_limit,currency,account_status,created_at,updated_at)
+         VALUES ($1,'prepaid',0.00,0.00,0.00,'BDT','active',NOW(),NOW())
+         ON CONFLICT (reseller_id) DO NOTHING`,
+        [inserted.rows[0].id]
+      );
       if (assignedPopIds.length) {
         const assigned = await client.query(
           'UPDATE pops SET reseller_id=$1,updated_at=NOW() WHERE id=ANY($2::bigint[]) AND reseller_id IS NULL RETURNING id',

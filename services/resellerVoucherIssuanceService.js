@@ -20,6 +20,14 @@ function positiveId(value, label) {
   return text;
 }
 
+function actorUserKey(value, fallbackValue) {
+  const text = String(value ?? fallbackValue ?? '').trim();
+  if (!/^[1-9]\d{0,18}$/.test(text) || BigInt(text) > 9223372036854775807n) {
+    throw serviceError('The authenticated actor must be a valid positive database user ID.', 403, 'INVALID_ACTOR_USER_ID');
+  }
+  return text;
+}
+
 function toCents(value, label) {
   const text = String(value ?? '').trim();
   const match = text.match(/^(\d{1,12})(?:\.(\d{1,2}))?$/);
@@ -30,6 +38,19 @@ function toCents(value, label) {
 function fromCents(value) {
   const amount = BigInt(value);
   return (amount / 100n).toString() + '.' + (amount % 100n).toString().padStart(2, '0');
+}
+
+function formatValiditySeconds(value) {
+  let seconds;
+  try { seconds = BigInt(value ?? 0); } catch (_) { return 'Data / quota package'; }
+  if (seconds <= 0n) return 'Data / quota package';
+  for (const [unitSeconds, label] of [[86400n, 'day'], [3600n, 'hour'], [60n, 'minute']]) {
+    if (seconds % unitSeconds === 0n) {
+      const count = seconds / unitSeconds;
+      return count.toString() + ' ' + label + (count === 1n ? '' : 's');
+    }
+  }
+  return seconds.toString() + ' seconds';
 }
 
 function validateQuantity(value) {
@@ -68,12 +89,58 @@ function assertSameRequest(existing, input) {
 
 async function loadBatchDetail(client, resellerId, batchKey) {
   const batchResult = await client.query(
-    `SELECT id, batch_key, reseller_id, pop_id, billing_account_id,
-            package_id, profile_key, validity, quantity,
-            retail_unit_price, wholesale_unit_price, retail_total,
-            wholesale_total, margin_total, billing_mode, status, created_at
-     FROM public.reseller_voucher_batches
-     WHERE batch_key=$1::uuid AND reseller_id=$2
+    `SELECT b.id,
+            to_jsonb(b)->>'batch_key' AS batch_key,
+            b.reseller_id,
+            NULLIF(to_jsonb(b)->>'pop_id','')::bigint AS pop_id,
+            NULLIF(to_jsonb(b)->>'billing_account_id','')::bigint AS billing_account_id,
+            NULLIF(to_jsonb(b)->>'package_id','') AS package_id,
+            to_jsonb(b)->>'profile_key' AS profile_key,
+            pkg.package_name AS package_name,
+            COALESCE(NULLIF(to_jsonb(binding)->>'dns_name',''), NULLIF(to_jsonb(binding)->>'hotspot_dns_name','')) AS dns_name,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'duration',''),
+              NULLIF(to_jsonb(pkg)->>'validity_days',''),
+              NULLIF(to_jsonb(pkg)->>'validity_period',''),
+              'N/A'
+            ) AS validity,
+            NULLIF(to_jsonb(b)->>'quantity','')::integer AS quantity,
+            NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric AS retail_unit_price,
+            NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric AS wholesale_unit_price,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+              0::numeric
+            ) AS retail_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+              0::numeric
+            ) AS wholesale_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'margin_total','')::numeric,
+              (
+                COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+                         0::numeric)
+                -
+                COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+                         0::numeric)
+              ),
+              0::numeric
+            ) AS margin_total,
+            to_jsonb(b)->>'billing_mode' AS billing_mode,
+            COALESCE(to_jsonb(b)->>'status', 'completed') AS status,
+            b.created_at
+     FROM public.reseller_voucher_batches b
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     LEFT JOIN public.pop_hotspot_bindings binding ON binding.id=b.binding_id
+     WHERE b.batch_key=$1::uuid AND b.reseller_id=$2
      LIMIT 1`,
     [batchKey, resellerId]
   );
@@ -97,6 +164,8 @@ async function loadBatchDetail(client, resellerId, batchKey) {
       popId: Number(batch.pop_id),
       packageId: String(batch.package_id),
       profileKey: batch.profile_key,
+      packageName: batch.package_name || batch.profile_key,
+      dnsName: batch.dns_name || null,
       validity: batch.validity,
       quantity: Number(batch.quantity),
       retailUnitPrice: String(batch.retail_unit_price),
@@ -113,6 +182,7 @@ async function loadBatchDetail(client, resellerId, batchKey) {
       username: row.username,
       password: row.password,
       profile: row.profile,
+      packageName: batch.package_name || batch.profile_key,
       validity: row.validity,
       timeLimit: row.time_limit || null,
       dataLimit: row.data_limit || null,
@@ -129,7 +199,7 @@ async function issueBatch(input) {
   const packageId = positiveId(input.packageId, 'package');
   const quantity = validateQuantity(input.quantity);
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
-  const actorUserId = String(input.actorUserId || resellerId).slice(0, 160);
+  const actorUserId = actorUserKey(input.actorUserId, resellerId);
 
   return db.withTransaction(async client => {
     const findExisting = async () => client.query(
@@ -157,16 +227,17 @@ async function issueBatch(input) {
               b.id AS binding_id, b.router_key, b.hotspot_server,
               b.hotspot_interface, b.vlan_id, b.ip_pool,
               pkg.id AS package_id, pkg.package_name, pkg.profile_key,
-              pkg.validity, pkg.time_limit, pkg.data_limit,
+              pkg.validity_seconds,
               pkg.retail_price, pkg.wholesale_price,
               a.id AS billing_account_id, a.billing_mode,
               a.wallet_balance, a.receivable_balance, a.credit_limit,
               a.currency, a.account_status
        FROM public.pops p
        INNER JOIN public.pop_hotspot_bindings b
-         ON b.pop_id=p.id AND b.status='active'
+         ON b.pop_id=p.id
+        AND COALESCE(NULLIF(to_jsonb(b)->>'status','')='active',(to_jsonb(b)->>'is_active')::boolean,FALSE)
        INNER JOIN public.pop_hotspot_packages pkg
-         ON pkg.pop_id=p.id AND pkg.status='active'
+         ON pkg.pop_id=p.id AND pkg.is_active=TRUE
        INNER JOIN public.reseller_billing_accounts a
          ON a.reseller_id=p.reseller_id
        WHERE p.id=$1
@@ -179,6 +250,7 @@ async function issueBatch(input) {
     );
     const eligible = eligibleResult.rows?.[0];
     if (!eligible) throw serviceError('The selected POP or package is inactive or is not assigned to your reseller account.', 403, 'POP_PACKAGE_NOT_ELIGIBLE');
+    if (!String(eligible.ip_pool || '').trim()) throw serviceError('The selected POP does not have a configured Hotspot IP Pool. Configure the Hotspot binding before issuing vouchers.', 409, 'HOTSPOT_IP_POOL_NOT_CONFIGURED');
     if (eligible.account_status !== 'active') throw serviceError('Your reseller billing account is not active. Contact FAZ NETWORK support.', 409, 'BILLING_ACCOUNT_INACTIVE');
     if (!['prepaid', 'postpaid'].includes(eligible.billing_mode)) throw serviceError('The reseller billing mode is not configured correctly.', 409, 'INVALID_BILLING_MODE');
 
@@ -195,6 +267,8 @@ async function issueBatch(input) {
       return { ...detail, replayed: true };
     }
 
+    const validitySeconds = BigInt(eligible.validity_seconds || 0);
+    const validity = formatValiditySeconds(validitySeconds);
     const retailUnitCents = toCents(eligible.retail_price, 'retail price');
     const wholesaleUnitCents = toCents(eligible.wholesale_price, 'wholesale cost');
     if (wholesaleUnitCents > retailUnitCents) {
@@ -239,7 +313,7 @@ async function issueBatch(input) {
         batchKey,idempotencyKey,resellerId,popId,eligible.billing_account_id,
         eligible.binding_id,packageId,eligible.router_key,eligible.hotspot_server,
         eligible.hotspot_interface,eligible.vlan_id,eligible.ip_pool,
-        eligible.profile_key,eligible.validity,quantity,
+        eligible.profile_key,validity,quantity,
         fromCents(retailUnitCents),fromCents(wholesaleUnitCents),
         fromCents(retailTotalCents),wholesaleTotal,fromCents(marginTotalCents),
         eligible.billing_mode,actorUserId
@@ -252,9 +326,9 @@ async function issueBatch(input) {
       client,
       profileName: eligible.profile_key,
       profileId: eligible.profile_key,
-      validity: eligible.validity,
-      timeLimit: eligible.time_limit || '',
-      dataLimit: eligible.data_limit || '',
+      validity,
+      timeLimit: validitySeconds > 0n ? validitySeconds.toString() + 's' : '',
+      dataLimit: '',
       price: Number(eligible.retail_price),
       server: eligible.hotspot_server,
       quantity,
@@ -344,14 +418,57 @@ async function listBatches(resellerIdValue, limitValue = 50) {
   const resellerId = resellerKey(resellerIdValue);
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(Number(limitValue)) ? Number(limitValue) : 50));
   const result = await db.query(
-    `SELECT b.id,b.batch_key,b.pop_id,b.package_id,b.profile_key,b.validity,
-            b.quantity,b.retail_total,b.wholesale_total,b.margin_total,
-            b.billing_mode,b.status,b.created_at,
-            COUNT(i.id)::int AS issued_count
+    `SELECT b.id,
+            to_jsonb(b)->>'batch_key' AS batch_key,
+            NULLIF(to_jsonb(b)->>'pop_id','')::bigint AS pop_id,
+            NULLIF(to_jsonb(b)->>'package_id','') AS package_id,
+            to_jsonb(b)->>'profile_key' AS profile_key,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'validity',''),
+              NULLIF(to_jsonb(pkg)->>'duration',''),
+              NULLIF(to_jsonb(pkg)->>'validity_days',''),
+              NULLIF(to_jsonb(pkg)->>'validity_period',''),
+              'N/A'
+            ) AS validity,
+            NULLIF(to_jsonb(b)->>'quantity','')::integer AS quantity,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+              NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+              0::numeric
+            ) AS retail_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+              NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+              0::numeric
+            ) AS wholesale_total,
+            COALESCE(
+              NULLIF(to_jsonb(b)->>'margin_total','')::numeric,
+              (
+                COALESCE(NULLIF(to_jsonb(b)->>'retail_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'total_cost','')::numeric,
+                         NULLIF(to_jsonb(b)->>'retail_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+                         0::numeric)
+                -
+                COALESCE(NULLIF(to_jsonb(b)->>'wholesale_total','')::numeric,
+                         NULLIF(to_jsonb(b)->>'wholesale_unit_price','')::numeric * NULLIF(to_jsonb(b)->>'quantity','')::numeric,
+                         0::numeric)
+              ),
+              0::numeric
+            ) AS margin_total,
+            to_jsonb(b)->>'billing_mode' AS billing_mode,
+            COALESCE(to_jsonb(b)->>'status', 'completed') AS status,
+            b.created_at,
+            COALESCE(items.issued_count,0)::int AS issued_count
      FROM public.reseller_voucher_batches b
-     LEFT JOIN public.reseller_voucher_issuance_items i ON i.batch_id=b.id
+     LEFT JOIN public.pop_hotspot_packages pkg ON pkg.id=b.package_id
+     LEFT JOIN (
+       SELECT batch_id,COUNT(*)::int AS issued_count
+       FROM public.reseller_voucher_issuance_items
+       GROUP BY batch_id
+     ) items ON items.batch_id=b.id
      WHERE b.reseller_id=$1
-     GROUP BY b.id
      ORDER BY b.created_at DESC,b.id DESC
      LIMIT $2`,
     [resellerId,limit]
