@@ -33,4 +33,7 @@ test('business overview query and UI remain available behind the existing admin 
   assert.match(view,/id="businessOverviewGrid" class="business-kpi-grid"/);
   assert.match(view,/business-kpi-grid\{grid-template-columns:1fr/);
   assert.match(view,/family=Outfit/);
+  assert.match(view,/function bindDashboardBusinessCardActions\(\)/);
+  for(const action of ['collection','due','hotspot','pppoe','pops','resellers','staff','expiring','support','online','throughput','fiber'])assert.ok(view.includes("case'"+action+"'"),`missing card action ${action}`);
+  assert.match(view,/#view-main-dashboard \.noc-kpi\{--noc-card:/);
 });
