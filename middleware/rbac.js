@@ -73,6 +73,7 @@ function requireRole(allowedRoles) {
     }
 
     let role = roleFromSession;
+    let adminUserId = req.session?.userId || null;
     if (req.session.userId && role !== 'reseller') {
       try {
         const result = await db.query('SELECT role,status FROM admin_users WHERE id=$1 LIMIT 1', [req.session.userId]);
@@ -89,8 +90,31 @@ function requireRole(allowedRoles) {
         role = normalizeRole(account.role);
         if (!role) return res.status(403).json({ success: false, message: 'Forbidden: invalid account role' });
         req.session.role = role;
+        adminUserId = Number(account.id);
       } catch (error) {
         console.error('[RBAC] Could not verify account status:', error.message);
+        return res.status(503).json({ success: false, message: 'Authorization service unavailable' });
+      }
+    }
+
+    // Migrate older shared-admin sessions by resolving their username only to
+    // one active super-admin identity before it can become a finance actor.
+    if (!resellerSession && req.session?.isAdmin === true && !adminUserId &&
+        req.session?.legacySuperAdmin === true && role === 'super_admin') {
+      try {
+        const result = await db.query(
+          "SELECT id FROM admin_users WHERE lower(username)=lower($1) AND lower(role) IN ('super_admin','superadmin') AND lower(status)='active' ORDER BY id LIMIT 2",
+          [req.session.adminUser || '']
+        );
+        if (result.rows?.length === 1) {
+          const resolvedId = Number(result.rows[0].id);
+          if (Number.isSafeInteger(resolvedId) && resolvedId > 0) {
+            adminUserId = resolvedId;
+            req.session.userId = resolvedId;
+          }
+        }
+      } catch (error) {
+        console.error('[RBAC] Could not resolve legacy admin actor:', error.message);
         return res.status(503).json({ success: false, message: 'Authorization service unavailable' });
       }
     }
@@ -119,7 +143,7 @@ function requireRole(allowedRoles) {
     req.auth = {
       ...(req.auth || {}),
       role,
-      userId: req.session.userId || null,
+      userId: adminUserId || null,
       username: req.session.adminUser || '',
       ...(role === 'reseller' ? { resellerId: resellerSessionId(req) } : {})
     };

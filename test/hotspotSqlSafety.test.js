@@ -21,9 +21,10 @@ test("Hotspot activation and lookup SQL use explicit text/bigint parameter types
  const auth=read("controllers/hotspotAuthController.js");
  assert.ok(auth.includes("($2::text<>'' AND REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($2::text,'880'||SUBSTRING($2::text FROM 2)))"));
  assert.ok(auth.includes("REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2))"));
- assert.ok(auth.includes("WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text))"));
+ assert.ok(auth.includes("WHERE id=$6::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text))"));
  assert.ok(auth.includes("WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text)"));
- assert.ok(auth.includes("phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked')"));
+ assert.ok(auth.includes("phone=COALESCE(NULLIF($5::text,''),NULLIF(phone,''),'Unlinked')"));
+ assert.ok(auth.includes("return activate({...req,ip:req.ip"),"voucher claims must preserve Express's client IP");
 });
 
 test("Online MFS voucher update keeps the password CASE parameter explicitly typed",()=>{

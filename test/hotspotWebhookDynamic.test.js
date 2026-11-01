@@ -283,8 +283,8 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
         assert.match(sql,/mac_address/);
         return {rows:[pendingVoucher()]};
       }
-      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")){
-        const row=pendingVoucher({username:params[0],password:params[1],mac_address:params[2],first_login_at:params[3],expires_at:params[4],comment:params[5]});
+      if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")){
+        const row=pendingVoucher({mac_address:params[0],first_login_at:params[1],expires_at:params[2],comment:params[3]});
         return {rows:[row]};
       }
       throw new Error("Unexpected transactional query: "+sql);
@@ -302,6 +302,8 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
     assert.equal(routerPayload.password,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.macAddress,"AA:BB:CC:DD:EE:FF");
     assert.equal(routerPayload.profile,"1-Hour");
+    assert.equal(activeUpdate.sql.includes("username=$2::text"),false,"activation must preserve the printed voucher username");
+    assert.equal(activeUpdate.sql.includes("password=$2::text"),false,"activation must preserve the printed voucher password");
     assert.match(routerPayload.comment,/^Exp: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     assert.equal(activeUpdate.params[1],"AA:BB:CC:DD:EE:FF");
     assert.equal(activeUpdate.params[2],routerPayload.comment);
@@ -334,10 +336,11 @@ test("manually generated unused voucher activates from phone number and captive-
         assert.doesNotMatch(sql,/expires_at IS NULL OR expires_at > NOW\(\)/,"unstarted vouchers must not be filtered by expiry");
         return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:new Date(Date.now()-86400000),first_login_at:null})]};
       }
-      if(sql.startsWith("UPDATE hotspot_vouchers SET username=$1")){
-        assert.match(sql,/IN \('unused','pending_claim'\) THEN \$5::timestamptz/,"first login must overwrite stale expiry");
-        assert.ok(new Date(params[4]).getTime()>Date.now(),"first-login expiry must start from the current activation time");
-        return {rows:[pendingVoucher({username:params[0],password:params[1],mac_address:params[2],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")){
+        assert.match(sql,/IN \('unused','pending_claim'\) THEN \$3::timestamptz/,"first login must overwrite stale expiry");
+        assert.ok(new Date(params[2]).getTime()>Date.now(),"first-login expiry must start from the current activation time");
+        assert.doesNotMatch(sql,/SET username=|password=/,"activation must preserve printed voucher credentials");
+        return {rows:[pendingVoucher({mac_address:params[0],first_login_at:params[1],expires_at:params[2],comment:params[3],status:"unused"})]};
       }
       throw new Error("Unexpected transactional query: "+sql);
     }});
@@ -398,9 +401,9 @@ test("the same MAC resolves and updates the phone when a customer changes SIM",a
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
       if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[pendingVoucher({username:"AA:BB:CC:DD:EE:FF",mac_address:"AA:BB:CC:DD:EE:FF",phone:"01711111111",status:"unused",first_login_at:null,expires_at:new Date(Date.now()+3600000)})]};
-      if(/^UPDATE hotspot_vouchers SET username=\$1(?:::text)?,password=\$2(?:::text)?,mac_address=\$3(?:::text)?/.test(sql)){
-        updatedPhone=params[6];
-        return {rows:[pendingVoucher({id:41,username:params[0],password:params[1],mac_address:params[2],phone:params[6],first_login_at:params[3],expires_at:params[4],comment:params[5],status:"unused"})]};
+      if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")){
+        updatedPhone=params[4];
+        return {rows:[pendingVoucher({id:41,mac_address:params[0],phone:params[4],first_login_at:params[1],expires_at:params[2],comment:params[3],status:"unused"})]};
       }
       throw new Error("Unexpected transactional query: "+sql);
     }});

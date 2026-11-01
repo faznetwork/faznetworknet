@@ -171,10 +171,10 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET username=$1::text,password=$2::text,mac_address=$3::text,first_login_at=COALESCE(first_login_at,$4::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $5::timestamptz WHEN $5::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$5::timestamptz) END,comment=$6::text,phone=COALESCE(NULLIF($7::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$8::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($3::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,mac,mac,firstLoginAt,expiresAt,comment,phone,row.id]);
+      const locked=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $3::timestamptz WHEN $3::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$3::timestamptz) END,comment=$4::text,phone=COALESCE(NULLIF($5::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$6::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,firstLoginAt,expiresAt,comment,phone,row.id]);
       if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
       const account=locked.rows[0];
-      return {account:{...account,username:mac,password:mac,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
+      return {account:{...account,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
     });
     const account=reservation.account;
     const expiry=account.expires_at?new Date(account.expires_at):null;
@@ -201,7 +201,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1::bigint AND mac_address=$2::text",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',username=$2::text,password=$2::text,mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -264,7 +264,7 @@ async function claimVoucher(req,res){
         return res.status(statusCode).json(body);
       }
     };
-    return activate({...req,body:{...(req.body||{}),mac,phone:""}},responseProxy);
+    return activate({...req,ip:req.ip,body:{...(req.body||{}),mac,phone:""}},responseProxy);
   }catch(error){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }

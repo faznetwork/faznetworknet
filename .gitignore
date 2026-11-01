@@ -2,6 +2,10 @@
 /deployment-info.json
 /deployment-info.json.tmp
 
+# Dependencies and local database exports must not be tracked.
+/node_modules/
+/supabase_data.sql
+
 .env
 cloudflared.exe
 clean_data.sql
