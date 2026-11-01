@@ -25,7 +25,7 @@ test('prepaid top-up writes the live settlement contract and canonical wallet_to
  assert.deepEqual(settlement.values,['801',41,'wallet_topup','25.50','cash','RCPT-1','9','Counter receipt']);
  const ledger=calls.find(c=>c.sql.includes('INSERT INTO public.reseller_ledger_entries'));
  assert.match(ledger.sql,/\(account_id,billing_account_id,reseller_id,account_type,entry_type/);
- assert.equal(ledger.values[2],'wallet');assert.equal(ledger.values[3],'wallet_topup');
+ assert.equal(ledger.values[2],'wallet');assert.equal(ledger.values[3],'wallet_topup');assert.equal(ledger.values[9],'9');
 });
 test('wallet top-up requires a non-null authenticated actor before opening a transaction',async()=>{
  await assert.rejects(finance.walletTopup({...input,actorUserId:null}),e=>e.code==='AUTHENTICATED_ACTOR_REQUIRED'&&e.statusCode===401);
