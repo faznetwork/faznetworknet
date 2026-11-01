@@ -101,7 +101,8 @@ async function renderDashboard(req, res) {
     res.set('Cache-Control','no-store, no-cache, must-revalidate, private');
     return res.render('reseller-dashboard',{title:'Network Overview · Reseller Workspace',
       resellerName:req.session.auth?.name||req.session.resellerName||'Reseller',
-      activePath:req.path,currentPath:req.path,billingAccount});
+      activePath:req.path,currentPath:req.path,billingAccount,
+      billingAccountUnavailable: !billingAccount});
   } catch(error) {
     console.error('[Reseller Portal] Dashboard billing snapshot failed:',error);
     return res.status(error.statusCode||503).send(error.statusCode && error.statusCode < 500 ? error.message : 'Reseller dashboard is temporarily unavailable. Please retry or contact support.');
