@@ -397,7 +397,7 @@ test('print page is authenticated and batch-scoped; no batch mutation routes exi
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'resellerPortalRoutes.js'), 'utf8');
   const printView = fs.readFileSync(path.join(__dirname, '..', 'views', 'reseller-voucher-print.ejs'), 'utf8');
-  assert.match(server, /\/reseller\/hotspot\/voucher-batches\/:batchKey\/print",requireRole\(\["reseller"\]\),loadTenantScope,resellerHotspotController\.printBatchPage/);
+  assert.match(server, /\/reseller\/hotspot\/voucher-batches\/:batchKey\/print",requireRole\(\["reseller"\]\),loadTenantScope,loadResellerBillingAccount,resellerHotspotController\.printBatchPage/);
   const printScript = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'reseller-voucher-print.js'), 'utf8');
   assert.match(printView, /reseller-voucher-print\.js/);
   assert.doesNotMatch(printView, /<script>\s*\(/i);
