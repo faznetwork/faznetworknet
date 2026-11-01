@@ -21,7 +21,7 @@ test('reseller workspace routes load a shared authenticated billing snapshot', (
     assert.ok(line && line.includes('loadResellerBillingAccount'), 'Missing billing middleware: ' + route);
   }
   assert.match(middleware, /req\.auth\?\.resellerId/);
-  assert.match(middleware, /res\.locals\.billingAccount = account/);
+  assert.match(middleware, /res\.locals\.billingAccount = billingAccount/);
   assert.match(middleware, /res\.locals\.billingAccountUnavailable = true/);
 });
 
