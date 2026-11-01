@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded',function(){
  document.querySelectorAll('.voucher[data-username]').forEach(function(card){
   const target=card.querySelector('.qr');if(!target)return;
   if(typeof window.QRCode!=='function'){target.textContent='QR unavailable';console.error('[Reseller voucher print] QRCode library did not load.');return;}
-  new window.QRCode(target,{text:loginUrl(host,card.dataset.username||'',card.dataset.password||''),width:88,height:88});
+  new window.QRCode(target,{text:loginUrl(host,card.dataset.username||'',card.dataset.password||''),width:72,height:72});
  });
  document.querySelectorAll('[data-print-format]').forEach(function(button){
   button.addEventListener('click',function(){print(button.dataset.printFormat||'a4');});

@@ -6,13 +6,13 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 function source(relativePath) { return fs.readFileSync(path.join(root, relativePath), 'utf8'); }
 
-test('Account & Balance metric uses emerald-to-teal theme and cache-busted stylesheet', () => {
+test('Account & Balance metric uses a solid teal theme and cache-busted stylesheet', () => {
   const css = source('public/css/reseller-workspace.css');
   const view = source('views/reseller-dashboard.ejs');
-  assert.match(css, /\.metric-card--account\{background:linear-gradient\(135deg,#059669 0%,#0d9488 100%\)/);
+  assert.match(css, /\.metric-card--account\{background:#0d9488/);
   assert.match(css, /\.metric-card--account \.metric-icon\{[^}]*background:rgba\(255,255,255,\.18\)/);
   assert.match(css, /\.metric-card--account \.metric-value\{[^}]*color:#fff/);
-  assert.match(view, /reseller-workspace\.css\?v=20261101-6/);
+  assert.match(view, /reseller-workspace\.css\?v=20261101-7/);
 });
 
 test('reseller dashboard exposes guidance without claiming a request was submitted', () => {
