@@ -2,6 +2,7 @@
 
 const ROLES = Object.freeze(['super_admin', 'admin', 'staff', 'reseller']);
 const db = require('../db');
+const { getAdminCredentials } = require('./adminAuth');
 
 function normalizeRole(role) {
   const value = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
@@ -102,15 +103,20 @@ function requireRole(allowedRoles) {
     if (!resellerSession && req.session?.isAdmin === true && !adminUserId &&
         role === 'super_admin') {
       try {
-        const result = await db.query(
-          "SELECT id FROM admin_users WHERE lower(username)=lower($1) AND lower(role) IN ('super_admin','superadmin') AND lower(status)='active' ORDER BY id LIMIT 2",
-          [req.session.adminUser || '']
-        );
-        if (result.rows?.length === 1) {
-          const resolvedId = Number(result.rows[0].id);
-          if (Number.isSafeInteger(resolvedId) && resolvedId > 0) {
-            adminUserId = resolvedId;
-            req.session.userId = resolvedId;
+        const configuredUsername = getAdminCredentials().ADMIN_USER;
+        const usernames = [...new Set([req.session.adminUser, configuredUsername].map(value => String(value || '').trim()).filter(Boolean))];
+        for (const username of usernames) {
+          const result = await db.query(
+            "SELECT id FROM admin_users WHERE lower(username)=lower($1) AND lower(role) IN ('super_admin','superadmin') AND lower(status)='active' ORDER BY id LIMIT 2",
+            [username]
+          );
+          if (result.rows?.length === 1) {
+            const resolvedId = Number(result.rows[0].id);
+            if (Number.isSafeInteger(resolvedId) && resolvedId > 0) {
+              adminUserId = resolvedId;
+              req.session.userId = resolvedId;
+              break;
+            }
           }
         }
       } catch (error) {
