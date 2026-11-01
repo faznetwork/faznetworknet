@@ -3,7 +3,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
-const controller = require("../controllers/rbacAuthController");\nconst adminAuth = require("../middleware/adminAuth");
+const controller = require("../controllers/rbacAuthController");
+const adminAuth = require("../middleware/adminAuth");
 
 const originalQuery = db.query;
 const originalTransaction = db.withTransaction;
@@ -23,7 +24,8 @@ function responseRecorder() {
     status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; },
     set() { return this; },
-    render(view, locals) { this.view = view; this.locals = locals; return this; },\n    redirect(location) { this.redirectedTo = location; return this; }
+    render(view, locals) { this.view = view; this.locals = locals; return this; },
+    redirect(location) { this.redirectedTo = location; return this; }
   };
 }
 
