@@ -34,3 +34,34 @@ test('unauthenticated and non-admin requests remain rejected by existing guards'
   assert.match(rbac, /if \(!req\.session\?\.isAdmin && !resellerSession\)/);
   assert.match(rbac, /if \(!role \|\| !allowed\.includes\(role\)\)/);
 });
+
+test('finance controller forwards the verified session actor into wallet settlement persistence', async () => {
+  const financeController = require('../controllers/resellerFinanceController');
+  const financeService = require('../services/resellerFinanceService');
+  const originalWalletTopup = financeService.walletTopup;
+  let postedInput;
+  financeService.walletTopup = async input => {
+    postedInput = input;
+    return { replayed: false, ledgerEntryId: '901', settlementId: '801', account: { wallet_balance: '50.00' } };
+  };
+  const res = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  try {
+    await financeController.walletTopup({
+      params: { resellerId: '7' },
+      body: { amount: '50.00' },
+      auth: { role: 'super_admin', userId: 11 },
+      session: { userId: 11 },
+      get(name) { return name === 'Idempotency-Key' ? 'legacy-actor-test-001' : null; }
+    }, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(postedInput.actorUserId, 11);
+    assert.equal(postedInput.resellerId, 7);
+  } finally {
+    financeService.walletTopup = originalWalletTopup;
+  }
+});
+
