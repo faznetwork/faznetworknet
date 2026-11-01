@@ -69,7 +69,31 @@ async function writeAudit(req, action, targetUserId, details) {
   } catch (error) { console.warn('[RBAC audit] Could not write audit record:', error.message); }
 }
 
+
+async function resolveLegacyAdminIdentity(username) {
+  const result = await db.query(
+    "SELECT id,username,role,status FROM admin_users WHERE lower(username)=lower($1) " +
+    "AND lower(role) IN ('super_admin','superadmin') AND lower(status)='active' ORDER BY id ASC LIMIT 2",
+    [String(username || '').trim()]
+  );
+  const matches = Array.isArray(result.rows) ? result.rows : [];
+  if (matches.length === 0) return { kind: 'missing' };
+  if (matches.length !== 1) return { kind: 'ambiguous' };
+  const row = matches[0];
+  const id = Number(row.id);
+  const role = normalizeRole(row.role);
+  if (!Number.isSafeInteger(id) || id < 1 || role !== 'super_admin' || String(row.status).toLowerCase() !== 'active') {
+    return { kind: 'invalid' };
+  }
+  return { kind: 'resolved', user: { id, username: row.username, role, legacy: true } };
+}
+
 function establishSession(req, res, user, nextTarget, loginType = 'login') {
+  const userId = Number(user?.id);
+  if (!Number.isSafeInteger(userId) || userId < 1) {
+    console.error('[RBAC] Refusing to establish an admin session without a verified numeric admin_users.id.');
+    return res.status(401).render('login', { next: safeNext(nextTarget), error: 'This admin credential is not linked to a valid active admin account. Contact the system administrator.' });
+  }
   req.session.regenerate(err => {
     if (err) {
       console.error('[RBAC] Session regeneration failed:', err.message);
@@ -78,7 +102,7 @@ function establishSession(req, res, user, nextTarget, loginType = 'login') {
     req.session.isAdmin = true;
     req.session.adminUser = user.username;
     req.session.role = user.role;
-    req.session.userId = user.id || null;
+    req.session.userId = userId;
     req.session.legacySuperAdmin = user.legacy === true;
     req.session.loginAt = Date.now();
     req.session.save(async saveErr => {
@@ -94,7 +118,7 @@ function establishSession(req, res, user, nextTarget, loginType = 'login') {
           return req.session.destroy(() => res.status(503).render('verify-otp', { error: 'Could not finalize verification. Please sign in and request a new code.' }));
         }
       } else if (user.id) {
-        db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]).catch(() => {});
+        db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [userId]).catch(error => {\n          console.error('[RBAC] Could not update last-login timestamp:', error.message);\n        });
       }
       if (user.id && user.legacy !== true) {
         sendSecurityNotification(user, 'login', req).catch(error => {
@@ -117,7 +141,22 @@ async function login(req, res) {
   const { ADMIN_USER } = getAdminCredentials();
   const legacy = require('../middleware/adminAuth');
   if (username.toLowerCase() === ADMIN_USER.toLowerCase() && await legacy.adminCredentialsValid(username, password)) {
-    return establishSession(req, res, { id: null, username, role: 'super_admin', legacy: true }, nextTarget);
+    let identity;
+    try {
+      identity = await resolveLegacyAdminIdentity(ADMIN_USER);
+    } catch (error) {
+      console.error('[RBAC] Legacy admin identity lookup failed:', error.message);
+      return res.status(503).render('login', { next: nextTarget, error: 'Admin identity verification is temporarily unavailable. Please retry.' });
+    }
+    if (identity.kind === 'missing' || identity.kind === 'invalid') {
+      console.error('[RBAC] Configured legacy admin credential has no eligible active super-admin identity.');
+      return res.status(403).render('login', { next: nextTarget, error: 'This admin credential is not linked to an active super-admin account. Contact the system administrator.' });
+    }
+    if (identity.kind === 'ambiguous') {
+      console.error('[RBAC] Configured legacy admin credential matches multiple active super-admin identities.');
+      return res.status(503).render('login', { next: nextTarget, error: 'Admin identity mapping is ambiguous. Contact the system administrator.' });
+    }
+    return establishSession(req, res, identity.user, nextTarget);
   }
 
   try {
