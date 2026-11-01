@@ -31,7 +31,13 @@ async function sendSecurityNotification(user, action, req) {
   const userAgent = String(req?.get?.('user-agent') || req?.headers?.['user-agent'] || '').slice(0, 500) || 'Unavailable';
   const normalizedAction = action === 'logout' ? 'logout' : 'login';
   const title = 'FAZ NETWORK staff ' + normalizedAction + ' security alert';
-  const text = 'Security event: ' + normalizedAction.toUpperCase() + '\nStaff: ' + username + '\nRole: ' + role + '\nTime (Asia/Dhaka, UTC+06:00): ' + timestamp + '\nISO timestamp: ' + occurredAt.toISOString() + '\nPublic client IP: ' + ipAddress + '\nUser-Agent: ' + userAgent;
+  const text = 'Security event: ' + normalizedAction.toUpperCase() + '
+Staff: ' + username + '
+Role: ' + role + '
+Time (Asia/Dhaka, UTC+06:00): ' + timestamp + '
+ISO timestamp: ' + occurredAt.toISOString() + '
+Public client IP: ' + ipAddress + '
+User-Agent: ' + userAgent;
   const html = '<h2>FAZ NETWORK staff security alert</h2><p><b>Event:</b> ' + escapeHtml(normalizedAction.toUpperCase()) + '</p><p><b>Staff:</b> ' + escapeHtml(username) + '</p><p><b>Role:</b> ' + escapeHtml(role) + '</p><p><b>Time (Asia/Dhaka, UTC+06:00):</b> ' + escapeHtml(timestamp) + '</p><p><b>ISO timestamp:</b> ' + escapeHtml(occurredAt.toISOString()) + '</p><p><b>Public client IP:</b> ' + escapeHtml(ipAddress) + '</p><p><b>User-Agent:</b> ' + escapeHtml(userAgent) + '</p>';
   return require('../services/emailOutboxService').enqueueEmail({ to: recipient, subject: title, text, html, event: 'admin_' + normalizedAction + '_alert', sensitive: true, idempotencyKey: 'admin-' + normalizedAction + '-alert:' + String(user.id || username) + ':' + occurredAt.getTime() });
 }
@@ -45,7 +51,9 @@ async function sendOtpEmail(user, code, expiresAt, purpose = 'admin_otp', client
   const title = invitationOtp ? 'FAZ NETWORK invitation verification code' : 'FAZ NETWORK sign-in verification code';
   const label = invitationOtp ? 'invitation verification code' : 'first-login verification code';
   const username = String(user.username || 'user').slice(0, 60);
-  const text = 'Hello ' + username + ',\n\nYour FAZ NETWORK ' + label + ' is ' + code + '. It expires in 5 minutes. Do not share this code.';
+  const text = 'Hello ' + username + ',
+
+Your FAZ NETWORK ' + label + ' is ' + code + '. It expires in 5 minutes. Do not share this code.';
   const html = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello ' + escapeHtml(username) + ',</p><p>Your ' + escapeHtml(label) + ' is:</p><div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px;background:#f0fdf4;border-radius:10px;text-align:center">' + escapeHtml(code) + '</div><p>This code expires in <b>5 minutes</b>. Do not share it.</p></div>';
   return require('../services/emailOutboxService').enqueueEmail({
     to: recipient, subject: title, text, html, event: invitationOtp ? 'admin_invitation_otp' : 'admin_login_otp',
@@ -118,7 +126,9 @@ function establishSession(req, res, user, nextTarget, loginType = 'login') {
           return req.session.destroy(() => res.status(503).render('verify-otp', { error: 'Could not finalize verification. Please sign in and request a new code.' }));
         }
       } else if (user.id) {
-        db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [userId]).catch(error => {\n          console.error('[RBAC] Could not update last-login timestamp:', error.message);\n        });
+        db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [userId]).catch(error => {
+          console.error('[RBAC] Could not update last-login timestamp:', error.message);
+        });
       }
       if (user.id && user.legacy !== true) {
         sendSecurityNotification(user, 'login', req).catch(error => {
@@ -397,7 +407,11 @@ async function sendInvitationEmail(invitation, rawToken, client = null) {
   const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
   const title = 'Invitation to FAZ NETWORK';
-  const text = 'Hello,\n\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and activate your account here: ' + link + '\n\nThis invitation expires in 24 hours.';
+  const text = 'Hello,
+
+You have been invited to join FAZ NETWORK as ' + roleLabel + '. Accept the invitation and activate your account here: ' + link + '
+
+This invitation expires in 24 hours.';
   const html = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h2>FAZ NETWORK</h2><p>Hello,</p><p>You have been invited to join as <b>' + escapeHtml(roleLabel) + '</b>.</p><p><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in 24 hours.</p></div>';
   return require('../services/emailOutboxService').enqueueEmail({
     to: invitation.email, subject: title, text, html, event: 'admin_invitation',
