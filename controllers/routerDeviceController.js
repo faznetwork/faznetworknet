@@ -109,13 +109,19 @@ function connectionTestError(res, error) {
   });
 }
 function inputFrom(body) {
+  const port = Number(body.api_port ?? body.port);
+  const requestedApiType = clean(body.api_type, 20);
+  // The MikroTik management modal currently edits native API gateways. Keep
+  // custom and standard RouterOS API ports on Native API when an older client
+  // omits api_type, instead of spending the test window probing REST first.
+  const apiType = requestedApiType || ([80, 443].includes(port) ? '' : 'native_api');
   return {
     router_name: clean(body.router_name, 120),
     host: clean(body.host, 253),
     api_port: body.api_port ?? body.port,
     username: clean(body.username, 160),
     password: String(body.password ?? ''),
-    api_type: clean(body.api_type, 20),
+    api_type: apiType,
     timeout: body.timeout
   };
 }
@@ -502,7 +508,9 @@ exports.updateDevice = async (req, res) => {
       username: clean(body.username ?? existing.username, 160),
       password: String(body.password || '') || credentials.decrypt(existing.password_encrypted),
       timeout: body.timeout ?? Math.min(Number(existing.timeout_ms) || 5000, 5000),
-      api_type: clean(body.api_type, 20)
+      // Editing is native API only; retain the saved protocol when the modal
+      // client omits api_type so verification fingerprints remain consistent.
+      api_type: clean(body.api_type || existing.api_type, 20)
     };
     assertValidInput(input);
     const handshake = consumeConnectionVerification(input, body.verification_token) || await routerDeviceService.testConnection(input);
