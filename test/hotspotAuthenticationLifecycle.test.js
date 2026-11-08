@@ -1,5 +1,5 @@
 "use strict";
-const test=require("node:test"),assert=require("node:assert/strict"),mikrotik=require("../services/mikrotikService");
+const test=require("node:test"),assert=require("node:assert/strict"),MikroTikService=require("../services/mikrotikService").MikroTikService,mikrotik=new MikroTikService();
 const MAC="AA:BB:CC:DD:EE:FF";
 test("recharge enforces MAC credentials and never creates expiry schedulers",async()=>{
  const original=mikrotik._withConnection,calls=[],user={".id":"*1",name:MAC,"mac-address":MAC,comment:"Exp: 2026-10-18 12:00:00",profile:"1-Hour",password:"01712345678"};
