@@ -13,9 +13,12 @@ test('voucher print document uses a multiline template literal with escaped dyna
   assert.ok(!adminTemplate.includes("const printable = '<!doctype html>"));
 });
 
-test('admin inline navigation helpers remain globally exposed', () => {
-  assert.match(adminTemplate, /function\s+toggleSubmenu\s*\(/);
-  assert.match(adminTemplate, /window\.toggleSubmenu\s*=\s*toggleSubmenu/);
+test('admin navigation helper loads independently and remains globally exposed', () => {
+  const navigationScript = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'admin-navigation.js'), 'utf8');
+  assert.match(adminTemplate, /<script src="\/js\/admin-navigation\.js[^"]*" defer><\/script>/);
+  assert.ok(adminTemplate.indexOf('/js/admin-navigation.js') < adminTemplate.indexOf('<body'));
+  assert.match(navigationScript, /function\s+toggleSubmenu\s*\(/);
+  assert.match(navigationScript, /window\.toggleSubmenu\s*=\s*toggleSubmenu/);
   assert.match(adminTemplate, /async function\s+loadCustomerSection\s*\(/);
   assert.match(adminTemplate, /window\.loadCustomerSection\s*=\s*loadCustomerSection/);
 });
