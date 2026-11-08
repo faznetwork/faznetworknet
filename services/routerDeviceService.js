@@ -275,39 +275,62 @@ async function testRest(config, protocol) {
 
 async function testConnection(input) {
   const config = validateConfig(input);
-  const errors = [];
+  const attempts = [];
+
   for (const protocol of ['https:', 'http:']) {
     try {
       const result = await testRest({ ...config, timeout: Math.min(config.timeout, 700) }, protocol);
       return { ...result, host: config.host, api_port: config.port };
     } catch (error) {
-      if (error?.code === 'EAUTH') {
-        const classified = classifyError(error);
-        throw Object.assign(new Error(classified.message), { statusCode: 401, routerStatus: classified.status, errorCode: classified.code });
-      }
-      errors.push(error);
+      attempts.push({
+        protocol: protocol === 'https:' ? 'HTTPS REST' : 'HTTP REST',
+        error
+      });
     }
   }
+
+  // A REST 401/403 on a forwarded native-API port does not prove that
+  // RouterOS API credentials are invalid. Always try both native transports.
   for (const secure of [true, false]) {
+    const protocol = secure ? 'Native API over TLS' : 'Native API';
     try {
       const result = await nativeRequest({ ...config, timeout: Math.min(config.timeout, 1700) }, secure);
       return { ...result, host: config.host, api_port: config.port, use_ssl: secure };
     } catch (error) {
-      errors.push(error);
-      if (error?.code === 'EAUTH') {
-        const classified = classifyError(error);
-        throw Object.assign(new Error(classified.message), { statusCode: 401, routerStatus: classified.status, errorCode: classified.code });
-      }
+      attempts.push({ protocol, error });
     }
   }
-  const best = errors.find(error => error?.code === 'ETIMEDOUT') || errors[errors.length - 1] || new Error('RouterOS service was not detected.');
-  const classified = classifyError(best);
-  throw Object.assign(new Error(classified.message), {
-    statusCode: classified.code === 'INVALID_CREDENTIALS' ? 401 : 503,
-    routerStatus: classified.status,
-    errorCode: classified.code,
-    latency_ms: null
+
+  const authenticationFailure = attempts.find(attempt => attempt.error?.code === 'EAUTH');
+  const timeoutFailure = attempts.find(attempt => attempt.error?.code === 'ETIMEDOUT');
+  const selected = authenticationFailure || timeoutFailure || attempts[attempts.length - 1];
+  const classified = classifyError(selected?.error || new Error('RouterOS service was not detected.'));
+  const diagnostics = attempts.map(({ protocol, error }) => {
+    const code = String(error?.code || 'UNKNOWN').toUpperCase();
+    const summary = code === 'EAUTH'
+      ? 'authentication or API policy rejected'
+      : code === 'ETIMEDOUT'
+        ? 'connection timed out'
+        : code === 'ENOTREST'
+          ? 'not a REST endpoint'
+          : code === 'ECONNREFUSED'
+            ? 'connection refused'
+            : code === 'ECONNRESET'
+              ? 'connection reset'
+              : 'protocol handshake failed';
+    return protocol + ': ' + summary;
   });
+
+  throw Object.assign(
+    new Error(classified.message + ' Protocol diagnostics: ' + diagnostics.join('; ') + '.'),
+    {
+      statusCode: authenticationFailure ? 401 : 503,
+      routerStatus: classified.status,
+      errorCode: classified.code,
+      latency_ms: null,
+      protocolDiagnostics: diagnostics
+    }
+  );
 }
 
 module.exports = { validateConfig, testConnection, classifyError, encodeLength, decodeLength, encodeSentence, decodeSentences };
