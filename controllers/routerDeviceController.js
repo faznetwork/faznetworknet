@@ -238,6 +238,10 @@ exports.activateDevice = async (req, res) => {
           statusCode: 409, errorCode: 'UNSUPPORTED_ROUTER_API_TYPE'
         });
       }
+      const previous = await client.query(
+        "SELECT id FROM router_devices WHERE is_active=TRUE AND api_type='native_api' AND id<>$1 FOR UPDATE",
+        [id]
+      );
       await client.query(
         "UPDATE router_devices SET is_active=FALSE,updated_at=NOW() WHERE is_active=TRUE AND api_type='native_api' AND id<>$1",
         [id]
@@ -247,23 +251,25 @@ exports.activateDevice = async (req, res) => {
         "RETURNING id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status,is_active",
         [id]
       );
-      return result.rows[0];
+      return { router: result.rows[0], previousIds: (previous.rows || []).map(row => String(row.id)) };
     });
     try {
-      await mikrotikService.runtimePool.invalidateAll();
+      await Promise.all([...activated.previousIds, String(id)].map(routerId =>
+        mikrotikService.runtimePool.invalidate(routerId)
+      ));
     } catch (error) {
       console.error('[Router Device API] Router activated but runtime pool invalidation failed', {
         routerId: String(id), message: error?.message || String(error)
       });
       mikrotikService.invalidateConfigCache();
       return res.status(503).json({
-        success: false, saved: true, reconnect: 'failed', router: activated,
-        message: 'Router activation was saved, but existing RouterOS runtime cleanup failed. Review service logs before retrying.'
+        success: false, saved: true, reconnect: 'failed', router: activated.router,
+        message: 'Router activation was saved, but one or more existing RouterOS runtimes could not be closed. Review service logs before retrying.'
       });
     }
     mikrotikService.invalidateConfigCache();
     return res.set('Cache-Control', 'no-store').json({
-      success: true, router: activated, message: 'Router activated as the sole core MikroTik router.'
+      success: true, router: activated.router, message: 'Router activated as the sole core MikroTik router.'
     });
   } catch (error) {
     return publicError(res, error);
@@ -403,7 +409,7 @@ exports.updateDevice = async (req, res) => {
       api_port: Number(saved.router.api_port),
       is_active: Boolean(saved.router.is_active)
     };
-    const replaced = await invalidateAfterSave(id, replacement);
+    const replaced = await invalidateAfterSave(id, saved.router.is_active ? replacement : null);
     if (!replaced) {
       return res.status(503).json({
         success: false, saved: true, reconnect: 'failed',
