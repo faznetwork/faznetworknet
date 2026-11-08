@@ -642,46 +642,15 @@ async function listCustomers(req,res){
     `, [req.tenantScope?.global ? null : (req.tenantScope?.popIds || [])]);
 
     let sessions=[];
-    let sessionSource="mikrotik-live";
-    let sessionLookupError=null;
+    let sessionReport={liveSync:"unavailable",routerCount:0,reachableRouterCount:0,failedRouterCount:0,failedRouters:[]};
     try{
-      // Give RouterOS enough time to return its active-session table. A short
-      // 2.5s race made transient API latency look like every customer was offline.
-      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),10000);
-      if(!Array.isArray(sessions))throw new Error("MikroTik returned an invalid active-session response.");
+      // Only a fresh response from every active core gateway can mark a customer Online.
+      // Collector snapshots are historical data and must never override an unreachable router.
+      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),10000);
+      if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
+      if(sessionReport.liveSync==="ok")sessions=sessionReport.sessions;
     }catch(error){
-      sessionLookupError=error.message||"MikroTik live session lookup failed.";
-      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable:",sessionLookupError);
-      try{
-        const snapshot=await db.query(
-          `SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
-                  caller_id AS "callerId",received_at AS "receivedAt"
-           FROM pppoe_live_sessions
-           WHERE received_at >= NOW() - INTERVAL '3 minutes'
-             AND ($1::bigint[] IS NULL OR username IN (SELECT username FROM customers WHERE pop_id=ANY($1::bigint[])))
-           ORDER BY username ASC`,
-          [req.tenantScope?.global ? null : (req.tenantScope?.popIds || [])]
-        );
-        if(!snapshot.rows.length){
-          return res.status(503).json({
-            success:false,
-            code:"LIVE_SESSION_SOURCE_UNAVAILABLE",
-            message:"Live MikroTik session data is temporarily unavailable. Customer online/offline status has not been changed to Offline.",
-            statusSource:"unavailable",
-            details:sessionLookupError
-          });
-        }
-        sessions=snapshot.rows;
-        sessionSource="recent-router-snapshot";
-      }catch(snapshotError){
-        console.warn("[CUSTOMER LIST] Recent session snapshot unavailable:",snapshotError.message);
-        return res.status(503).json({
-          success:false,
-          code:"LIVE_SESSION_SOURCE_UNAVAILABLE",
-          message:"Live customer status is temporarily unavailable; no Offline status was inferred.",
-          statusSource:"unavailable"
-        });
-      }
+      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable; customers will be shown Offline:",error.message||error);
     }
     const sessionMap=createActiveSessionMap(sessions);
 
@@ -732,7 +701,7 @@ async function listCustomers(req,res){
       unpaid:allMapped.filter(s=>s==="unpaid"||s==="expired").length
     };
 
-    return res.json({success:true,count:mapped.length,total:result.rows.length,status:requestedStatus,counts,users:mapped,customers:mapped});
+    return res.json({success:true,count:mapped.length,total:result.rows.length,status:requestedStatus,counts,liveSync:sessionReport.liveSync,statusSource:sessionReport.liveSync==="ok"?"mikrotik-live":"router-unavailable",routerCount:sessionReport.routerCount,reachableRouterCount:sessionReport.reachableRouterCount,failedRouterCount:sessionReport.failedRouterCount,failedRouters:sessionReport.failedRouters,users:mapped,customers:mapped});
   }catch(error){return errorResponse(res,error);}
 }
 
