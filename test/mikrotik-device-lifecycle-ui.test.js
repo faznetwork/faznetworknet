@@ -62,3 +62,10 @@ test('the complete devices view and router modal scripts parse as JavaScript', (
   const modalScript = adminView.slice(modalStart + '<script>'.length, modalEnd);
   assert.doesNotThrow(() => new vm.Script(modalScript));
 });
+
+test('MikroTik Management does not expose or invoke the deprecated cloud-incompatible discovery endpoint', () => {
+  assert.ok(!devicesView.includes('Discover MikroTik Ports'));
+  assert.ok(!devicesView.includes('devicesDiscoverBtn'));
+  assert.ok(!devicesView.includes('devicesDiscoveryResult'));
+  assert.ok(!devicesView.includes('/api/devices/mikrotik/discover'));
+});
