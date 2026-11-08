@@ -50,11 +50,13 @@ function clean(value, max = 255) {
 
 function resolveCustomerRouterId(customer) {
   const value = String(customer?.router_id ?? "").trim();
-  return /^[1-9]\d*$/.test(value) ? value : "3";
+  return /^[1-9]\d*$/.test(value) ? value : "";
 }
 
-async function getCustomerRouterService(customer) {
-  return require("../services/mikrotikService").getMikroTikService(resolveCustomerRouterId(customer));
+async function getCustomerRouterService() {
+  // Customer accounts belong to the currently selected core gateway. Do not pin
+  // customer operations to a device ID that may be deleted or replaced.
+  return require("../services/mikrotikService").getMikroTikService();
 }
 
 function formatBdPhoneNumber(phone) {
@@ -190,7 +192,7 @@ async function createCustomer(req, res) {
   const body = req.body || {};
   const customer = {
     fullName: clean(body.fullName || body.name, 200),
-    routerId: clean(body.routerId ?? body.router_id ?? "3", 20) || "3",
+    routerId: clean(body.routerId ?? body.router_id, 20) || null,
     phone: formatBdPhoneNumber(body.phone),
     connectionDate: normalizeDate(body.activationDate || body.activation_date || body.connectionDate || body.connection_date),
     username: clean(body.username, 100),
@@ -220,7 +222,7 @@ async function createCustomer(req, res) {
     disabled: [true,"true",1,"1","yes","on"].includes(body.disabled),
     remarks: clean(body.remarks || body.note, 1000)
   };
-  if(!/^[1-9]\d*$/.test(customer.routerId))return res.status(400).json({success:false,message:"A valid router ID is required."});
+  if(customer.routerId&&!/^[1-9]\d*$/.test(customer.routerId))return res.status(400).json({success:false,message:"A valid router ID is required when supplied."});
   if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
   if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
   if(customer.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email))return res.status(400).json({success:false,message:"Enter a valid customer email address."});
@@ -343,8 +345,12 @@ async function createCustomer(req, res) {
     let provisioning = "pending";
 
     try {
-      const routerService = await getCustomerRouterService({router_id: customer.routerId});
+      const routerService = await getCustomerRouterService();
       const routerReady = await routerService.testConnection();
+      if(routerReady){
+        const activeRouter=await db.query("SELECT id FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 2");
+        customer.routerId=activeRouter.rows.length===1?String(activeRouter.rows[0].id):null;
+      }
       if (routerReady) {
         await routerService.createSecret({
           username: customer.username,
