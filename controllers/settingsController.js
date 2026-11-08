@@ -74,20 +74,9 @@ const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_ro
 async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);try{require("../services/appSettings").invalidate();}catch(_){}}
 async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
 async function resolveSettingsRouter(routerId) {
- const fail=(message,statusCode)=>Object.assign(new Error(message),{statusCode});
- let id=null;
- if(routerId!==undefined&&routerId!==null&&String(routerId).trim()!==""){
-  id=String(routerId).trim();
-  if(!/^[1-9]\d*$/.test(id))throw fail("Invalid routerId. A positive integer ID is required.",400);
- }
- const query=id
-  ? await db.query("SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,timeout_ms,use_ssl FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",[id])
-  : await db.query("SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,timeout_ms,use_ssl FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND api_type='native_api' AND is_active=TRUE LIMIT 2");
- const rows=query.rows||[];
- if(rows.length===0)throw fail(id?"Selected router was not found, is inactive, or is not a native API router.":"No active canonical router was found at 10.10.10.1:8728.",id?404:503);
- if(rows.length!==1)throw fail(id?"Selected router ID did not resolve uniquely.":"Multiple active canonical routers match 10.10.10.1:8728.",409);
- return rows[0];
+ return mikrotikService.resolveActiveRouter(routerId);
 }
+
 async function generalSettings(req,res){
  try{
   const keys=["personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(MFS_KEYS)];
@@ -102,12 +91,30 @@ async function generalSettings(req,res){
 }
 async function testMikrotik(req,res){
  try{
-  const body=req.body||{},current=await getSettingsMap(ROUTER_KEYS);
-  const config={host:String(body.host??current.mikrotik_host??process.env.ROUTER_HOST??"").trim(),port:Number(body.port??current.mikrotik_port??process.env.ROUTER_PORT??8728),user:String(body.user??current.mikrotik_user??process.env.ROUTER_USER??"").trim(),password:String(body.password||current.mikrotik_password||process.env.ROUTER_PASS||"")};
-  const router=await mikrotikService.testConnection(config);
-  return res.set("Cache-Control","no-store").json({success:true,message:"Router connection successful.",router});
- }catch(error){const message=String(error?.message||"MikroTik connection failed.");return res.status(502).json({success:false,message,error:message});}
+  const body=req.body||{};
+  const hasExplicitConfig=["host","port","user","password"].some(key=>Object.prototype.hasOwnProperty.call(body,key));
+  if(hasExplicitConfig){
+   const result=await routerDeviceService.testConnection({
+    router_name:String(body.router_name||"Connection test").trim(),
+    host:body.host,api_port:body.port,username:body.user,password:body.password,timeout:body.timeout
+   });
+   return res.set("Cache-Control","no-store").json({success:true,message:"Router connection successful.",router:result});
+  }
+  const selected=await resolveSettingsRouter(body.router_id);
+  const runtime=await mikrotikService.getMikroTikService(selected.id);
+  const result=await runtime.testConnection();
+  return res.set("Cache-Control","no-store").json({
+   success:true,message:"Router connection successful.",
+   router:{...result,id:String(selected.id),host:selected.host,port:Number(selected.api_port)}
+  });
+ }catch(error){
+  const message=String(error?.message||"MikroTik connection failed.");
+  return res.status(Number(error?.statusCode)||502).set("Cache-Control","no-store").json({
+   success:false,message,error:message,code:error?.code||"MIKROTIK_TEST_FAILED"
+  });
+ }
 }
+
 async function syncMikrotikProfilesInternal(routerId){
  const runtime=await mikrotikService.getMikroTikService(routerId);
  const [pppoeProfiles,hotspotProfiles]=await Promise.all([runtime.fetchExistingProfiles(),runtime.getHotspotProfiles()]);
@@ -139,7 +146,11 @@ async function saveMikrotik(req,res){
   const savedResult=await db.query("UPDATE router_devices SET router_name=$1,host=$2,api_port=$3,username=$4,password_encrypted=$5,status='online',last_synced=NOW(),updated_at=NOW() WHERE id=$6 AND api_type='native_api' AND is_active=TRUE RETURNING id,router_name,host,api_port,username,password_encrypted",[routerName,handshake.host||host,Number(handshake.api_port||port),user,credentials.encrypt(password),String(selected.id)]);
   const saved=savedResult.rows?.[0];if(!saved)throw Object.assign(new Error("Selected active router no longer exists."),{statusCode:409});
   credentialsSaved=true;
-  const runtime=await mikrotikService.getMikroTikService(saved.id);runtime.invalidateConfigCache();
+  const savedRouter={
+   id:String(saved.id),router_name:saved.router_name,host:saved.host,
+   api_type:"native_api",api_port:Number(saved.api_port),is_active:true
+  };
+  await mikrotikService.runtimePool.replace(saved.id,savedRouter);
   const sync=await syncMikrotikProfilesInternal(String(saved.id));
   return res.set("Cache-Control","no-store").json({success:true,credentialsSaved:true,profileSync:"completed",message:"Router credentials saved and profiles synchronized.",router:{id:String(saved.id),router_name:saved.router_name,host:saved.host,port:saved.api_port,user:saved.username,passwordConfigured:true},sync});
  }catch(error){
