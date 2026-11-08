@@ -128,9 +128,10 @@ test("Push endpoint selects only active/unused voucher candidates and formats Ro
 });
 
 test("RouterOS push adds MAC credentials and preserves existing sessions unless expired",async()=>{
-  const originalWithConnection=mikrotik._withConnection;
+  const routerRuntime = new (require('../services/mikrotikService').MikroTikService)();
+  const originalWithConnection=routerRuntime._withConnection;
   const calls=[];
-  mikrotik._withConnection=async function(_label,callback){
+  routerRuntime._withConnection=async function(_label,callback){
     const connection={write:async(command,params=[])=>{
       calls.push({command,params});
       if(command==="/ip/hotspot/user/print")return [{".id":"*1",name:MAC_A,profile:"Old",comment:"Exp: 2029-01-01 00:00:00"}];
@@ -140,7 +141,7 @@ test("RouterOS push adds MAC credentials and preserves existing sessions unless 
     return callback(connection);
   };
   try{
-    const result=await mikrotik.syncHotspotUsers([
+    const result=await routerRuntime.syncHotspotUsers([
       {macAddress:MAC_A,profile:"Gold",comment:"Exp: 2030-01-02 03:04:05",expired:false},
       {macAddress:MAC_B,profile:"Silver",comment:"Exp: 2020-01-02 03:04:05",expired:true}
     ]);
@@ -159,5 +160,5 @@ test("RouterOS push adds MAC credentials and preserves existing sessions unless 
     const removals=calls.filter(c=>c.command==="/ip/hotspot/active/remove");
     assert.deepEqual(removals,[{command:"/ip/hotspot/active/remove",params:["=.id=*b"]}]);
     assert.ok(!calls.some(c=>c.command==="/ip/hotspot/user/reset-counters"));
-  }finally{mikrotik._withConnection=originalWithConnection;}
+  }finally{routerRuntime._withConnection=originalWithConnection;}
 });
