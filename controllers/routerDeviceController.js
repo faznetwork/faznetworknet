@@ -434,13 +434,11 @@ exports.deleteDevice = async (req, res) => {
       if ((target.rows || []).length !== 1) {
         throw Object.assign(new Error('Saved router was not found.'), { statusCode: 404, errorCode: 'ROUTER_NOT_FOUND' });
       }
-      if (target.rows[0].is_active) {
-        throw Object.assign(new Error('The active gateway cannot be deleted. Activate another router or deactivate this gateway first.'), {
-          statusCode: 409, errorCode: 'ACTIVE_ROUTER_DELETE_BLOCKED'
-        });
-      }
+      // Router records are independent from customer and billing records. Deleting
+      // the selected gateway removes only this connection; customers remain saved
+      // and session lookups will report everyone Offline until a gateway is activated.
       const result = await client.query(
-        "DELETE FROM router_devices WHERE id=$1 AND is_active=FALSE RETURNING id",
+        "DELETE FROM router_devices WHERE id=$1 RETURNING id",
         [id]
       );
       if ((result.rows || []).length !== 1) {
@@ -465,7 +463,7 @@ exports.deleteDevice = async (req, res) => {
     }
     mikrotikService.invalidateConfigCache();
     return res.set('Cache-Control', 'no-store').json({
-      success: true, deleted: true, router_id: deletedId, message: 'Standby router removed.'
+      success: true, deleted: true, router_id: deletedId, message: 'Router removed. Customer and billing records were preserved; customers will show Offline until a gateway is connected.'
     });
   } catch (error) {
     return publicError(res, error);
