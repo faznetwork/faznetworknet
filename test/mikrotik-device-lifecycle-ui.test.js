@@ -47,7 +47,7 @@ test('the lifecycle endpoints remain registered on the existing MikroTik router'
 
 test('the complete devices view and router modal scripts parse as JavaScript', () => {
   assert.doesNotThrow(() => new vm.Script(devicesView));
-  const modalStart = adminView.indexOf("<script>\\n    (function(){\\n      const form=document.getElementById('mikrotikAddRouterForm');");
+  const modalStart = adminView.indexOf("<script>\n    (function(){\n      const form=document.getElementById('mikrotikAddRouterForm');");
   const modalEnd = adminView.indexOf('</script>', modalStart);
   assert.ok(modalStart >= 0 && modalEnd > modalStart, 'router modal script boundaries must exist');
   const modalScript = adminView.slice(modalStart + '<script>'.length, modalEnd);
