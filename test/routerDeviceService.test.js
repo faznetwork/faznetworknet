@@ -34,10 +34,10 @@ async function startRouterFixture({ rejectNativeLogin = false } = {}) {
       if (buffer.length === 0 && (chunk.toString('ascii', 0, 4) === 'GET ')) {
         httpHandled = true;
         socket.end(
-          'HTTP/1.1 401 Unauthorized\\r\\n' +
-          'Content-Type: application/json\\r\\n' +
-          'Content-Length: 2\\r\\n' +
-          'Connection: close\\r\\n\\r\\n{}'
+          'HTTP/1.1 401 Unauthorized\r\n' +
+          'Content-Type: application/json\r\n' +
+          'Content-Length: 2\r\n' +
+          'Connection: close\r\n\r\n{}'
         );
         return;
       }
