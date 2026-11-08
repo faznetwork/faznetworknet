@@ -4876,6 +4876,7 @@ window.editHotspotUser=function(username,event){
                     if (form) {
                         delete form.dataset.routerId;
                         form.reset();
+                        form.querySelectorAll('input').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true })));
                         const title = document.getElementById('mikrotikAddRouterTitle');
                         if (title) title.textContent = 'Add MikroTik Router';
                         const password = document.getElementById('routerDevicePassword');
@@ -4913,6 +4914,7 @@ window.editHotspotUser=function(username,event){
                         form.elements.password.required = true;
                         form.elements.password.placeholder = 'Re-enter RouterOS API password to verify and save';
                         form.elements.timeout.value = String(Math.min(Number(router.timeout_ms) || 5000, 5000));
+                        form.querySelectorAll('input').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true })));
                         const title = document.getElementById('mikrotikAddRouterTitle');
                         if (title) title.textContent = 'Edit MikroTik Router';
                         window.bootstrap.Modal.getOrCreateInstance(modal).show();
