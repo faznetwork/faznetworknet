@@ -292,7 +292,7 @@ class MikroTikService {
     }
   }
 
-  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS) {
+  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS, handshakeTimeoutMs = CONNECTION_TIMEOUT_MS) {
     const execute = async () => {
       let connection = null;
       try {
@@ -303,7 +303,7 @@ class MikroTikService {
           CONNECTION_TIMEOUT_MS,
           "MikroTik configuration lookup"
         );
-        connection = await this._getPersistentConnection(config, operationTimeoutMs);
+        connection = await this._getPersistentConnection(config, handshakeTimeoutMs);
         return await this._executeWithTimeout(
           Promise.resolve().then(() => operation(connection)),
           operationTimeoutMs,
@@ -385,6 +385,8 @@ class MikroTikService {
     const timeoutMs=configOverride&&Number.isFinite(requestedTimeout)
       ? Math.max(500,Math.min(requestedTimeout,5000))
       : OPERATION_TIMEOUT_MS;
+    const handshakeTimeoutMs=configOverride?Math.max(250,Math.floor(timeoutMs*0.6)):CONNECTION_TIMEOUT_MS;
+    const operationTimeoutMs=configOverride?Math.max(250,timeoutMs-handshakeTimeoutMs):OPERATION_TIMEOUT_MS;
     return this._withConnection("connection test", async (connection) => {
       const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query");
       const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query");
@@ -395,7 +397,7 @@ class MikroTikService {
         boardName: this._str(resources["board-name"]) || this._str(resources.platform) || "RouterOS device",
         uptime: this._str(resources.uptime) || "unknown"
       };
-    }, configOverride, timeoutMs);
+    }, configOverride, operationTimeoutMs, handshakeTimeoutMs);
   }
   async getSystemResources() { return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); const totalHddBytes = this._number(resource["total-hdd-space"]); const freeHddBytes = this._number(resource["free-hdd-space"]); return { cpuLoad: this._number(resource["cpu-load"]), cpuCount: this._number(resource["cpu-count"]), cpuFrequencyMHz: this._number(resource["cpu-frequency"]), cpu: this._str(resource.cpu) || "Unknown", architectureName: this._str(resource["architecture-name"]) || "Unknown", boardName: this._str(resource["board-name"]) || "Unknown", platform: this._str(resource.platform) || "Unknown", version: this._str(resource.version) || "Unknown", buildTime: this._str(resource["build-time"]) || "Unknown", factorySoftware: this._str(resource["factory-software"]) || "Unknown", freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number((Math.max(0, totalMemoryBytes - freeMemoryBytes) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, freeHddMb: Number((freeHddBytes / 1024 / 1024).toFixed(2)), totalHddMb: Number((totalHddBytes / 1024 / 1024).toFixed(2)), hddUsagePercent: totalHddBytes > 0 ? Number((((totalHddBytes - freeHddBytes) / totalHddBytes) * 100).toFixed(1)) : 0, writeSectsSinceReboot: this._number(resource["write-sect-since-reboot"]), writeSectsTotal: this._number(resource["write-sect-total"]), badBlocks: this._str(resource["bad-blocks"]) || "0%", uptime: this._str(resource.uptime) || "unknown" }; }); }
   async getInterfaces() {
