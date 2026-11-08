@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 const db = require('../db');
 const credentials = require('../services/deviceCredentials');
 const routerDeviceService = require('../services/routerDeviceService');
@@ -6,6 +7,53 @@ const mikrotikService = require('../services/mikrotikService');
 
 function clean(value, max = 120) {
   return String(value ?? '').trim().slice(0, max);
+}
+
+const CONNECTION_VERIFICATION_TTL_MS = 2 * 60 * 1000;
+const connectionVerifications = new Map();
+
+function connectionFingerprint(input) {
+  const normalized = [
+    clean(input.router_name, 120),
+    clean(input.host, 253).toLowerCase(),
+    Number(input.api_port ?? input.port),
+    clean(input.username, 160),
+    String(input.password ?? ''),
+    Math.min(Number(input.timeout) || 5000, 5000)
+  ];
+  return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
+function issueConnectionVerification(input, handshake) {
+  const now = Date.now();
+  for (const [token, item] of connectionVerifications) {
+    if (item.expiresAt <= now) connectionVerifications.delete(token);
+  }
+  const token = crypto.randomBytes(32).toString('base64url');
+  connectionVerifications.set(token, {
+    fingerprint: connectionFingerprint(input),
+    handshake,
+    expiresAt: now + CONNECTION_VERIFICATION_TTL_MS
+  });
+  while (connectionVerifications.size > 256) {
+    connectionVerifications.delete(connectionVerifications.keys().next().value);
+  }
+  return token;
+}
+
+function consumeConnectionVerification(input, tokenValue) {
+  const token = String(tokenValue || '').trim();
+  if (!token) return null;
+  const verification = connectionVerifications.get(token);
+  connectionVerifications.delete(token);
+  if (!verification || verification.expiresAt <= Date.now() ||
+      verification.fingerprint !== connectionFingerprint(input)) {
+    throw Object.assign(
+      new Error('The successful connection test expired or the router settings changed. Test the current settings again before saving.'),
+      { statusCode: 409, errorCode: 'CONNECTION_TEST_REQUIRED' }
+    );
+  }
+  return verification.handshake;
 }
 function isIPv4(value) {
   const parts = String(value || '').trim().split('.');
@@ -120,7 +168,8 @@ exports.testConnection = async (req, res) => {
     const input = inputFrom(req.body || {});
     assertValidInput(input);
     const result = await routerDeviceService.testConnection(input);
-    return res.set('Cache-Control', 'no-store').json({ success: true, status: 'online', ...result, message: 'RouterOS handshake successful.' });
+    const verificationToken = issueConnectionVerification(input, result);
+    return res.set('Cache-Control', 'no-store').json({ success: true, status: 'online', ...result, verification_token: verificationToken, message: 'RouterOS handshake successful.' });
   } catch (error) {
     return connectionTestError(res, error);
   }
@@ -180,7 +229,7 @@ exports.addDevice = async (req, res) => {
   try {
     const input = inputFrom(req.body || {});
     assertValidInput(input);
-    const handshake = await routerDeviceService.testConnection(input);
+    const handshake = consumeConnectionVerification(input, req.body?.verification_token) || await routerDeviceService.testConnection(input);
     const encryptedPassword = credentials.encrypt(input.password);
     const apiType = handshake.api_type;
     const ssl = Boolean(handshake.use_ssl);
