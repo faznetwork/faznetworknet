@@ -4767,40 +4767,16 @@ window.editHotspotUser=function(username,event){
             const dynamic = document.getElementById('dynamicPageContent');
             if (!dynamic) return;
             dynamic.style.display = 'block';
-            dynamic.innerHTML = '<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading MikroTik routers and network inventory…</div></section>';
+            dynamic.innerHTML = '<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading saved MikroTik gateways…</div></section>';
 
             const esc = escapeHtml;
             try {
-                const [inventoryResponse, routerResponse] = await Promise.all([
-                    jsonFetch('/api/devices'),
-                    jsonFetch('/api/mikrotik/devices')
-                ]);
+                const routerResponse = await jsonFetch('/api/mikrotik/devices');
                 if (routerResponse.success === false) {
                     throw new Error(routerResponse.message || 'Saved MikroTik routers could not be loaded.');
                 }
 
                 const savedRouters = Array.isArray(routerResponse.devices) ? routerResponse.devices : [];
-                const inventoryDevices = Array.isArray(inventoryResponse.devices) ? inventoryResponse.devices : [];
-                const rawMikroTikDevices = inventoryDevices.filter(device =>
-                    String(device.deviceType || '').toLowerCase() === 'mikrotik'
-                );
-                const routerIdentity = device => {
-                    const ip = String(device.managementIp || '').trim().toLowerCase();
-                    return ip ? 'ip:' + ip : 'name:' + String(device.name || '').trim().toLowerCase();
-                };
-                const preferredRouter = (a, b) => {
-                    const seenA = Date.parse(a.lastSeenAt || a.updatedAt || a.createdAt || 0) || 0;
-                    const seenB = Date.parse(b.lastSeenAt || b.updatedAt || b.createdAt || 0) || 0;
-                    return seenB - seenA;
-                };
-                const inventoryRouters = rawMikroTikDevices
-                    .slice()
-                    .sort(preferredRouter)
-                    .filter((device, index, list) =>
-                        list.findIndex(other => routerIdentity(other) === routerIdentity(device)) === index
-                    );
-                const hiddenDuplicateCount = rawMikroTikDevices.length - inventoryRouters.length;
-                const counts = { mikrotik: inventoryRouters.length };
                 const isActive = router => router.is_active === true || String(router.is_active).toLowerCase() === 'true';
 
                 const routerRows = savedRouters.map(router => {
@@ -4820,27 +4796,12 @@ window.editHotspotUser=function(username,event){
                         '</tr>';
                 }).join('');
 
-                const inventoryRows = inventoryRouters.map(device => {
-                    const matchingRouter = savedRouters.find(router =>
-                        String(router.host || '').trim().toLowerCase() === String(device.managementIp || '').trim().toLowerCase()
-                    );
-                    const configured = Boolean(matchingRouter);
-                    const gatewayState = configured ? (isActive(matchingRouter) ? 'Active gateway' : 'Standby router') : 'Inventory only';
-                    return '<tr>' +
-                        '<td><strong>' + esc(device.name) + '</strong><div class="small text-muted">' + esc(device.vendor || '') + ' ' + esc(device.model || '') + '</div></td>' +
-                        '<td>MikroTik Router</td>' +
-                        '<td><code>' + esc(device.managementIp || '—') + '</code></td>' +
-                        '<td>' + esc(device.location || '—') + '</td>' +
-                        '<td><span class="badge ' + (configured ? (isActive(matchingRouter) ? 'text-bg-success' : 'text-bg-secondary') : 'text-bg-light') + '">' + gatewayState + '</span></td>' +
-                        '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger device-delete-btn" data-id="' + esc(device.id) + '" data-name="' + esc(device.name) + '" title="Remove inventory record"><i class="bi bi-trash"></i></button></td>' +
-                        '</tr>';
-                }).join('');
+
 
                 dynamic.innerHTML =
                     '<section class="admin-view p-3">' +
                         '<div class="d-flex flex-wrap align-items-center gap-2 mb-3">' +
                             '<div class="me-auto"><div class="small text-success fw-bold">CORE SYSTEM / NETWORK OPERATIONS</div><h3 class="mb-1">MikroTik Management</h3><div class="text-muted">Manage saved RouterOS connections and the single active core gateway.</div></div>' +
-                            '<button class="btn btn-outline-success" id="devicesDiscoverBtn" type="button"><i class="bi bi-radar me-1"></i>Discover MikroTik Ports</button>' +
                             '<button class="btn btn-success" id="devicesAddBtn" type="button"><i class="bi bi-router me-1"></i>Add Router</button>' +
                         '</div>' +
                         '<div class="card border-0 shadow-sm mb-3">' +
@@ -4851,16 +4812,11 @@ window.editHotspotUser=function(username,event){
                             '</tbody></table></div>' +
                         '</div>' +
                         '<div class="row g-3 mb-3">' +
-                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">MikroTik Inventory</div><div class="fs-3 fw-bold">' + counts.mikrotik + '</div></div></div></div>' +
                             '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Saved Routers</div><div class="fs-3 fw-bold">' + savedRouters.length + '</div></div></div></div>' +
                             '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Active Gateway</div><div class="fs-6 fw-bold">' + esc(savedRouters.find(isActive)?.router_name || 'Not selected') + '</div></div></div></div>' +
                             '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Standby Routers</div><div class="fs-3 fw-bold">' + savedRouters.filter(router => !isActive(router)).length + '</div></div></div></div>' +
                         '</div>' +
-                        '<div id="devicesDiscoveryResult" class="mb-3"></div>' +
-                        '<div class="card border-0 shadow-sm"><div class="card-header bg-white py-3"><strong>Registered Network Inventory</strong><span class="text-muted small ms-2">' + inventoryRouters.length + ' records</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Device</th><th>Type</th><th>Management / MAC</th><th>POP / Location</th><th>Integration</th><th></th></tr></thead><tbody>' +
-                            (inventoryRows || '<tr><td colspan="6" class="text-center text-muted py-5">No MikroTik inventory records are registered.</td></tr>') +
-                        '</tbody></table></div></div>' +
-                        '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>Router lifecycle state is managed only through Saved MikroTik Gateways. Network inventory remains separate and is not used to select the live gateway.</div>' +
+
                     '</section>';
 
                 const lifecyclePanel = dynamic.querySelector('.card.border-0.shadow-sm.mb-3');
@@ -4977,30 +4933,6 @@ window.editHotspotUser=function(username,event){
                             showFeedback(error.message || 'Unable to remove the inventory record.', 'danger');
                         }
                     });
-                });
-
-                document.getElementById('devicesDiscoverBtn')?.addEventListener('click', async function(){
-                    const button = this;
-                    const output = document.getElementById('devicesDiscoveryResult');
-                    button.disabled = true;
-                    output.innerHTML = '<div class="alert alert-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Reading MikroTik interfaces and learned bridge MACs. No configuration will be changed.</div>';
-                    try {
-                        const data = await jsonFetch('/api/devices/mikrotik/discover');
-                        if (data.success === false) throw new Error(data.message || 'MikroTik discovery failed.');
-                        const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
-                        const hosts = Array.isArray(data.bridgeHosts) ? data.bridgeHosts : [];
-                        const interfaceRows = interfaces.map(item =>
-                            '<tr><td><code>' + esc(item.name) + '</code></td><td>' + esc(item.type) + '</td><td><span class="badge ' + (item.running ? 'text-bg-success' : item.disabled ? 'text-bg-secondary' : 'text-bg-warning') + '">' + (item.disabled ? 'Disabled' : item.running ? 'Running' : 'Not running') + '</span></td><td>' + esc(item.comment || '—') + '</td></tr>'
-                        ).join('');
-                        const hostRows = hosts.map(item =>
-                            '<tr><td><code>' + esc(item.macAddress) + '</code></td><td><code>' + esc(item.interface || '—') + '</code></td><td>' + esc(item.bridge || '—') + '</td><td>' + esc(item.vlanId || '—') + '</td><td>' + (item.dynamic ? 'Dynamic' : 'Other') + '</td></tr>'
-                        ).join('');
-                        output.innerHTML = '<div class="card border-success shadow-sm"><div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center"><strong><i class="bi bi-router me-2 text-success"></i>' + esc(data.router?.routerName || 'MikroTik') + '</strong><span class="badge text-bg-success">Read-only scan complete</span><span class="small text-muted ms-auto">' + esc(data.router?.version || '') + ' · ' + esc(data.checkedAt || '') + '</span></div><div class="card-body"><div class="row g-2 mb-3"><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">CPU Load</div><strong>' + (data.resources?.cpuLoad ?? 'N/A') + '%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Memory Used</div><strong>' + (data.resources?.memoryUsagePercent ?? 'N/A') + '%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Interfaces</div><strong>' + interfaces.length + '</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Learned MACs</div><strong>' + hosts.length + '</strong></div></div></div><h6 class="mb-2">Router Hardware &amp; System Details</h6><div class="table-responsive mb-3"><table class="table table-sm table-bordered bg-white"><tbody><tr><th>Board / Model</th><td>' + esc(data.resources?.boardName || data.router?.boardName || 'N/A') + '</td><th>Platform</th><td>' + esc(data.resources?.platform || 'N/A') + '</td></tr><tr><th>Architecture</th><td>' + esc(data.resources?.architectureName || 'N/A') + '</td><th>CPU</th><td>' + esc(data.resources?.cpu || 'N/A') + ' · ' + esc(data.resources?.cpuCount ?? 'N/A') + ' core(s) · ' + esc(data.resources?.cpuFrequencyMHz ?? 'N/A') + ' MHz</td></tr><tr><th>RouterOS Version</th><td>' + esc(data.resources?.version || data.router?.version || 'N/A') + '</td><th>Build Time</th><td>' + esc(data.resources?.buildTime || 'N/A') + '</td></tr><tr><th>Uptime</th><td>' + esc(data.resources?.uptime || data.router?.uptime || 'N/A') + '</td><th>Factory Software</th><td>' + esc(data.resources?.factorySoftware || 'N/A') + '</td></tr><tr><th>Memory</th><td>' + esc(data.resources?.memoryUsedMb ?? 'N/A') + ' / ' + esc(data.resources?.totalMemoryMb ?? 'N/A') + ' MB (' + esc(data.resources?.memoryUsagePercent ?? 'N/A') + '%)</td><th>Storage</th><td>' + esc(data.resources?.totalHddMb ?? 'N/A') + ' MB total · ' + esc(data.resources?.freeHddMb ?? 'N/A') + ' MB free (' + esc(data.resources?.hddUsagePercent ?? 'N/A') + '% used)</td></tr><tr><th>Bad Blocks</th><td>' + esc(data.resources?.badBlocks || 'N/A') + '</td><th>Write Sectors</th><td>Since reboot: ' + esc(data.resources?.writeSectsSinceReboot ?? 'N/A') + ' · Total: ' + esc(data.resources?.writeSectsTotal ?? 'N/A') + '</td></tr></tbody></table></div><h6>Router Interfaces</h6><div class="table-responsive mb-3"><table class="table table-sm table-striped"><thead><tr><th>Interface</th><th>Type</th><th>Status</th><th>Comment</th></tr></thead><tbody>' + (interfaceRows || '<tr><td colspan="4">No interfaces reported.</td></tr>') + '</tbody></table></div><h6>Learned Bridge MAC Addresses</h6><div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>MAC Address</th><th>Learned On</th><th>Bridge</th><th>VLAN</th><th>Entry</th></tr></thead><tbody>' + (hostRows || '<tr><td colspan="5">No bridge host entries returned. This can be normal if the router is not using a bridge.</td></tr>') + '</tbody></table></div><div class="small text-muted">MAC entries are observed on RouterOS, not automatically verified as customer-owned. If the OLT is behind one uplink, downstream ONU/PON mapping must come from the OLT management interface.</div></div></div>';
-                    } catch (error) {
-                        output.innerHTML = '<div class="alert alert-danger">' + esc(error.message || 'MikroTik discovery failed.') + '</div>';
-                    } finally {
-                        button.disabled = false;
-                    }
                 });
 
                 if (window.innerWidth <= 768 && typeof closeSidebarMobile === 'function') closeSidebarMobile();

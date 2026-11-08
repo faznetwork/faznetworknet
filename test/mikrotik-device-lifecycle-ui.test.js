@@ -16,8 +16,8 @@ const devicesView = adminView.slice(devicesStart, devicesEnd);
 
 test('MikroTik Devices renders an Active or Inactive state for every saved router', () => {
   assert.ok(devicesView.includes("const savedRouters = Array.isArray(routerResponse.devices) ? routerResponse.devices : [];"));
-  assert.ok(devicesView.includes('text-bg-success\">Active</span>'));
-  assert.ok(devicesView.includes('text-bg-secondary\">Inactive</span>'));
+  assert.ok(devicesView.includes('text-bg-success">Active</span>'));
+  assert.ok(devicesView.includes('text-bg-secondary">Inactive</span>'));
   assert.ok(devicesView.includes("savedRouters.map(router =>"));
 });
 
@@ -41,6 +41,14 @@ test('saved routers can be edited through the existing lifecycle API without UI 
   assert.ok(adminView.includes('saved successfully as Inactive. The live gateway was not changed.'));
 });
 
+test('MikroTik Management displays only the authoritative saved-gateway list', () => {
+  assert.ok(devicesView.includes("jsonFetch('/api/mikrotik/devices')"));
+  assert.ok(!devicesView.includes("jsonFetch('/api/devices')"));
+  assert.ok(!devicesView.includes('Registered Network Inventory'));
+  assert.ok(!devicesView.includes('inventoryRouters'));
+  assert.ok(!devicesView.includes('MikroTik Inventory'));
+});
+
 test('the lifecycle endpoints remain registered on the existing MikroTik router', () => {
   assert.ok(routerRoutes.includes("router.post('/devices/:id/activate', controller.activateDevice);"));
   assert.ok(routerRoutes.includes("router.post('/devices/:id/deactivate', controller.deactivateDevice);"));
@@ -53,4 +61,11 @@ test('the complete devices view and router modal scripts parse as JavaScript', (
   assert.ok(modalStart >= 0 && modalEnd > modalStart, 'router modal script boundaries must exist');
   const modalScript = adminView.slice(modalStart + '<script>'.length, modalEnd);
   assert.doesNotThrow(() => new vm.Script(modalScript));
+});
+
+test('MikroTik Management does not expose or invoke the deprecated cloud-incompatible discovery endpoint', () => {
+  assert.ok(!devicesView.includes('Discover MikroTik Ports'));
+  assert.ok(!devicesView.includes('devicesDiscoverBtn'));
+  assert.ok(!devicesView.includes('devicesDiscoveryResult'));
+  assert.ok(!devicesView.includes('/api/devices/mikrotik/discover'));
 });
