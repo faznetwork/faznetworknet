@@ -71,7 +71,8 @@ test("PUT-style Hotspot profile update accepts an empty speed limit and uses the
 });
 
 test("RouterOS profile creation omits an empty rate-limit attribute", async () => {
-  const service = require("../services/mikrotikService");
+  const MikroTikService = require("../services/mikrotikService").MikroTikService;
+  const service = new MikroTikService();
   const original = service._withConnection;
   const calls = [];
   service._withConnection = async (operation, callback) => callback({
