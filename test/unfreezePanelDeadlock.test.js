@@ -41,7 +41,8 @@ test("admin diagnostics bound both database and router waits", () => {
   assert.match(diagnostics, /withTimeout\(db\.query\('SELECT 1'\), 1500/);
   // Diagnostics now performs a bounded TCP probe before the RouterOS API test.
   assert.match(diagnostics, /function testTcp\(host, port, timeoutMs = 2500\)/);
-  assert.match(diagnostics, /withTimeout\(\s*runtime\.testConnection\(\{/);\n  assert.match(diagnostics, /11000/);
+  assert.match(diagnostics, /withTimeout\(\s*runtime\.testConnection\(\{/);
+  assert.match(diagnostics, /11000/);
   assert.match(diagnostics, /clearTimeout\(timer\)/);
 });
 
