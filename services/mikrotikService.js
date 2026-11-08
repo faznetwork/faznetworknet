@@ -1941,13 +1941,13 @@ const mikrotikService = new Proxy(canonicalRuntime, {
     if (property.startsWith('_') || property === 'constructor' || property === 'close' || property === 'invalidateConfigCache') {
       return value.bind(target);
     }
+    if (Object.prototype.hasOwnProperty.call(target, property)) return value.bind(target);
     if (property === 'testConnection') {
       return (...args) => {
         if (args[0] && typeof args[0] === 'object' && Object.keys(args[0]).length) return value.apply(target, args);
         return getMikroTikService().then(runtime => runtime.testConnection());
       };
     }
-    if (Object.prototype.hasOwnProperty.call(target, property)) return value.bind(target);
     return (...args) => getMikroTikService().then(runtime => runtime[property](...args));
   }
 });
