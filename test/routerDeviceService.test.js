@@ -24,14 +24,16 @@ async function startRouterFixture({ rejectNativeLogin = false } = {}) {
     socket.on('data', chunk => {
       if (httpHandled) return;
 
+      buffer = Buffer.concat([buffer, chunk]);
+
       // TLS ClientHello is not a RouterOS sentence. This fixture intentionally
       // rejects TLS so the test can exercise the plain native API fallback.
-      if (!nativeProtocol && buffer.length === 0 && chunk[0] === 0x16) {
+      if (!nativeProtocol && buffer[0] === 0x16) {
         socket.destroy();
         return;
       }
 
-      if (buffer.length === 0 && (chunk.toString('ascii', 0, 4) === 'GET ')) {
+      if (buffer.length >= 4 && buffer.subarray(0, 4).toString('ascii') === 'GET ') {
         httpHandled = true;
         socket.end(
           'HTTP/1.1 401 Unauthorized\r\n' +
@@ -41,8 +43,6 @@ async function startRouterFixture({ rejectNativeLogin = false } = {}) {
         );
         return;
       }
-
-      buffer = Buffer.concat([buffer, chunk]);
       const decoded = routerDeviceService.decodeSentences(buffer);
       buffer = decoded.remaining;
 
