@@ -15,8 +15,8 @@ const devicesView = adminView.slice(devicesStart, devicesEnd);
 
 test('MikroTik Devices renders an Active or Inactive state for every saved router', () => {
   assert.ok(devicesView.includes("const savedRouters = Array.isArray(routerResponse.devices) ? routerResponse.devices : [];"));
-  assert.ok(devicesView.includes("text-bg-success">Active</span>"));
-  assert.ok(devicesView.includes("text-bg-secondary">Inactive</span>"));
+  assert.ok(devicesView.includes('text-bg-success\">Active</span>'));
+  assert.ok(devicesView.includes('text-bg-secondary\">Inactive</span>'));
   assert.ok(devicesView.includes("savedRouters.map(router =>"));
 });
 
