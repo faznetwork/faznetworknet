@@ -17,3 +17,6 @@ clean_data.sql
 work/
 
 *.zip
+
+logs/
+prompts/
