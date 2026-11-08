@@ -43,26 +43,29 @@
         .business-overview{--bo-heading:'Outfit',var(--font-ui);margin:0 0 28px;padding:22px;border:1px solid #e1e7ee;border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(15,23,42,.035)}
         .business-overview-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
         .business-overview-kicker{color:#65758b;font-size:.68rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
-        .business-overview-title{margin:3px 0 4px;color:#17283d;font-family:var(--bo-heading);font-size:1.42rem;font-weight:600;letter-spacing:-.025em}
+        .business-overview-title{margin:3px 0 4px;color:#17283d;font-family:var(--bo-heading);font-size:1.36rem;font-weight:500;letter-spacing:-.018em}
+        #view-main-dashboard h1,#view-main-dashboard h2{font-family:var(--bo-heading);font-weight:500!important;letter-spacing:-.018em}
         .business-overview-description{margin:0;color:#65758b;font-size:.86rem;line-height:1.5}
         .business-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
-        .business-kpi{--kpi-bg:#27496d;--kpi-border:rgba(255,255,255,.16);--kpi-ink:#fff;position:relative;display:flex;min-width:0;min-height:154px;flex-direction:column;overflow:hidden;padding:17px;border:1px solid var(--kpi-border);border-radius:13px;background-color:var(--kpi-bg);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
-        .business-kpi::after{position:absolute;right:-20px;bottom:-40px;width:112px;height:112px;border:1px solid rgba(255,255,255,.1);border-radius:50%;content:"";pointer-events:none}
+        .business-kpi{--kpi-bg:#397568;--kpi-border:rgba(255,255,255,.2);--kpi-ink:#fff;position:relative;display:flex;min-width:0;min-height:154px;flex-direction:column;overflow:hidden;padding:17px;border:1px solid var(--kpi-border);border-radius:13px;background-color:#397568;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
         .business-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-        .business-kpi-label{color:#fff;font-family:var(--bo-heading);font-size:.72rem;font-weight:600;letter-spacing:.045em;line-height:1.35;text-transform:uppercase}
+        .business-kpi-label{color:#fff;font-family:var(--bo-heading);font-size:.72rem;font-weight:500;letter-spacing:.035em;line-height:1.4;text-transform:uppercase}
         .business-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.28);border-radius:10px;background-color:rgba(255,255,255,.1);color:#fff;font-size:.95rem}
         .business-kpi-value{display:block;margin:13px 0 11px;color:#fff;font-family:var(--font-ui);font-size:clamp(1.48rem,2vw,1.9rem);font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.035em;line-height:1.15;overflow-wrap:anywhere}
         .business-kpi-badge{position:relative;z-index:1;align-self:flex-start;max-width:100%;margin-top:auto;padding:4px 8px;border:1px solid rgba(255,255,255,.24);border-radius:999px;background-color:rgba(255,255,255,.1);color:#fff;font-size:.7rem;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
         .business-kpi-quick-actions{position:relative;z-index:2;display:flex;gap:10px;margin-top:8px}.business-kpi-quick-actions button{padding:0;border:0;background:none;color:#fff;font:500 .72rem var(--font-ui);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
-        .business-kpi-navy{--kpi-bg:#27496d}.business-kpi-forest{--kpi-bg:#2c5f4b}.business-kpi-teal{--kpi-bg:#2a6468}.business-kpi-indigo{--kpi-bg:#454b78}.business-kpi-burgundy{--kpi-bg:#70454f}.business-kpi-slate{--kpi-bg:#47586b}.business-kpi-olive{--kpi-bg:#535d3a}
+                .business-kpi-navy{background-color:#397568}.business-kpi-forest{background-color:#4f7953}.business-kpi-teal{background-color:#317c7a}.business-kpi-indigo{background-color:#665c7e}.business-kpi-burgundy{background-color:#80545d}.business-kpi-slate{background-color:#6f6a58}.business-kpi-olive{background-color:#707845}
+        .business-kpi:nth-child(6){background-color:#3f7478}.business-kpi:nth-child(8){background-color:#866042}.business-kpi:nth-child(9){background-color:#77586e}.business-kpi:nth-child(10){background-color:#486e63}.business-kpi:nth-child(11){background-color:#6f6260}
+        .business-kpi:hover,.business-kpi:focus-visible{background-color:#64748b!important;border-color:rgba(255,255,255,.42);color:#fff}
         .business-kpi[role="button"],#view-main-dashboard .noc-kpi[role="button"]{cursor:pointer;transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
-        .business-kpi[role="button"]:hover,#view-main-dashboard .noc-kpi[role="button"]:hover{transform:translateY(-2px);filter:saturate(1.06);box-shadow:0 8px 18px rgba(15,23,42,.1)}
+        .business-kpi[role="button"]:hover,#view-main-dashboard .noc-kpi[role="button"]:hover{transform:translateY(-2px);filter:none;box-shadow:0 8px 18px rgba(15,23,42,.1)}
         .business-kpi[role="button"]:focus-visible,#view-main-dashboard .noc-kpi[role="button"]:focus-visible{outline:3px solid #7da895;outline-offset:3px}
-        #view-main-dashboard .noc-kpi{border-color:rgba(255,255,255,.16);border-radius:13px;background:#354f6d;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
+        #view-main-dashboard .noc-kpi{border-color:rgba(255,255,255,.2);border-radius:13px;background:#397568;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 12px rgba(15,23,42,.12)}
         #view-main-dashboard .noc-kpi *{color:#fff!important}
         #view-main-dashboard .noc-kpi .badge{background-color:rgba(255,255,255,.1)!important;border-color:rgba(255,255,255,.3)!important}
-        #view-main-dashboard .noc-kpi:before{width:3px;background:#fff}.noc-purple{background:#4a4c72!important}.noc-purple:before{background:#fff!important}.noc-blue{background:#2b6265!important}.noc-blue:before{background:#fff!important}.noc-amber{background:#6b5140!important}.noc-amber:before{background:#fff!important}
-        #view-main-dashboard .noc-kpi-top{align-items:center;color:#fff;font-family:var(--font-heading);font-size:.68rem;font-weight:600;letter-spacing:.055em}
+        #view-main-dashboard .noc-kpi:hover,#view-main-dashboard .noc-kpi:focus-visible,#view-main-dashboard .noc-kpi.noc-purple:hover,#view-main-dashboard .noc-kpi.noc-blue:hover,#view-main-dashboard .noc-kpi.noc-amber:hover{background:#64748b!important;border-color:rgba(255,255,255,.42)}
+        #view-main-dashboard .noc-kpi:before{width:3px;background:#fff}.noc-purple{background:#665c7e!important}.noc-blue{background:#397568!important}.noc-amber{background:#866042!important}.noc-purple:before,.noc-blue:before,.noc-amber:before{background:#fff!important}
+        #view-main-dashboard .noc-kpi-top{align-items:center;color:#fff;font-family:var(--font-heading);font-size:.68rem;font-weight:500;letter-spacing:.055em}
         #view-main-dashboard .noc-kpi-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border:1px solid rgba(255,255,255,.28);border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:.95rem}
         #view-main-dashboard .noc-kpi-value{color:#fff;font-family:var(--font-ui);font-weight:600;letter-spacing:-.025em}
         #view-main-dashboard .noc-kpi-sub{color:#fff}
@@ -97,7 +100,7 @@
             font-variant-numeric: tabular-nums;
             letter-spacing: -0.025em;
         }
-        
+
 .sticky-device-actions{position:sticky;bottom:0;background:#fff;padding:12px 0 calc(12px + env(safe-area-inset-bottom));z-index:2;border-top:1px solid #e5e7eb;}
         @media(max-width:767.98px){.sticky-device-actions{margin-left:-1rem;margin-right:-1rem;padding:12px 1rem calc(12px + env(safe-area-inset-bottom));}.sticky-device-actions button{min-height:44px;flex:1 1 auto;}}
         .sidebar {
@@ -121,7 +124,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .lang-switcher {
             padding: 10px 20px;
             font-size: 13px;
@@ -145,10 +148,10 @@
             color: #fff;
         }
 
-        .sidebar-menu { 
-            list-style: none; 
-            padding: 0; 
-            margin: 10px 0 30px 0; 
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 30px 0;
         }
         .menu-item a, .menu-item .dropdown-toggle {
             color: #a7f3d0;
@@ -164,48 +167,50 @@
             text-align: left;
             font-size: 14px;
         }
-        .menu-item a:hover, 
-        .menu-item a.active, 
+        .menu-item a:hover,
+        .menu-item a.active,
         .menu-item .dropdown-toggle:hover {
             background-color: rgba(16, 185, 129, 0.2);
             color: #fff;
         }
         .menu-item i { margin-right: 12px; font-size: 17px; }
-        
+
         .dropdown-toggle::after {
             display: none;
         }
-        
+
         .submenu {
             background-color: rgba(0, 0, 0, 0.25);
             list-style: none;
             padding: 0;
-            display: none;
+            display: block;
+            max-height: 0;
+            overflow: hidden;
+            visibility: hidden;
+            opacity: 0;
+            transition: max-height .22s ease, opacity .16s ease, visibility .22s ease;
         }
-        .submenu.show { display: block; }
-        /* General Settings uses the same sidebar accordion, with a short smooth reveal. */
-        html.admin-route-restoring .submenu.general-settings-submenu,
-        html.admin-route-restoring .general-settings-toggle .arrow-icon { transition: none !important; }
-        .submenu.general-settings-submenu { display: block; max-height: 0; overflow: hidden; visibility: hidden; transition: max-height .24s ease, visibility .24s ease; }
-        .submenu.general-settings-submenu.show { max-height: 360px; visibility: visible; }
-        .general-settings-toggle .arrow-icon { transition: transform .24s ease; }
-        .general-settings-toggle[aria-expanded="true"] .arrow-icon { transform: rotate(180deg); }
+        .submenu.show { max-height: 1200px; visibility: visible; opacity: 1; }
+        html.admin-route-restoring .submenu,
+        html.admin-route-restoring .dropdown-toggle .arrow-icon { transition: none !important; }
+        .dropdown-toggle .arrow-icon { transition: transform .18s ease; }
+        .dropdown-toggle[aria-expanded="true"] .arrow-icon { transform: rotate(180deg); }
         .general-settings-submenu a { padding-left: 48px; }
         .general-settings-submenu a.active { color: #fff; background: rgba(16,185,129,.28); box-shadow: inset 3px 0 #6ee7b7; }
         .general-settings-submenu a:focus-visible { outline: 2px solid #a7f3d0; outline-offset: -2px; }
         @media (prefers-reduced-motion: reduce) {
-            .submenu.general-settings-submenu, .general-settings-toggle .arrow-icon { transition: none; }
+            .submenu, .dropdown-toggle .arrow-icon { transition: none; }
         }
-        .submenu a, .submenu button { 
-            padding-left: 48px; 
-            font-size: 13.5px; 
+        .submenu a, .submenu button {
+            padding-left: 48px;
+            font-size: 13.5px;
         }
-        .submenu .submenu a { 
-            padding-left: 65px; 
-            font-size: 13px; 
+        .submenu .submenu a {
+            padding-left: 65px;
+            font-size: 13px;
             background-color: rgba(0, 0, 0, 0.15);
         }
-        
+
         .dashboard-view.hidden { display: none !important; }
         html.admin-route-initial #view-main-dashboard { display: none !important; }
         .main-content {
@@ -390,13 +395,13 @@
         .gateway-rocket { background: #8c3494; }
         .payment-kpi { border-left: 4px solid var(--accent-color); }
         .payment-action-group .btn { min-width: 34px; }
-        
+
         @media (max-width: 768px) {
             .sidebar { left: calc(-1 * var(--sidebar-width)); }
             .sidebar.show { left: 0; }
             .main-content { margin-left: 0; }
         }
-    
+
         @media (min-width: 769px) {
             html.admin-sidebar-collapsed .sidebar { left: calc(-1 * var(--sidebar-width)); }
             html.admin-sidebar-collapsed .main-content { margin-left: 0; }
@@ -445,7 +450,7 @@
             .main-content{margin-left:0;width:100%;max-width:100%;padding:12px}
             .main-content>.navbar{margin-bottom:12px!important}
             .hotspot-live-table,.customer-live-table,.payment-ledger-table{min-width:760px}
-        
+
         .hotspot-live-table th,.hotspot-live-table td,.customer-live-table th,.customer-live-table td,.payment-ledger-table th,.payment-ledger-table td{white-space:nowrap;padding:8px 10px}
             .hotspot-search,.customer-search-wrap,.payment-search-wrap{min-width:0;width:100%}
         }
@@ -454,26 +459,45 @@
         .hotspot-live-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
         .hotspot-live-table td { vertical-align: middle; font-size: 13px; }
         .hotspot-search { min-width: 260px; }
-        .voucher-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; }
-        .voucher-card { border:1px dashed #64748b; border-radius:8px; padding:14px; background:#fff; min-height:185px; break-inside:avoid; page-break-inside:avoid; }
-        .voucher-brand { color:var(--primary-color); font-weight:800; font-size:15px; letter-spacing:.02em; }
-        .voucher-credential { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:800; font-size:18px; letter-spacing:.04em; }
-        .voucher-instruction { font-size:11px; color:#475569; }
-        .voucher-cut { border-top:1px dashed #cbd5e1; margin:10px 0; }
-        @media (max-width: 1100px) { .voucher-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-        @media (max-width: 800px) { .voucher-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-        @media (max-width: 520px) { .voucher-grid { grid-template-columns:1fr; } }
-        @media print {
-            @page { size:A4 portrait; margin:8mm; }
-            body.hotspot-printing * { visibility:hidden !important; }
-            body.hotspot-printing #hotspotVoucherPrint,
-            body.hotspot-printing #voucherPrintArea * { visibility:visible !important; }
-            body.hotspot-printing #voucherPrintArea { position:absolute; left:0; top:0; width:100%; }
-            body.hotspot-printing .voucher-grid { grid-template-columns:repeat(4,1fr) !important; gap:8px !important; }
-            body.hotspot-printing .voucher-card { min-height:0; padding:10px; border:1px dashed #444; }
-            body.hotspot-printing .voucher-credential { font-size:15px; }
-            body.hotspot-printing .voucher-instruction { font-size:9px; }
-        }
+        .voucher-template-selector{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}.voucher-template-selector strong,.voucher-template-selector label{font-size:13px;color:#334155;font-weight:600}.voucher-template-selector select{min-width:155px;min-height:40px;padding:7px 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#243247;font:500 13px Inter,"Noto Sans Bengali",sans-serif}.voucher-template-selector button{min-height:40px;padding:8px 14px;border:1px solid #17634f;border-radius:9px;background:#17634f;color:#fff;font:600 13px Inter,"Noto Sans Bengali",sans-serif;cursor:pointer}.voucher-template-selector button:disabled{opacity:.65;cursor:wait}.voucher-template-status{font-size:12px;color:#64748b}
+        .voucher-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.voucher-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 62px;grid-template-rows:auto 1fr;column-gap:12px;align-items:center;min-width:0;min-height:142px;padding:14px;border:1px solid #d6dee7;border-radius:12px;background:#fff;color:#243247;break-inside:avoid;page-break-inside:avoid;overflow:hidden}.voucher-topline{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid #dbe3eb}.voucher-brand{min-width:0;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;overflow-wrap:anywhere}.voucher-kind{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;opacity:.78}.voucher-main{grid-column:1;min-width:0}.voucher-label{display:block;margin:5px 0 2px;font-size:8px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;opacity:.74}.voucher-credential{font:700 16px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.025em;overflow-wrap:anywhere;word-break:break-word}.voucher-secondary{font:600 12px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}.voucher-details{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:9px;line-height:1.35}.voucher-price{display:inline-flex;margin-top:8px;padding:4px 8px;border:1px solid currentColor;border-radius:999px;font-size:10px;font-weight:700}.voucher-qr{grid-column:2;grid-row:2;display:grid;place-items:center;width:62px;height:62px;padding:3px;border-radius:7px;background:#fff}.voucher-qr img,.voucher-qr canvas{display:block!important;width:56px!important;height:56px!important;max-width:56px!important;max-height:56px!important;object-fit:contain}.voucher-instruction{grid-column:1/-1;margin-top:9px;padding-top:7px;border-top:1px solid currentColor;font-size:8px;line-height:1.35;opacity:.75}
+        .voucher-card.template-basic{background:#fff;color:#243247;border:1px solid #b8c5d3;border-radius:6px;box-shadow:none}.template-basic .voucher-topline{border-bottom:1px solid #dbe3eb}.template-basic .voucher-price{background:#f1f5f9}
+        .voucher-card.template-standard{background:#17634f;color:#fff;border:1px solid #17634f;border-radius:12px;box-shadow:0 3px 10px rgba(15,23,42,.12);-webkit-print-color-adjust:exact;print-color-adjust:exact}.template-standard .voucher-topline{border-color:rgba(255,255,255,.35)}.template-standard .voucher-qr{background:#fff}.template-standard .voucher-price{background:rgba(255,255,255,.12)}
+        .voucher-card.template-pro{background:#36566b;color:#fff;border:1px solid #36566b;border-radius:14px;box-shadow:0 4px 12px rgba(15,23,42,.14);-webkit-print-color-adjust:exact;print-color-adjust:exact}.template-pro:before{position:absolute;inset:0 auto 0 0;width:4px;background:#c8a969;content:""}.template-pro .voucher-topline{border-color:rgba(255,255,255,.32)}.template-pro .voucher-qr{background:#fff}.template-pro .voucher-price{background:rgba(255,255,255,.12)}
+        .voucher-card,.voucher-main,.voucher-details{overflow-wrap:anywhere;word-break:break-word;min-width:0}
+        #voucherPrintArea .voucher-card{grid-template-columns:minmax(0,1fr) 70px;grid-template-rows:auto minmax(0,1fr) auto;align-items:start;column-gap:10px;min-width:0;overflow:hidden}
+        #voucherPrintArea .voucher-topline{grid-column:1/-1;grid-row:1;min-width:0;gap:8px}
+        #voucherPrintArea .voucher-main{grid-column:1;grid-row:2;min-width:0;align-self:start}
+        #voucherPrintArea .voucher-qr{grid-column:2;grid-row:2;align-self:start;width:70px;height:70px;padding:4px;background:#fff!important;border:1px solid #dbe3eb;border-radius:8px}
+        #voucherPrintArea .voucher-qr img,#voucherPrintArea .voucher-qr canvas{display:block!important;width:62px!important;height:62px!important;max-width:62px!important;max-height:62px!important;object-fit:contain}
+        #voucherPrintArea .voucher-instruction{grid-column:1/-1;grid-row:3;min-width:0;overflow-wrap:anywhere;line-height:1.5}
+        #voucherPrintArea .voucher-logo-frame{display:flex;align-items:center;justify-content:flex-start;min-width:32px;max-width:116px;min-height:30px;padding:2px 5px;border-radius:4px;background:#fff;color:#243348}#voucherPrintArea .voucher-brand img{display:block;width:auto;max-width:106px;height:auto;max-height:26px;object-fit:contain;object-position:left center}
+        #voucherPrintArea .voucher-card.template-basic{background:#fff!important;color:#253348!important}
+        #voucherPrintArea .voucher-card.template-standard{background:#17634f!important;color:#fff!important;border-color:#17634f!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+        #voucherPrintArea .voucher-card.template-pro{background:#284e70!important;color:#fff!important;border-color:#284e70!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+        #voucherPrintArea .voucher-card.template-standard *,#voucherPrintArea .voucher-card.template-pro *{color:inherit}
+        #voucherPrintArea .voucher-card.template-standard .voucher-qr,#voucherPrintArea .voucher-card.template-pro .voucher-qr{color:#111;background:#fff!important}
+        .voucher-card{display:grid!important;grid-template-columns:minmax(0,1fr) 70px!important;grid-template-rows:auto minmax(0,1fr) auto!important;align-items:start!important;column-gap:10px!important;min-width:0!important;overflow:hidden!important}
+        .voucher-card>.voucher-topline{grid-column:1/-1!important;grid-row:1!important;min-width:0!important}
+        .voucher-card>.voucher-main{grid-column:1!important;grid-row:2!important;min-width:0!important;overflow-wrap:anywhere!important}
+        .voucher-card>.voucher-qr{position:static!important;grid-column:2!important;grid-row:2!important;display:grid!important;place-items:center!important;flex:0 0 70px!important;width:70px!important;min-width:70px!important;max-width:70px!important;height:70px!important;min-height:70px!important;max-height:70px!important;margin:0!important;padding:4px!important;overflow:hidden!important;border:1px solid #dbe3eb!important;border-radius:8px!important;background:#fff!important}
+        .voucher-card>.voucher-qr img,.voucher-card>.voucher-qr canvas{display:block!important;flex:none!important;width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;aspect-ratio:1/1!important;object-fit:contain!important}
+        .voucher-card>.voucher-instruction{grid-column:1/-1!important;grid-row:3!important;min-width:0!important;overflow-wrap:anywhere!important;line-height:1.5!important}
+        .voucher-card.template-basic{background:#fff!important;color:#253348!important}
+        .voucher-card.template-standard{background:#17634f!important;color:#fff!important;border-color:#17634f!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+        .voucher-card.template-pro{background:#284e70!important;color:#fff!important;border-color:#284e70!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+        .voucher-card.template-standard>.voucher-topline,.voucher-card.template-pro>.voucher-topline{border-color:rgba(255,255,255,.42)!important}
+        .voucher-card.template-standard>.voucher-instruction,.voucher-card.template-pro>.voucher-instruction{border-color:rgba(255,255,255,.42)!important}
+        .voucher-card.template-standard .voucher-content *,.voucher-card.template-pro .voucher-content *,.voucher-card.template-standard>.voucher-main *,.voucher-card.template-pro>.voucher-main *{color:#fff!important}
+        .voucher-card .voucher-logo-frame{display:flex;align-items:center;justify-content:flex-start;min-width:32px;max-width:116px;min-height:30px;padding:2px 5px;border-radius:4px;background:#fff!important;color:#243348!important}
+        .voucher-card .voucher-brand img{display:block;width:auto!important;max-width:106px!important;height:auto!important;max-height:26px!important;padding:0!important;background:#fff!important;object-fit:contain!important}
+        .voucher-card .voucher-credential,.voucher-card .voucher-secondary{display:block!important;position:relative!important;z-index:1!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:inherit!important;text-transform:none!important}
+        .voucher-card.template-standard>.voucher-qr,.voucher-card.template-pro>.voucher-qr{color:#111!important;background:#fff!important}
+        @media(max-width:1000px){.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media(max-width:620px){.voucher-grid{grid-template-columns:minmax(0,1fr)}.voucher-card{min-height:128px}}
+        @media print{@page{size:A4 portrait;margin:7mm}body.hotspot-printing *{visibility:hidden!important}body.hotspot-printing #hotspotVoucherPrint,body.hotspot-printing #voucherPrintArea,body.hotspot-printing #voucherPrintArea *{visibility:visible!important}body.hotspot-printing #voucherPrintArea{position:absolute;left:0;top:0;width:100%}body.hotspot-printing .voucher-template-selector{display:none!important}body.hotspot-printing .voucher-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:3.5mm!important}body.hotspot-printing .voucher-card{min-height:32mm;padding:3mm;grid-template-columns:minmax(0,1fr) 15mm;column-gap:2.5mm;border-radius:2.5mm;box-shadow:none}body.hotspot-printing .voucher-qr{width:15mm;height:15mm;padding:1mm}body.hotspot-printing .voucher-qr img,body.hotspot-printing .voucher-qr canvas{width:13mm!important;height:13mm!important;max-width:13mm!important;max-height:13mm!important}body.hotspot-printing .voucher-credential{font-size:11pt}body.hotspot-printing .voucher-instruction{font-size:7pt}body.hotspot-printing .voucher-card{break-inside:avoid;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+        @media print{#voucherPrintArea .voucher-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:3.5mm!important}#voucherPrintArea .voucher-card{grid-template-columns:minmax(0,1fr) 15mm!important;min-height:32mm!important;padding:3mm!important;column-gap:2mm!important}#voucherPrintArea .voucher-logo-frame{max-width:27mm;min-height:7mm;padding:1mm}#voucherPrintArea .voucher-brand img{max-width:25mm;max-height:5mm}#voucherPrintArea .voucher-qr{width:15mm!important;height:15mm!important;padding:1mm!important}#voucherPrintArea .voucher-qr img,#voucherPrintArea .voucher-qr canvas{width:13mm!important;height:13mm!important;max-width:13mm!important;max-height:13mm!important}}
+        @media print{.voucher-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:3.5mm!important}.voucher-card{grid-template-columns:minmax(0,1fr) 15mm!important;min-height:32mm!important;padding:3mm!important;column-gap:2mm!important}.voucher-card>.voucher-qr{grid-column:2!important;grid-row:2!important;width:15mm!important;min-width:15mm!important;max-width:15mm!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important;padding:1mm!important}.voucher-card>.voucher-qr img,.voucher-card>.voucher-qr canvas{width:13mm!important;min-width:13mm!important;max-width:13mm!important;height:13mm!important;min-height:13mm!important;max-height:13mm!important}.voucher-card .voucher-logo-frame{max-width:27mm;min-height:7mm;padding:1mm}.voucher-card .voucher-brand img{max-width:25mm!important;max-height:5mm!important}.voucher-card>.voucher-instruction{font-size:7pt!important}}
         .customer-add-shell{max-width:1180px;margin:0 auto;padding-bottom:24px}
         .customer-add-hero{padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;border:1px solid #e2e8f0}
         .customer-add-icon{width:42px;height:42px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:#ecfdf5;color:#059669;font-size:19px}
@@ -581,7 +605,7 @@
         @media(max-width:768px){.ipam-shell{padding:10px;border-radius:12px}.ipam-shell .ipam-hero{padding:15px}.ipam-shell .ipam-toolbar{width:100%}.ipam-shell .ipam-toolbar .btn{flex:1}.ipam-shell .ipam-grid{grid-template-columns:1fr}.ipam-shell .ipam-filters{grid-template-columns:1fr}.ipam-shell .ipam-filters #ipamSearch{grid-column:auto}.ipam-shell .ipam-section{padding:11px}.ipam-shell .ipam-metrics{gap:8px}.ipam-shell .ipam-metric{padding:11px}.ipam-shell .ipam-metric strong{font-size:21px}.ipam-shell .ipam-pool-actions .btn{flex:0 1 auto}.ipam-shell .ipam-pool-data{gap:10px}}
         @media(max-width:420px){.ipam-shell .ipam-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ipam-shell .ipam-metric strong{font-size:19px}.ipam-shell .ipam-pool-actions .btn{flex:1}.ipam-shell .ipam-pool-head{gap:6px}.ipam-shell .ipam-badge{font-size:10px;padding:4px 6px}}
         @media(prefers-reduced-motion:reduce){.ipam-shell .ipam-metric,.ipam-shell .ipam-pool-card{transition:none}.ipam-shell .ipam-pool-card:hover,.ipam-shell .ipam-metric:hover{transform:none}}
-        
+
         /* IP Pools enterprise UI */
         .ip-pool-shell{position:relative}
         .ip-pool-hero{border:1px solid rgba(16,185,129,.16);background:linear-gradient(135deg,#ffffff 0%,#f0fdf8 52%,#ecfdf5 100%);border-radius:20px;padding:22px 24px;box-shadow:0 14px 40px rgba(15,23,42,.06);overflow:hidden}
@@ -605,7 +629,7 @@
         .ip-pool-save:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(5,150,105,.25)}
         @keyframes ipPoolModalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
         @media(max-width:768px){.ip-pool-hero{padding:18px}.ip-pool-table{min-width:860px}.ip-pool-modal .modal-body{padding:16px}}
-    
+
         /* FAZ NETWORK Hotspot Suite — premium, responsive UI layer. CSS-only: preserves all existing handlers and API contracts. */
         .hotspot-dynamic-view{--hs-ink:#10231c;--hs-muted:#64756d;--hs-line:#e2eae5;--hs-soft:#f5faf7;color:var(--hs-ink);font-family:Inter,'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;min-width:0}
         .hotspot-dynamic-view>.row{--bs-gutter-x:clamp(12px,1.6vw,20px);--bs-gutter-y:clamp(12px,1.6vw,20px)}
@@ -732,7 +756,7 @@
         .admin-topbar-container{display:flex;align-items:center;justify-content:space-between;min-width:0}
         .admin-topbar-main{display:flex;align-items:center;gap:12px;min-width:0}
         .admin-topbar-heading{display:flex;flex-direction:column;gap:2px;min-width:0}
-        .admin-topbar-brand{display:block;color:#047857;font-size:9px;font-weight:800;letter-spacing:.12em;line-height:1.2}
+        .admin-topbar-brand{display:flex;color:#047857;font-size:9px;font-weight:800;letter-spacing:.12em;line-height:1.2}
         .admin-topbar-actions{display:flex;align-items:center;gap:12px;min-width:0}
         .topbar-mobile-logout{display:none}
         #mainContent{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
@@ -771,7 +795,7 @@
 
             .admin-topbar-main { display:flex;align-items:center;flex:1 1 auto;gap:9px;min-width:0; }
             .admin-topbar-heading { display:flex;flex:1 1 auto;flex-direction:column;justify-content:center;gap:2px;min-width:0;line-height:1.2; }
-            .admin-topbar-brand { display:block;max-width:100%;overflow:hidden;color:#047857;font-size:9px;font-weight:800;letter-spacing:.12em;line-height:1.2;text-overflow:ellipsis;white-space:nowrap; }
+            .admin-topbar-brand { display:flex;max-width:100%;overflow:hidden;color:#047857;font-size:9px;font-weight:800;letter-spacing:.12em;line-height:1.2;text-overflow:ellipsis;white-space:nowrap; }
             #mobileSidebarToggle { display:inline-grid;place-items:center;flex:0 0 42px;width:42px;height:42px;min-width:42px;min-height:42px;padding:0;border-radius:11px;font-size:21px;touch-action:manipulation; }
             #pageTitle { display:block;width:100%;min-width:0;max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px!important;line-height:1.3; }
             .admin-topbar-actions { display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:7px;min-width:0; }
@@ -1147,7 +1171,7 @@
         }
         @media(prefers-reduced-motion:reduce){#adminTopBar.is-loading .mobile-page-loading-bar::after{animation:none;width:100%;left:0}}
 
-    
+
         /* OLT NOC module: fixed slide-over, compact triage and mobile-safe telemetry. */
         .olt-drawer-backdrop{position:fixed;inset:0;z-index:1060;display:flex;justify-content:flex-end;background:rgba(15,23,42,.56);backdrop-filter:blur(2px)}
         .olt-drawer{display:flex;flex-direction:column;width:min(560px,100vw);height:100%;background:#fff;box-shadow:-18px 0 48px rgba(15,23,42,.2);animation:oltDrawerIn .18s ease-out}
@@ -1169,20 +1193,11 @@
 .dashboard-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;min-width:0;align-items:stretch}
 .dashboard-kpi-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:13px;min-width:0;min-height:172px;height:auto;padding:18px 18px 20px;border:1px solid #e2e8f0;border-radius:15px;overflow:hidden;text-align:left;color:#0f172a;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;touch-action:manipulation}
 .dashboard-kpi-card:before,.dashboard-kpi-card:after{display:none}
-.dashboard-kpi-card.kpi-gradient-violet{background:#454b78;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-cyan{background:#2a6468;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-crimson{background:#70454f;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-amber{background:#69533c;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-pink{background:#68465d;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-emerald{background:#2c5f4b;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-indigo{background:#3f5075;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-teal{background:#285c5b;border-color:rgba(255,255,255,.2);color:#fff}
-.dashboard-kpi-card.kpi-gradient-purple{background:#55476f;border-color:rgba(255,255,255,.2);color:#fff}
+        .dashboard-kpi-card.kpi-gradient-violet{background:#665c7e;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-cyan{background:#317c7a;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-crimson{background:#80545d;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-amber{background:#866042;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-pink{background:#77586e;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-emerald{background:#4f7953;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-indigo{background:#6f6a58;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-teal{background:#486e63;border-color:rgba(255,255,255,.2);color:#fff}.dashboard-kpi-card.kpi-gradient-purple{background:#6f6260;border-color:rgba(255,255,255,.2);color:#fff}
 .dashboard-kpi-card .dashboard-kpi-icon{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.28);color:#fff}
 .dashboard-kpi-card .dashboard-kpi-open,.dashboard-kpi-card .dashboard-kpi-value,.dashboard-kpi-card .dashboard-kpi-title,.dashboard-kpi-card .dashboard-kpi-subtitle{color:#fff}
 .dashboard-kpi-card .dashboard-kpi-skeleton{background:rgba(255,255,255,.22);animation:none}
-.dashboard-kpi-card:hover{border-color:rgba(255,255,255,.35);filter:none;box-shadow:0 7px 18px rgba(15,23,42,.16)}
-.dashboard-kpi-card:hover{transform:translateY(-2px);border-color:#cbd5e1;box-shadow:0 7px 18px rgba(15,23,42,.07);filter:none}
+        .dashboard-kpi-card:hover{transform:translateY(-2px);background:#64748b;border-color:rgba(255,255,255,.42);box-shadow:0 7px 18px rgba(15,23,42,.16);filter:none}
 .dashboard-kpi-card:active{transform:translateY(0)}
 .dashboard-kpi-card:focus-visible{outline:3px solid #10b981;outline-offset:3px}
 .dashboard-kpi-card.is-navigating{border-color:#6ee7b7;box-shadow:0 0 0 3px rgba(16,185,129,.10),0 4px 12px rgba(15,23,42,.06)}
@@ -1198,6 +1213,7 @@
 .kpi-gradient-indigo .dashboard-kpi-icon{background:#eef2ff;color:#4f46e5;border-color:#e0e7ff}
 .kpi-gradient-teal .dashboard-kpi-icon{background:#f0fdfa;color:#0f766e;border-color:#ccfbf1}
 .kpi-gradient-purple .dashboard-kpi-icon{background:#faf5ff;color:#9333ea;border-color:#f3e8ff}
+.dashboard-kpi-card .dashboard-kpi-icon{background:rgba(255,255,255,.1)!important;color:#fff!important;border-color:rgba(255,255,255,.28)!important}
 .dashboard-kpi-open{font-size:14px;color:#94a3b8}
 .dashboard-kpi-value-wrap{position:relative;display:flex;align-items:center;min-height:34px;max-width:100%}
 .dashboard-kpi-value{font-size:clamp(1.25rem,1.8vw,1.8rem);line-height:1.15;font-weight:800;letter-spacing:-.045em;overflow-wrap:anywhere;color:#0f172a;font-variant-numeric:tabular-nums}
@@ -1206,8 +1222,8 @@
 .dashboard-kpi-card.is-loading .dashboard-kpi-value{opacity:.18}
 .dashboard-kpi-card.is-loading .dashboard-kpi-skeleton{display:block}
 .dashboard-kpi-copy{display:flex;flex-direction:column;gap:4px;min-width:0;width:100%;margin-top:auto}
-.dashboard-kpi-title{font-size:.83rem;font-weight:800;line-height:1.3;overflow-wrap:anywhere;color:#1e293b}
-.dashboard-kpi-subtitle{font-size:.69rem;line-height:1.4;color:#64748b;overflow-wrap:anywhere}
+.dashboard-kpi-title{font-size:.83rem;font-weight:500;line-height:1.4;overflow-wrap:anywhere;color:#1e293b}
+.dashboard-kpi-subtitle{font-size:.72rem;font-weight:400;line-height:1.45;color:#64748b;overflow-wrap:anywhere}
 .dashboard-kpi-ripple{position:absolute;z-index:2;width:12px;height:12px;border-radius:50%;background:rgba(16,185,129,.18);transform:translate(-50%,-50%) scale(0);animation:dashboardRipple .55s ease-out forwards;pointer-events:none}
 .dashboard-activity-section-heading{margin:0 0 10px}.dashboard-activity-section-heading h2{color:#0f172a}.dashboard-activity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px;margin-bottom:24px}
 .dashboard-activity-panel{min-width:0;overflow:hidden;border:1px solid #e2e8f0;border-radius:15px;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.04)}
@@ -1237,7 +1253,7 @@
 @media(max-width:359.98px){.dashboard-kpi-grid{grid-template-columns:minmax(0,1fr)}.dashboard-kpi-card{min-height:145px;padding:15px 14px 18px}}
 @media(prefers-reduced-motion:reduce){.dashboard-kpi-card,.dashboard-kpi-skeleton,.dashboard-kpi-ripple,.dashboard-kpi-icon i{animation:none!important;transition:none!important}.dashboard-kpi-card:hover,.dashboard-kpi-card:active{transform:none}}
 
-.noc-kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.noc-kpi{position:relative;min-width:0;border:1px solid #e2e8f0;border-radius:13px;background:#fff;padding:16px;box-shadow:0 3px 12px #0f172a08;overflow:hidden}.noc-kpi:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:#10b981}.noc-purple:before{background:#8b5cf6}.noc-blue:before{background:#0ea5e9}.noc-amber:before{background:#f59e0b}.noc-kpi-top{display:flex;justify-content:space-between;font-size:.65rem;font-weight:800;letter-spacing:.07em;color:#64748b}.noc-kpi-value{font-size:1.25rem;font-weight:800;line-height:1.25;margin:10px 0 6px;overflow-wrap:anywhere;color:#0f172a;letter-spacing:-.035em}.noc-subscriber-value,.noc-fiber-value{font-family:var(--font-ui);font-size:1.2rem;font-weight:800;letter-spacing:-.035em}.noc-throughput{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-family:var(--font-telemetry);margin:8px 0}.noc-throughput .traffic-download{font-size:1.22rem;line-height:1.35;font-weight:700;color:#059669}.noc-throughput .traffic-upload{font-size:1rem;line-height:1.35;font-weight:600;color:#6366f1}.noc-throughput b{font-weight:inherit;font-variant-numeric:tabular-nums}.noc-billing-value{font-family:var(--font-telemetry);font-size:1.35rem;font-weight:800;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.noc-kpi-sub{display:flex;align-items:center;gap:7px;min-height:25px;color:#64748b;font-family:var(--font-ui);font-size:.72rem;font-weight:500;overflow-wrap:anywhere;line-height:1.45}.noc-billing-sub{display:block;margin-top:4px;white-space:normal}.noc-fiber-sub{align-items:flex-start;margin-top:4px}.noc-fiber-sub i{color:#d97706;flex:0 0 auto;margin-top:2px}.noc-fiber-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-family:var(--font-telemetry);font-size:.68rem;color:#94a3b8}.noc-kpi-action-link{display:inline-block;margin-top:8px;padding:0;border:0;background:transparent;color:#059669;font-family:var(--font-ui);font-size:.75rem;font-weight:700;line-height:1.5;text-decoration:none;cursor:pointer}.noc-kpi-action-link:hover{color:#047857;text-decoration:underline}.noc-kpi-sub{display:flex;align-items:center;gap:7px;min-height:25px;color:#64748b;font-size:.76rem;overflow-wrap:anywhere}.noc-billing-sub{display:block;margin-top:4px;white-space:normal}.noc-fiber-sub{align-items:flex-start;margin-top:4px}.noc-kpi-value.noc-subscriber-value,.noc-kpi-value.noc-fiber-value,.noc-kpi-value.noc-billing-value{font-size:1.5rem}.noc-fiber-meta .noc-kpi-action-link{margin-top:0}.noc-kpi-actions{display:flex;flex-wrap:wrap;gap:8px 14px;border-top:1px solid #f1f5f9;margin-top:10px;padding-top:9px;font-size:.72rem;color:#64748b}.noc-kpi-actions button{border:0;background:none;padding:0;color:#047857;font-weight:750}.noc-interface-pill{border:1px solid #d1fae5;background:#ecfdf5;color:#047857;border-radius:6px;padding:3px 7px;font-size:.7rem}.noc-main-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px}.noc-hardware-stack{display:grid;grid-template-rows:1fr 1fr;gap:16px;min-width:0}.noc-panel{min-width:0;border:1px solid #e2e8f0;border-radius:13px;overflow:hidden}.noc-panel .card-custom-header{padding:13px 16px;min-width:0;gap:12px}.noc-interface-select{max-width:200px;min-width:115px;font-size:.75rem}.noc-chart-legend{display:flex;gap:14px;font-size:.76rem;color:#475569}.noc-chart-legend span:first-child{color:#059669}.noc-chart-legend span:last-child{color:#6366f1}.noc-chart-wrap{position:relative;height:170px;max-height:180px;min-width:0;margin-top:8px}.noc-chart-wrap svg{width:100%;height:100%;display:block}.noc-chart-grid{fill:none;stroke:#e2e8f0;stroke-width:1;stroke-dasharray:3 5}.noc-chart-empty{position:absolute;inset:42% 0 auto;text-align:center;color:#94a3b8}.noc-traffic-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px;border-top:1px solid #f1f5f9;padding-top:14px}.noc-traffic-stats>div{display:flex;flex-direction:column;gap:5px}.noc-traffic-stats span,.noc-progress-row span{font-size:.63rem;font-weight:800;color:#64748b}.noc-traffic-stats strong{font-size:.9rem;overflow-wrap:anywhere}.noc-progress-row{margin-top:14px}.noc-progress-row>div:first-child{display:flex;justify-content:space-between;margin-bottom:7px}.noc-progress-row .progress{height:7px;background:#e2e8f0}.noc-olt-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.noc-olt-stats>div{display:flex;flex-direction:column}.noc-olt-stats strong{font-size:1.35rem}.noc-olt-stats span{font-size:.7rem;color:#64748b}.noc-operations-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.noc-table-wrap{min-width:0;overflow-x:auto}.noc-table{font-size:.78rem;min-width:560px}.noc-table th{font-size:.65rem;color:#64748b;text-transform:uppercase;white-space:nowrap;background:#f8fafc}.noc-table td{padding:11px 12px}.noc-subline{display:block;font-size:.7rem;color:#64748b;overflow-wrap:anywhere}.noc-signal{border-radius:6px;padding:4px 7px;font-weight:800;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:.72rem}.noc-signal-normal{background:#dcfce7;color:#166534}.noc-signal-warning{background:#fef3c7;color:#92400e}.noc-signal-critical{background:#ffe4e6;color:#9f1239;animation:nocPulse 1.5s infinite}.noc-signal-offline{background:#e2e8f0;color:#334155}.noc-empty{padding:26px 12px!important;text-align:center;color:#94a3b8}@media(min-width:1800px){.noc-kpi{padding:20px 22px}}@media(max-width:1199.98px){.noc-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.noc-main-grid{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr)}.noc-operations-grid{grid-template-columns:1fr}}@media(max-width:767.98px){.main-content{padding:14px!important}.noc-kpi-grid,.noc-main-grid,.noc-operations-grid{grid-template-columns:1fr}.noc-kpi{padding:15px}.noc-kpi-value{font-size:1.25rem}.noc-hardware-stack{grid-template-rows:auto;gap:12px}.noc-panel .card-custom-header{padding:12px}.noc-interface-select{max-width:145px;min-width:100px}.noc-chart-wrap{height:170px;max-height:180px}.noc-chart-legend{font-size:.7rem}.noc-traffic-stats strong{font-size:.8rem}}
+.noc-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.noc-kpi{position:relative;min-width:0;border:1px solid #e2e8f0;border-radius:13px;background:#fff;padding:16px;box-shadow:0 3px 12px #0f172a08;overflow:hidden}.noc-kpi:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:#10b981}.noc-purple:before{background:#8b5cf6}.noc-blue:before{background:#0ea5e9}.noc-amber:before{background:#f59e0b}.noc-kpi-top{display:flex;justify-content:space-between;font-size:.65rem;font-weight:800;letter-spacing:.07em;color:#64748b}.noc-kpi-value{font-size:1.25rem;font-weight:800;line-height:1.25;margin:10px 0 6px;overflow-wrap:anywhere;color:#0f172a;letter-spacing:-.035em}.noc-subscriber-value,.noc-fiber-value{font-family:var(--font-ui);font-size:1.2rem;font-weight:800;letter-spacing:-.035em}.noc-throughput{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-family:var(--font-telemetry);margin:8px 0}.noc-throughput .traffic-download{font-size:1.22rem;line-height:1.35;font-weight:700;color:#059669}.noc-throughput .traffic-upload{font-size:1rem;line-height:1.35;font-weight:600;color:#6366f1}.noc-throughput b{font-weight:inherit;font-variant-numeric:tabular-nums}.noc-billing-value{font-family:var(--font-telemetry);font-size:1.35rem;font-weight:800;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.noc-kpi-sub{display:flex;align-items:center;gap:7px;min-height:25px;color:#64748b;font-family:var(--font-ui);font-size:.72rem;font-weight:500;overflow-wrap:anywhere;line-height:1.45}.noc-billing-sub{display:block;margin-top:4px;white-space:normal}.noc-fiber-sub{align-items:flex-start;margin-top:4px}.noc-fiber-sub i{color:#d97706;flex:0 0 auto;margin-top:2px}.noc-fiber-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-family:var(--font-telemetry);font-size:.68rem;color:#94a3b8}.noc-kpi-action-link{display:inline-block;margin-top:8px;padding:0;border:0;background:transparent;color:#059669;font-family:var(--font-ui);font-size:.75rem;font-weight:700;line-height:1.5;text-decoration:none;cursor:pointer}.noc-kpi-action-link:hover{color:#047857;text-decoration:underline}.noc-kpi-sub{display:flex;align-items:center;gap:7px;min-height:25px;color:#64748b;font-size:.76rem;overflow-wrap:anywhere}.noc-billing-sub{display:block;margin-top:4px;white-space:normal}.noc-fiber-sub{align-items:flex-start;margin-top:4px}.noc-kpi-value.noc-subscriber-value,.noc-kpi-value.noc-fiber-value,.noc-kpi-value.noc-billing-value{font-size:1.5rem}.noc-fiber-meta .noc-kpi-action-link{margin-top:0}.noc-kpi-actions{display:flex;flex-wrap:wrap;gap:8px 14px;border-top:1px solid #f1f5f9;margin-top:10px;padding-top:9px;font-size:.72rem;color:#64748b}.noc-kpi-actions button{border:0;background:none;padding:0;color:#047857;font-weight:750}.noc-interface-pill{border:1px solid #d1fae5;background:#ecfdf5;color:#047857;border-radius:6px;padding:3px 7px;font-size:.7rem}.noc-main-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px}.noc-hardware-stack{display:grid;grid-template-rows:1fr 1fr;gap:16px;min-width:0}.noc-hardware-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.noc-hardware-grid .noc-hardware-stack{display:contents}.noc-panel{min-width:0;border:1px solid #e2e8f0;border-radius:13px;overflow:hidden}.noc-panel .card-custom-header{padding:13px 16px;min-width:0;gap:12px}.noc-interface-select{max-width:200px;min-width:115px;font-size:.75rem}.noc-chart-legend{display:flex;gap:14px;font-size:.76rem;color:#475569}.noc-chart-legend span:first-child{color:#059669}.noc-chart-legend span:last-child{color:#6366f1}.noc-chart-wrap{position:relative;height:170px;max-height:180px;min-width:0;margin-top:8px}.noc-chart-wrap svg{width:100%;height:100%;display:block}.noc-chart-grid{fill:none;stroke:#e2e8f0;stroke-width:1;stroke-dasharray:3 5}.noc-chart-empty{position:absolute;inset:42% 0 auto;text-align:center;color:#94a3b8}.noc-traffic-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px;border-top:1px solid #f1f5f9;padding-top:14px}.noc-traffic-stats>div{display:flex;flex-direction:column;gap:5px}.noc-traffic-stats span,.noc-progress-row span{font-size:.63rem;font-weight:800;color:#64748b}.noc-traffic-stats strong{font-size:.9rem;overflow-wrap:anywhere}.noc-progress-row{margin-top:14px}.noc-progress-row>div:first-child{display:flex;justify-content:space-between;margin-bottom:7px}.noc-progress-row .progress{height:7px;background:#e2e8f0}.noc-olt-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.noc-olt-stats>div{display:flex;flex-direction:column}.noc-olt-stats strong{font-size:1.35rem}.noc-olt-stats span{font-size:.7rem;color:#64748b}.noc-operations-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.noc-table-wrap{min-width:0;overflow-x:auto}.noc-table{font-size:.78rem;min-width:560px}.noc-table th{font-size:.65rem;color:#64748b;text-transform:uppercase;white-space:nowrap;background:#f8fafc}.noc-table td{padding:11px 12px}.noc-subline{display:block;font-size:.7rem;color:#64748b;overflow-wrap:anywhere}.noc-signal{border-radius:6px;padding:4px 7px;font-weight:800;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:.72rem}.noc-signal-normal{background:#dcfce7;color:#166534}.noc-signal-warning{background:#fef3c7;color:#92400e}.noc-signal-critical{background:#ffe4e6;color:#9f1239;animation:nocPulse 1.5s infinite}.noc-signal-offline{background:#e2e8f0;color:#334155}.noc-empty{padding:26px 12px!important;text-align:center;color:#94a3b8}@media(min-width:1800px){.noc-kpi{padding:20px 22px}}@media(max-width:1199.98px){.noc-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.noc-main-grid{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr)}.noc-operations-grid{grid-template-columns:1fr}}@media(max-width:767.98px){.main-content{padding:14px!important}.noc-kpi-grid,.noc-main-grid,.noc-hardware-grid,.noc-operations-grid{grid-template-columns:1fr}.noc-kpi{padding:15px}.noc-kpi-value{font-size:1.25rem}.noc-hardware-stack{grid-template-rows:auto;gap:12px}.noc-panel .card-custom-header{padding:12px}.noc-interface-select{max-width:145px;min-width:100px}.noc-chart-wrap{height:170px;max-height:180px}.noc-chart-legend{font-size:.7rem}.noc-traffic-stats strong{font-size:.8rem}}
 
         /* All Customers: explicit high-specificity desktop styles on the rendered table cells.
            These rules intentionally override Bootstrap utility classes and inherited table typography. */
@@ -1901,7 +1917,7 @@
     })();
 </script>
 <style id="sms-history-selection-style">#smsHistorySelectPage.sms-history-select-control,#smsHistoryRows .sms-history-select-control{width:1.25rem;height:1.25rem;min-width:1.25rem;cursor:pointer;vertical-align:middle}#smsHistoryRows .sms-history-select-control{width:1.2rem;height:1.2rem}#smsHistoryDeleteSelectedBtn{font-size:1rem;min-height:40px}#smsHistoryDeleteSelectedBtn .badge{font-size:.9rem}</style></head>
-<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>">
+    <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>" data-voucher-brand="<%= brandSettings && brandSettings.company_name || 'FAZ NETWORK' %>" data-voucher-logo="<%= brandSettings && brandSettings.logo_url || '' %>" data-voucher-template="<%= brandSettings && ['basic','standard','pro'].includes(brandSettings.voucher_template) ? brandSettings.voucher_template : 'standard' %>">
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -1922,9 +1938,6 @@
         <ul class="sidebar-menu">
             <li class="menu-item">
                 <a href="/admin/dashboard" class="active" data-view-target="view-main-dashboard"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
-            </li>
-            <li class="menu-item">
-                <a href="/admin/dashboard#dashboardTrafficCard" class="traffic-sidebar-link"><i class="bi bi-activity"></i><span>Live Traffic Monitor</span><span class="ms-auto badge rounded-pill text-bg-success">LIVE</span></a>
             </li>
 
             <li class="menu-item">
@@ -1976,7 +1989,18 @@
                 </ul>
             </li>
 
-            <li class="menu-item">
+                        <li class="menu-item api-webhooks-menu">
+                <button class="dropdown-toggle" type="button" aria-expanded="false" aria-controls="api-webhooks-submenu" onclick="toggleSubmenu(event, this); return false;">
+                    <i class="bi bi-braces-asterisk"></i> <span>API &amp; Webhooks</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon" aria-hidden="true"></i>
+                </button>
+                <ul id="api-webhooks-submenu" class="submenu" aria-label="API and webhook settings">
+                    <li><a href="/admin/settings/payment-webhooks" data-settings-nav="payments"><i class="bi bi-wallet2 me-2"></i><span>Payment Webhooks</span></a></li>
+                    <li><a href="/admin/settings/webhooks" data-settings-nav="webhooks"><i class="bi bi-shield-lock me-2"></i><span>Webhooks &amp; API</span></a></li>
+                </ul>
+            </li>
+
+<li class="menu-item">
                 <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
                     <i class="bi bi-wifi"></i> <span data-key="hotspot">Hotspot</span>
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
@@ -2012,10 +2036,11 @@
                 <ul id="general-settings-submenu" class="submenu general-settings-submenu" aria-label="General Settings sections">
                     <li><a href="/admin/settings/brand-identity" data-settings-nav="brand"><i class="bi bi-palette me-2"></i><span>Brand &amp; Identity</span></a></li>
                     <li><a href="/admin/settings/billing-expiry" data-settings-nav="billing"><i class="bi bi-calendar2-check me-2"></i><span>Billing &amp; Expiry</span></a></li>
-                    <li><a href="/admin/settings/payment-webhooks" data-settings-nav="payments"><i class="bi bi-wallet2 me-2"></i><span>Payment &amp; Webhooks</span></a></li>
+                    
                     <li><a href="/admin/settings/sms-alerts" data-settings-nav="sms"><i class="bi bi-chat-dots me-2"></i><span>SMS &amp; Alerts</span></a></li>
                     <li><a href="/admin/settings/hotspot-portal" data-settings-nav="hotspot-portal"><i class="bi bi-wifi me-2"></i><span>Hotspot &amp; Captive Portal</span></a></li>
-                    <li><a href="/admin/settings/webhooks" data-settings-nav="webhooks"><i class="bi bi-shield-lock me-2"></i><span>Webhooks &amp; API</span></a></li>
+                    <li><a href="/admin/settings/automation-call" data-settings-nav="automation-call"><i class="bi bi-telephone-outbound me-2"></i><span>Automation Call</span></a></li>
+                    
                 </ul>
             </li>
             <li class="menu-item">
@@ -2158,14 +2183,14 @@
                         <i class="bi bi-list" aria-hidden="true"></i>
                     </button>
                     <div class="admin-topbar-heading">
-                        <span class="admin-topbar-brand">FAZ NETWORK</span>
+                        <span class="admin-topbar-brand d-flex align-items-center gap-2"><% if (brandSettings && brandSettings.logo_url) { %><img src="<%= brandSettings.logo_url %>" alt="" style="max-height:24px;max-width:96px;object-fit:contain"><% } %><%= brandSettings.company_name || "FAZ NETWORK" %></span>
                         <span class="fs-6 fw-semibold text-secondary" id="pageTitle" data-key="dashboard" title="Dashboard">Dashboard</span>
                     </div>
                 </div>
                 <div class="admin-topbar-actions">
                     <span id="mobileHeaderStatus" class="mobile-header-status d-md-none" aria-live="polite"><span class="mobile-header-status-dot"></span><span id="mobileHeaderStatusText">READY</span></span>
                     <div class="admin-topbar-user text-end d-none d-sm-block">
-                        <div class="small fw-semibold text-dark"><i class="bi bi-person-circle me-1"></i><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></div>
+                        <div class="small fw-semibold text-dark d-flex align-items-center justify-content-end gap-2"><% if (brandSettings && brandSettings.admin_avatar_url) { %><img src="<%= brandSettings.admin_avatar_url %>" alt="Admin profile" class="rounded-circle" style="width:30px;height:30px;object-fit:cover"><% } else { %><i class="bi bi-person-circle"></i><% } %><%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %></div>
                         <div class="small text-muted"><%= String(typeof currentRole !== 'undefined' ? currentRole : 'super_admin').replace('_', ' ') %></div>
                     </div>
                     <form method="POST" action="/logout" class="topbar-mobile-logout d-md-none" onsubmit="return confirm('Are you sure you want to sign out?');">
@@ -2197,22 +2222,20 @@
                   <article class="business-kpi business-kpi-burgundy"><div class="business-kpi-top"><span class="business-kpi-label">Outstanding due</span><span class="business-kpi-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="outstandingDue">—</strong><span class="business-kpi-badge" data-business-badge="outstandingDue">— unpaid accounts</span></article>
                   <article class="business-kpi business-kpi-indigo"><div class="business-kpi-top"><span class="business-kpi-label">Active Hotspot</span><span class="business-kpi-icon"><i class="bi bi-wifi" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activeHotspot">—</strong><span class="business-kpi-badge" data-business-badge="activeHotspot">Active vouchers</span></article>
                   <article class="business-kpi business-kpi-navy"><div class="business-kpi-top"><span class="business-kpi-label">Active PPPoE</span><span class="business-kpi-icon"><i class="bi bi-router" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activePppoe">—</strong><span class="business-kpi-badge" id="businessPppoeLive" data-business-live="activePppoe">Online/offline status loading</span><div class="business-kpi-quick-actions"><button type="button" onclick="loadCustomerSection('online','online_customer')">View online</button><button type="button" onclick="loadCustomerSection('offline','offline_customer')">View offline</button></div></article>
-                  <article class="business-kpi business-kpi-olive"><div class="business-kpi-top"><span class="business-kpi-label">Active POPs</span><span class="business-kpi-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activePops">—</strong><span class="business-kpi-badge" data-business-badge="activePops">Network locations</span></article>
+                  <article class="business-kpi business-kpi-olive"><div class="business-kpi-top"><span class="business-kpi-label">Active reseller POPs</span><span class="business-kpi-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activePops">—</strong><span class="business-kpi-badge" data-business-badge="activePops">Network locations</span></article>
                   <article class="business-kpi business-kpi-slate"><div class="business-kpi-top"><span class="business-kpi-label">Active resellers</span><span class="business-kpi-icon"><i class="bi bi-people" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activeResellers">—</strong><span class="business-kpi-badge" data-business-badge="activeResellers">Partner accounts</span></article>
                   <article class="business-kpi business-kpi-teal"><div class="business-kpi-top"><span class="business-kpi-label">Staff &amp; employees</span><span class="business-kpi-icon"><i class="bi bi-person-badge" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="activeStaff">—</strong><span class="business-kpi-badge" data-business-badge="activeStaff">Active team members</span></article>
                   <article class="business-kpi business-kpi-burgundy"><div class="business-kpi-top"><span class="business-kpi-label">Expiring soon</span><span class="business-kpi-icon"><i class="bi bi-hourglass-split" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="expiringSoon">—</strong><span class="business-kpi-badge" data-business-badge="expiringSoon">Next 48 hours</span></article>
                   <article class="business-kpi business-kpi-indigo"><div class="business-kpi-top"><span class="business-kpi-label">Open support tickets</span><span class="business-kpi-icon"><i class="bi bi-headset" aria-hidden="true"></i></span></div><strong class="business-kpi-value" data-business-kpi="openTickets">—</strong><span class="business-kpi-badge" data-business-badge="openTickets">Awaiting resolution</span></article>
                 </div>
               </section>
-              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="dashboardTrafficStatus" class="badge rounded-pill bg-secondary">Connecting…</span><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
-              
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><div class="noc-eyebrow"><span class="noc-live-dot"></span> NETWORK OPERATIONS CENTER</div><h1 class="h4 fw-bold mb-1 mt-1">Network Overview</h1><p class="text-muted small mb-0">Live subscriber, transport, billing and optical health</p></div><div class="d-flex align-items-center gap-2"><span id="nocLastUpdated" class="small text-muted">Waiting for metrics</span></div></div>
+
               <div class="noc-kpi-grid mb-4">
-                <article class="noc-kpi noc-purple"><div class="noc-kpi-top">LIVE INTERFACE THROUGHPUT</div><div class="noc-kpi-value noc-throughput"><span class="traffic-download" aria-label="Download"><span aria-hidden="true">↓</span> <b id="dashboardTrafficRx">—</b> Mbps</span><span class="traffic-upload" aria-label="Upload"><span aria-hidden="true">↑</span> <b id="dashboardTrafficTx">—</b> Mbps</span></div><div class="noc-kpi-sub"><span class="noc-interface-pill" id="nocInterfacePill">Interface: loading</span></div></article>
-                <article class="noc-kpi noc-blue"><div class="noc-kpi-top">TODAY'S BILLING</div><div class="noc-kpi-value noc-billing-value" id="nocBillingToday">৳ 0.00</div><div class="noc-kpi-sub noc-billing-sub" id="nocBillingSub">0 Transactions Today • MTD ৳3,330.00</div><button class="noc-kpi-action-link" onclick="loadPaymentsSection('all','all_payments')">Open collections</button></article>
+                                <article class="noc-kpi noc-blue"><div class="noc-kpi-top">TODAY'S BILLING</div><div class="noc-kpi-value noc-billing-value" id="nocBillingToday">৳ 0.00</div><div class="noc-kpi-sub noc-billing-sub" id="nocBillingSub">0 Transactions Today • MTD ৳3,330.00</div><button class="noc-kpi-action-link" onclick="loadPaymentsSection('all','all_payments')">Open collections</button></article>
                 <article class="noc-kpi noc-amber"><div class="noc-kpi-top">OPTICAL / FIBER HEALTH</div><div class="noc-kpi-value noc-fiber-value" id="nocFiberValue">— Online • — Alert</div><div class="noc-kpi-sub noc-fiber-sub"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span id="nocFiberSub">Direct OLT polling not configured</span></div><div class="noc-fiber-meta"><span id="nocPonSummary">PON —/—</span><button class="noc-kpi-action-link" onclick="window.loadOltManagement('overview')">Open OLT</button></div></article>
               </div>
-              <div class="noc-main-grid mb-4">
-                <section id="dashboardTrafficCard" class="card card-custom noc-panel"><div class="card-custom-header"><div><i class="bi bi-activity text-success me-2"></i>Live Traffic Monitor</div><select id="dashboardInterface" aria-label="Select MikroTik interface" class="form-select form-select-sm noc-interface-select"><option value="aggregate">aggregate</option></select></div><div class="card-body p-3"><div class="noc-chart-legend"><span>● Download</span><span>● Upload</span></div><div class="noc-chart-wrap"><svg id="nocTrafficChart" viewBox="0 0 900 260" role="img" aria-label="Live throughput area chart" preserveAspectRatio="none"><defs><linearGradient id="nocRxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity=".15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient><linearGradient id="nocTxFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6366f1" stop-opacity=".15"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs><g class="noc-chart-grid"><path d="M48 30H884 M48 80H884 M48 130H884 M48 180H884 M48 230H884"/></g><path id="nocRxArea" d="" fill="url(#nocRxFill)"/><path id="nocTxArea" d="" fill="url(#nocTxFill)"/><path id="nocRxLine" d="" fill="none" stroke="#10b981" stroke-width="3"/><path id="nocTxLine" d="" fill="none" stroke="#6366f1" stroke-width="3"/></svg><div id="nocChartEmpty" class="noc-chart-empty">Collecting live samples…</div></div><div class="noc-traffic-stats"><div><span>PEAK DOWNLOAD</span><strong id="nocPeakRx">— Mbps</strong></div><div><span>AVERAGE DOWNLOAD</span><strong id="nocAvgRx">— Mbps</strong></div><div><span>TRANSFERRED TODAY</span><strong id="nocTransferred">Not available</strong></div></div></div></section>
+              <div class="noc-hardware-grid mb-4">
                 <div class="noc-hardware-stack"><section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-router text-success me-2"></i>MikroTik Core Health</span><span id="dashboardRouterStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocRouterModel">RouterOS device</strong><div id="nocRouterUptime" class="small text-muted">Uptime pending</div><div class="noc-progress-row"><div><span>CPU LOAD</span><strong id="metricCpu">—</strong></div><div class="progress"><div id="cpuBar" class="progress-bar bg-success" style="width:0%"></div></div></div><div class="noc-progress-row"><div><span>RAM USED</span><strong id="metricRam">—</strong></div><div class="progress"><div id="ramBar" class="progress-bar bg-info" style="width:0%"></div></div></div></div></section>
                 <section class="card card-custom noc-panel"><div class="card-custom-header"><span><i class="bi bi-hdd-network text-primary me-2"></i>OLT Status</span><span id="nocOltStatus" class="badge bg-secondary">Checking…</span></div><div class="card-body p-3"><strong id="nocOltName">V-SOL V1600D4</strong><div id="nocOltAddress" class="small text-muted">IP not reported by telemetry</div><div class="noc-olt-stats"><div><strong id="nocOnuTotal">—</strong><span>Registered ONUs</span></div><div><strong id="nocPonActive">—</strong><span>Active PON ports</span></div></div><div id="nocOltSeen" class="small text-muted mt-2">Telemetry freshness pending</div></div></section></div>
               </div>
@@ -2292,13 +2315,13 @@
 
             <!-- VIEW: CENTRALIZED GENERAL SETTINGS -->
             <section id="view-general-settings" class="admin-view" style="display:none">
-            
+
 
               <div id="general-settings-panel-hotspot-portal" class="general-settings-panel" style="display:none"><div class="card card-custom border-0 shadow-sm mb-3"><div class="card-custom-header"><i class="bi bi-wifi text-success fs-5"></i><div><div class="fw-semibold">Hotspot &amp; Captive Portal Settings</div><small class="text-muted">Branding, login methods, banner media and redirect settings.</small></div></div><div class="card-body p-3 p-md-4"><form id="hotspotPortalSettingsForm"><div class="row g-3">
 <div class="col-12"><strong>Branding &amp; display mode</strong><div class="d-flex flex-wrap gap-3 mt-2"><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="default" checked> Default Mode</label><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="banner"> Banner Image Mode</label><label class="border rounded-3 p-3"><input type="radio" name="portalDisplayMode" value="custom_code"> Custom HTML / Text Mode</label></div></div>
 <div class="col-12 border rounded-3 p-3"><label class="form-label fw-semibold" for="portalLogoFile">Captive Portal Logo (JPG/PNG/WEBP, max 2 MB)</label><div class="row g-2 align-items-center"><div class="col-12 col-md-7"><input id="portalLogoFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><div class="d-flex gap-2 mt-2"><button id="portalLogoUploadBtn" type="button" class="btn btn-success btn-sm">Upload Logo</button><button id="portalLogoRemoveBtn" type="button" class="btn btn-outline-danger btn-sm">Remove Logo</button></div></div><div class="col-12 col-md-5"><img id="portalLogoPreview" alt="Captive portal logo preview" class="img-fluid rounded" style="display:none;max-height:100px;max-width:180px"></div></div></div>
 <div id="portalBannerEditor" class="col-12" style="display:none"><label class="form-label">Banner image (JPG/PNG/WEBP, max 2 MB)</label><input id="portalBannerFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><img id="portalBannerPreview" alt="Banner preview" class="img-fluid rounded mt-3" style="display:none;max-height:220px"><div class="mt-2 d-flex gap-2"><button id="portalBannerUploadBtn" type="button" class="btn btn-success">Upload Banner</button><button id="portalBannerRemoveBtn" type="button" class="btn btn-outline-danger">Remove Banner</button></div><div id="portalBannerStatus" class="small mt-2"></div></div>
-<div id="portalCustomEditor" class="col-12" style="display:none"><label class="form-label">Custom HTML / Text</label><textarea id="portalCustomHtml" class="form-control font-monospace" rows="7" maxlength="20000"></textarea><small class="text-muted">Scripts are disabled on the public portal.</small></div>
+<div id="portalMobileBannerEditor" class="col-12" style="display:none"><label class="form-label">Mobile banner (optional; falls back to desktop)</label><input id="portalMobileBannerFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><img id="portalMobileBannerPreview" alt="Mobile banner preview" class="img-fluid rounded mt-3" style="display:none;max-height:180px"><div class="mt-2 d-flex gap-2"><button id="portalMobileBannerUploadBtn" type="button" class="btn btn-success">Upload Mobile Banner</button><button id="portalMobileBannerRemoveBtn" type="button" class="btn btn-outline-danger">Remove</button></div></div><div id="portalCustomEditor" class="col-12" style="display:none"><label class="form-label">Custom HTML / Text</label><textarea id="portalCustomHtml" class="form-control font-monospace" rows="7" maxlength="20000"></textarea><small class="text-muted">Scripts are disabled on the public portal.</small></div>
 
 <div class="col-12 border rounded-3 p-3"><div class="fw-semibold mb-2">Public sale packages (MikroTik Hotspot Profiles)</div><div class="small text-muted mb-2">Enable only the profiles you want customers to purchase. Price and display details are stored in PostgreSQL.</div><div id="portalPackageRows" class="table-responsive"><div class="small text-muted">Loading MikroTik profiles…</div></div></div>
 <div class="col-12 border rounded-3 p-3"><div class="fw-semibold mb-2">MFS payment accounts</div><div class="row g-2" id="portalMfsFields">
@@ -2315,8 +2338,8 @@
                 <div class="card-body p-4"><form id="systemBrandForm" novalidate><div class="row g-3">
                   <div class="col-md-6"><label class="form-label" for="setCompanyName">Company / ISP Name</label><input id="setCompanyName" class="form-control" maxlength="160" required></div>
                   <div class="col-md-6"><label class="form-label" for="setPublicBaseUrl">Public Website Base URL</label><input id="setPublicBaseUrl" type="url" class="form-control" placeholder="https://example.com"></div>
-                  <div class="col-md-6"><label class="form-label" for="setLogoUrl">Header / Navbar Logo URL</label><input id="setLogoUrl" type="url" class="form-control"></div>
-                  <div class="col-md-6"><label class="form-label" for="setFaviconUrl">Favicon URL</label><input id="setFaviconUrl" type="url" class="form-control"></div>
+                  <div class="col-md-6"><label class="form-label" for="setLogoUrl">Global Company Logo URL</label><input id="setLogoUrl" type="text" class="form-control"><div class="input-group mt-2"><input id="setLogoFile" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><button id="setLogoUpload" class="btn btn-outline-success" type="button">Upload</button></div><img id="setLogoPreview" alt="Company logo preview" class="mt-2 rounded" style="display:none;max-height:56px;max-width:180px;object-fit:contain"></div>
+                  <div class="col-md-6"><label class="form-label" for="setFaviconUrl">Favicon URL</label><input id="setFaviconUrl" type="url" class="form-control"></div><div class="col-md-6"><label class="form-label" for="setAvatarFile">Admin Profile Picture</label><div class="input-group"><input id="setAvatarFile" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><button id="setAvatarUpload" class="btn btn-outline-success" type="button">Upload</button></div><img id="setAvatarPreview" alt="Admin avatar preview" class="mt-2 rounded-circle" style="display:none;width:56px;height:56px;object-fit:cover"></div>
                   <div class="col-md-6"><label class="form-label" for="setSupportPhone">Support Phone / Helpline</label><input id="setSupportPhone" class="form-control" maxlength="40" inputmode="tel"></div>
                   <div class="col-md-6"><label class="form-label" for="setWhatsapp">WhatsApp Number (international digits)</label><input id="setWhatsapp" class="form-control" maxlength="24" inputmode="tel"></div>
                   <div class="col-md-12"><label class="form-label" for="setOfficeAddress">Physical Office Address</label><textarea id="setOfficeAddress" class="form-control" rows="2" maxlength="1000"></textarea></div>
@@ -2330,7 +2353,7 @@
                   <div class="col-md-6"><label class="form-label" for="setBillingCycle">Billing Cycle Type</label><select id="setBillingCycle" class="form-select"><option value="monthly_1st">Monthly calendar cycle (1st to month end)</option><option value="same_date_monthly">Same-Date Monthly Billing Cycle</option><option value="rolling_30">Legacy 30-day rolling cycle (existing setting)</option></select></div>
                   <div class="col-md-6"><label class="form-label" for="setGraceDays">Grace Period Before Line Cut (days)</label><input id="setGraceDays" type="number" class="form-control" min="0" max="7" step="1" value="0"></div>
                   <div class="col-12"><label class="form-label d-block">Action on Expiry</label>
-                    <div class="form-check border rounded p-3 ps-5 mb-2"><input class="form-check-input" type="radio" name="setExpiryAction" id="setExpiryQuarantine" value="quarantine" checked><label class="form-check-label" for="setExpiryQuarantine"><strong>Quarantine (recommended)</strong><div class="small text-muted">Assign EXPIRED-PROFILE / zero speed while keeping the secret and MAC visibility intact.</div></label></div>
+                    <div class="form-check border rounded p-3 ps-5 mb-2"><input class="form-check-input" type="radio" name="setExpiryAction" id="setExpiryQuarantine" value="quarantine" checked><label class="form-check-label" for="setExpiryQuarantine"><strong>Quarantine (recommended)</strong><div class="small text-muted">Assign EXPIRED-PROFILE with a 1k/1k rate limit, while keeping the secret and MAC visibility intact.</div></label></div>
                     <div class="form-check border rounded p-3 ps-5"><input class="form-check-input" type="radio" name="setExpiryAction" id="setExpiryDisable" value="disable_secret"><label class="form-check-label" for="setExpiryDisable"><strong>Disable Secret</strong><div class="small text-muted">Disable the PPPoE secret when the expiry engine runs.</div></label></div>
                   </div>
                 </div><div id="systemBillingResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemBillingSaveBtn" class="btn btn-success">Save Billing Policy</button></div></form></div></div>
@@ -2407,7 +2430,7 @@
           <div id="whatsappStatusMessage" class="small mt-2" role="status" aria-live="polite"></div>
           <div class="card border mt-4"><div class="card-body"><h6 class="fw-bold mb-1"><i class="bi bi-send me-2 text-success"></i>Send Test WhatsApp</h6><p class="small text-muted mb-3">Send a real test message through the connected WhatsApp socket to confirm delivery.</p><div class="row g-3 align-items-end"><div class="col-md-4"><label class="form-label" for="whatsappTestTo">Recipient Mobile</label><input id="whatsappTestTo" class="form-control" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="01XXXXXXXXX or 8801XXXXXXXXX" required></div><div class="col-md-6"><label class="form-label" for="whatsappTestMessage">Test Message</label><input id="whatsappTestMessage" class="form-control" maxlength="4000" value="FAZ NETWORK WhatsApp test message" required></div><div class="col-md-2 d-grid"><button type="button" id="whatsappTestBtn" class="btn btn-outline-success" disabled>Send Test WhatsApp</button></div></div><div id="whatsappTestResult" class="small mt-3" role="status" aria-live="polite"></div><div class="small text-muted mt-2">Automated PPPoE renewals also require WhatsApp channel enabled and the PPPoE → Renewal → WhatsApp rule checked below.</div></div></div>
         </section>
-        
+
         <section data-notify-panel="email" style="display:none">
           <div class="form-check form-switch mb-3"><input class="form-check-input" id="notifyEmailEnabled" type="checkbox"><label class="form-check-label fw-semibold" for="notifyEmailEnabled">Enable Email Notifications</label></div>
           <div class="mb-3"><h6 class="fw-bold mb-1">Native SMTP Email Engine</h6><p class="small text-muted mb-0">Email delivery runs through the FAZ NETWORK Node.js service and durable PostgreSQL outbox. SMTP credentials remain server-side in Notification Hub settings.</p></div>
@@ -2429,7 +2452,7 @@
             <div class="col-12"><div id="emailTestResult" class="alert alert-secondary py-2 small mb-0" role="status" aria-live="polite">Save your active provider settings, then send a test email to validate delivery.</div></div>
           </div>
         </section>
-        
+
         <section data-notify-panel="rules" style="display:none">
           <h6 class="fw-bold mb-1">Notification Trigger Matrix</h6><p class="small text-muted">Choose the event and channel combinations that may send alerts. Channel-level enable switches above still apply.</p>
           <div class="table-responsive"><table class="table table-sm table-bordered align-middle"><thead class="table-light"><tr><th>Subscriber Type</th><th>Trigger</th><th>SMS</th><th>WhatsApp</th><th>Email</th></tr></thead><tbody id="notificationRulesBody"></tbody></table></div>
@@ -2500,7 +2523,9 @@
                   </div><div id="generalMfsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalMfsSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Numbers</button></div></form></div>
                 </div>
               </div>
-            
+
+              <%- include('automation-call') %>
+
 
 </section>
 
@@ -2589,7 +2614,7 @@
                                         <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-speedometer2"></i></span><select class="form-select" id="packageSelect" required><option value="">Loading packages...</option></select></div>
                                         <div id="packagePriceHint" class="form-text mt-2"><i class="bi bi-info-circle me-1"></i>Select a package to load its preset price.</div>
                                     </div>
-                                    
+
                                     <div class="col-12">
                                         <div class="billing-validity-panel">
                                             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -2640,8 +2665,8 @@
                                 <div class="row g-4">
                                     <div class="col-md-6"><label for="customerEmail" class="form-label">Email Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-envelope"></i></span><input type="email" class="form-control" id="customerEmail" maxlength="254" placeholder="customer@example.com" autocomplete="email"></div></div>
                                     <div class="col-md-6"><label for="customerWhatsappPhone" class="form-label">WhatsApp Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-whatsapp"></i></span><input type="tel" class="form-control" id="customerWhatsappPhone" maxlength="40" placeholder="Leave blank to use primary phone" autocomplete="tel"></div><div class="form-text">Optional override; primary phone remains the default.</div></div>
-                                    
-                                    
+
+
                                     <div class="col-12"><div class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>These details are saved to the customer record and shared across Add Customer, Edit Customer and Customer 360. Actual message delivery requires the relevant provider to be configured.</div></div>
                                 </div>
                             </div>
@@ -2790,8 +2815,8 @@
               <div class="col-12"><div class="border rounded-3 p-3 p-md-4 bg-light-subtle"><div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-3 bg-success-subtle text-success p-2"><i class="bi bi-chat-dots fs-5"></i></span><div><h6 class="fw-bold mb-1">Customer Contact &amp; Notifications</h6><div class="small text-muted">Save contact details now. Messages are sent only when the matching channel is configured in the main Notification Settings.</div></div></div><div class="row g-3">
                 <div class="col-md-6"><label class="form-label fw-semibold" for="cpEmail">Email Address</label><div class="input-group"><span class="input-group-text"><i class="bi bi-envelope"></i></span><input id="cpEmail" type="email" maxlength="254" class="form-control" placeholder="customer@example.com"></div></div>
                 <div class="col-md-6"><label class="form-label fw-semibold" for="cpWhatsappNumber">WhatsApp Number <span class="badge text-bg-light border">Optional override</span></label><div class="input-group"><span class="input-group-text text-success"><i class="bi bi-whatsapp"></i></span><input id="cpWhatsappNumber" type="tel" maxlength="40" class="form-control" placeholder="Leave blank to use Primary Phone"></div><div class="form-text">If left blank, a valid Primary Phone is used as the default WhatsApp contact.</div></div>
-                
-                
+
+
                 <div class="col-12"><div id="cpNotificationReadiness" class="alert alert-info py-2 mb-0 small"><i class="bi bi-info-circle me-1"></i>Contact details are stored independently of sender configuration. Unconfigured channels will not send messages.</div></div>
               </div></div></div>
               <div class="col-md-4"><label class="form-label fw-semibold">Alternative / Emergency Phone</label><input id="cpAltPhone" class="form-control"></div>
@@ -3102,6 +3127,8 @@
         let currentHotspotTitleKey = '';
         let currentHotspotProfiles = [];
         let currentVoucherBatch = [];
+        let currentVoucherTemplate = ['basic','standard','pro'].includes(document.body.dataset.voucherTemplate) ? document.body.dataset.voucherTemplate : 'standard';
+        let currentVoucherBranding = {name: document.body.dataset.voucherBrand || 'FAZ NETWORK', logoUrl: document.body.dataset.voucherLogo || ''};
 
         function hotspotTitle(key) {
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
@@ -4298,23 +4325,29 @@ window.editHotspotUser=function(username,event){
             }
         }
 
-        function voucherCardHtml(v) {
+        function voucherCardHtml(v,index) {
             const qrPayload=escapeHtml(JSON.stringify({pin:v.username,password:v.password}));
-            return '<div class="voucher-card"><div class="voucher-brand">FAZ NETWORK Wi-Fi Hotspot</div><div class="voucher-cut"></div><div class="voucher-qr" data-payload="'+qrPayload+'"></div><div class="small text-muted" data-key="username_label">Username / PIN</div><div class="voucher-credential">'+escapeHtml(v.username)+'</div><div class="small text-muted mt-1" data-key="password_pin">Password / PIN</div><div class="voucher-credential">'+escapeHtml(v.password)+'</div><div class="d-flex justify-content-between mt-2 small"><span>Profile: <strong>'+escapeHtml(v.profile||'-')+'</strong></span><span>Validity: <strong>'+escapeHtml(v.validity||'-')+'</strong></span></div><div class="fw-bold mt-1">Price: ৳ '+Number(v.price||0).toFixed(2)+'</div><div class="voucher-cut"></div><div class="voucher-instruction"><span data-key="instructions">Scan QR or connect to Wi-Fi and enter PIN/password</span></div></div>';
+            const name=escapeHtml(currentVoucherBranding.name||'FAZ NETWORK');
+            const logo=currentVoucherBranding.logoUrl?'<span class="voucher-logo-frame"><img src="'+escapeHtml(currentVoucherBranding.logoUrl)+'" alt="'+name+'"></span>':name;
+            const passwordLine=v.password!==v.username?'<span class="voucher-label">পাসওয়ার্ড</span><div class="voucher-secondary">'+escapeHtml(v.password)+'</div>':'';
+            const validity=escapeHtml(v.validity||'-'),profile=escapeHtml(v.profile||'-'),price=Number(v.price);
+            const priceTag=Number.isFinite(price)&&price>0?'<span class="voucher-price">৳ '+price.toFixed(2)+'</span>':'';
+            return '<article class="voucher-card template-'+currentVoucherTemplate+'"><div class="voucher-topline"><span class="voucher-brand">'+logo+'</span><span class="voucher-kind">ওয়াই-ফাই ভাউচার · '+String(index+1).padStart(2,'0')+'</span></div><div class="voucher-main"><span class="voucher-label">ইউজারনেম / পিন</span><div class="voucher-credential">'+escapeHtml(v.username)+'</div>'+passwordLine+'<div class="voucher-details"><span>প্যাকেজ <b>'+profile+'</b></span><span>মেয়াদ <b>'+validity+'</b></span></div>'+priceTag+'</div><div class="voucher-qr" data-payload="'+qrPayload+'"></div><div class="voucher-instruction">FAZ NETWORK ওয়াই-ফাই কানেক্ট করে QR স্ক্যান করুন অথবা পিন দিন।</div></article>';
         }
 
         function renderVoucherCards(vouchers) {
             currentVoucherBatch=vouchers||[];
             const area=document.getElementById('voucherPrintArea') || document.getElementById('hotspotVoucherPrint');
-            if(area) { area.innerHTML='<div class="voucher-grid">'+currentVoucherBatch.map(voucherCardHtml).join('')+'</div>'; if(typeof QRCode!=='undefined') area.querySelectorAll('.voucher-qr').forEach(function(node){new QRCode(node,{text:node.dataset.payload,width:86,height:86,correctLevel:QRCode.CorrectLevel.M});}); else console.warn('[HOTSPOT VOUCHERS] QR library unavailable; QR codes were not rendered.'); }
+            if(area) { area.innerHTML='<div class="voucher-grid template-'+currentVoucherTemplate+'">'+currentVoucherBatch.map(voucherCardHtml).join('')+'</div>'; if(typeof QRCode!=='undefined') area.querySelectorAll('.voucher-qr').forEach(function(node){new QRCode(node,{text:node.dataset.payload,width:56,height:56,correctLevel:QRCode.CorrectLevel.M});}); else console.warn('[HOTSPOT VOUCHERS] QR library unavailable; QR codes were not rendered.'); }
         }
 
         window.loadVoucherGeneratorSection = async function loadVoucherGeneratorSection() {
             currentHotspotMode='generator'; currentHotspotTitleKey='gen_print_vouchers'; setHotspotTitle('gen_print_vouchers');
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-4"><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><span data-key="gen_print_vouchers">'+escapeHtml(hotspotTitle('gen_print_vouchers'))+'</span></div><div class="card-body"><form id="voucherGeneratorForm"><div class="row g-3"><div class="col-md-2"><label class="form-label" data-key="quantity">Quantity</label><input id="voucherQuantity" type="number" class="form-control" min="1" max="500" value="10" required></div><div class="col-md-2"><label class="form-label" data-key="user_prefix">User Prefix</label><input id="voucherPrefix" class="form-control" value="FAZ-" maxlength="20"></div><div class="col-md-2"><label class="form-label" data-key="character_length">PIN Length</label><input id="voucherCharLength" type="number" class="form-control" min="4" max="16" value="6" required></div><div class="col-md-4"><label class="form-label" data-key="profile">Existing Hotspot Profile</label><select id="voucherProfile" class="form-select" required><option value="">Loading profiles...</option></select><small id="voucherProfileValidity" class="text-muted">Validity is inherited from the selected profile.</small></div><div class="col-md-2"><label class="form-label" data-key="price">Price</label><input id="voucherPrice" type="number" class="form-control" min="0" step="0.01" value="20" required></div><div class="col-12 d-flex justify-content-end gap-2 mt-3"><button type="submit" class="btn btn-theme"><i class="bi bi-magic me-1"></i> <span data-key="generate_batch_vouchers">Generate Batch Vouchers</span></button><button type="button" class="btn btn-outline-success" onclick="printVoucherCards()">🖨️ <span data-key="print_voucher_cards">Print Voucher Cards</span></button></div></div></form><div id="voucherGeneratorStatus" class="mt-3" role="status" aria-live="polite"></div></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-collection text-success fs-5"></i> Unused Voucher Batches</div><div class="card-body"><div class="small text-muted mb-3">Generated scratch cards remain available here until claimed. Open any batch to preview or print the remaining unused cards.</div><div id="unusedVoucherBatches"><div class="text-center py-3 text-muted">Loading saved batches...</div></div></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-printer text-success fs-5"></i> <span data-key="printable_voucher_cards">Printable Voucher Cards</span> <span id="voucherBatchCount" class="badge bg-success ms-2">0</span></div><div class="card-body" id="voucherPrintArea"><div class="text-center py-5 text-muted">Generate a voucher batch to preview printable cards.</div></div></div></div></div></section>');
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-4"><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><span data-key="gen_print_vouchers">'+escapeHtml(hotspotTitle('gen_print_vouchers'))+'</span></div><div class="card-body"><form id="voucherGeneratorForm"><div class="row g-3"><div class="col-md-2"><label class="form-label" data-key="quantity">Quantity</label><input id="voucherQuantity" type="number" class="form-control" min="1" max="500" value="10" required></div><div class="col-md-2"><label class="form-label" data-key="user_prefix">User Prefix</label><input id="voucherPrefix" class="form-control" value="FAZ-" maxlength="20"></div><div class="col-md-2"><label class="form-label" data-key="character_length">PIN Length</label><input id="voucherCharLength" type="number" class="form-control" min="4" max="16" value="6" required></div><div class="col-md-4"><label class="form-label" data-key="profile">Existing Hotspot Profile</label><select id="voucherProfile" class="form-select" required><option value="">Loading profiles...</option></select><small id="voucherProfileValidity" class="text-muted">Validity is inherited from the selected profile.</small></div><div class="col-md-2"><label class="form-label" data-key="price">Price</label><input id="voucherPrice" type="number" class="form-control" min="0" step="0.01" value="20" required></div><div class="col-12 d-flex justify-content-end gap-2 mt-3"><button type="submit" class="btn btn-theme"><i class="bi bi-magic me-1"></i> <span data-key="generate_batch_vouchers">Generate Batch Vouchers</span></button><button type="button" class="btn btn-outline-success" onclick="printVoucherCards()">🖨️ <span data-key="print_voucher_cards">Print Voucher Cards</span></button></div></div></form><div id="voucherGeneratorStatus" class="mt-3" role="status" aria-live="polite"></div></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-collection text-success fs-5"></i> Unused Voucher Batches</div><div class="card-body"><div class="small text-muted mb-3">Generated scratch cards remain available here until claimed. Open any batch to preview or print the remaining unused cards.</div><div id="unusedVoucherBatches"><div class="text-center py-3 text-muted">Loading saved batches...</div></div></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-printer text-success fs-5"></i> <span data-key="printable_voucher_cards">Printable Voucher Cards</span> <span id="voucherBatchCount" class="badge bg-success ms-2">0</span></div><div class="card-body"><div class="voucher-template-selector"><label for="adminVoucherTemplate">কার্ডের ডিজাইন</label><select id="adminVoucherTemplate" aria-label="ভাউচার টেমপ্লেট"><option value="basic">Basic</option><option value="standard">Standard</option><option value="pro">Pro</option></select><button type="button" id="saveVoucherTemplate">পছন্দ সংরক্ষণ</button><span class="voucher-template-status" id="voucherTemplateStatus" role="status" aria-live="polite"></span></div><div id="voucherPrintArea"><div class="text-center py-5 text-muted">Generate a voucher batch to preview printable cards.</div></div></div></div></div></div></section>');
             const form=document.getElementById('voucherGeneratorForm');
             const select=document.getElementById('voucherProfile');
             const status=document.getElementById('voucherGeneratorStatus');
+            const templateSelect=document.getElementById('adminVoucherTemplate');const templateStatus=document.getElementById('voucherTemplateStatus');const saveTemplateButton=document.getElementById('saveVoucherTemplate');if(templateSelect){templateSelect.value=currentVoucherTemplate;templateSelect.addEventListener('change',function(){currentVoucherTemplate=['basic','standard','pro'].includes(templateSelect.value)?templateSelect.value:'standard';if(currentVoucherBatch.length)renderVoucherCards(currentVoucherBatch);});}if(saveTemplateButton)saveTemplateButton.addEventListener('click',async function(){saveTemplateButton.disabled=true;if(templateStatus){templateStatus.textContent='সংরক্ষণ হচ্ছে…';templateStatus.style.color='#64748b';}try{const saved=await jsonFetch('/api/settings/update',{method:'POST',body:JSON.stringify({settings:{voucher_template:currentVoucherTemplate}})});currentVoucherTemplate=saved.settings&&saved.settings.voucher_template||currentVoucherTemplate;document.body.dataset.voucherTemplate=currentVoucherTemplate;if(templateSelect)templateSelect.value=currentVoucherTemplate;if(currentVoucherBatch.length)renderVoucherCards(currentVoucherBatch);if(templateStatus){templateStatus.textContent='পছন্দ সংরক্ষিত হয়েছে';templateStatus.style.color='#17634f';}}catch(error){if(templateStatus){templateStatus.textContent=error.message||'সংরক্ষণ করা যায়নি';templateStatus.style.color='#b42318';}}finally{saveTemplateButton.disabled=false;}});
             try {
                 const data=await jsonFetch('/api/hotspot/profiles');
                 const profiles=(data.profiles||[]).filter(function(p){return p.name&&String(p.name).toLowerCase()!=='default';});
@@ -4562,17 +4595,7 @@ window.editHotspotUser=function(username,event){
             }
             if (!button) return;
             const submenu = button.nextElementSibling;
-            const isGeneralSettingsParent = button.classList.contains('general-settings-toggle');
-            const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
-            const isInsideGeneralSettings = /^\/admin\/settings(?:\/|$)/.test(currentPath);
-            const containsCurrentRoute = Boolean(submenu && Array.from(submenu.querySelectorAll('a[href]')).some(link => {
-                try { return new URL(link.getAttribute('href'), window.location.origin).pathname.replace(/\/$/, '') === currentPath; }
-                catch (_) { return false; }
-            }));
-            // Keep the active route's parent expanded so returning to a page never hides its submenu.
-            const isOpen = containsCurrentRoute || (isGeneralSettingsParent && isInsideGeneralSettings)
-                ? true
-                : Boolean(submenu && !submenu.classList.contains('show'));
+            const isOpen = Boolean(submenu && !submenu.classList.contains('show'));
             if (submenu) submenu.classList.toggle('show', isOpen);
             button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             const arrow = button.querySelector('.arrow-icon');
@@ -5201,7 +5224,7 @@ async function deletePlan(id,name){
           }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
         }
         function showGeneralSettingsSection(target) {
-          const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
+          const validTargets = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks', 'automation-call'];
           if (!validTargets.includes(target)) return false;
           document.querySelectorAll('.general-settings-panel').forEach(panel => {
             const key = panel.id.replace('general-settings-panel-', '');
@@ -5214,6 +5237,7 @@ async function deletePlan(id,name){
             loadHotspotWebhookSettings();
             loadGeneralSettings(true);
           }
+          if (target === 'automation-call' && typeof window.initAndroidGatewayAdminPanel === 'function') window.initAndroidGatewayAdminPanel();
           return true;
         }
         window.showGeneralSettingsSection = showGeneralSettingsSection;
@@ -5502,7 +5526,7 @@ async function deletePlan(id,name){
             for(const [id,key] of [['setSmsApiKey','sms_api_key'],['setSmsDeviceToken','sms_device_token'],['smtpPassword','smtp_password']]){const el=document.getElementById(id);if(el)el.value='';}
             document.getElementById('setSmsApiKeyHint').textContent=s.sms_api_key_configured?'API key saved. Leave blank to retain it.':'No API key configured.';
             document.getElementById('setSmsDeviceTokenHint').textContent=s.sms_device_token_configured?'Gateway token saved. Leave blank to retain it.':'No gateway token configured.';
-            
+
             document.getElementById('smtpPasswordHint').textContent=s.smtp_password_configured?'SMTP password saved. Leave blank to retain it.':'No SMTP password configured.';
             renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
             renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
@@ -5514,8 +5538,10 @@ async function deletePlan(id,name){
         async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
         document.getElementById('setSmsMode')?.addEventListener('change',()=>{toggleSmsProviderFields();if(document.getElementById('setSmsMode').value==='provider_preset')document.getElementById('smsProviderPreset')?.dispatchEvent(new Event('change'));});
         function toggleEmailProviderFields(){const smtp=document.getElementById('emailSmtpFields');if(smtp)smtp.style.display='';}
-        document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}}); 
-        document.getElementById('systemBillingForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({billing_cycle_type:document.getElementById('setBillingCycle').value,grace_period_days:document.getElementById('setGraceDays').value,expiry_action:document.querySelector('input[name="setExpiryAction"]:checked')?.value||'quarantine'},'systemBillingSaveBtn','systemBillingResult');}catch(_){}}); 
+        async function uploadBrandImage(kind,inputId,previewId){const file=document.getElementById(inputId)?.files?.[0];if(!file)return generalSettingsResult('systemBrandResult','Choose an image first.',false);const fd=new FormData();fd.append('image',file);try{const response=await fetch('/api/settings/brand-assets/'+kind,{method:'POST',body:fd,credentials:'same-origin'});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||'Upload failed.');const field=document.getElementById(kind==='logo'?'setLogoUrl':null);if(field)field.value=data.url;const preview=document.getElementById(previewId);if(preview){preview.src=data.url+'?v='+Date.now();preview.style.display='';}if(kind==='logo')document.querySelectorAll('.admin-topbar-brand img').forEach(img=>img.src=data.url);if(kind==='avatar'){const user=document.querySelector('.admin-topbar-user');if(user){const old=user.querySelector('img');if(old)old.src=data.url;else{const img=document.createElement('img');img.src=data.url;img.alt='Admin profile';img.className='rounded-circle';img.style.cssText='width:30px;height:30px;object-fit:cover';user.querySelector('.small')?.prepend(img);}}}generalSettingsResult('systemBrandResult','Image uploaded. Save brand settings to apply it throughout the website.',true);}catch(error){generalSettingsResult('systemBrandResult',error.message||'Image upload failed.',false);}}
+document.getElementById('setLogoUpload')?.addEventListener('click',()=>uploadBrandImage('logo','setLogoFile','setLogoPreview'));document.getElementById('setAvatarUpload')?.addEventListener('click',()=>uploadBrandImage('avatar','setAvatarFile','setAvatarPreview'));
+document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}});
+        document.getElementById('systemBillingForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({billing_cycle_type:document.getElementById('setBillingCycle').value,grace_period_days:document.getElementById('setGraceDays').value,expiry_action:document.querySelector('input[name="setExpiryAction"]:checked')?.value||'quarantine'},'systemBillingSaveBtn','systemBillingResult');}catch(_){}});
         function collectNotificationPayload(){
           const mode=document.getElementById('setSmsMode').value;
           const payload={
@@ -5526,12 +5552,12 @@ async function deletePlan(id,name){
             sms_device_http_method:document.getElementById('smsDeviceMethod').value,sms_device_param_mapping:JSON.stringify(collectNotificationMapping('smsDeviceMappingRows')),
             notification_channel_sms_enabled:document.getElementById('notifySmsEnabled').checked,
             notification_channel_whatsapp_enabled:document.getElementById('notifyWhatsappEnabled').checked,
-            
-            
+
+
             notification_channel_email_enabled:document.getElementById('notifyEmailEnabled').checked,
             email_provider_mode:'smtp',
             smtp_host:document.getElementById('smtpHost').value,smtp_port:document.getElementById('smtpPort').value,smtp_secure:document.getElementById('smtpSecure').checked,smtp_username:document.getElementById('smtpUsername').value,email_from_name:document.getElementById('emailFromName').value,email_from_address:document.getElementById('emailFromAddress').value,
-            
+
           };
           document.querySelectorAll('.notify-rule').forEach(el=>{payload['notification_rule_'+el.dataset.type+'_'+el.dataset.event+'_'+el.dataset.channel+'_enabled']=el.checked;});
           const apiKey=document.getElementById('setSmsApiKey').value,deviceToken=document.getElementById('setSmsDeviceToken').value,smtpPassword=document.getElementById('smtpPassword').value;
@@ -5641,7 +5667,7 @@ async function deletePlan(id,name){
         document.getElementById('smsProviderPreset')?.addEventListener('change',()=>{const p=document.getElementById('smsProviderPreset').value;const url=document.getElementById('setSmsApiUrl'),method=document.getElementById('setSmsApiMethod');const presetUrls=['https://api.greenweb.com.bd/api.php','https://api.sms.net.bd/sendsms','https://msg.elitbuzz-bd.com/smsapi'];const defaults={greenweb:'https://api.greenweb.com.bd/api.php',alpha_sms:'https://api.sms.net.bd/sendsms',elitbuzz:'https://msg.elitbuzz-bd.com/smsapi',custom:''};if(url&&(!url.value||presetUrls.includes(url.value)))url.value=defaults[p]||'';if(method&&p!=='custom')method.value='POST_FORM';const mapping=p==='greenweb'?{token:'{token}',to:'{to}',message:'{message}',senderid:'{sender_id}'}:p==='alpha_sms'?{api_key:'{token}',to:'{to}',msg:'{message}',sender_id:'{sender_id}'}:p==='elitbuzz'?{api_key:'{token}',type:'text',contacts:'{to}',msg:'{message}',senderid:'{sender_id}'}:{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'};renderNotificationMapping('smsMappingRows',mapping);});
         document.getElementById('smsMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsMappingRows'));
         document.getElementById('smsDeviceMappingAdd')?.addEventListener('click',()=>addNotificationMapping('smsDeviceMappingRows'));
-        document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}}); 
+        document.getElementById('systemSmsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveNotificationHub();}catch(_){}});
         document.getElementById('notifySmsTestBtn')?.addEventListener('click',()=>runNotificationTest('sms'));
         document.getElementById('whatsappConnectBtn')?.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;whatsappPairingPending=true;whatsappConnectedToastShown=false;startWhatsAppStatusPolling();try{const r=await fetch('/api/settings/notifications/whatsapp/connect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'WhatsApp connection failed.');await refreshWhatsAppStatus();}catch(error){stopWhatsAppStatusPolling();document.getElementById('whatsappStatusMessage').textContent=error.message||'WhatsApp connection failed.';}finally{b.disabled=false;}});
         document.getElementById('whatsappStatusBtn')?.addEventListener('click',async e=>{
@@ -5668,7 +5694,7 @@ async function deletePlan(id,name){
           finally{button.disabled=false;await refreshWhatsAppStatus();}
         });
         document.getElementById('whatsappUnlinkBtn')?.addEventListener('click',async e=>{if(!window.confirm('Unlink WhatsApp and remove the saved local session?'))return;const b=e.currentTarget;b.disabled=true;try{const r=await fetch('/api/settings/notifications/whatsapp/unlink',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Unable to unlink WhatsApp.');await refreshWhatsAppStatus();}catch(error){document.getElementById('whatsappStatusMessage').textContent=error.message||'Unlink failed.';}finally{b.disabled=false;}});
- 
+
 
         let hotspotWebhookSettingsLoaded=false;
         function renderWebhookEndpointDisplay(){
@@ -5759,7 +5785,7 @@ async function deletePlan(id,name){
             currentPaymentChannel = channel || '';
             if (target === 'view-main-dashboard') {
                 void refreshDashboard();
-                startTrafficPolling();
+
             } else {
                 if (trafficTimer) {
                     clearInterval(trafficTimer);
@@ -6072,7 +6098,33 @@ async function deletePlan(id,name){
             const content = root.querySelector('#pppoeMonitorContent');
             try {
                 const data = await window.jsonFetch('/api/pppoe/active');
+                if (!data || data.success === false) throw new Error(data?.message || data?.error || 'Unable to load PPPoE status.');
                 const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+                const accountRows = Array.isArray(data.users) ? data.users : sessions.map(session => ({
+                    username: session.username,
+                    online: true,
+                    session
+                }));
+                const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
+                const sessionByUsername = new Map();
+                sessions.forEach(session => {
+                    const username = normalizeUsername(session?.username || session?.name || session?.user);
+                    if (username && !sessionByUsername.has(username)) sessionByUsername.set(username, session);
+                });
+                const displayedUsernames = new Set();
+                const displayUsers = accountRows.map(account => {
+                    const username = normalizeUsername(account?.username);
+                    if (username) displayedUsernames.add(username);
+                    const session = account?.session || sessionByUsername.get(username) || null;
+                    return { ...account, session, online: Boolean(account?.online || session) };
+                });
+                // Keep RouterOS sessions visible even if their username has not yet been imported into the panel.
+                sessions.forEach(session => {
+                    const username = normalizeUsername(session?.username || session?.name || session?.user);
+                    if (!username || displayedUsernames.has(username)) return;
+                    displayedUsernames.add(username);
+                    displayUsers.push({ username: session.username || session.name || session.user, online: true, session, source: 'router-only' });
+                });
                 const toBig = value => { try { const s = String(value ?? '0').trim(); return /^\d+$/.test(s) ? BigInt(s) : 0n; } catch (_) { return 0n; } };
                 const formatBytes = value => {
                     const n = typeof value === 'bigint' ? value : toBig(value);
@@ -6083,23 +6135,43 @@ async function deletePlan(id,name){
                 };
                 const totalIn = sessions.reduce((sum, item) => sum + toBig(item.bytesIn), 0n);
                 const totalOut = sessions.reduce((sum, item) => sum + toBig(item.bytesOut), 0n);
-                const source = data.source === 'mikrotik-live' ? 'MikroTik live' : data.source === 'recent-router-snapshot' ? 'Recent snapshot · fallback' : 'Source not specified';
-                const sourceClass = data.source === 'mikrotik-live' ? 'text-bg-success' : 'text-bg-warning';
+                const onlineCount = displayUsers.filter(user => user.online).length;
+                const source = data.liveSync === 'ok' || data.source === 'mikrotik-live'
+                    ? 'MikroTik live · ' + Number(data.reachableRouterCount ?? data.routerCount ?? 1) + ' router(s)'
+                    : data.liveSync === 'partial' || data.source === 'mikrotik-partial'
+                        ? 'Partial router data · ' + Number(data.reachableRouterCount || 0) + '/' + Number(data.routerCount || 0) + ' responding'
+                        : data.liveSync === 'unavailable' || data.source === 'mikrotik-unavailable'
+                            ? 'Router data unavailable · database accounts shown Offline'
+                            : data.source === 'recent-router-snapshot' ? 'Recent snapshot · fallback' : 'Source not specified';
+                const sourceClass = data.liveSync === 'ok' || data.source === 'mikrotik-live'
+                    ? 'text-bg-success'
+                    : data.liveSync === 'unavailable' || data.source === 'mikrotik-unavailable'
+                        ? 'text-bg-danger' : 'text-bg-warning';
                 const summary = isUsage
                     ? '<div class="row g-3 mb-4"><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Active sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">RX · Downloaded this session</div><div class="h4 fw-bold mb-0 text-success">' + formatBytes(totalIn) + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">TX · Uploaded this session</div><div class="h4 fw-bold mb-0 text-primary">' + formatBytes(totalOut) + '</div></div></div></div>'
-                    : '<div class="row g-3 mb-4"><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Online PPPoE sessions</div><div class="h3 fw-bold mb-0">' + sessions.length + '</div></div></div><div class="col-12 col-sm-6"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Data source</div><div class="mt-1"><span class="badge ' + sourceClass + '">' + escapeHtml(source) + '</span></div></div></div></div>';
-                const rows = sessions.map(session => {
-                    const user = escapeHtml(session.username || '—');
-                    const ip = escapeHtml(session.address || '—');
-                    const uptime = escapeHtml(session.uptime || '—');
-                    const service = escapeHtml(session.service || 'PPPoE');
-                    const caller = escapeHtml(session.callerId || '—');
-                    return '<tr><td class="fw-semibold text-break">' + user + '</td><td class="text-nowrap">' + ip + '</td><td class="text-nowrap">' + uptime + '</td><td>' + service + '</td><td class="text-break">' + caller + '</td>' + (isUsage ? '<td class="text-nowrap">' + formatBytes(session.bytesIn) + '</td><td class="text-nowrap">' + formatBytes(session.bytesOut) + '</td>' : '') + '</tr>';
+                    : '<div class="row g-3 mb-4"><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Online accounts</div><div class="h3 fw-bold mb-0">' + onlineCount + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Database accounts</div><div class="h3 fw-bold mb-0">' + displayUsers.length + '</div></div></div><div class="col-12 col-sm-4"><div class="border rounded-4 p-3 h-100"><div class="small text-muted">Data source</div><div class="mt-1"><span class="badge ' + sourceClass + '">' + escapeHtml(source) + '</span></div></div></div></div>';
+                const rows = displayUsers.map(account => {
+                    const session = account.session || null;
+                    const user = escapeHtml(account.username || '—');
+                    const ip = escapeHtml(session?.address || account.session_ip || '—');
+                    const uptime = escapeHtml(session?.uptime || account.session_uptime || '—');
+                    const service = escapeHtml(session?.service || 'PPPoE');
+                    const caller = escapeHtml(session?.callerId || session?.caller_id || account.session_caller_id || '—');
+                    const status = account.online
+                        ? '<span class="badge text-bg-success">Online</span>'
+                        : '<span class="badge text-bg-danger">Offline</span>';
+                    return '<tr><td class="fw-semibold text-break">' + user + '</td><td class="text-nowrap">' + ip + '</td><td class="text-nowrap">' + uptime + '</td><td>' + service + '</td><td class="text-break">' + caller + '</td><td>' + status + '</td>' + (isUsage ? '<td class="text-nowrap">' + (session ? formatBytes(session.bytesIn) : '—') + '</td><td class="text-nowrap">' + (session ? formatBytes(session.bytesOut) : '—') + '</td>' : '') + '</tr>';
                 }).join('');
-                content.innerHTML = summary + (data.source === 'recent-router-snapshot' ? '<div class="alert alert-warning small">MikroTik live query was unavailable. These rows came from a recent stored snapshot and may not reflect the exact current state.</div>' : '') +
-                    '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h3 class="h6 fw-bold mb-0">' + (isUsage ? 'Session traffic counters' : 'Online sessions') + '</h3><span class="small text-muted">Source: ' + escapeHtml(source) + '</span></div>' +
-                    '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>IP address</th><th>Uptime</th><th>Service</th><th>Caller ID</th>' + (isUsage ? '<th>RX · Download</th><th>TX · Upload</th>' : '') + '</tr></thead><tbody>' +
-                    (sessions.length ? rows : '<tr><td colspan="' + (isUsage ? 7 : 5) + '" class="text-center text-muted py-4">No active PPPoE sessions were returned.</td></tr>') +
+                const sourceWarning = data.liveSync === 'partial'
+                    ? '<div class="alert alert-warning small">Some routers could not be reached. Accounts without a session from a reachable router are shown Offline; their actual state may be unknown until those routers reconnect.</div>'
+                    : data.liveSync === 'unavailable' || data.source === 'mikrotik-unavailable'
+                        ? '<div class="alert alert-danger small">Router live status is unavailable. All database accounts remain visible and are shown Offline until RouterOS can be checked.</div>'
+                        : data.source === 'recent-router-snapshot'
+                            ? '<div class="alert alert-warning small">MikroTik live query was unavailable. These rows came from a recent stored snapshot and may not reflect the exact current state.</div>' : '';
+                content.innerHTML = summary + sourceWarning +
+                    '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h3 class="h6 fw-bold mb-0">' + (isUsage ? 'Session traffic by account' : 'PPPoE account status') + '</h3><span class="small text-muted">Source: ' + escapeHtml(source) + '</span></div>' +
+                    '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>IP address</th><th>Uptime</th><th>Service</th><th>Caller ID</th><th>Status</th>' + (isUsage ? '<th>RX · Download</th><th>TX · Upload</th>' : '') + '</tr></thead><tbody>' +
+                    (displayUsers.length ? rows : '<tr><td colspan="' + (isUsage ? 8 : 6) + '" class="text-center text-muted py-4">No PPPoE accounts are stored in the database.</td></tr>') +
                     '</tbody></table></div>';
                 return true;
             } catch (error) {
@@ -6776,7 +6848,7 @@ async function deletePlan(id,name){
 </head>
 <body>
     <article class="voucher">
-        <header class="head"><h1>FAZ NETWORK</h1><p>Fast Network · Hotspot Voucher</p></header>
+        <header class="head"><% if(brandSettings&&brandSettings.logo_url){ %><img src="<%= brandSettings.logo_url %>" alt="" style="max-height:38px;max-width:160px;object-fit:contain"><% } %><h1><%= brandSettings.company_name||"FAZ NETWORK" %></h1><p>Fast Network · Hotspot Voucher</p></header>
         <section class="content">
             <div class="label">Voucher PIN</div>
             <div class="pin">${escapeHtml(pin)}</div>
@@ -6785,7 +6857,7 @@ async function deletePlan(id,name){
             <div class="row"><span class="label">Paid:</span> <strong>৳${escapeHtml(amount)}</strong></div>
             <div class="row"><span class="label">TrxID:</span> ${escapeHtml(receiptTrx)}</div>
         </section>
-        <footer class="foot">Keep this PIN secure. Connect to FAZ NETWORK Hotspot and enter the voucher PIN.</footer>
+        <footer class="foot">Keep this PIN secure. Connect to <%= brandSettings.company_name||"FAZ NETWORK" %> Hotspot and enter the voucher PIN.</footer>
     </article>
     <script>window.addEventListener("load",function(){window.print()});<\/script>
 </body>
@@ -7429,6 +7501,8 @@ async function deletePlan(id,name){
                                     <tr>
                                         <th class="ps-3">#</th>
                                         <th>Customer</th>
+                                        <th>POP</th>
+                                        <th>Reseller</th>
                                         <th>PPPoE Username</th>
                                         <th>Package / Profile</th>
                                         <th>Connection</th>
@@ -7438,7 +7512,7 @@ async function deletePlan(id,name){
                                     </tr>
                                 </thead>
                                 <tbody id="customerFilterBody">
-                                    ${visibleUsers.length ? visibleUsers.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                    ${visibleUsers.length ? visibleUsers.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="10" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
@@ -7511,7 +7585,9 @@ async function deletePlan(id,name){
                 '<td class="ps-3 px-4 py-4 customer-serial-cell"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
                 '<td class="customer-identity-cell px-4 py-4"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
                     '<a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link fw-semibold text-decoration-none d-inline-flex align-items-center" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a>' +
-                    '<div class="customer-phone mt-1"><i class="bi bi-telephone-fill me-1"></i>' + escapeHtml(metadata.displayPhone) + '</div>' + networkBadges + '</div></div></td>' +
+                    '<div class="customer-phone mt-1"><i class="bi bi-telephone-fill me-1"></i>' + escapeHtml(metadata.displayPhone) + '</div></div></div></td>' +
+                '<td class="px-3 py-4">' + escapeHtml(popName) + '</td>' +
+                '<td class="px-3 py-4">' + escapeHtml(resellerName) + '</td>' +
                 '<td class="customer-pppoe-cell px-4 py-4"><span class="customer-username" title="' + escapeHtml(user.username || '') + '"><i class="bi bi-key-fill me-1 text-secondary"></i>' + escapeHtml(user.username || '-') + '</span></td>' +
                 '<td class="customer-package-cell px-4 py-4"><span class="customer-package"><i class="bi bi-box-seam me-1"></i>' + escapeHtml(user.package_name || user.profile || 'N/A') + '</span></td>' +
                 '<td class="customer-connection-cell px-4 py-4"><div class="customer-connection-value">' + escapeHtml(ip) + '</div><div class="customer-connection-meta"><i class="bi bi-broadcast-pin me-1"></i>' + escapeHtml(caller) + '</div></td>' +
@@ -7524,7 +7600,7 @@ async function deletePlan(id,name){
                     '<button type="button" class="btn btn-sm btn-outline-primary px-2 py-1 action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" aria-label="Edit ' + escapeHtml(metadata.displayName || user.username || 'customer') + '" ><i class="bi bi-pencil-square"></i></button>' +
                     '<button type="button" class="btn btn-sm btn-outline-danger px-2 py-1 action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>' +
                 '</div></td>' +
-                '<td class="mobile-customer-card-cell" colspan="8">' +
+                '<td class="mobile-customer-card-cell" colspan="10">' +
                   '<div class="mc-row mc-head"><span class="mc-avatar">' + escapeHtml(initials) + '</span><div class="mc-identity"><a href="/admin/customers/' + encodeURIComponent(user.username || customerId) + '" class="customer-profile-link mc-name fw-bold text-decoration-none" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' + escapeHtml(metadata.displayName) + '</a><a class="mc-call mc-call-inline" href="tel:' + escapeHtml(metadata.displayPhone || '') + '" aria-label="Call ' + escapeHtml(metadata.displayName || 'customer') + '"><i class="bi bi-telephone-fill"></i></a><a class="mc-phone" href="tel:' + escapeHtml(metadata.displayPhone || '') + '"><i class="bi bi-telephone-fill"></i> ' + escapeHtml(metadata.displayPhone || '-') + '</a>' + networkBadges + '</div><div class="mc-dock"><span class="mc-live ' + (networkStatus.online ? 'online' : 'offline') + '"><i></i>' + escapeHtml(networkStatus.online ? (user.session_uptime || 'Online') : 'Router Offline') + '</span><span class="mc-package">⚡ ' + escapeHtml(user.package_name || user.profile || 'N/A') + '</span></div></div>' +
                   '<div class="mc-telemetry-grid"><div class="mc-telemetry-item"><span>🔑 PPPoE</span><code>' + escapeHtml(user.username || '-') + '</code></div><div class="mc-telemetry-item"><span>🌐 IP</span><code>' + escapeHtml(ip || 'Dynamic') + '</code></div><div class="mc-telemetry-item mc-mac"><span>MAC</span><code>' + escapeHtml(user.mac || user.router_mac || user.routerMac || caller || '--') + '</code><span class="mc-session-status ' + (networkStatus.online ? 'is-online' : 'is-offline') + '"><i></i>' + escapeHtml(networkStatus.online ? 'ROUTER ONLINE' : 'ROUTER OFFLINE') + '</span></div></div>' +
                   '<div class="mc-row mc-foot"><div class="mc-validity"><span>📅 Exp: ' + escapeHtml(validityLabel || '—') + '</span>' + (daysLabel ? '<small class="' + daysClass + '">' + escapeHtml(daysLabel) + '</small>' : '') + '</div><div class="mc-actions">' +
@@ -8451,8 +8527,8 @@ async function deletePlan(id,name){
                     packageProfile: profile,
                     email: String(valueOf('customerEmail')).trim(),
                     whatsappPhone: String(valueOf('customerWhatsappPhone')).trim(),
-                    
-                    
+
+
                     package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
@@ -8911,7 +8987,66 @@ bindDashboardKpiEvents();
 
 const businessCardActions={monthlyIncome:'collection',yearlyIncome:'collection',todayCollection:'collection',outstandingDue:'due',activeHotspot:'hotspot',activePppoe:'pppoe',activePops:'pops',activeResellers:'resellers',activeStaff:'staff',expiringSoon:'expiring',openTickets:'support'};
 const businessCardLabels={collection:'Open collections',due:'Open unpaid customers',hotspot:'Open active Hotspot users',pppoe:'Open PPPoE customers',pops:'Open POP management',resellers:'Open reseller accounts',staff:'Open employee directory',expiring:'View subscribers expiring soon',support:'Open support tickets',online:'View online subscribers',throughput:'Refresh network telemetry',fiber:'Open OLT status'};
-function bindDashboardBusinessCardActions(){const root=document.getElementById('view-main-dashboard');if(!root)return;root.querySelectorAll('.business-kpi').forEach(card=>{const key=card.querySelector('[data-business-kpi]')?.dataset.businessKpi,action=businessCardActions[key];if(!action)return;card.dataset.dashboardAction=action;card.setAttribute('role',key==='activePppoe'?'group':'button');card.tabIndex=0;card.setAttribute('aria-label',(businessCardLabels[action]||'Open dashboard details')+'. '+(card.querySelector('.business-kpi-label')?.textContent||'')+' '+(card.querySelector('.business-kpi-value')?.textContent||''));});const nocActions=['throughput','collection','fiber'],nocIcons=['bi-speedometer2','bi-cash-stack','bi-hdd-network'];root.querySelectorAll('.noc-kpi').forEach((card,index)=>{const action=nocActions[index];if(!action)return;card.dataset.dashboardAction=action;card.setAttribute('role',key==='activePppoe'?'group':'button');card.tabIndex=0;card.setAttribute('aria-label',(businessCardLabels[action]||'Open dashboard details')+'. '+(card.querySelector('.noc-kpi-top')?.textContent||''));const top=card.querySelector('.noc-kpi-top');if(top&&!top.querySelector('.noc-kpi-icon')){const icon=document.createElement('span');icon.className='noc-kpi-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML='<i class="bi '+nocIcons[index]+'"></i>';top.appendChild(icon);}});if(root.dataset.businessActionsBound==='1')return;root.dataset.businessActionsBound='1';const run=async(action)=>{switch(action){case'collection':return window.loadPaymentsSection?.('all','all_payments');case'due':return window.loadCustomerSection?.('due','due_customer');case'hotspot':return window.loadHotspotSection?.('active','active_user');case'pppoe':return window.loadCustomerSection?.('active','active_customer');case'pops':return window.loadPopManagement?.();case'resellers':return window.loadResellerAccess?.();case'staff':return window.loadHRModule?.('employees');case'expiring':await pollNocStats();document.querySelector('#nocExpiringBody')?.closest('.noc-panel')?.scrollIntoView({behavior:'smooth',block:'center'});return true;case'support':return window.loadSupportTickets?.('all');case'throughput':await pollNocStats();document.getElementById('dashboardTrafficCard')?.scrollIntoView({behavior:'smooth',block:'center'});return true;case'fiber':return window.loadOltManagement?.('overview');default:return false;}};root.addEventListener('click',event=>{if(event.target.closest('button,a,input,select,textarea'))return;const card=event.target.closest('[data-dashboard-action]');if(card&&root.contains(card))void run(card.dataset.dashboardAction).catch(error=>console.warn('[Dashboard card action]',error?.message||error));});root.addEventListener('keydown',event=>{if(event.key!=='Enter'&&event.key!==' ')return;const card=event.target.closest('[data-dashboard-action]');if(!card||!root.contains(card)||event.target.closest('button,a,input,select,textarea'))return;event.preventDefault();void run(card.dataset.dashboardAction).catch(error=>console.warn('[Dashboard card action]',error?.message||error));});}
+function bindDashboardBusinessCardActions(){
+  const root=document.getElementById('view-main-dashboard');
+  if(!root)return;
+  root.querySelectorAll('.business-kpi').forEach(card=>{
+    const key=card.querySelector('[data-business-kpi]')?.dataset.businessKpi;
+    const action=businessCardActions[key];
+    if(!action)return;
+    card.dataset.dashboardAction=action;
+    card.setAttribute('role',key==='activePppoe'?'group':'button');
+    card.tabIndex=0;
+    card.setAttribute('aria-label',(businessCardLabels[action]||'Open dashboard details')+'. '+(card.querySelector('.business-kpi-label')?.textContent||'')+' '+(card.querySelector('.business-kpi-value')?.textContent||''));
+  });
+  const nocActions=['collection','fiber'];
+  const nocIcons=['bi-cash-stack','bi-hdd-network'];
+  root.querySelectorAll('.noc-kpi').forEach((card,index)=>{
+    const top=card.querySelector('.noc-kpi-top');
+    if(top&&!top.querySelector('.noc-kpi-icon')){
+      const icon=document.createElement('span');
+      icon.className='noc-kpi-icon';
+      icon.setAttribute('aria-hidden','true');
+      icon.innerHTML='<i class="bi '+nocIcons[index]+'"></i>';
+      top.appendChild(icon);
+    }
+    const action=nocActions[index];
+    if(!action)return;
+    card.dataset.dashboardAction=action;
+    card.setAttribute('role','button');
+    card.tabIndex=0;
+    card.setAttribute('aria-label',(businessCardLabels[action]||'Open dashboard details')+'. '+(top?.textContent||''));
+  });
+  if(root.dataset.businessActionsBound==='1')return;
+  root.dataset.businessActionsBound='1';
+  const run=async action=>{
+    switch(action){
+      case'collection':return window.loadPaymentsSection?.('all','all_payments');
+      case'due':return window.loadCustomerSection?.('due','due_customer');
+      case'hotspot':return window.loadHotspotSection?.('active','active_user');
+      case'pppoe':return window.loadCustomerSection?.('active','active_customer');
+      case'pops':return window.loadPopManagement?.();
+      case'resellers':return window.loadResellerAccess?.();
+      case'staff':return window.loadHRModule?.('employees');
+      case'expiring':await pollNocStats();document.querySelector('#nocExpiringBody')?.closest('.noc-panel')?.scrollIntoView({behavior:'smooth',block:'center'});return true;
+      case'support':return window.loadSupportTickets?.('all');
+      case'fiber':return window.loadOltManagement?.('overview');
+      default:return false;
+    }
+  };
+  root.addEventListener('click',event=>{
+    if(event.target.closest('button,a,input,select,textarea'))return;
+    const card=event.target.closest('[data-dashboard-action]');
+    if(card&&root.contains(card))void run(card.dataset.dashboardAction).catch(error=>console.warn('[Dashboard card action]',error?.message||error));
+  });
+  root.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'&&event.key!==' ')return;
+    const card=event.target.closest('[data-dashboard-action]');
+    if(!card||!root.contains(card)||event.target.closest('button,a,input,select,textarea'))return;
+    event.preventDefault();
+    void run(card.dataset.dashboardAction).catch(error=>console.warn('[Dashboard card action]',error?.message||error));
+  });
+}
 
 async function pollBusinessOverview(){const view=document.getElementById('view-main-dashboard');if(document.hidden||!view||view.style.display==='none')return;const grid=document.getElementById('businessOverviewGrid');if(!grid)return;try{const d=await jsonFetch('/api/dashboard/business-overview',{cache:'no-store',timeout:10000});if(!d||d.success===false)throw new Error(d?.message||'Business metrics unavailable');const f=d.financial||{},c=d.customers||{},i=d.infrastructure||{},o=d.operations||{},money=v=>'৳ '+Number(v||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}),count=v=>Number(v||0).toLocaleString('en-BD');const values={monthlyIncome:money(f.monthlyIncome),yearlyIncome:money(f.yearlyIncome),todayCollection:money(f.todayCollection),outstandingDue:money(f.outstandingDue),activeHotspot:count(c.activeHotspot),activePppoe:count(c.activePppoe),activePops:count(i.activePops),activeResellers:count(i.activeResellers),activeStaff:count(i.activeStaff),expiringSoon:count(o.expiringSoon),openTickets:count(o.openTickets)};Object.entries(values).forEach(([key,value])=>{const node=grid.querySelector('[data-business-kpi="'+key+'"]');if(node)node.textContent=value;});const dueBadge=grid.querySelector('[data-business-badge="outstandingDue"]');if(dueBadge)dueBadge.textContent=count(f.dueAccounts)+' unpaid accounts';const hotspotBadge=grid.querySelector('[data-business-badge="activeHotspot"]');if(hotspotBadge)hotspotBadge.textContent=count(c.activeHotspot)+' active · '+count(c.totalHotspot)+' total';const pppoeBadge=grid.querySelector('[data-business-live="activePppoe"]');if(pppoeBadge)pppoeBadge.textContent=count(c.activePppoe)+' active · '+count(c.totalPppoe)+' total';safeSetText('businessOverviewUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());grid.setAttribute('aria-busy','false');}catch(error){safeSetText('businessOverviewUpdated','Metrics temporarily unavailable');console.warn('[Business Overview]',error.message||error);}}
 
@@ -9247,7 +9382,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     return { view: 'page', page: route.page, channel: route.channel || '' };
                 }
                 if (route.view === 'settings') {
-                    const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks'];
+                    const sections = ['brand', 'billing', 'payments', 'sms', 'hotspot-portal', 'webhooks', 'automation-call'];
                     return { view: 'settings', section: sections.includes(String(route.section || '')) ? String(route.section) : 'brand' };
                 }
                 if (route.view === 'customers') {
@@ -9351,6 +9486,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                     '/admin/settings/sms-alerts': { view: 'settings', section: 'sms' },
                     '/admin/settings/hotspot-portal': { view: 'settings', section: 'hotspot-portal' },
                     '/admin/settings/webhooks': { view: 'settings', section: 'webhooks' },
+                    '/admin/settings/automation-call': { view: 'settings', section: 'automation-call' },
                     '/admin/monitor/usage': { view: 'monitor', mode: 'usage' },
                     '/admin/monitor/online': { view: 'monitor', mode: 'online' },
                     '/admin/network/diagram': { view: 'network-diagram' },
@@ -9405,7 +9541,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
                         payments: '/admin/settings/payment-webhooks',
                         sms: '/admin/settings/sms-alerts',
                         'hotspot-portal': '/admin/settings/hotspot-portal',
-                        webhooks: '/admin/settings/webhooks'
+                        webhooks: '/admin/settings/webhooks',
+                        'automation-call': '/admin/settings/automation-call'
                     };
                     return paths[normalized.section] || paths.brand;
                 }

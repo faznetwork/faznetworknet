@@ -38,25 +38,31 @@ async function runExpiryWarnings(){
         if(!claim.rows.length)continue;
         const claimed=claim.rows[0];
         const channels=['sms','whatsapp'].filter(channel=>['pending','failed'].includes(String(claimed[channel+'_status']||'pending')));
+        let dispatchedOutcomes=null;
         try{
           const result=await dispatch({userType,event:"expiry_warning",to:customer.phone,username,message:"Reminder from FAZ NETWORK: your internet service expires in 2 days. Please renew on time to avoid service interruption.",channels,variables:{name:customer.full_name||username,username,amount:customer.amount,expiry_date:expiry}});
           const outcomes=Object.fromEntries((result.results||[]).map(item=>[item.channel,item.status||'failed']));
+          dispatchedOutcomes=outcomes;
           const smsStatus=outcomes.sms||claimed.sms_status||'pending',whatsappStatus=outcomes.whatsapp||claimed.whatsapp_status||'pending';
           const retryNeeded=[smsStatus,whatsappStatus].some(status=>['pending','failed'].includes(status));
           const exhausted=Number(claimed.attempt_count)>=8&&retryNeeded;
           const terminal=!retryNeeded||exhausted;
           const backoff=WARNING_RETRY_MINUTES[Math.min(Math.max(0,Number(claimed.attempt_count)-1),WARNING_RETRY_MINUTES.length-1)];
-          await db.query(`UPDATE sms_notification_log SET sms_status=$2,whatsapp_status=$3,
-            status=$4,sent_at=CASE WHEN $4 IN ('sent','complete') THEN COALESCE(sent_at,NOW()) ELSE sent_at END,
-            next_attempt_at=CASE WHEN $4='pending' THEN NOW()+($5::text||' minutes')::interval ELSE NULL END,
+          await db.query(`UPDATE sms_notification_log SET sms_status=$2::varchar,whatsapp_status=$3::varchar,
+            status=$4::varchar,sent_at=CASE WHEN $4::varchar='sent' THEN COALESCE(sent_at,NOW()) ELSE sent_at END,
+            next_attempt_at=CASE WHEN $4::varchar='pending' THEN NOW()+make_interval(mins=>$5::int) ELSE NULL END,
             lease_until=NULL WHERE event_key=$1`,[eventKey,smsStatus,whatsappStatus,exhausted?'failed':terminal?(smsStatus==='sent'||whatsappStatus==='sent'?'sent':'complete'):'pending',backoff]);
           if(smsStatus==='sent'||whatsappStatus==='sent')sent++;
         }catch(error){
-          const exhausted=Number(claimed.attempt_count)>=8,backoff=WARNING_RETRY_MINUTES[Math.min(Math.max(0,Number(claimed.attempt_count)-1),WARNING_RETRY_MINUTES.length-1)];
-          await db.query(`UPDATE sms_notification_log SET sms_status=CASE WHEN sms_status IN ('sent','skipped') THEN sms_status ELSE 'failed' END,
-            whatsapp_status=CASE WHEN whatsapp_status IN ('sent','skipped') THEN whatsapp_status ELSE 'failed' END,
-            status=$2,next_attempt_at=CASE WHEN $2='pending' THEN NOW()+($3::text||' minutes')::interval ELSE NULL END,
-            lease_until=NULL WHERE event_key=$1`,[eventKey,exhausted?'failed':'pending',backoff]).catch(()=>{});
+          const smsStatus=dispatchedOutcomes?.sms||(['sent','skipped'].includes(claimed.sms_status)?claimed.sms_status:'failed');
+          const whatsappStatus=dispatchedOutcomes?.whatsapp||(['sent','skipped'].includes(claimed.whatsapp_status)?claimed.whatsapp_status:'failed');
+          const retryNeeded=[smsStatus,whatsappStatus].some(status=>['pending','failed'].includes(status));
+          const exhausted=Number(claimed.attempt_count)>=8&&retryNeeded;
+          const finalStatus=exhausted?'failed':retryNeeded?'pending':(smsStatus==='sent'||whatsappStatus==='sent'?'sent':'complete');
+          const backoff=WARNING_RETRY_MINUTES[Math.min(Math.max(0,Number(claimed.attempt_count)-1),WARNING_RETRY_MINUTES.length-1)];
+          await db.query(`UPDATE sms_notification_log SET sms_status=$2::varchar,whatsapp_status=$3::varchar,
+            status=$4::varchar,next_attempt_at=CASE WHEN $4::varchar='pending' THEN NOW()+make_interval(mins=>$5::int) ELSE NULL END,
+            lease_until=NULL WHERE event_key=$1`,[eventKey,smsStatus,whatsappStatus,finalStatus,backoff]).catch(()=>{});
           console.warn("[Notification Hub] Expiry warning failed for "+username+":",error.message);
         }
       }

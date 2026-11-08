@@ -177,7 +177,7 @@ async function saveMfsAccounts(req,res){
 
 const appSettingsService=require("../services/appSettings");
 const SETTINGS_RULES={
- company_name:{max:160},public_base_url:{url:true,max:500},logo_url:{url:true,max:1000},favicon_url:{url:true,max:1000},
+ company_name:{max:160},public_base_url:{url:true,max:500},logo_url:{pathOrUrl:true,max:1000},favicon_url:{pathOrUrl:true,max:1000},voucher_template:{oneOf:["basic","standard","pro"]},
  support_phone:{phone:true,max:40},whatsapp_number:{phone:true,max:24},office_address:{max:1000},btrc_license_number:{max:200},footer_copyright:{max:300},
  billing_cycle_type:{oneOf:["monthly_1st","rolling_30","same_date_monthly"]},grace_period_days:{numberMin:0,numberMax:7},expiry_action:{oneOf:["quarantine","disable_secret"]},
  personal_payment_webhook_url:{pathOrUrl:true,max:500},personal_payment_webhook_enabled:{bool:true},personal_payment_webhook_secret:{secret:true,max:300},

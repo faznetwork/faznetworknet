@@ -2,17 +2,81 @@
 <%
 const brand=typeof brandSettings!=='undefined'&&brandSettings?brandSettings:{};
 const brandName=String(brand.company_name||'FAZ NETWORK');
+const brandLogo=String(brand.logo_url||'');
+const preferredTemplate=['basic','standard','pro'].includes(brand.voucher_template)?brand.voucher_template:'standard';
 const safeResellerName=String(resellerName||'Reseller');
 const loginHost=String(batch.dnsName||'login.hotspot');
-const formatDate=value=>value?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dhaka',dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—';
+const formatDate=value=>value?new Intl.DateTimeFormat('bn-BD',{timeZone:'Asia/Dhaka',dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—';
 %>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title><%= brandName %> · Voucher Batch <%= batch.batchKey %></title><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');:root{--body-font:Inter,Arial,sans-serif;--heading-font:Outfit,Inter,sans-serif;font-family:var(--body-font);color:#0f172a}*{box-sizing:border-box}body{margin:0;background:#f1f5f9;padding:22px}.toolbar{max-width:1200px;margin:0 auto 16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.toolbar a,.toolbar button{border:0;border-radius:8px;padding:10px 14px;text-decoration:none;font-weight:700;cursor:pointer;background:#e2e8f0;color:#0f172a}.toolbar button{background:#166534;color:#fff}.sheet{max-width:1200px;margin:auto;background:#fff;padding:26px;border:1px solid #e2e8f0;border-radius:14px}.heading{display:flex;justify-content:space-between;gap:18px;border-bottom:2px solid #166534;padding-bottom:14px;margin-bottom:16px}.brand{font-size:20px;font-weight:800;color:#166534}.muted{font-size:11px;color:#64748b}h1{font-family:var(--heading-font);font-size:20px;margin:5px 0}.meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.meta div{background:#f8fafc;border:1px solid #e2e8f0;padding:9px;border-radius:7px}.meta small{display:block;color:#64748b;font-size:9px;text-transform:uppercase;font-weight:700}.meta strong{font-size:12px;overflow-wrap:anywhere;word-break:break-word}.voucher-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.voucher{display:grid;grid-template-columns:minmax(56px,72px) minmax(0,1fr);align-items:center;gap:10px;min-width:0;border:1px dashed #64748b;border-radius:8px;padding:10px;min-height:130px;break-inside:avoid}.voucher>div:last-child,.voucher-head,.credential,.credential b{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}.qr{width:72px;height:72px;max-width:100%;display:grid;place-items:center}.qr *{display:block;max-width:100%!important;width:100%!important;height:auto!important}.voucher-head{font-size:10px;font-weight:800;color:#166534;margin-bottom:6px}.credential{font-size:10px;margin:4px 0;overflow-wrap:anywhere}.credential span{display:block;color:#64748b}.credential b{display:block;font-family:Consolas,monospace}.footer{margin-top:18px;padding-top:10px;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px}@media(max-width:760px){body{padding:10px}.sheet{padding:14px}.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.voucher{grid-template-columns:60px minmax(0,1fr);gap:8px;padding:8px}.qr{width:60px;height:60px}.meta{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.heading{flex-direction:column;align-items:flex-start}.heading>div:last-child{text-align:left!important}.voucher-grid{grid-template-columns:minmax(0,1fr)}.voucher{grid-template-columns:64px minmax(0,1fr);gap:10px;padding:10px}.qr{width:64px;height:64px}}
-@page thermal58{size:58mm auto;margin:2mm}@page thermal80{size:80mm auto;margin:3mm}@media print{@page{size:A4;margin:8mm}body{background:#fff;padding:0}.toolbar{display:none}.sheet{max-width:none;border:0;border-radius:0;padding:0}.voucher-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:4mm}.voucher{min-height:30mm;padding:5px;grid-template-columns:52px minmax(0,1fr)}.voucher>div:last-child,.voucher-head,.credential,.credential b{min-width:0;overflow-wrap:anywhere;word-break:break-word}.qr{width:58px;height:58px}.qr img{max-width:58px}body.print-thermal-58{page:thermal58}body.print-thermal-80{page:thermal80}body.print-thermal-58 .heading,body.print-thermal-80 .heading{display:block;text-align:center}body.print-thermal-58 .meta,body.print-thermal-80 .meta{grid-template-columns:1fr 1fr}body.print-thermal-58 .voucher-grid,body.print-thermal-80 .voucher-grid{display:block}body.print-thermal-58 .voucher,body.print-thermal-80 .voucher{display:grid;grid-template-columns:48px minmax(0,1fr);border:0;border-bottom:1px dashed #64748b;min-height:0;padding:7px 0}body.print-thermal-58 .qr{width:46px;height:46px}body.print-thermal-80 .qr{width:58px;height:58px}}
-</style></head><body>
-<nav class="toolbar"><a href="/reseller/vouchers/history">← Voucher history</a><div><button data-print-format="thermal-58" type="button">Print 58mm</button> <button data-print-format="thermal-80" type="button">Print 80mm</button> <button data-print-format="a4" type="button">Print A4 cut sheet</button></div></nav>
-<main class="sheet" data-login-host="<%= loginHost %>"><header class="heading"><div><div class="brand"><%= brandName %></div><div class="muted">Authorized reseller voucher issuance</div><h1>Hotspot Voucher Batch</h1></div><div style="text-align:right"><strong><%= safeResellerName %></strong><div class="muted">Issued: <%= formatDate(batch.createdAt) %></div></div></header>
-<section class="meta"><div><small>Batch reference</small><strong><%= batch.batchKey %></strong></div><div><small>Package / Profile</small><strong><%= batch.packageName||batch.profileKey %></strong></div><div><small>Quantity</small><strong><%= batch.quantity %></strong></div><div><small>Validity</small><strong><%= batch.validity||'As configured' %></strong></div></section>
-<section class="voucher-grid"><% vouchers.forEach((v,i)=>{ %><article class="voucher" data-username="<%= v.username %>" data-password="<%= v.password %>"><div class="qr" id="qr<%= i %>"></div><div><div class="voucher-head"><%= brandName %> · VOUCHER <%= i+1 %></div><div class="credential"><span><%= v.password===v.username?'PIN':'Username / PIN' %></span><b><%= v.username %></b></div><% if(v.password!==v.username){ %><div class="credential"><span>Password</span><b><%= v.password %></b></div><% } %><div class="credential"><span>Validity</span><b><%= v.validity||batch.validity||'—' %></b></div></div></article><% }); %></section><footer class="footer">Keep voucher credentials secure. Voucher lifecycle is managed by FAZ NETWORK.</footer></main>
-<script src="/js/reseller-voucher-print.js?v=20261101-1" defer></script></body></html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title><%= brandName %> · ভাউচার ব্যাচ <%= batch.batchKey %></title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+    :root{font-family:Inter,"Noto Sans Bengali",sans-serif;color:#253348;background:#f3f6f8}
+    *{box-sizing:border-box}
+    body{margin:0;padding:20px;background:#f3f6f8}
+    .toolbar,.template-selector{max-width:1120px;margin:0 auto 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .toolbar{justify-content:space-between}
+    .toolbar a,.toolbar button,.template-selector select{min-height:40px;padding:8px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#334155;font:600 13px Inter,"Noto Sans Bengali",sans-serif;text-decoration:none;cursor:pointer}
+    .toolbar button{background:#17634f;border-color:#17634f;color:#fff}
+    .template-selector label{font-size:13px;font-weight:600;color:#334155}
+    .template-selector select{min-width:150px;font:500 13px Inter,"Noto Sans Bengali",sans-serif}
+    .sheet{max-width:1120px;margin:auto;padding:22px;border:1px solid #dfe6ed;border-radius:15px;background:#fff;box-shadow:0 8px 24px rgba(25,45,65,.06)}
+    .heading{display:flex;justify-content:space-between;gap:16px;padding-bottom:14px;border-bottom:1px solid #dce4eb}
+    .brand{display:flex;align-items:center;min-height:32px;font-size:17px;font-weight:700;color:#17634f}
+    .brand img{display:block;width:auto;max-width:150px;height:auto;max-height:34px;object-fit:contain;object-position:left center}
+    .muted{font-size:12px;color:#64748b}
+    .heading h1{margin:6px 0 0;font:600 17px Outfit,Inter,"Noto Sans Bengali",sans-serif;letter-spacing:-.01em}
+    .meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0 18px}
+    .meta div{min-width:0;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}
+    .meta small{display:block;margin-bottom:3px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#64748b}
+    .meta strong{display:block;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+    .voucher-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .voucher{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 70px;grid-template-rows:auto minmax(0,1fr) auto;align-items:start;column-gap:10px;min-width:0;min-height:150px;padding:13px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#253348;break-inside:avoid;page-break-inside:avoid;overflow:hidden}
+    .voucher-topline{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid #dbe3eb}
+    .voucher-brand{display:flex;align-items:center;min-width:0;min-height:27px;font-size:11px;font-weight:700;letter-spacing:.035em;overflow-wrap:anywhere}
+    .voucher-logo-frame{display:flex;align-items:center;justify-content:flex-start;min-width:32px;max-width:116px;min-height:30px;padding:2px 5px;border-radius:4px;background:#fff;color:#243348}
+    .voucher-brand img{display:block;width:auto;max-width:106px;height:auto;max-height:26px;object-fit:contain;object-position:left center}
+    .voucher-kind{flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.03em;white-space:nowrap;opacity:.8}
+    .voucher-main{grid-column:1;grid-row:2;min-width:0;align-self:start}
+    .voucher-label{display:block;margin:4px 0 2px;font-size:10px;font-weight:600;line-height:1.4;opacity:.82}
+    .credential{max-width:100%;font:700 15px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.015em;overflow-wrap:anywhere;word-break:break-word}
+    .credential.secondary{font-size:12px}
+    .voucher-details{display:flex;gap:7px 12px;flex-wrap:wrap;margin-top:8px;font-size:10px;line-height:1.45}
+    .voucher-details span{min-width:0;overflow-wrap:anywhere}
+    .voucher-details b{font-weight:700}
+    .voucher-price{display:inline-flex;margin-top:7px;padding:3px 8px;border:1px solid currentColor;border-radius:999px;font-size:11px;font-weight:700}
+    .qr{grid-column:2;grid-row:2;display:grid;place-items:center;align-self:start;width:70px;height:70px;padding:4px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
+    .qr img,.qr canvas{display:block!important;width:62px!important;height:62px!important;max-width:62px!important;max-height:62px!important;object-fit:contain}
+    .qr-placeholder{max-width:62px;text-align:center;font-size:9px;line-height:1.35;color:#475569}
+    .voucher-instruction{grid-column:1/-1;grid-row:3;min-width:0;margin-top:9px;padding-top:7px;border-top:1px solid currentColor;font-size:10px;line-height:1.5;overflow-wrap:anywhere;opacity:.82}
+    .voucher-basic{border-color:#b8c5d3;border-radius:6px;background:#fff!important;color:#253348!important;box-shadow:none}
+    .voucher-basic .voucher-topline{border-color:#dbe3eb}
+    .voucher-standard{border-color:#17634f;background:#17634f!important;color:#fff!important;box-shadow:0 3px 9px rgba(15,23,42,.12);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .voucher-standard .voucher-topline,.voucher-standard .voucher-instruction{border-color:rgba(255,255,255,.42)}
+    .voucher-pro{border-color:#284e70;background:#284e70!important;color:#fff!important;box-shadow:0 4px 11px rgba(15,23,42,.14);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .voucher-pro:before{position:absolute;inset:0 auto 0 0;width:4px;background:#c8a969;content:""}
+    .voucher-pro .voucher-topline,.voucher-pro .voucher-instruction{border-color:rgba(255,255,255,.42)}
+    .voucher-basic .qr,.voucher-standard .qr,.voucher-pro .qr{background:#fff;color:#111}
+    .footer{margin-top:16px;padding-top:9px;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:11px}
+    @media(max-width:900px){.voucher-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sheet{padding:17px}}
+    @media(max-width:580px){body{padding:10px}.sheet{padding:12px}.heading{flex-direction:column}.meta{grid-template-columns:repeat(2,minmax(0,1fr))}.voucher-grid{grid-template-columns:minmax(0,1fr)}.voucher{min-height:140px}}
+    @page thermal58{size:58mm auto;margin:2mm}@page thermal80{size:80mm auto;margin:3mm}
+    @media print{@page{size:A4 portrait;margin:7mm}body{padding:0;background:#fff}.toolbar,.template-selector{display:none!important}.sheet{max-width:none;margin:0;padding:0;border:0;border-radius:0;box-shadow:none}.heading,.meta,.footer{display:none!important}.voucher-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:3.5mm}.voucher{min-height:35mm;padding:3mm;grid-template-columns:minmax(0,1fr) 18mm;column-gap:2mm;border-radius:2mm;box-shadow:none;break-inside:avoid;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}.voucher-topline{margin-bottom:1.5mm;padding-bottom:1.5mm}.voucher-logo-frame{max-width:27mm;min-height:7mm;padding:1mm}.voucher-brand img{max-width:25mm;max-height:5mm}.voucher-kind{font-size:6.5pt}.voucher-label{font-size:7pt}.credential{font-size:10pt}.credential.secondary{font-size:8pt}.voucher-details{gap:4px 7px;font-size:7pt}.voucher-price{font-size:7pt}.voucher-instruction{margin-top:1.5mm;padding-top:1.5mm;font-size:7pt}.qr{width:18mm;height:18mm;padding:1mm}.qr img,.qr canvas{width:16mm!important;height:16mm!important;max-width:16mm!important;max-height:16mm!important}body.print-thermal-58{page:thermal58}body.print-thermal-80{page:thermal80}body.print-thermal-58 .voucher-grid,body.print-thermal-80 .voucher-grid{display:block}body.print-thermal-58 .voucher,body.print-thermal-80 .voucher{grid-template-columns:minmax(0,1fr) 16mm;min-height:0;margin:0 0 2mm;padding:2mm 0;border:0;border-bottom:1px dashed #64748b;border-radius:0;box-shadow:none}body.print-thermal-58 .voucher-logo-frame,body.print-thermal-80 .voucher-logo-frame{max-width:24mm}body.print-thermal-58 .voucher-brand img,body.print-thermal-80 .voucher-brand img{max-width:22mm}body.print-thermal-58 .qr,body.print-thermal-80 .qr{width:16mm;height:16mm}body.print-thermal-58 .qr img,body.print-thermal-58 .qr canvas,body.print-thermal-80 .qr img,body.print-thermal-80 .qr canvas{width:14mm!important;height:14mm!important}}
+  </style>
+</head>
+<body data-template="<%= preferredTemplate %>">
+  <nav class="toolbar"><a href="/reseller/vouchers/history">← ভাউচার ইতিহাস</a><div><button data-print-format="thermal-58" type="button">৫৮ মিমি প্রিন্ট</button> <button data-print-format="thermal-80" type="button">৮০ মিমি প্রিন্ট</button> <button data-print-format="a4" type="button">A4 প্রিন্ট</button></div></nav>
+  <div class="template-selector"><label for="voucherTemplate">কার্ডের ডিজাইন</label><select id="voucherTemplate" aria-label="ভাউচার টেমপ্লেট"><option value="basic">Basic</option><option value="standard">Standard</option><option value="pro">Pro</option></select></div>
+  <main class="sheet" data-login-host="<%= loginHost %>">
+    <header class="heading"><div><div class="brand"><% if(brandLogo){ %><img src="<%= brandLogo %>" alt="<%= brandName %>"><% }else{ %><%= brandName %><% } %></div><div class="muted">হটস্পট অ্যাক্সেস ভাউচার · <%= safeResellerName %></div><h1>ভাউচার ব্যাচ</h1></div><div class="muted">তৈরি: <%= formatDate(batch.createdAt) %></div></header>
+    <section class="meta"><div><small>ব্যাচ রেফারেন্স</small><strong><%= batch.batchKey %></strong></div><div><small>প্যাকেজ / প্রোফাইল</small><strong><%= batch.packageName||batch.profileKey %></strong></div><div><small>পরিমাণ</small><strong><%= batch.quantity %></strong></div><div><small>মেয়াদ</small><strong><%= batch.validity||'নির্ধারিত' %></strong></div></section>
+    <section class="voucher-grid template-<%= preferredTemplate %>"><% vouchers.forEach((v,i)=>{const price=Number(v.price??batch.retailTotal/(batch.quantity||1));%><article class="voucher voucher-<%= preferredTemplate %>"><div class="voucher-topline"><span class="voucher-brand"><% if(brandLogo){ %><span class="voucher-logo-frame"><img src="<%= brandLogo %>" alt="<%= brandName %>"></span><% }else{ %><%= brandName %><% } %></span><span class="voucher-kind">ওয়াই-ফাই ভাউচার · <%= String(i+1).padStart(2,'0') %></span></div><div class="voucher-main"><span class="voucher-label">ইউজারনেম / পিন</span><div class="credential"><%= v.username %></div><% if(v.password!==v.username){ %><span class="voucher-label">পাসওয়ার্ড</span><div class="credential secondary"><%= v.password %></div><% } %><div class="voucher-details"><span>প্যাকেজ <b><%= v.packageName||batch.packageName||batch.profileKey||'—' %></b></span><span>মেয়াদ <b><%= v.validity||batch.validity||'—' %></b></span></div><% if(Number.isFinite(price)&&price>0){ %><span class="voucher-price">৳ <%= price.toFixed(2) %></span><% } %></div><div class="qr"><% if(v.qrDataUrl){ %><img src="<%= v.qrDataUrl %>" alt="ভাউচার QR কোড"><% }else{ %><span class="qr-placeholder">QR তৈরি হয়নি</span><% } %></div><div class="voucher-instruction">FAZ NETWORK ওয়াই-ফাই কানেক্ট করে QR স্ক্যান করুন অথবা পিন দিন।</div></article><% }); %></section>
+    <footer class="footer">ভাউচার তথ্য নিরাপদে রাখুন।</footer>
+  </main>
+  <script src="/js/reseller-voucher-print.js?v=20261101-4" defer></script>
+</body>
+</html>

@@ -9,3 +9,11 @@
 .env
 cloudflared.exe
 clean_data.sql
+
+# PaySync local Android project and generated APK
+/paysync-android-source/
+
+*.zip
+work/
+
+*.zip

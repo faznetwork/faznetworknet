@@ -3,6 +3,8 @@
 const catalogService = require('../services/resellerHotspotCatalogService');
 const issuanceService = require('../services/resellerVoucherIssuanceService');
 const lifecycleService = require('../services/resellerVoucherLifecycleService');
+const appSettingsService = require('../services/appSettings');
+const QRCode = require('qrcode');
 
 function sendError(res, error, operation, resellerId) {
   const databaseCode = /^[0-9A-Z]{5}$/.test(String(error.code || '')) ? String(error.code) : null;
@@ -116,12 +118,27 @@ async function printBatchPage(req, res) {
   try {
     const result = await issuanceService.getBatch(id, req.params.batchKey);
     if (!result) return res.status(404).send('Voucher batch not found.');
+    const brandSettings = await appSettingsService.getBrandSettings();
+    const loginHost = String(result.batch.dnsName || 'login.hotspot').trim();
+    const loginOrigin = /^https?:\/\//i.test(loginHost) ? loginHost : 'http://' + loginHost;
+    const vouchers = await Promise.all(result.vouchers.map(async voucher => {
+      const loginUrl = new URL('/login', loginOrigin);
+      loginUrl.searchParams.set('username', String(voucher.username || ''));
+      loginUrl.searchParams.set('password', String(voucher.password || ''));
+      try {
+        return { ...voucher, qrDataUrl: await QRCode.toDataURL(loginUrl.toString(), { width: 128, margin: 1, errorCorrectionLevel: 'M' }) };
+      } catch (error) {
+        console.error('[Reseller Hotspot] Voucher QR generation failed:', error.message || error);
+        return { ...voucher, qrDataUrl: null };
+      }
+    }));
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.render('reseller-voucher-print', {
       title: 'FAZ NETWORK Reseller Voucher Batch',
       resellerName: req.session.auth?.name || req.session.resellerName || 'Reseller',
+      brandSettings,
       batch: result.batch,
-      vouchers: result.vouchers
+      vouchers
     });
   } catch (error) {
     console.error('[Reseller Hotspot] Printable batch view failed:', {

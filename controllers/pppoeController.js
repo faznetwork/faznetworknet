@@ -23,6 +23,29 @@ function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+async function readGlobalActiveSessions(context) {
+  try {
+    const report = await mikrotikService.getAllActiveSessionsWithStatus();
+    if (!report || !Array.isArray(report.sessions)) {
+      throw new Error("MikroTik returned an invalid multi-router active-session result.");
+    }
+    return report;
+  } catch (error) {
+    console.error(`[PPPoE ${context}] Live router status unavailable; database accounts will be shown Offline.`, {
+      message: error?.message || String(error),
+      code: error?.code || null
+    });
+    return {
+      sessions: [],
+      liveSync: "unavailable",
+      routerCount: 0,
+      reachableRouterCount: 0,
+      failedRouterCount: 0,
+      failedRouters: []
+    };
+  }
+}
+
 function extractExpiryDate(comment) {
   const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/i);
   if (!match) return "";
@@ -300,12 +323,11 @@ async function users(req, res) {
 
     if (filter === "active") {
       conditions.push("u.status = 'active'");
-      conditions.push("(u.expiry_date IS NULL OR u.expiry_date >= (NOW() AT TIME ZONE 'Asia/Dhaka')::date)");
+      conditions.push("(u.expiry_date IS NULL OR u.expiry_date > (NOW() AT TIME ZONE 'Asia/Dhaka')::date)");
       conditions.push("u.disabled = FALSE");
     } else if (filter === "expire") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date");
+      conditions.push("u.expiry_date <= (NOW() AT TIME ZONE 'Asia/Dhaka')::date");
     } else if (filter === "expire_today_yesterday") {
       conditions.push("u.expiry_date IS NOT NULL");
       conditions.push("u.expiry_date BETWEEN ((NOW() AT TIME ZONE 'Asia/Dhaka')::date - INTERVAL '1 day') AND (NOW() AT TIME ZONE 'Asia/Dhaka')::date");
@@ -315,7 +337,7 @@ async function users(req, res) {
     } else if (filter === "new") {
       conditions.push("u.created_at >= NOW() - INTERVAL '7 days'");
     } else if (filter === "due") {
-      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
+      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date <= (NOW() AT TIME ZONE 'Asia/Dhaka')::date) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
     }
 
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
@@ -333,27 +355,10 @@ async function users(req, res) {
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `, params);
 
-    // Use the live RouterOS active-session table for the current online state.
-    // Only use a recent pushed snapshot when the RouterOS read fails.
-    let liveRows;
-    try {
-      liveRows = await mikrotikService.getActiveSessions();
-      if (!Array.isArray(liveRows)) throw new Error("Invalid MikroTik active-session response.");
-    } catch (liveError) {
-      console.warn("[PPPoE API] Live session lookup unavailable:", liveError.message);
-      const snapshot = await db.query(
-        `SELECT username,address,uptime,service,bytes_in AS "bytesIn",
-                bytes_out AS "bytesOut",caller_id AS "callerId",received_at AS "receivedAt"
-         FROM pppoe_live_sessions
-         WHERE received_at >= NOW() - INTERVAL '3 minutes'
-         ORDER BY username ASC`
-      );
-      if (!snapshot.rows.length) {
-        return res.status(503).json({success:false,users:[],profiles:[],code:"LIVE_SESSION_SOURCE_UNAVAILABLE",message:"Live session data is unavailable; customer status was not inferred."});
-      }
-      liveRows = snapshot.rows;
-    }
-    const sessionMap = createActiveSessionMap(liveRows);
+    // Database accounts remain authoritative even when every RouterOS device is unavailable.
+    // Do not promote stale snapshots into current Online state.
+    const sessionReport = await readGlobalActiveSessions("USER LIST");
+    const sessionMap = createActiveSessionMap(sessionReport.sessions);
 
     let users = result.rows.map(user => {
       const session = sessionMap.get(normalizeUsername(user.username));
@@ -376,6 +381,7 @@ async function users(req, res) {
         days_left:billing.daysLeft,
         active: Boolean(session),
         online: Boolean(session),
+        session_status: session ? "Online" : "Offline",
         session: session || null,
         session_ip: session?.address || null,
         session_uptime: session?.uptime || null,
@@ -391,6 +397,11 @@ async function users(req, res) {
       success: true,
       count: users.length,
       filter,
+      liveSync: sessionReport.liveSync,
+      routerCount: sessionReport.routerCount,
+      reachableRouterCount: sessionReport.reachableRouterCount,
+      failedRouterCount: sessionReport.failedRouterCount,
+      failedRouters: sessionReport.failedRouters,
       users
     });
   } catch (error) {
@@ -409,33 +420,45 @@ async function profiles(req, res) {
 
 async function active(req, res) {
   try {
-    // This endpoint drives the Online/Offline customer filters. Query RouterOS
-    // directly first; the pushed snapshot table is only a fallback source.
-    let sessions;
-    let source = "mikrotik-live";
-    try {
-      sessions = await mikrotikService.getActiveSessions();
-      if (!Array.isArray(sessions)) throw new Error("Invalid MikroTik active-session response.");
-    } catch (liveError) {
-      console.warn("[PPPoE ACTIVE] Live RouterOS lookup failed; trying recent snapshot:", liveError.message);
-      const snapshot = await db.query(
-        `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
-                bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
-         FROM pppoe_live_sessions
-         WHERE received_at >= NOW() - INTERVAL '3 minutes'
-         ORDER BY username ASC`
-      );
-      if (!snapshot.rows.length) {
-        return res.status(503).json({
-          success: false,
-          code: "LIVE_SESSION_SOURCE_UNAVAILABLE",
-          message: "MikroTik live sessions are unavailable and no recent snapshot exists. Online/offline status was not inferred."
-        });
-      }
-      sessions = snapshot.rows;
-      source = "recent-router-snapshot";
-    }
-    return res.json({ success: true, count: sessions.length, sessions, source, stale: false });
+    // Query database users first so this endpoint can still render every account
+    // when live RouterOS state is unavailable.
+    const usersResult = await db.query(
+      "SELECT username,profile,phone,disabled,status FROM pppoe_users ORDER BY username ASC"
+    );
+    const sessionReport = await readGlobalActiveSessions("ACTIVE LIST");
+    const sessions = sessionReport.sessions;
+    const sessionMap = createActiveSessionMap(sessions);
+    const users = (usersResult.rows || []).map(user => {
+      const session = sessionMap.get(normalizeUsername(user.username)) || null;
+      return {
+        ...user,
+        online: Boolean(session),
+        active: Boolean(session),
+        session_status: session ? "Online" : "Offline",
+        session: session || null,
+        session_ip: session?.address || null,
+        session_uptime: session?.uptime || null,
+        session_caller_id: session?.callerId || null
+      };
+    });
+    const source = sessionReport.liveSync === "ok"
+      ? "mikrotik-live"
+      : sessionReport.liveSync === "partial"
+        ? "mikrotik-partial"
+        : "mikrotik-unavailable";
+    return res.json({
+      success: true,
+      count: sessions.length,
+      sessions,
+      users,
+      source,
+      liveSync: sessionReport.liveSync,
+      routerCount: sessionReport.routerCount,
+      reachableRouterCount: sessionReport.reachableRouterCount,
+      failedRouterCount: sessionReport.failedRouterCount,
+      failedRouters: sessionReport.failedRouters,
+      stale: false
+    });
   } catch (error) {
     return errorResponse(res, error);
   }

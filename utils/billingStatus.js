@@ -49,7 +49,10 @@ function evaluateCustomerBillingStatus(customer) {
   if (!expDate) return { status: "unpaid", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
 
   const daysLeft = Math.floor((expDate.getTime() - today) / 86400000);
-  if (daysLeft < 0) return { status: "expired", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
+  // Expiration is effective from the start of the expiry date in Bangladesh.
+  // Keep this boundary aligned with jobs/billingCron.js, which expires accounts
+  // when expiration_date <= today's Asia/Dhaka date.
+  if (daysLeft <= 0) return { status: "expired", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
   if (daysLeft <= 3) return { status: "due", badgeClass: "badge bg-warning text-dark", label: `Expiring Soon (${daysLeft}d)`, daysLeft };
   return { status: "paid", badgeClass: "badge bg-success", label: "Paid / Active", daysLeft };
 }

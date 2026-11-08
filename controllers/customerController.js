@@ -137,16 +137,12 @@ function validDateOnly(value) {
   if(!/^\d{2}\/\d{2}\/\d{4}$/.test(raw)&&!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
   return Boolean(normalizeDate(raw));
 }
-function expirationEndOfDay(expirationDate) {
-  const raw = normalizeDate(expirationDate);
-  if (!raw) return null;
-  const expDateObj = new Date(raw + "T23:59:59.999+06:00");
-  return Number.isNaN(expDateObj.getTime()) ? null : expDateObj;
-}
 function dateStatus(expirationDate) {
-  const expDateObj = expirationEndOfDay(expirationDate);
-  if (!expDateObj) return "active";
-  return new Date().getTime() > expDateObj.getTime() ? "expired" : "active";
+  const expiryDate = normalizeDate(expirationDate);
+  if (!expiryDate) return "active";
+  // The billing cron and account dashboard use the expiry date as the first
+  // expired day (00:00 Asia/Dhaka), not as a full extra day of service.
+  return expiryDate <= bangladeshToday() ? "expired" : "active";
 }
 
 function effectiveProfile(profile, expirationDate) {
@@ -1249,7 +1245,7 @@ async function updateCustomer(req,res){
     const profileName=packageDefinition.profileName||requestedProfile,password=clean(body.password||row.password,255);
     const requestedAccountStatus=String(body.accountStatus||"").trim().toLowerCase();
     if(requestedAccountStatus&&!["active","suspended","expired"].includes(requestedAccountStatus))return res.status(400).json({success:false,message:"Account status must be Active, Suspended, or Expired."});
-    if(requestedAccountStatus==="expired"&&dateStatus(expirationDate)!=="expired")return res.status(400).json({success:false,message:"An account can be marked Expired only when its expiry date is before today."});
+    if(requestedAccountStatus==="expired"&&dateStatus(expirationDate)!=="expired")return res.status(400).json({success:false,message:"An account can be marked Expired only when its expiry date is today or earlier."});
     if(requestedAccountStatus==="active"&&dateStatus(expirationDate)==="expired")return res.status(409).json({success:false,message:"This expiry date is in the past. Update the expiry date before reactivating the account."});
     const disabled=requestedAccountStatus?requestedAccountStatus==="suspended":body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";

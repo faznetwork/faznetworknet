@@ -5,7 +5,7 @@
 %>
 <aside class="reseller-sidebar" id="resellerSidebar" aria-label="Reseller navigation">
   <div class="reseller-sidebar-brand">
-    <span class="reseller-brand-mark"><i class="bi bi-diagram-3-fill"></i></span>
+    <span class="reseller-brand-mark"><% if (typeof brandSettings!=='undefined' && brandSettings.logo_url) { %><img src="<%= brandSettings.logo_url %>" alt="" style="width:28px;height:28px;object-fit:contain"><% } else { %><i class="bi bi-diagram-3-fill"></i><% } %></span>
     <span><strong><%= safeBrandName %></strong><small>Reseller Workspace</small></span>
   </div>
   <nav class="reseller-nav">

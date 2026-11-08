@@ -44,3 +44,11 @@ test("portal keeps verified payment, voucher claim and QR scanning contracts",()
  assert.match(script,/submitMikrotikLogin\(result\.username\|\|device\.mac,result\.password\|\|device\.mac,result\.redirect_url\)/);
  assert.doesNotThrow(()=>new vm.Script(script,{filename:"public/login.html"}));
 });
+
+test("Hotspot MFS checkout asks customer name optionally and sends it only when supplied",()=>{
+ const controller=fs.readFileSync(path.join(__dirname,"..","controllers","paymentController.js"),"utf8");
+ assert.match(portal,/id="cust_name"[^>]*maxlength="120" autocomplete="name"/);
+ assert.match(portal,/গ্রাহকের নাম \(ঐচ্ছিক\)/);
+ assert.match(script,/if\(customerName\)payload\.customer_name=customerName/);
+ assert.match(controller,/replace\(\/\[\\u0000-\\u001f\\u007f\]\/g," "\)[\s\S]*slice\(0,120\)\|\|"গ্রাহক"/);
+});

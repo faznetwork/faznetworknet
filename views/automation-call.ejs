@@ -1,0 +1,117 @@
+<div id="general-settings-panel-automation-call" class="general-settings-panel" style="display:none">
+  <style>
+    #general-settings-panel-automation-call .gateway-card { border:1px solid #dce6e3; border-radius:16px; background:#fff; box-shadow:0 8px 24px rgba(17,48,39,.06); }
+    #general-settings-panel-automation-call .gateway-status-dot { width:10px;height:10px;border-radius:50%;display:inline-block;background:#94a3b8; }
+    #general-settings-panel-automation-call .gateway-status-dot.is-online { background:#16a36a;box-shadow:0 0 0 4px #e6f6ee; }
+    #general-settings-panel-automation-call .gateway-status-dot.is-offline { background:#b45353;box-shadow:0 0 0 4px #fbecec; }
+    #general-settings-panel-automation-call .voice-call-card { border-color:#d9e4f4; }
+    #general-settings-panel-automation-call .voice-call-icon { width:42px;height:42px;background:#eaf1fc;color:#315f9d; }
+  </style>
+  <div class="gateway-card mb-3">
+    <div class="p-3 p-md-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="rounded-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:#e8f3ef;color:#176653;font-size:21px"><i class="bi bi-telephone-outbound"></i></div>
+        <div><h2 class="h5 mb-1">Automation Call</h2><p class="text-muted small mb-0">Android phone gateway connection and an admin-triggered SMS check.</p></div>
+      </div>
+      <div class="d-flex align-items-center gap-2 rounded-pill px-3 py-2" style="background:#f5f8f7;border:1px solid #e2ebe8">
+        <span id="androidGatewayStatusDot" class="gateway-status-dot" aria-hidden="true"></span>
+        <span id="androidGatewayStatusText" class="small fw-semibold">Checking gateway…</span>
+        <button id="androidGatewayRefresh" type="button" class="btn btn-sm btn-outline-secondary ms-1" aria-label="Refresh gateway status"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+    <div class="px-3 px-md-4 pb-3 pb-md-4">
+      <div id="androidGatewayConfigNote" class="alert alert-info small mb-0" role="status">Gateway app is not connected. The Android companion app and a device token are required before live delivery is available.</div>
+      <div id="androidGatewayDeviceInfo" class="small text-muted mt-2" hidden></div>
+    </div>
+  </div>
+
+  <div class="gateway-card">
+    <div class="p-3 p-md-4 border-bottom" style="border-color:#edf1ef!important"><h3 class="h6 mb-1">Send a test SMS</h3><p class="small text-muted mb-0">This sends a real message through the connected phone’s SIM when the Android gateway is online.</p></div>
+    <form id="androidGatewayTestForm" class="p-3 p-md-4" autocomplete="off">
+      <div class="row g-3">
+        <div class="col-md-5"><label for="androidGatewayPhone" class="form-label fw-semibold">Bangladesh mobile number</label><input id="androidGatewayPhone" name="phone" class="form-control" inputmode="tel" autocomplete="tel" maxlength="18" placeholder="01XXXXXXXXX" required></div>
+        <div class="col-md-7"><label for="androidGatewayMessage" class="form-label fw-semibold">Message</label><textarea id="androidGatewayMessage" name="message" class="form-control" rows="2" maxlength="500" required>FAZ NETWORK automation gateway test message.</textarea><div class="form-text">Up to 500 characters.</div></div>
+        <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2"><div id="androidGatewayTestResult" class="small" role="status" aria-live="polite"></div><button id="androidGatewaySendTest" class="btn btn-success px-4" type="submit"><i class="bi bi-send me-2"></i>Send test SMS</button></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="gateway-card voice-call-card mt-3">
+    <div class="p-3 p-md-4 border-bottom d-flex align-items-center gap-3" style="border-color:#edf1f8!important">
+      <div class="voice-call-icon rounded-3 d-flex align-items-center justify-content-center"><i class="bi bi-soundwave fs-5"></i></div>
+      <div><h3 class="h6 mb-1">Test AI Voice Call</h3><p class="small text-muted mb-0">Send a text-to-speech script to the connected Android gateway for a live test call.</p></div>
+    </div>
+    <form id="androidGatewayCallForm" class="p-3 p-md-4" autocomplete="off">
+      <div class="row g-3">
+        <div class="col-md-5"><label for="androidGatewayCallPhone" class="form-label fw-semibold">Bangladesh mobile number</label><input id="androidGatewayCallPhone" name="phone" class="form-control" inputmode="tel" autocomplete="tel" maxlength="18" placeholder="01XXXXXXXXX" required></div>
+        <div class="col-md-7"><label for="androidGatewayCallScript" class="form-label fw-semibold">Voice Message / Text-to-Speech Script</label><textarea id="androidGatewayCallScript" name="message" class="form-control" rows="3" maxlength="1000" placeholder="Write what the voice should say…" required></textarea><div class="form-text">Up to 1,000 characters. The Android gateway app must provide the voice playback/TTS behavior.</div></div>
+        <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2"><div id="androidGatewayCallResult" class="small" role="status" aria-live="polite"></div><button id="androidGatewayInitiateCall" class="btn btn-primary px-4" type="submit"><i class="bi bi-telephone-outbound me-2"></i>Initiate Test Call</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+window.initAndroidGatewayAdminPanel = () => {
+  if (window.__androidGatewayAdminBound) return;
+  window.__androidGatewayAdminBound = true;
+  const $ = id => document.getElementById(id);
+  const dot = $('androidGatewayStatusDot'), label = $('androidGatewayStatusText');
+  const note = $('androidGatewayConfigNote'), deviceInfo = $('androidGatewayDeviceInfo');
+  function showStatus(gateway) {
+    if (!dot || !label) return;
+    const connected = gateway?.connected === true;
+    dot.classList.toggle('is-online', connected); dot.classList.toggle('is-offline', !connected);
+    label.textContent = connected ? 'Connected' : 'Disconnected';
+    if (note) {
+      note.className = 'alert small mb-0 ' + (connected ? 'alert-success' : 'alert-info');
+      note.textContent = !gateway?.configured
+        ? 'Server setup is incomplete: configure ANDROID_GATEWAY_TOKEN before pairing an Android gateway.'
+        : connected ? 'Android gateway is online. Test messages are sent only after you submit this form.'
+          : 'Gateway app is not connected. The Android companion app must register with the configured device token.';
+    }
+    if (deviceInfo) {
+      deviceInfo.hidden = !connected;
+      deviceInfo.textContent = connected ? 'Device: ' + (gateway.device?.name || gateway.device?.id || 'Android gateway') + ' · Connected since ' + new Date(gateway.device.connectedAt).toLocaleString() : '';
+    }
+  }
+  async function refreshStatus() {
+    try { const response = await fetch('/api/admin/automation-call/status', { credentials:'same-origin', cache:'no-store' }); const data = await response.json(); if (!response.ok || !data.success) throw new Error(data.message || 'Status request failed.'); showStatus(data.gateway); }
+    catch (_) { if (label) label.textContent = 'Status unavailable'; if (dot) dot.classList.add('is-offline'); }
+  }
+  $('androidGatewayRefresh')?.addEventListener('click', refreshStatus);
+  refreshStatus();
+  if (typeof window.io === 'function') {
+    const socket = window.io('/admin-gateway', { withCredentials:true, reconnection:true, reconnectionDelayMax:10000 });
+    socket.on('gateway_status', showStatus);
+  }
+  $('androidGatewayTestForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = $('androidGatewaySendTest'), result = $('androidGatewayTestResult');
+    if (!button || !result) return;
+    button.disabled = true; result.className = 'small text-muted'; result.textContent = 'Sending request to the gateway…';
+    try {
+      const response = await fetch('/api/admin/automation-call/test-sms', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify({ phone:$('androidGatewayPhone')?.value, message:$('androidGatewayMessage')?.value }), cache:'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.message || 'SMS request failed.');
+      result.className = 'small text-success'; result.textContent = data.message || 'Gateway acknowledged the request.';
+    } catch (error) { result.className = 'small text-danger'; result.textContent = error.message || 'Could not send the test SMS.'; }
+    finally { button.disabled = false; }
+  });
+  $('androidGatewayCallForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const phone = $('androidGatewayCallPhone')?.value, message = $('androidGatewayCallScript')?.value;
+    if (!window.confirm('Initiate a real test call to ' + String(phone || '').trim() + '? The recipient may hear the voice script and the call may incur charges.')) return;
+    const button = $('androidGatewayInitiateCall'), result = $('androidGatewayCallResult');
+    if (!button || !result) return;
+    button.disabled = true; result.className = 'small text-muted'; result.textContent = 'Sending call request to the gateway…';
+    try {
+      const response = await fetch('/api/admin/automation-call/test-call', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify({ phone, message }), cache:'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.message || 'Call request failed.');
+      result.className = 'small text-success'; result.textContent = data.message || 'Gateway acknowledged the test call.';
+    } catch (error) { result.className = 'small text-danger'; result.textContent = error.message || 'Could not initiate the test call.'; }
+    finally { button.disabled = false; }
+  });
+};
+</script>

@@ -82,7 +82,7 @@ exports.businessOverview=async(_req,res)=>{
         FROM customers`),
       db.query(`SELECT COUNT(*) FILTER (WHERE status='active' AND (expires_at IS NULL OR expires_at>NOW()))::int AS active_hotspot,
         COUNT(*)::int AS total_hotspot FROM hotspot_vouchers`),
-      db.query(`SELECT (SELECT COUNT(*)::int FROM pops WHERE status='active') AS active_pops,
+      db.query(`SELECT (SELECT COUNT(*)::int FROM pops WHERE status='active' AND reseller_id IS NOT NULL) AS active_pops,
         (SELECT COUNT(*)::int FROM resellers WHERE status='active') AS active_resellers,
         (SELECT COUNT(*)::int FROM hr_employees WHERE status='active') AS active_staff`),
       db.query(`WITH clock AS (SELECT NOW() AS now_at, (NOW() AT TIME ZONE 'Asia/Dhaka')::date AS today)

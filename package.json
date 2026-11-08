@@ -12,23 +12,23 @@
     "build": "node scripts/verify-build.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "dotenv": "^16.4.7",
-    "cors": "^2.8.5",
-    "ejs": "^3.1.10",
-    "pg": "^8.13.1",
-    "node-routeros": "^1.0.5",
-    "bcryptjs": "^2.4.3",
-    "express-session": "^1.18.2",
-    "connect-pg-simple": "^10.0.0",
-    "nodemailer": "^10.1.0",
-    "net-snmp": "^3.26.0",
     "@whiskeysockets/baileys": "^6.7.18",
-    "qrcode": "^1.5.4",
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.2",
+    "multer": "^2.0.2",
+    "net-snmp": "^3.26.0",
+    "node-routeros": "^1.0.5",
+    "nodemailer": "^10.1.0",
+    "pg": "^8.13.1",
     "pino": "^9.6.0",
-    "multer": "^2.0.2"
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4"
   },
-  "devDependencies": {},
   "engines": {
     "node": ">=20"
   }

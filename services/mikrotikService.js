@@ -1846,6 +1846,68 @@ const runtimePool=new RouterRuntimePool({
   createRuntime:router=>new MikroTikService(String(router.id)),
   maxRuntimes:Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES||"100",10)
 });
+const activeSessionFailureLogAt = new Map();
+const ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS = 60000;
+
+async function getAllActiveSessionsWithStatus() {
+  const database = require("../db");
+  const result = await database.query(
+    "SELECT id,router_name FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC"
+  );
+  const routers = result.rows || [];
+
+  const outcomes = await Promise.all(routers.map(async router => {
+    const routerId = String(router.id);
+    try {
+      const runtime = await runtimePool.getRuntime(router);
+      const sessions = await runtime.getActiveSessions();
+      activeSessionFailureLogAt.delete(routerId);
+      return { router, sessions, reachable: true };
+    } catch (error) {
+      const now = Date.now();
+      const lastLoggedAt = activeSessionFailureLogAt.get(routerId) || 0;
+      if (now - lastLoggedAt >= ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS) {
+        console.warn("[MikroTik Active Sessions] Router session query failed", {
+          routerId,
+          routerName: String(router.router_name || ""),
+          code: error?.code || null,
+          message: error?.message || String(error)
+        });
+        activeSessionFailureLogAt.set(routerId, now);
+      }
+      return { router, sessions: [], reachable: false };
+    }
+  }));
+
+  const reachableRouterCount = outcomes.filter(item => item.reachable).length;
+  const failedRouters = outcomes
+    .filter(item => !item.reachable)
+    .map(item => ({ id: String(item.router.id), name: String(item.router.router_name || "") }));
+  const sessions = outcomes.flatMap(({ router, sessions: rows }) => rows.map(session => ({
+    ...session,
+    routerId: String(router.id),
+    routerName: String(router.router_name || "")
+  })));
+
+  return {
+    sessions,
+    liveSync: routers.length === 0
+      ? "unavailable"
+      : failedRouters.length === 0
+        ? "ok"
+        : reachableRouterCount > 0 ? "partial" : "unavailable",
+    routerCount: routers.length,
+    reachableRouterCount,
+    failedRouterCount: failedRouters.length,
+    failedRouters
+  };
+}
+
+async function getAllActiveSessions() {
+  const result = await getAllActiveSessionsWithStatus();
+  return result.sessions;
+}
+
 async function getMikroTikService(routerId) {
   const database = require("../db");
   const suppliedId = routerId === undefined || routerId === null || String(routerId).trim() === ""
@@ -1865,6 +1927,8 @@ async function getMikroTikService(routerId) {
 }
 const mikrotikService=new Proxy(canonicalRuntime,{
   get(target,property,receiver){
+    if(property==="getActiveSessions"||property==="getAllActiveSessions")return getAllActiveSessions;
+    if(property==="getAllActiveSessionsWithStatus")return getAllActiveSessionsWithStatus;
     if(property==="getMikroTikService")return getMikroTikService;
     if(property==="runtimePool")return runtimePool;
     if(property==="MikroTikService")return MikroTikService;

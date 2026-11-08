@@ -314,6 +314,23 @@ async function acquireSocketOwnership() {
   const pool = typeof db.getPool === "function" ? db.getPool() : null;
   if (!pool || typeof pool.connect !== "function") return;
   const client = await pool.connect();
+  client.on("error", error => {
+    if (socketLockClient !== client) return;
+    socketLockClient = null;
+    socketOwner = false;
+    if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
+    lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
+    const activeSocket = socket;
+    socket = null;
+    if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
+    connection = "error";
+    console.warn("[WhatsApp] Socket ownership lock lost:", error.message);
+    try { client.release(true); } catch (_) {}
+    // pg can emit a second socket error while a heartbeat query is settling
+    // after release. Keep that late event from becoming an unhandled process error.
+    client.on("error", () => {});
+    scheduleReconnect();
+  });
   try {
     await forceClearLegacySocketLock(client);
     let result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
@@ -348,25 +365,10 @@ async function acquireSocketOwnership() {
     if (socketHeartbeatTimer) clearInterval(socketHeartbeatTimer);
     socketHeartbeatTimer = setInterval(() => { heartbeatSocketLease(client); }, SOCKET_HEARTBEAT_MS);
     if (typeof socketHeartbeatTimer.unref === "function") socketHeartbeatTimer.unref();
-    if (typeof client.on === "function") {
-      client.on("error", error => {
-        if (socketLockClient !== client) return;
-        socketLockClient = null;
-        socketOwner = false;
-        if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
-        try { client.release(true); } catch (_) {}
-        lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
-        const activeSocket = socket;
-        socket = null;
-        if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
-        connection = "error";
-        console.warn("[WhatsApp] Socket ownership lock lost:", error.message);
-        scheduleReconnect();
-      });
-    }
   } catch (error) {
     if (socketLockClient !== client) {
       try { client.release(); } catch (_) {}
+      client.on("error", () => {});
     }
     throw error;
   }

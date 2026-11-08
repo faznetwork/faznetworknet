@@ -662,7 +662,7 @@ async function verifyTrx(req,res){
   claimedTransactionId=claim.rows[0].id??tx.id;
   const profileId=String(metadata.id||metadata.profileId||metadata.profile_id||metadata.packageId||metadata.package_id||metadata.packageName||metadata.package_name||metadata.alias||requestedProfile);
   const pendingComment="FAZ|PENDING|PROFILE="+profile.name;
-  const customerName=String(body.customer_name||body.customerName||body.name||"গ্রাহক").trim()||"গ্রাহক";
+  const customerName=String(body.customer_name||body.customerName||body.name||"").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim().slice(0,120)||"গ্রাহক";
   let wasRecharge=false,provisioningVoucher=null;
   await db.withTransaction(async client=>{
    if(phone)await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-phone:"+phone]);
