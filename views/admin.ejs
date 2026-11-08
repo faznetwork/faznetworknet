@@ -2870,12 +2870,17 @@
 
         // Guaranteed Global Fetch Helper
         window.jsonFetch = async function(url, options = {}) {
-            const timeoutMs = options.timeout || 8000;
+            const timeoutMs = Number(options.timeout) > 0 ? Number(options.timeout) : 8000;
+            const silent = options.silent === true;
+            const callerSignal = options.signal;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            const abortFromCaller = () => controller.abort();
+            if (callerSignal?.aborted) controller.abort();
+            else callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
 
             try {
-                const { timeout: _ignoredTimeout, ...fetchOptions } = options;
+                const { timeout: _ignoredTimeout, silent: _ignoredSilent, signal: _ignoredSignal, ...fetchOptions } = options;
                 const res = await fetch(url, {
                     credentials: 'include',
                     headers: {
@@ -2884,10 +2889,8 @@
                         ...(fetchOptions.headers || {})
                     },
                     ...fetchOptions,
-                    signal: fetchOptions.signal || controller.signal
+                    signal: controller.signal
                 });
-
-                clearTimeout(timeoutId);
 
                 if (res.status === 401) {
                     window.location.href = '/login';
@@ -2895,19 +2898,18 @@
                 }
 
                 const contentType = res.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    return await res.json();
-                }
-
+                if (contentType.includes('application/json')) return await res.json();
                 const text = await res.text();
                 return { success: res.ok, data: text };
             } catch (err) {
-                clearTimeout(timeoutId);
-                console.error('[jsonFetch Failed]:', url, err.name === 'AbortError' ? 'Request Timed Out' : err.message);
+                if (!silent) console.error('[jsonFetch Failed]:', url, err.name === 'AbortError' ? 'Request Timed Out' : err.message);
                 return {
                     success: false,
                     message: err.name === 'AbortError' ? 'Request Timed Out' : err.message
                 };
+            } finally {
+                clearTimeout(timeoutId);
+                callerSignal?.removeEventListener('abort', abortFromCaller);
             }
         };
         // Alias for backward compatibility
@@ -4781,18 +4783,24 @@ window.editHotspotUser=function(username,event){
 
                 const routerRows = savedRouters.map(router => {
                     const active = isActive(router);
+                    const savedStatus = String(router.status || '').toLowerCase();
+                    const statusLabel = savedStatus === 'online' ? 'Last check: Online' : savedStatus === 'auth_failed' ? 'Auth failed' : savedStatus === 'offline' ? 'Unreachable' : 'Not tested';
+                    const statusClass = savedStatus === 'online' ? 'text-bg-success' : savedStatus === 'auth_failed' ? 'text-bg-warning' : savedStatus === 'offline' ? 'text-bg-danger' : 'text-bg-secondary';
                     const stateBadge = active
-                        ? '<span class="badge text-bg-success">Active</span>'
-                        : '<span class="badge text-bg-secondary">Inactive</span>';
-                    const gatewayAction = active
-                        ? '<button type="button" class="btn btn-sm btn-outline-success" disabled aria-label="This router is the active gateway"><i class="bi bi-check-circle-fill me-1"></i>Active Gateway</button>'
+                        ? '<span class="badge rounded-pill text-bg-success"><i class="bi bi-broadcast-pin me-1"></i>Primary</span>'
+                        : '<span class="badge rounded-pill text-bg-secondary"><i class="bi bi-hdd-network me-1"></i>Standby</span>';
+                    const activateAction = active
+                        ? '<button type="button" class="btn btn-sm btn-outline-success" disabled aria-label="This router is the active gateway"><i class="bi bi-check-circle-fill me-1"></i>Primary</button>'
                         : '<button type="button" class="btn btn-sm btn-success" data-router-activate="' + esc(router.id) + '"><i class="bi bi-arrow-left-right me-1"></i>Activate</button>';
+                    const deleteAction = active
+                        ? '<button type="button" class="btn btn-sm btn-outline-danger" data-router-delete="' + esc(router.id) + '" disabled title="Activate another router or deactivate this gateway first" aria-label="Cannot delete active gateway"><i class="bi bi-trash3 me-1"></i>Delete</button>'
+                        : '<button type="button" class="btn btn-sm btn-outline-danger" data-router-delete="' + esc(router.id) + '"><i class="bi bi-trash3 me-1"></i>Delete</button>';
                     return '<tr>' +
-                        '<td><strong>' + esc(router.router_name) + '</strong><div class="small text-muted">' + esc(router.identity || router.board_model || 'MikroTik') + '</div></td>' +
-                        '<td><code>' + esc(router.host) + ':' + esc(router.api_port) + '</code><div class="small text-muted">' + esc(router.api_type || 'native_api') + '</div></td>' +
+                        '<td><div class="d-flex align-items-center gap-2"><span class="rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center" style="width:2.25rem;height:2.25rem"><i class="bi bi-router-fill"></i></span><div><strong>' + esc(router.router_name) + '</strong><div class="small text-muted">' + esc(router.identity || 'MikroTik') + (router.board_model ? ' · ' + esc(router.board_model) : '') + '</div></div></div></td>' +
+                        '<td><code class="d-inline-block px-2 py-1 rounded bg-light text-dark">' + esc(router.host) + ':' + esc(router.api_port) + '</code><div class="small text-muted mt-1">' + esc(router.api_type || 'native_api') + '</div></td>' +
                         '<td>' + stateBadge + '</td>' +
-                        '<td><span class="badge ' + (String(router.status || '').toLowerCase() === 'online' ? 'text-bg-success' : 'text-bg-secondary') + '">' + esc(router.status || 'Unknown') + '</span></td>' +
-                        '<td class="text-end text-nowrap"><button type="button" class="btn btn-sm btn-outline-secondary me-1" data-router-edit="' + esc(router.id) + '"><i class="bi bi-pencil-square me-1"></i>Edit</button>' + gatewayAction + '</td>' +
+                        '<td><span data-router-status class="badge rounded-pill ' + statusClass + '">' + esc(statusLabel) + '</span></td>' +
+                        '<td><div class="d-flex flex-wrap justify-content-end gap-1"><button type="button" class="btn btn-sm btn-outline-primary" data-router-test="' + esc(router.id) + '"><i class="bi bi-plug me-1"></i>Test</button>' + activateAction + '<button type="button" class="btn btn-sm btn-outline-secondary" data-router-edit="' + esc(router.id) + '"><i class="bi bi-pencil-square me-1"></i>Edit</button>' + deleteAction + '</div></td>' +
                         '</tr>';
                 }).join('');
 
@@ -4807,7 +4815,7 @@ window.editHotspotUser=function(username,event){
                         '<div class="card border-0 shadow-sm mb-3">' +
                             '<div class="card-header bg-white py-3 d-flex flex-wrap align-items-center gap-2"><strong>Saved MikroTik Gateways</strong><span class="badge text-bg-light">' + savedRouters.length + ' saved</span><span class="small text-muted ms-auto">Exactly one router should be Active.</span></div>' +
                             '<div id="routerLifecycleFeedback" class="px-3 pt-3" role="status" aria-live="polite"></div>' +
-                            '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Router</th><th>API Endpoint</th><th>Gateway</th><th>Connection</th><th class="text-end">Actions</th></tr></thead><tbody>' +
+                            '<div class="table-responsive"><table class="table table-hover align-middle mb-0" style="min-width: 850px"><colgroup><col style="width:28%"><col style="width:21%"><col style="width:14%"><col style="width:16%"><col style="width:21%"></colgroup><thead class="table-light"><tr><th>Router &amp; Identity</th><th>IP &amp; API Port</th><th>Role / Mode</th><th>Connection Status</th><th class="text-end">Actions</th></tr></thead><tbody>' +
                                 (routerRows || '<tr><td colspan="5" class="text-center text-muted py-5">No saved MikroTik routers. Add a router and complete a successful connection test before saving.</td></tr>') +
                             '</tbody></table></div>' +
                         '</div>' +
@@ -4874,6 +4882,74 @@ window.editHotspotUser=function(username,event){
                         const title = document.getElementById('mikrotikAddRouterTitle');
                         if (title) title.textContent = 'Edit MikroTik Router';
                         window.bootstrap.Modal.getOrCreateInstance(modal).show();
+                        return;
+                    }
+
+                    const testButton = event.target.closest('[data-router-test]');
+                    if (testButton) {
+                        const router = savedRouters.find(item => String(item.id) === String(testButton.dataset.routerTest));
+                        if (!router) {
+                            showFeedback('Router is no longer in this list. Refresh and try again.', 'danger');
+                            return;
+                        }
+                        const badge = testButton.closest('tr')?.querySelector('[data-router-status]');
+                        const original = testButton.innerHTML;
+                        testButton.disabled = true;
+                        testButton.setAttribute('aria-busy', 'true');
+                        testButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Testing…';
+                        if (badge) { badge.className = 'badge rounded-pill text-bg-warning'; badge.textContent = 'Testing…'; }
+                        showFeedback('Checking ' + (router.router_name || 'MikroTik') + ' connection…', 'secondary');
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000);
+                        try {
+                            const response = await fetch('/api/mikrotik/devices/' + encodeURIComponent(router.id) + '/test-connection', {
+                                method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal
+                            });
+                            const body = await response.json().catch(() => ({ message: 'The server returned an invalid response.' }));
+                            if (response.ok && body.success === true) {
+                                if (badge) { badge.className = 'badge rounded-pill text-bg-success'; badge.textContent = 'Online · just now'; }
+                                showFeedback(body.message || 'Router connection verified successfully.', 'success');
+                            } else {
+                                const authFailure = body.status === 'auth_failed';
+                                if (badge) { badge.className = 'badge rounded-pill ' + (authFailure ? 'text-bg-warning' : 'text-bg-danger'); badge.textContent = authFailure ? 'Auth failed' : 'Unreachable'; }
+                                showFeedback(body.message || 'Router connection could not be verified.', authFailure ? 'danger' : 'danger');
+                            }
+                        } catch (error) {
+                            if (badge) { badge.className = 'badge rounded-pill text-bg-danger'; badge.textContent = 'Unreachable'; }
+                            showFeedback(error?.name === 'AbortError' ? 'Connection test timed out. Retry when the router endpoint is reachable.' : (error?.message || 'Connection test failed.'), 'danger');
+                        } finally {
+                            clearTimeout(timeoutId);
+                            testButton.disabled = false;
+                            testButton.removeAttribute('aria-busy');
+                            testButton.innerHTML = original;
+                        }
+                        return;
+                    }
+
+                    const deleteButton = event.target.closest('[data-router-delete]');
+                    if (deleteButton) {
+                        const target = savedRouters.find(item => String(item.id) === String(deleteButton.dataset.routerDelete));
+                        if (!target) { showFeedback('Router is no longer in this list. Refresh and try again.', 'danger'); return; }
+                        if (isActive(target)) { showFeedback('The active gateway cannot be deleted. Activate another router or deactivate this gateway first.', 'danger'); return; }
+                        if (!window.confirm('Remove standby router "' + String(target.router_name || 'MikroTik') + '"? The router configuration record will be deleted.')) return;
+                        deleteButton.disabled = true;
+                        deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Removing…';
+                        try {
+                            const response = await fetch('/api/mikrotik/devices/' + encodeURIComponent(target.id), {
+                                method: 'DELETE', credentials: 'same-origin', cache: 'no-store'
+                            });
+                            const body = await response.json().catch(() => ({ message: 'The server returned an invalid response.' }));
+                            if (!response.ok || body.success !== true) throw new Error(body.message || 'Router could not be removed.');
+                            await loadDevices();
+                            const feedbackAfterRefresh = document.getElementById('routerLifecycleFeedback');
+                            if (feedbackAfterRefresh) {
+                                feedbackAfterRefresh.className = 'px-3 pt-3 small text-success';
+                                feedbackAfterRefresh.textContent = body.message || 'Standby router removed.';
+                            }
+                        } catch (error) {
+                            deleteButton.disabled = false;
+                            showFeedback(error.message || 'Router could not be removed.', 'danger');
+                        }
                         return;
                     }
 
@@ -8787,37 +8863,96 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
             }
         }
 
-        async function refreshDashboard() {
+        function isAdminDashboardRoute() {
+            const path = String(window.location.pathname || '').replace(/\\/$/, '') || '/';
+            return path === '/admin' || path === '/admin/dashboard';
+        }
+
+        async function ensureActiveGatewayVerified() {
+            const now = Date.now();
+            if (now < Number(window.__fazGatewayCheckUntil || 0)) return window.__fazGatewayVerified === true;
+            if (window.__fazGatewayCheckPromise) return window.__fazGatewayCheckPromise;
+            window.__fazGatewayCheckPromise = (async () => {
+                const result = await jsonFetch('/api/router/test', { cache: 'no-store', timeout: 12000, silent: true });
+                const verified = result?.success === true && result?.degraded !== true;
+                window.__fazGatewayVerified = verified;
+                window.__fazGatewayCheckUntil = Date.now() + (verified ? 15000 : 5000);
+                return verified;
+            })();
             try {
-                const [users, active, summary] = await Promise.all([
-                    jsonFetch('/api/pppoe/users'),
-                    jsonFetch('/api/pppoe/active'),
-                    jsonFetch('/api/payments/summary')
-                ]);
-                const customerRows = Array.isArray(users.users) ? users.users : null;
-                const sessionRows = Array.isArray(active.sessions) ? active.sessions : (Array.isArray(active.active) ? active.active : null);
-                const usersAvailable = users.success !== false && customerRows !== null;
-                const sessionsAvailable = active.success !== false && sessionRows !== null;
+                return await window.__fazGatewayCheckPromise;
+            } catch (_) {
+                window.__fazGatewayVerified = false;
+                window.__fazGatewayCheckUntil = Date.now() + 5000;
+                return false;
+            } finally {
+                window.__fazGatewayCheckPromise = null;
+            }
+        }
+
+        async function refreshDashboard() {
+            const dashboard = document.getElementById('view-main-dashboard');
+            if (!dashboard || dashboard.style.display === 'none') return;
+            if (!isAdminDashboardRoute()) return;
+            try {
+                const gatewayVerified = await ensureActiveGatewayVerified();
+                const summaryPromise = jsonFetch('/api/payments/summary', { timeout: 10000, silent: true });
+                let users = null;
+                let active = null;
+                let summary;
+                if (gatewayVerified) {
+                    [users, active, summary] = await Promise.all([
+                        jsonFetch('/api/pppoe/users', { timeout: 12000, silent: true }),
+                        jsonFetch('/api/pppoe/active', { timeout: 12000, silent: true }),
+                        summaryPromise
+                    ]);
+                } else {
+                    summary = await summaryPromise;
+                    safeSetText('metricCustomers', '—');
+                    safeSetText('metricSessions', '—');
+                    safeSetText('metricOffline', '—');
+                    safeSetText('metricCpu', '—');
+                    safeSetText('metricRam', '—');
+                    safeSetText('dashboardRouterStatus', 'Unavailable');
+                    safeSetText('dashboardRoundRouterStatus', 'Unavailable');
+                    const status = document.getElementById('dashboardRouterStatus');
+                    if (status) status.className = 'badge bg-secondary ms-auto';
+                }
+                const customerRows = Array.isArray(users?.users) ? users.users : null;
+                const sessionRows = Array.isArray(active?.sessions) ? active.sessions : (Array.isArray(active?.active) ? active.active : null);
+                const usersAvailable = gatewayVerified && users?.success !== false && customerRows !== null;
+                const sessionsAvailable = gatewayVerified && active?.success !== false && sessionRows !== null;
                 safeSetText('metricCustomers', usersAvailable ? customerRows.length : '—');
                 safeSetText('metricSessions', sessionsAvailable ? sessionRows.length : '—');
                 safeSetText('metricOffline', usersAvailable ? customerRows.filter(user => user.online === false || user.active === false).length : '—');
-                safeSetText('metricCollection', '৳' + Number(summary.summary?.today_collection || 0).toFixed(2));
-                const recent = summary.recent || [];
+                safeSetText('metricCollection', '৳' + Number(summary?.summary?.today_collection || 0).toFixed(2));
+                const recent = Array.isArray(summary?.recent) ? summary.recent : [];
                 const recentPaymentsBody = document.getElementById('recentPaymentsBody');
                 if (recentPaymentsBody) {
                     recentPaymentsBody.innerHTML = recent.slice(0,5).map(t =>
                         '<tr><td>' + escapeHtml(t.trx_id) + '</td><td>' + escapeHtml(t.channel) + '</td><td>৳' + Number(t.amount || 0).toFixed(2) + '</td><td><span class="badge ' + (String(t.status || '').toLowerCase() === 'processed' || String(t.status || '').toUpperCase() === 'PAID' ? 'bg-success' : 'bg-warning text-dark') + '">' + escapeHtml(t.status) + '</span></td><td>' + escapeHtml(FazDate.formatDateTime(t.created_at)) + '</td></tr>'
                     ).join('') || '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
                 }
+                if (gatewayVerified) await loadRouterMetrics();
             } catch (error) {
-                console.error('[Dashboard]', error);
+                safeSetText('metricCustomers', '—');
+                safeSetText('metricSessions', '—');
+                safeSetText('metricOffline', '—');
+                console.warn('[Dashboard] Refresh unavailable:', error?.message || error);
             }
-            await loadRouterMetrics();
         }
 
         async function loadRouterMetrics() {
             const dashboard = document.getElementById('view-main-dashboard');
-            if (!dashboard || dashboard.style.display === 'none') return;
+            if (!dashboard || dashboard.style.display === 'none' || !isAdminDashboardRoute()) return;
+            if (!(await ensureActiveGatewayVerified())) {
+                safeSetText('metricCpu', '—');
+                safeSetText('metricRam', '—');
+                safeSetText('dashboardRoundRouterStatus', 'Unavailable');
+                const status = document.getElementById('dashboardRouterStatus');
+                if (status) { status.className = 'badge bg-secondary ms-auto'; status.textContent = 'Unavailable'; }
+                return;
+            }
             try {
                 const data = await jsonFetch('/api/router/resources');
                 const r = data.resources || {};
@@ -8851,8 +8986,13 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
         }
 
         async function loadInterfaces() {
+            if (!(await ensureActiveGatewayVerified())) {
+                const status = document.getElementById('dashboardTrafficStatus');
+                if (status) { status.className = 'badge bg-secondary ms-auto'; status.textContent = 'UNAVAILABLE'; }
+                return;
+            }
             try {
-                const data = await jsonFetch('/api/router/interfaces', { cache: 'no-store' });
+                const data = await jsonFetch('/api/router/interfaces', { cache: 'no-store', timeout: 12000, silent: true });
                 const interfaces = Array.isArray(data.interfaces) ? data.interfaces.filter(item => item && item.name) : [];
                 const select = document.getElementById('dashboardInterface');
                 if (!select) return;
@@ -8907,7 +9047,12 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
         async function pollTraffic() {
             if (trafficPollInFlight) return;
             const dashboard = document.getElementById('view-main-dashboard');
-            if (!dashboard || dashboard.style.display === 'none') return;
+            if (!dashboard || dashboard.style.display === 'none' || !isAdminDashboardRoute()) return;
+            if (!(await ensureActiveGatewayVerified())) {
+                const status = document.getElementById('dashboardTrafficStatus');
+                if (status) { status.className = 'badge bg-secondary ms-auto'; status.textContent = 'UNAVAILABLE'; }
+                return;
+            }
             const select = document.getElementById('dashboardInterface');
             if (!select || !select.value) return;
 
@@ -8916,7 +9061,7 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
                 const selectedOption = select.options[select.selectedIndex];
                 const role = selectedOption && selectedOption.dataset.role || trafficInterfaceRole({ name: select.value });
                 safeSetText('nocInterfacePill', 'Interface: ' + select.value);
-                const data = await jsonFetch('/api/router/traffic?interface=' + encodeURIComponent(select.value) + '&role=' + encodeURIComponent(role), { cache: 'no-store' });
+                const data = await jsonFetch('/api/router/traffic?interface=' + encodeURIComponent(select.value) + '&role=' + encodeURIComponent(role), { cache: 'no-store', timeout: 8000, silent: true });
                 const downloadBps = Number(data.downloadBps);
                 const uploadBps = Number(data.uploadBps);
                 if (!Number.isFinite(downloadBps) || downloadBps < 0 || !Number.isFinite(uploadBps) || uploadBps < 0) {
@@ -9193,7 +9338,7 @@ function bindDashboardBusinessCardActions(){
 
 async function pollBusinessOverview(){const view=document.getElementById('view-main-dashboard');if(document.hidden||!view||view.style.display==='none')return;const grid=document.getElementById('businessOverviewGrid');if(!grid)return;try{const d=await jsonFetch('/api/dashboard/business-overview',{cache:'no-store',timeout:10000});if(!d||d.success===false)throw new Error(d?.message||'Business metrics unavailable');const f=d.financial||{},c=d.customers||{},i=d.infrastructure||{},o=d.operations||{},money=v=>'৳ '+Number(v||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}),count=v=>Number(v||0).toLocaleString('en-BD');const values={monthlyIncome:money(f.monthlyIncome),yearlyIncome:money(f.yearlyIncome),todayCollection:money(f.todayCollection),outstandingDue:money(f.outstandingDue),activeHotspot:count(c.activeHotspot),activePppoe:count(c.activePppoe),activePops:count(i.activePops),activeResellers:count(i.activeResellers),activeStaff:count(i.activeStaff),expiringSoon:count(o.expiringSoon),openTickets:count(o.openTickets)};Object.entries(values).forEach(([key,value])=>{const node=grid.querySelector('[data-business-kpi="'+key+'"]');if(node)node.textContent=value;});const dueBadge=grid.querySelector('[data-business-badge="outstandingDue"]');if(dueBadge)dueBadge.textContent=count(f.dueAccounts)+' unpaid accounts';const hotspotBadge=grid.querySelector('[data-business-badge="activeHotspot"]');if(hotspotBadge)hotspotBadge.textContent=count(c.activeHotspot)+' active · '+count(c.totalHotspot)+' total';const pppoeBadge=grid.querySelector('[data-business-live="activePppoe"]');if(pppoeBadge)pppoeBadge.textContent=count(c.activePppoe)+' active · '+count(c.totalPppoe)+' total';safeSetText('businessOverviewUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());grid.setAttribute('aria-busy','false');}catch(error){safeSetText('businessOverviewUpdated','Metrics temporarily unavailable');console.warn('[Business Overview]',error.message||error);}}
 
-async function pollNocStats(){if(nocStatsBusy||document.hidden)return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};const subscriberMetricsAvailable=s.available!==false;safeSetText('nocSubscriberValue',subscriberMetricsAvailable?Number(s.online||0)+' / '+Number(s.total||0)+' Online':'Subscriber status unavailable');safeSetText('nocAvailability',subscriberMetricsAvailable&&Number(s.total)>0?Number(s.availability||0).toFixed(1)+'% Network Availability':'Network Availability unavailable');safeSetText('businessPppoeLive',subscriberMetricsAvailable?Number(s.online||0).toLocaleString('en-BD')+' online · '+Number(s.offline||0).toLocaleString('en-BD')+' offline':'Live status unavailable');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge bg-secondary';ob.textContent='Not configured';}safeSetText('nocOltName','OLT inventory');safeSetText('nocOltAddress','Direct OLT polling not configured');safeSetText('nocOnuTotal','—');safeSetText('nocPonActive','—');safeSetText('nocOltSeen','Live OLT telemetry is disabled pending direct polling integration');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
+async function pollNocStats(){if(nocStatsBusy||document.hidden||!isAdminDashboardRoute())return;const v=document.getElementById('view-main-dashboard');if(!v||v.style.display==='none')return;if(!(await ensureActiveGatewayVerified())){safeSetText('nocSubscriberValue','Subscriber status unavailable');safeSetText('businessPppoeLive','Live status unavailable');safeSetText('nocRouterModel','Router unavailable');safeSetText('nocRouterUptime','Connection not verified');safeSetText('dashboardRouterStatus','Unavailable');return;}nocStatsBusy=true;try{const sel=document.getElementById('dashboardInterface'),iface=sel&&sel.value||'aggregate',d=await jsonFetch('/api/dashboard/stats?interface='+encodeURIComponent(iface)),s=d.subscribers||{},t=d.traffic||{},b=d.billing||{},f=d.fiber||{},r=d.router||{};const subscriberMetricsAvailable=s.available!==false;safeSetText('nocSubscriberValue',subscriberMetricsAvailable?Number(s.online||0)+' / '+Number(s.total||0)+' Online':'Subscriber status unavailable');safeSetText('nocAvailability',subscriberMetricsAvailable&&Number(s.total)>0?Number(s.availability||0).toFixed(1)+'% Network Availability':'Network Availability unavailable');safeSetText('businessPppoeLive',subscriberMetricsAvailable?Number(s.online||0).toLocaleString('en-BD')+' online · '+Number(s.offline||0).toLocaleString('en-BD')+' offline':'Live status unavailable');safeSetText('nocInterfacePill','Interface: '+(t.interface||iface));safeSetText('nocBillingToday','৳ '+Number(b.todayAmount||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2}));safeSetText('nocBillingSub',Number(b.todayTransactions||0)+' Transactions Today • MTD '+nocMoney(b.mtdAmount));safeSetText('nocFiberValue',Number(f.online||0)+' Online • '+Number(f.warnings||0)+' Alert');safeSetText('nocFiberSub',Number(f.lowSignalCount||0)+' ONU with Low Optical Signal (≤ −25 dBm)');safeSetText('nocPonSummary','PON '+Number(f.activePonPorts||0)+'/'+Number(f.totalPonPorts||0));safeSetText('nocRouterModel',r.model||'RouterOS device');safeSetText('nocRouterUptime','Uptime '+(r.uptime||'unavailable'));safeSetText('metricCpu',r.cpuLoad==null?'—':Number(r.cpuLoad).toFixed(0)+'%');safeSetText('metricRam',r.memoryUsagePercent==null?'—':Number(r.memoryUsagePercent).toFixed(1)+'%');const cpu=document.getElementById('cpuBar'),ram=document.getElementById('ramBar');if(cpu)cpu.style.width=Math.max(0,Math.min(100,Number(r.cpuLoad)||0))+'%';if(ram)ram.style.width=Math.max(0,Math.min(100,Number(r.memoryUsagePercent)||0))+'%';const rb=document.getElementById('dashboardRouterStatus');if(rb){rb.className='badge '+(r.online?'bg-success':'bg-danger');rb.textContent=r.online?'Online':'Unavailable';}const ob=document.getElementById('nocOltStatus');if(ob){ob.className='badge bg-secondary';ob.textContent='Not configured';}safeSetText('nocOltName','OLT inventory');safeSetText('nocOltAddress','Direct OLT polling not configured');safeSetText('nocOnuTotal','—');safeSetText('nocPonActive','—');safeSetText('nocOltSeen','Live OLT telemetry is disabled pending direct polling integration');nocUrgent(f.urgent||[]);nocExpiring(d.expiring||[]);safeSetText('nocTransferred',t.transferredTodayLabel||'Not available');safeSetText('nocLastUpdated','Updated '+new Date(d.generatedAt||Date.now()).toLocaleTimeString());if(Array.isArray(d.recentPayments)){const body=document.getElementById('recentPaymentsBody');if(body)body.innerHTML=d.recentPayments.map(p=>'<tr><td>'+nocEsc(p.trx_id)+'</td><td>'+nocEsc(p.channel)+'</td><td>'+nocMoney(p.amount)+'</td><td>'+nocEsc(p.status)+'</td><td>'+nocEsc(p.created_at?FazDate.formatDateTime(p.created_at):'—')+'</td></tr>').join('')||'<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';}}catch(e){console.warn('[NOC Dashboard]',e.message||e);}finally{nocStatsBusy=false;}}
 function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStatsTimer);if(window.hotspotOverviewTimer)clearInterval(window.hotspotOverviewTimer);if(window.businessOverviewTimer)clearInterval(window.businessOverviewTimer);bindDashboardBusinessCardActions();void pollNocStats();void pollHotspotOverview();void pollBusinessOverview();window.nocStatsTimer=setInterval(()=>void pollNocStats(),5000);window.hotspotOverviewTimer=setInterval(()=>void pollHotspotOverview(),30000);window.businessOverviewTimer=setInterval(()=>void pollBusinessOverview(),30000);}document.addEventListener('visibilitychange',()=>{if(!document.hidden){void pollNocStats();void pollBusinessOverview();}});
 
         async function safeAdminBootStep(label, task) {
@@ -10254,6 +10399,14 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       if(!form || form.dataset.initialized==='1') return;
       form.dataset.initialized='1';
       const $=id=>document.getElementById(id);
+      const modalElement=$('mikrotikAddRouterModal');
+      let modalOpener=null;
+      modalElement?.addEventListener('show.bs.modal',()=>{
+        modalOpener=document.activeElement;
+      });
+      modalElement?.addEventListener('hide.bs.modal',()=>{
+        if(modalElement.contains(document.activeElement)) document.activeElement.blur();
+      });
       let testedFingerprint='';
       const fields=['routerDeviceName','routerDeviceHost','routerDevicePort','routerDeviceUsername','routerDevicePassword','routerDeviceTimeout'];
       function fingerprint(){return fields.map(id=>$(id).type==='checkbox'?String($(id).checked):String($(id).value||'')).join('|');}
@@ -10272,10 +10425,12 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
         button.disabled=true;
         button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
         result('Connecting to RouterOS and reading identity/resources…','info','bi-arrow-repeat');
+        const requestController=new AbortController();
+        const requestTimeout=setTimeout(()=>requestController.abort(),15000);
         try{
-          const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(data)});
+          const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',signal:requestController.signal,body:JSON.stringify(data)});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
-          if(!response.ok||!body.success){const message=body.message||'Connection failed.';result(((body.code==='CONNECTION_REFUSED'||body.errorCode==='PORT_UNREACHABLE')?'Port unreachable: ':(body.code==='AUTH_FAILED'||body.errorCode==='INVALID_CREDENTIALS')?'Invalid credentials: ':'')+message,body.status==='auth_failed'?'danger':'warning',body.status==='auth_failed'?'bi-shield-x':'bi-exclamation-triangle');return;}
+          if(!response.ok||!body.success){const message=body.message||'Connection failed.';result(((body.status==='unreachable'||body.code==='CONNECTION_REFUSED'||body.errorCode==='PORT_UNREACHABLE'||body.errorCode==='TIMEOUT')?'Router unreachable: ':(body.status==='auth_failed'||body.code==='AUTH_FAILED'||body.errorCode==='INVALID_CREDENTIALS')?'Invalid credentials: ':'')+message,body.status==='auth_failed'?'danger':'warning',body.status==='auth_failed'?'bi-shield-x':'bi-exclamation-triangle');return;}
           testedFingerprint=fingerprint();
           $('routerDeviceLatency').textContent=body.latency_ms+' ms';
           $('routerDeviceBoard').textContent=body.board_model||'Unknown';
@@ -10287,8 +10442,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
           $('routerDeviceSaveBtn').disabled=false;
           result('Connected to '+(body.identity||'MikroTik')+' successfully. Save is enabled.','success','bi-check-circle-fill');
         }catch(error){
-          result(error.message||'Could not reach the server.','danger','bi-x-circle');
+          result(error.name==='AbortError'?'Connection test timed out. Please retry.':(error.message||'Could not reach the server.'),'danger','bi-x-circle');
         }finally{
+          clearTimeout(requestTimeout);
           button.disabled=false;
           button.innerHTML='<i class="bi bi-plug me-1"></i>Test Connection';
         }
@@ -10322,6 +10478,8 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
         }
       });
       $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{
+        if(modalOpener?.isConnected) modalOpener.focus({preventScroll:true});
+        modalOpener=null;
         form.reset();
         delete form.dataset.routerId;
         const title=$('mikrotikAddRouterTitle');
