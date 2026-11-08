@@ -6,7 +6,12 @@ const { execFileSync } = require('node:child_process');
 
 const TEST_CA = '-----BEGIN CERTIFICATE-----\\nunit-test-root\\n-----END CERTIFICATE-----';
 
-function runPoolConfiguration({ nodeEnv, ca = TEST_CA, databaseUrl = 'postgresql://unit-test:unit-test@127.0.0.1:5432/unit_test' }) {
+function runPoolConfiguration(options) {
+  const {
+    nodeEnv,
+    databaseUrl = 'postgresql://unit-test:unit-test@127.0.0.1:5432/unit_test'
+  } = options;
+  const ca = Object.prototype.hasOwnProperty.call(options, 'ca') ? options.ca : TEST_CA;
   const script = String.raw`
     const Module = require('node:module');
     const originalLoad = Module._load;

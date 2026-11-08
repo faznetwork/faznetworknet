@@ -4757,45 +4757,256 @@ window.editHotspotUser=function(username,event){
 
         window.loadDevices = loadDevices;
         async function loadDevices(){
-            purgeStuckBackdrops(); currentCustomerTitleKey=''; currentPaymentTitleKey=''; setPageTitleSafe('MikroTik Management');
-            hideAdminViews(); removeHotspotView();
-            const dynamic=document.getElementById('dynamicPageContent'); if(!dynamic)return; dynamic.style.display='block';
-            const existingCorePanel=document.getElementById('general-settings-panel-router');
-            dynamic.innerHTML='<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading network device inventory…</div></section>';
-            const esc=escapeHtml;
-            try{
-                const [response,routerResponse]=await Promise.all([jsonFetch('/api/devices'),jsonFetch('/api/mikrotik/devices')]);
-                const activeRouters=Array.isArray(routerResponse.devices)?routerResponse.devices:[];
-                const allDevices=Array.isArray(response.devices)?response.devices:[];
-                const rawMikroTikDevices=allDevices.filter(d=>String(d.deviceType||'').toLowerCase()==='mikrotik');
-                // Avoid rendering the same router more than once when legacy inventory rows share an IP.
-                // Keep the most recently seen row; never delete or mutate database records here.
-                const routerIdentity=d=>{const ip=String(d.managementIp||'').trim().toLowerCase();return ip?'ip:'+ip:'name:'+String(d.name||'').trim().toLowerCase();};
-                const preferredRouter=(a,b)=>{const seenA=Date.parse(a.lastSeenAt||a.updatedAt||a.createdAt||0)||0;const seenB=Date.parse(b.lastSeenAt||b.updatedAt||b.createdAt||0)||0;return seenB-seenA;};
-                const devices=[...rawMikroTikDevices].sort(preferredRouter).filter((d,i,arr)=>arr.findIndex(other=>routerIdentity(other)===routerIdentity(d))===i);
-                const hiddenDuplicateCount=rawMikroTikDevices.length-devices.length;
-                const counts={mikrotik:0,olt:0,onu:0,ont:0,other:0};
-                devices.forEach(d=>{counts[d.deviceType]=(counts[d.deviceType]||0)+1;});
-                const typeLabel=function(t){return ({mikrotik:'MikroTik Router',olt:'OLT',onu:'ONU',ont:'ONT',access_point:'Access Point',cpe:'CPE',other:'Other'})[t]||t;};
-                const activeRouterRows=activeRouters.map(r=>'<tr><td><strong>'+esc(r.router_name)+'</strong></td><td><code>'+esc(r.host)+':'+esc(r.api_port)+'</code></td><td>'+esc(r.identity||r.board_model||'MikroTik')+'</td><td><span class="badge text-bg-success">Manually added · '+esc(r.status||'active')+'</span></td></tr>').join('');
-                const rows=devices.map(d=>{const configured=activeRouters.some(r=>String(r.host||'').toLowerCase()===String(d.managementIp||'').toLowerCase());return '<tr><td><strong>'+esc(d.name)+'</strong><div class="small text-muted">'+esc(d.vendor||'')+' '+esc(d.model||'')+'</div></td><td>'+esc(typeLabel(d.deviceType))+'</td><td><code>'+esc(d.managementIp||'—')+'</code></td><td>'+esc(d.location||'—')+'</td><td><span class="badge '+(configured?'text-bg-success':'text-bg-secondary')+'">'+(configured?'Manually added':'Inventory only')+'</span></td><td class="text-end"><button class="btn btn-sm btn-outline-danger device-delete-btn" data-id="'+esc(d.id)+'" data-name="'+esc(d.name)+'" title="Remove inventory record"><i class="bi bi-trash"></i></button></td></tr>';}).join('');
-                dynamic.innerHTML='<section class="admin-view p-3"><div class="d-flex flex-wrap align-items-center gap-2 mb-3"><div class="me-auto"><div class="small text-success fw-bold">CORE SYSTEM / NETWORK OPERATIONS</div><h3 class="mb-1">MikroTik Management</h3><div class="text-muted">Router inventory and live RouterOS status, using the existing shared Core connection.</div></div><button class="btn btn-outline-success" id="devicesDiscoverBtn"><i class="bi bi-radar me-1"></i>Discover MikroTik Ports</button><button class="btn btn-success" id="devicesAddBtn" type="button"><i class="bi bi-router me-1"></i>Add Device</button></div><div class="row g-3 mb-3"><div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Total Inventory</div><div class="fs-3 fw-bold">'+devices.length+'</div></div></div></div><div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">MikroTik Routers</div><div class="fs-3 fw-bold">'+(counts.mikrotik||0)+'</div></div></div></div><div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">OLTs</div><div class="fs-3 fw-bold">'+(counts.olt||0)+'</div></div></div></div><div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">ONU / ONT</div><div class="fs-3 fw-bold">'+((counts.onu||0)+(counts.ont||0))+'</div></div></div></div></div><div id="devicesFormWrap" class="card border-0 shadow-sm mb-3 d-none"><div class="card-body"><div class="d-flex align-items-center mb-3"><h5 class="mb-0">Register Network Device</h5><button type="button" id="devicesFormClose" class="btn-close ms-auto"></button></div><form id="devicesCreateForm"><div class="row g-3"> <div class="col-md-4"><label class="form-label">Device Type *</label><select name="deviceType" id="deviceType" class="form-select" required><option value="mikrotik">MikroTik Router</option></select></div> <div class="col-md-4"><label class="form-label">Device Name *</label><input name="name" class="form-control" maxlength="120" required placeholder="e.g. Main POP Router"></div> <div class="col-md-4"><label class="form-label">Vendor</label><input name="vendor" class="form-control" value="MikroTik" placeholder="MikroTik"></div> <div class="col-md-4"><label class="form-label">Model</label><input name="model" class="form-control" placeholder="Router model"></div> <div class="col-md-4"><label class="form-label">Router IP / Host *</label><input name="managementIp" id="deviceRouterHost" class="form-control" required placeholder="103.54.37.182"></div> <div class="col-md-4"><label class="form-label">POP / Location (optional)</label><input name="location" class="form-control" placeholder="Main POP / Area"></div> <div class="col-md-12"><label class="form-label">Notes</label><input name="notes" class="form-control" placeholder="Optional"></div> </div><div class="small text-muted mt-3">This only registers the router in inventory. Connection settings are managed once in the Router Configuration section above.</div><div class="mt-3 d-flex flex-wrap gap-2 sticky-device-actions"><button class="btn btn-outline-success" id="deviceTestConnectionBtn" type="button"><i class="bi bi-plug me-1"></i>Test Connection</button><button class="btn btn-success" type="submit"><i class="bi bi-check2 me-1"></i>Save Device</button><div id="devicesFormMessage" class="small align-self-center" role="status" aria-live="polite"></div></div><div class="small text-muted mt-2">Connection test uses the existing shared Router Configuration credentials. No credentials are duplicated in the device inventory.</div></form></div></div></div></div><div id="devicesDiscoveryResult" class="mb-3"></div><div class="card border-0 shadow-sm"><div class="card-header bg-white py-3"><strong>Registered Network Devices</strong><span class="text-muted small ms-2">'+devices.length+' devices</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Device</th><th>Type</th><th>Management / MAC</th><th>POP / Location</th><th>Integration</th><th></th></tr></thead><tbody>'+ (rows||'<tr><td colspan="6" class="text-center text-muted py-5">No devices registered yet. Add the MikroTik router and OLT to begin inventory.</td></tr>')+'</tbody></table></div></div><div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>MikroTik discovery is read-only. OLTs and ONTs are managed separately from the OLT Management submenu.</div></section>';
-                const manualPanel=document.createElement('div');manualPanel.className='card border-0 shadow-sm mb-3';manualPanel.innerHTML='<div class="card-header bg-white"><strong>Manually Added RouterOS Connections</strong></div><div class="card-body">'+(activeRouters.length?'<div class="alert alert-success py-2">'+activeRouters.length+' router(s) manually tested and saved.</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Router</th><th>API endpoint</th><th>Identity</th><th>Status</th></tr></thead><tbody>'+activeRouterRows+'</tbody></table></div>':'<div class="alert alert-warning mb-0"><strong>No MikroTik router has been added yet.</strong><div class="small mt-1">Inventory records do not connect a router. Use <b>Add Device</b>, enter its RouterOS credentials, pass Test Connection, then Save Router.</div></div>');
-                dynamic.querySelector('.row.g-3.mb-3')?.before(manualPanel);
-                const pageDescription=dynamic.querySelector('h3')?.parentElement?.querySelector('.text-muted');if(pageDescription)pageDescription.textContent='Only routers manually tested and saved through Add Device are connected to RouterOS.';
-                if(hiddenDuplicateCount>0){const inventoryHeader=dynamic.querySelector('.card-header');if(inventoryHeader){const warning=document.createElement('div');warning.className='alert alert-warning py-2 px-3 mt-2 mb-0 small';warning.textContent=hiddenDuplicateCount+' duplicate MikroTik inventory record(s) hidden from this list. Database records were not deleted; review them before cleanup.';inventoryHeader.appendChild(warning);}}
-                const deviceFormWrap=document.getElementById('devicesFormWrap');
-                if(deviceFormWrap)deviceFormWrap.classList.add('d-none');
-                document.getElementById('devicesAddBtn')?.addEventListener('click',()=>{const modal=document.getElementById('mikrotikAddRouterModal');if(modal&&window.bootstrap?.Modal)window.bootstrap.Modal.getOrCreateInstance(modal).show();else if(modal){modal.classList.add('show');modal.style.display='block';}});
-                document.getElementById('devicesFormClose')?.addEventListener('click',()=>document.getElementById('devicesFormWrap')?.classList.add('d-none'));
-                const validateDeviceIPv4=function(value){const parts=String(value||'').trim().split('.');return parts.length===4&&parts.every(part=>/^\\d{1,3}$/.test(part)&&Number(part)>=0&&Number(part)<=255);};
-                const testDeviceConnection=async function(){const form=document.getElementById('devicesCreateForm'),msg=document.getElementById('devicesFormMessage'),host=String(form?.elements.managementIp?.value||'').trim(),port=Number(document.getElementById('generalRouterPort')?.value||8728),user=String(document.getElementById('generalRouterUser')?.value||'').trim(),password=String(document.getElementById('generalRouterPassword')?.value||'');if(!validateDeviceIPv4(host)){throw new Error('Enter a valid IPv4 address, for example 192.168.88.1.');}if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Set a valid API port in Router Configuration first.');const button=document.getElementById('deviceTestConnectionBtn');if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Testing…';}if(msg){msg.className='small text-muted align-self-center';msg.textContent='Connecting to RouterOS…';}try{const result=await jsonFetch('/api/settings/mikrotik/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port,user,password})});if(result.success===false)throw new Error(result.message||'RouterOS connection failed.');if(msg){msg.className='small text-success align-self-center';msg.textContent='Connected: '+(result.router?.routerName||'RouterOS')+' · v'+(result.router?.version||'unknown');}return result;}catch(error){if(msg){msg.className='small text-danger align-self-center';msg.textContent=error.message||'RouterOS connection failed.';}throw error;}finally{if(button){button.disabled=false;button.innerHTML='<i class="bi bi-plug me-1"></i>Test Connection';}}};
-                document.getElementById('deviceTestConnectionBtn')?.addEventListener('click',async()=>{try{await testDeviceConnection();}catch(_){}});
-                document.getElementById('devicesCreateForm')?.addEventListener('submit',async function(event){event.preventDefault();const form=event.currentTarget,msg=document.getElementById('devicesFormMessage');const payload=Object.fromEntries(new FormData(form).entries());const button=form.querySelector('button[type="submit"]');button.disabled=true;msg.className='small text-muted align-self-center';msg.textContent='Testing connection before save…';try{const host=String(payload.managementIp||'').trim(),name=String(payload.name||'').trim();if(!host||!name)throw new Error('Device name and router IP/host are required.');if(!validateDeviceIPv4(host))throw new Error('Enter a valid IPv4 address, for example 192.168.88.1.');await testDeviceConnection();const inventory={deviceType:'mikrotik',name,vendor:payload.vendor||'MikroTik',model:payload.model||'',managementIp:host,location:payload.location||'',notes:payload.notes||''};let existing=devices.find(d=>String(d.deviceType).toLowerCase()==='mikrotik'&&(String(d.name||'').trim().toLowerCase()===name.toLowerCase()||String(d.managementIp||'')===host));let result;if(existing){if(!confirm('A MikroTik device already exists with this name or IP. Update "'+existing.name+'" with the submitted details?')){button.disabled=false;return;}result=await jsonFetch('/api/devices/'+encodeURIComponent(existing.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(inventory)});}else{result=await jsonFetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(inventory)});}if(result.success===false)throw new Error(result.message||'Could not save device');await loadDevices();}catch(error){msg.className='small text-danger align-self-center';msg.textContent=error.message||'Unable to save device';button.disabled=false;}});
-                dynamic.querySelectorAll('.device-delete-btn').forEach(button=>button.addEventListener('click',async()=>{if(!confirm('Remove '+button.dataset.name+' from inventory? This does not change the physical device or MikroTik configuration.'))return;try{const result=await jsonFetch('/api/devices/'+encodeURIComponent(button.dataset.id),{method:'DELETE'});if(result.success===false)throw new Error(result.message||'Delete failed');await loadDevices();}catch(error){alert(error.message||'Unable to remove device');}}));
-                document.getElementById('devicesDiscoverBtn')?.addEventListener('click',async function(){const btn=this,out=document.getElementById('devicesDiscoveryResult');btn.disabled=true;out.innerHTML='<div class="alert alert-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Reading MikroTik interfaces and learned bridge MACs. No configuration will be changed.</div>';try{const data=await jsonFetch('/api/devices/mikrotik/discover');if(data.success===false)throw new Error(data.message||'Discovery failed');const ints=Array.isArray(data.interfaces)?data.interfaces:[],hosts=Array.isArray(data.bridgeHosts)?data.bridgeHosts:[];const intRows=ints.map(i=>'<tr><td><code>'+esc(i.name)+'</code></td><td>'+esc(i.type)+'</td><td><span class="badge '+(i.running?'text-bg-success':i.disabled?'text-bg-secondary':'text-bg-warning')+'">'+(i.disabled?'Disabled':i.running?'Running':'Not running')+'</span></td><td>'+esc(i.comment||'—')+'</td></tr>').join('');const hostRows=hosts.map(h=>'<tr><td><code>'+esc(h.macAddress)+'</code></td><td><code>'+esc(h.interface||'—')+'</code></td><td>'+esc(h.bridge||'—')+'</td><td>'+esc(h.vlanId||'—')+'</td><td>'+ (h.dynamic?'Dynamic':'Other')+'</td></tr>').join('');out.innerHTML='<div class="card border-success shadow-sm"><div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center"><strong><i class="bi bi-router me-2 text-success"></i>'+esc(data.router?.routerName||'MikroTik')+'</strong><span class="badge text-bg-success">Read-only scan complete</span><span class="small text-muted ms-auto">'+esc(data.router?.version||'')+' · '+esc(data.checkedAt||'')+'</span></div><div class="card-body"><div class="row g-2 mb-3"><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">CPU Load</div><strong>'+(data.resources?.cpuLoad??'N/A')+'%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Memory Used</div><strong>'+(data.resources?.memoryUsagePercent??'N/A')+'%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Interfaces</div><strong>'+ints.length+'</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Learned MACs</div><strong>'+hosts.length+'</strong></div></div></div><h6 class="mb-2">Router Hardware &amp; System Details</h6><div class="table-responsive mb-3"><table class="table table-sm table-bordered bg-white"><tbody><tr><th>Board / Model</th><td>'+esc(data.resources?.boardName||data.router?.boardName||'N/A')+'</td><th>Platform</th><td>'+esc(data.resources?.platform||'N/A')+'</td></tr><tr><th>Architecture</th><td>'+esc(data.resources?.architectureName||'N/A')+'</td><th>CPU</th><td>'+esc(data.resources?.cpu||'N/A')+' · '+esc(data.resources?.cpuCount??'N/A')+' core(s) · '+esc(data.resources?.cpuFrequencyMHz??'N/A')+' MHz</td></tr><tr><th>RouterOS Version</th><td>'+esc(data.resources?.version||data.router?.version||'N/A')+'</td><th>Build Time</th><td>'+esc(data.resources?.buildTime||'N/A')+'</td></tr><tr><th>Uptime</th><td>'+esc(data.resources?.uptime||data.router?.uptime||'N/A')+'</td><th>Factory Software</th><td>'+esc(data.resources?.factorySoftware||'N/A')+'</td></tr><tr><th>Memory</th><td>'+esc(data.resources?.memoryUsedMb??'N/A')+' / '+esc(data.resources?.totalMemoryMb??'N/A')+' MB ('+esc(data.resources?.memoryUsagePercent??'N/A')+'%)</td><th>Storage</th><td>'+esc(data.resources?.totalHddMb??'N/A')+' MB total · '+esc(data.resources?.freeHddMb??'N/A')+' MB free ('+esc(data.resources?.hddUsagePercent??'N/A')+'% used)</td></tr><tr><th>Bad Blocks</th><td>'+esc(data.resources?.badBlocks||'N/A')+'</td><th>Write Sectors</th><td>Since reboot: '+esc(data.resources?.writeSectsSinceReboot??'N/A')+' · Total: '+esc(data.resources?.writeSectsTotal??'N/A')+'</td></tr></tbody></table></div><h6>Router Interfaces</h6><div class="table-responsive mb-3"><table class="table table-sm table-striped"><thead><tr><th>Interface</th><th>Type</th><th>Status</th><th>Comment</th></tr></thead><tbody>'+(intRows||'<tr><td colspan="4">No interfaces reported.</td></tr>')+'</tbody></table></div><h6>Learned Bridge MAC Addresses</h6><div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>MAC Address</th><th>Learned On</th><th>Bridge</th><th>VLAN</th><th>Entry</th></tr></thead><tbody>'+(hostRows||'<tr><td colspan="5">No bridge host entries returned. This can be normal if the router is not using a bridge.</td></tr>')+'</tbody></table></div><div class="small text-muted">MAC entries are observed on RouterOS, not automatically verified as customer-owned. If the OLT is behind one uplink, downstream ONU/PON mapping must come from the OLT management interface.</div></div></div>';}catch(error){out.innerHTML='<div class="alert alert-danger">'+esc(error.message||'MikroTik discovery failed')+'</div>';}finally{btn.disabled=false;}});
-                if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
-            }catch(error){dynamic.innerHTML='<section class="admin-view p-3"><div class="alert alert-danger">'+esc(error.message||'Unable to load device inventory')+'</div></section>';}
+            purgeStuckBackdrops();
+            currentCustomerTitleKey = '';
+            currentPaymentTitleKey = '';
+            setPageTitleSafe('MikroTik Management');
+            hideAdminViews();
+            removeHotspotView();
+
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return;
+            dynamic.style.display = 'block';
+            dynamic.innerHTML = '<section class="admin-view p-3"><div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading MikroTik routers and network inventory…</div></section>';
+
+            const esc = escapeHtml;
+            try {
+                const [inventoryResponse, routerResponse] = await Promise.all([
+                    jsonFetch('/api/devices'),
+                    jsonFetch('/api/mikrotik/devices')
+                ]);
+                if (routerResponse.success === false) {
+                    throw new Error(routerResponse.message || 'Saved MikroTik routers could not be loaded.');
+                }
+
+                const savedRouters = Array.isArray(routerResponse.devices) ? routerResponse.devices : [];
+                const inventoryDevices = Array.isArray(inventoryResponse.devices) ? inventoryResponse.devices : [];
+                const rawMikroTikDevices = inventoryDevices.filter(device =>
+                    String(device.deviceType || '').toLowerCase() === 'mikrotik'
+                );
+                const routerIdentity = device => {
+                    const ip = String(device.managementIp || '').trim().toLowerCase();
+                    return ip ? 'ip:' + ip : 'name:' + String(device.name || '').trim().toLowerCase();
+                };
+                const preferredRouter = (a, b) => {
+                    const seenA = Date.parse(a.lastSeenAt || a.updatedAt || a.createdAt || 0) || 0;
+                    const seenB = Date.parse(b.lastSeenAt || b.updatedAt || b.createdAt || 0) || 0;
+                    return seenB - seenA;
+                };
+                const inventoryRouters = rawMikroTikDevices
+                    .slice()
+                    .sort(preferredRouter)
+                    .filter((device, index, list) =>
+                        list.findIndex(other => routerIdentity(other) === routerIdentity(device)) === index
+                    );
+                const hiddenDuplicateCount = rawMikroTikDevices.length - inventoryRouters.length;
+                const counts = { mikrotik: inventoryRouters.length };
+                const isActive = router => router.is_active === true || String(router.is_active).toLowerCase() === 'true';
+
+                const routerRows = savedRouters.map(router => {
+                    const active = isActive(router);
+                    const stateBadge = active
+                        ? '<span class="badge text-bg-success">Active</span>'
+                        : '<span class="badge text-bg-secondary">Inactive</span>';
+                    const gatewayAction = active
+                        ? '<button type="button" class="btn btn-sm btn-outline-success" disabled aria-label="This router is the active gateway"><i class="bi bi-check-circle-fill me-1"></i>Active Gateway</button>'
+                        : '<button type="button" class="btn btn-sm btn-success" data-router-activate="' + esc(router.id) + '"><i class="bi bi-arrow-left-right me-1"></i>Activate</button>';
+                    return '<tr>' +
+                        '<td><strong>' + esc(router.router_name) + '</strong><div class="small text-muted">' + esc(router.identity || router.board_model || 'MikroTik') + '</div></td>' +
+                        '<td><code>' + esc(router.host) + ':' + esc(router.api_port) + '</code><div class="small text-muted">' + esc(router.api_type || 'native_api') + '</div></td>' +
+                        '<td>' + stateBadge + '</td>' +
+                        '<td><span class="badge ' + (String(router.status || '').toLowerCase() === 'online' ? 'text-bg-success' : 'text-bg-secondary') + '">' + esc(router.status || 'Unknown') + '</span></td>' +
+                        '<td class="text-end text-nowrap"><button type="button" class="btn btn-sm btn-outline-secondary me-1" data-router-edit="' + esc(router.id) + '"><i class="bi bi-pencil-square me-1"></i>Edit</button>' + gatewayAction + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                const inventoryRows = inventoryRouters.map(device => {
+                    const matchingRouter = savedRouters.find(router =>
+                        String(router.host || '').trim().toLowerCase() === String(device.managementIp || '').trim().toLowerCase()
+                    );
+                    const configured = Boolean(matchingRouter);
+                    const gatewayState = configured ? (isActive(matchingRouter) ? 'Active gateway' : 'Standby router') : 'Inventory only';
+                    return '<tr>' +
+                        '<td><strong>' + esc(device.name) + '</strong><div class="small text-muted">' + esc(device.vendor || '') + ' ' + esc(device.model || '') + '</div></td>' +
+                        '<td>MikroTik Router</td>' +
+                        '<td><code>' + esc(device.managementIp || '—') + '</code></td>' +
+                        '<td>' + esc(device.location || '—') + '</td>' +
+                        '<td><span class="badge ' + (configured ? (isActive(matchingRouter) ? 'text-bg-success' : 'text-bg-secondary') : 'text-bg-light') + '">' + gatewayState + '</span></td>' +
+                        '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger device-delete-btn" data-id="' + esc(device.id) + '" data-name="' + esc(device.name) + '" title="Remove inventory record"><i class="bi bi-trash"></i></button></td>' +
+                        '</tr>';
+                }).join('');
+
+                dynamic.innerHTML =
+                    '<section class="admin-view p-3">' +
+                        '<div class="d-flex flex-wrap align-items-center gap-2 mb-3">' +
+                            '<div class="me-auto"><div class="small text-success fw-bold">CORE SYSTEM / NETWORK OPERATIONS</div><h3 class="mb-1">MikroTik Management</h3><div class="text-muted">Manage saved RouterOS connections and the single active core gateway.</div></div>' +
+                            '<button class="btn btn-outline-success" id="devicesDiscoverBtn" type="button"><i class="bi bi-radar me-1"></i>Discover MikroTik Ports</button>' +
+                            '<button class="btn btn-success" id="devicesAddBtn" type="button"><i class="bi bi-router me-1"></i>Add Router</button>' +
+                        '</div>' +
+                        '<div class="card border-0 shadow-sm mb-3">' +
+                            '<div class="card-header bg-white py-3 d-flex flex-wrap align-items-center gap-2"><strong>Saved MikroTik Gateways</strong><span class="badge text-bg-light">' + savedRouters.length + ' saved</span><span class="small text-muted ms-auto">Exactly one router should be Active.</span></div>' +
+                            '<div id="routerLifecycleFeedback" class="px-3 pt-3" role="status" aria-live="polite"></div>' +
+                            '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Router</th><th>API Endpoint</th><th>Gateway</th><th>Connection</th><th class="text-end">Actions</th></tr></thead><tbody>' +
+                                (routerRows || '<tr><td colspan="5" class="text-center text-muted py-5">No saved MikroTik routers. Add a router and complete a successful connection test before saving.</td></tr>') +
+                            '</tbody></table></div>' +
+                        '</div>' +
+                        '<div class="row g-3 mb-3">' +
+                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">MikroTik Inventory</div><div class="fs-3 fw-bold">' + counts.mikrotik + '</div></div></div></div>' +
+                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Saved Routers</div><div class="fs-3 fw-bold">' + savedRouters.length + '</div></div></div></div>' +
+                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Active Gateway</div><div class="fs-6 fw-bold">' + esc(savedRouters.find(isActive)?.router_name || 'Not selected') + '</div></div></div></div>' +
+                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Standby Routers</div><div class="fs-3 fw-bold">' + savedRouters.filter(router => !isActive(router)).length + '</div></div></div></div>' +
+                        '</div>' +
+                        '<div id="devicesDiscoveryResult" class="mb-3"></div>' +
+                        '<div class="card border-0 shadow-sm"><div class="card-header bg-white py-3"><strong>Registered Network Inventory</strong><span class="text-muted small ms-2">' + inventoryRouters.length + ' records</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Device</th><th>Type</th><th>Management / MAC</th><th>POP / Location</th><th>Integration</th><th></th></tr></thead><tbody>' +
+                            (inventoryRows || '<tr><td colspan="6" class="text-center text-muted py-5">No MikroTik inventory records are registered.</td></tr>') +
+                        '</tbody></table></div></div>' +
+                        '<div class="alert alert-info mt-3 mb-0"><i class="bi bi-info-circle me-2"></i>Router lifecycle state is managed only through Saved MikroTik Gateways. Network inventory remains separate and is not used to select the live gateway.</div>' +
+                    '</section>';
+
+                const lifecyclePanel = dynamic.querySelector('.card.border-0.shadow-sm.mb-3');
+                const feedback = dynamic.querySelector('#routerLifecycleFeedback');
+                const showFeedback = (message, kind) => {
+                    if (!feedback) return;
+                    feedback.className = 'px-3 pt-3 small text-' + (kind === 'success' ? 'success' : kind === 'danger' ? 'danger' : 'secondary');
+                    feedback.textContent = message || '';
+                };
+
+                document.getElementById('devicesAddBtn')?.addEventListener('click', () => {
+                    const form = document.getElementById('mikrotikAddRouterForm');
+                    if (form) {
+                        delete form.dataset.routerId;
+                        form.reset();
+                        form.querySelectorAll('input').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true })));
+                        const title = document.getElementById('mikrotikAddRouterTitle');
+                        if (title) title.textContent = 'Add MikroTik Router';
+                        const password = document.getElementById('routerDevicePassword');
+                        if (password) {
+                            password.required = true;
+                            password.placeholder = 'RouterOS API password';
+                        }
+                    }
+                    const modal = document.getElementById('mikrotikAddRouterModal');
+                    if (modal && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(modal).show();
+                    else if (modal) showFeedback('The router editor could not open because the modal runtime is unavailable. Reload the page and try again.', 'danger');
+                });
+
+                lifecyclePanel?.addEventListener('click', async event => {
+                    const editButton = event.target.closest('[data-router-edit]');
+                    if (editButton) {
+                        const router = savedRouters.find(item => String(item.id) === String(editButton.dataset.routerEdit));
+                        if (!router) {
+                            showFeedback('The selected router is no longer in the current list. Refresh and try again.', 'danger');
+                            return;
+                        }
+                        const form = document.getElementById('mikrotikAddRouterForm');
+                        const modal = document.getElementById('mikrotikAddRouterModal');
+                        if (!form || !modal || !window.bootstrap?.Modal) {
+                            showFeedback('The router editor is unavailable. Reload the page and try again.', 'danger');
+                            return;
+                        }
+                        form.reset();
+                        form.dataset.routerId = String(router.id);
+                        form.elements.router_name.value = router.router_name || '';
+                        form.elements.host.value = router.host || '';
+                        form.elements.api_port.value = String(router.api_port || '');
+                        form.elements.username.value = router.username || '';
+                        form.elements.password.value = '';
+                        form.elements.password.required = true;
+                        form.elements.password.placeholder = 'Re-enter RouterOS API password to verify and save';
+                        form.elements.timeout.value = String(Math.min(Number(router.timeout_ms) || 5000, 5000));
+                        form.querySelectorAll('input').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true })));
+                        const title = document.getElementById('mikrotikAddRouterTitle');
+                        if (title) title.textContent = 'Edit MikroTik Router';
+                        window.bootstrap.Modal.getOrCreateInstance(modal).show();
+                        return;
+                    }
+
+                    const activateButton = event.target.closest('[data-router-activate]');
+                    if (!activateButton) return;
+                    const target = savedRouters.find(item => String(item.id) === String(activateButton.dataset.routerActivate));
+                    if (!target || isActive(target)) {
+                        showFeedback('This router is already the active gateway or is no longer available. Refresh the list.', 'danger');
+                        return;
+                    }
+                    if (!window.confirm('Are you sure you want to switch the active MikroTik gateway?')) return;
+
+                    const originalLabel = activateButton.innerHTML;
+                    lifecyclePanel.querySelectorAll('[data-router-activate]').forEach(button => { button.disabled = true; });
+                    activateButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Switching…';
+                    showFeedback('Switching the active MikroTik gateway. Please wait…', 'secondary');
+                    try {
+                        const response = await fetch('/api/mikrotik/devices/' + encodeURIComponent(target.id) + '/activate', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            cache: 'no-store'
+                        });
+                        const body = await response.json().catch(() => ({ message: 'The server returned an invalid response.' }));
+                        if (!response.ok || body.success !== true) {
+                            throw new Error(body.message || 'The active MikroTik gateway could not be switched.');
+                        }
+                        await loadDevices();
+                        const refreshedFeedback = document.getElementById('routerLifecycleFeedback');
+                        if (refreshedFeedback) {
+                            refreshedFeedback.className = 'px-3 pt-3 small text-success';
+                            refreshedFeedback.textContent = body.message || 'The active MikroTik gateway was switched successfully.';
+                        }
+                    } catch (error) {
+                        lifecyclePanel.querySelectorAll('[data-router-activate]').forEach(button => { button.disabled = false; });
+                        if (activateButton.isConnected) {
+                            activateButton.innerHTML = originalLabel;
+                            activateButton.disabled = false;
+                        }
+                        showFeedback(error.message || 'The gateway switch failed. The current gateway state has not been confirmed; refresh before retrying.', 'danger');
+                    }
+                });
+
+                dynamic.querySelectorAll('.device-delete-btn').forEach(button => {
+                    button.addEventListener('click', async () => {
+                        if (!window.confirm('Remove ' + button.dataset.name + ' from inventory? This does not change the physical device or MikroTik configuration.')) return;
+                        button.disabled = true;
+                        try {
+                            const result = await jsonFetch('/api/devices/' + encodeURIComponent(button.dataset.id), {
+                                method: 'DELETE',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                            if (result.success === false) throw new Error(result.message || 'Inventory deletion failed.');
+                            await loadDevices();
+                        } catch (error) {
+                            button.disabled = false;
+                            showFeedback(error.message || 'Unable to remove the inventory record.', 'danger');
+                        }
+                    });
+                });
+
+                document.getElementById('devicesDiscoverBtn')?.addEventListener('click', async function(){
+                    const button = this;
+                    const output = document.getElementById('devicesDiscoveryResult');
+                    button.disabled = true;
+                    output.innerHTML = '<div class="alert alert-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Reading MikroTik interfaces and learned bridge MACs. No configuration will be changed.</div>';
+                    try {
+                        const data = await jsonFetch('/api/devices/mikrotik/discover');
+                        if (data.success === false) throw new Error(data.message || 'MikroTik discovery failed.');
+                        const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
+                        const hosts = Array.isArray(data.bridgeHosts) ? data.bridgeHosts : [];
+                        const interfaceRows = interfaces.map(item =>
+                            '<tr><td><code>' + esc(item.name) + '</code></td><td>' + esc(item.type) + '</td><td><span class="badge ' + (item.running ? 'text-bg-success' : item.disabled ? 'text-bg-secondary' : 'text-bg-warning') + '">' + (item.disabled ? 'Disabled' : item.running ? 'Running' : 'Not running') + '</span></td><td>' + esc(item.comment || '—') + '</td></tr>'
+                        ).join('');
+                        const hostRows = hosts.map(item =>
+                            '<tr><td><code>' + esc(item.macAddress) + '</code></td><td><code>' + esc(item.interface || '—') + '</code></td><td>' + esc(item.bridge || '—') + '</td><td>' + esc(item.vlanId || '—') + '</td><td>' + (item.dynamic ? 'Dynamic' : 'Other') + '</td></tr>'
+                        ).join('');
+                        output.innerHTML = '<div class="card border-success shadow-sm"><div class="card-header bg-white d-flex flex-wrap gap-2 align-items-center"><strong><i class="bi bi-router me-2 text-success"></i>' + esc(data.router?.routerName || 'MikroTik') + '</strong><span class="badge text-bg-success">Read-only scan complete</span><span class="small text-muted ms-auto">' + esc(data.router?.version || '') + ' · ' + esc(data.checkedAt || '') + '</span></div><div class="card-body"><div class="row g-2 mb-3"><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">CPU Load</div><strong>' + (data.resources?.cpuLoad ?? 'N/A') + '%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Memory Used</div><strong>' + (data.resources?.memoryUsagePercent ?? 'N/A') + '%</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Interfaces</div><strong>' + interfaces.length + '</strong></div></div><div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Learned MACs</div><strong>' + hosts.length + '</strong></div></div></div><h6 class="mb-2">Router Hardware &amp; System Details</h6><div class="table-responsive mb-3"><table class="table table-sm table-bordered bg-white"><tbody><tr><th>Board / Model</th><td>' + esc(data.resources?.boardName || data.router?.boardName || 'N/A') + '</td><th>Platform</th><td>' + esc(data.resources?.platform || 'N/A') + '</td></tr><tr><th>Architecture</th><td>' + esc(data.resources?.architectureName || 'N/A') + '</td><th>CPU</th><td>' + esc(data.resources?.cpu || 'N/A') + ' · ' + esc(data.resources?.cpuCount ?? 'N/A') + ' core(s) · ' + esc(data.resources?.cpuFrequencyMHz ?? 'N/A') + ' MHz</td></tr><tr><th>RouterOS Version</th><td>' + esc(data.resources?.version || data.router?.version || 'N/A') + '</td><th>Build Time</th><td>' + esc(data.resources?.buildTime || 'N/A') + '</td></tr><tr><th>Uptime</th><td>' + esc(data.resources?.uptime || data.router?.uptime || 'N/A') + '</td><th>Factory Software</th><td>' + esc(data.resources?.factorySoftware || 'N/A') + '</td></tr><tr><th>Memory</th><td>' + esc(data.resources?.memoryUsedMb ?? 'N/A') + ' / ' + esc(data.resources?.totalMemoryMb ?? 'N/A') + ' MB (' + esc(data.resources?.memoryUsagePercent ?? 'N/A') + '%)</td><th>Storage</th><td>' + esc(data.resources?.totalHddMb ?? 'N/A') + ' MB total · ' + esc(data.resources?.freeHddMb ?? 'N/A') + ' MB free (' + esc(data.resources?.hddUsagePercent ?? 'N/A') + '% used)</td></tr><tr><th>Bad Blocks</th><td>' + esc(data.resources?.badBlocks || 'N/A') + '</td><th>Write Sectors</th><td>Since reboot: ' + esc(data.resources?.writeSectsSinceReboot ?? 'N/A') + ' · Total: ' + esc(data.resources?.writeSectsTotal ?? 'N/A') + '</td></tr></tbody></table></div><h6>Router Interfaces</h6><div class="table-responsive mb-3"><table class="table table-sm table-striped"><thead><tr><th>Interface</th><th>Type</th><th>Status</th><th>Comment</th></tr></thead><tbody>' + (interfaceRows || '<tr><td colspan="4">No interfaces reported.</td></tr>') + '</tbody></table></div><h6>Learned Bridge MAC Addresses</h6><div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>MAC Address</th><th>Learned On</th><th>Bridge</th><th>VLAN</th><th>Entry</th></tr></thead><tbody>' + (hostRows || '<tr><td colspan="5">No bridge host entries returned. This can be normal if the router is not using a bridge.</td></tr>') + '</tbody></table></div><div class="small text-muted">MAC entries are observed on RouterOS, not automatically verified as customer-owned. If the OLT is behind one uplink, downstream ONU/PON mapping must come from the OLT management interface.</div></div></div>';
+                    } catch (error) {
+                        output.innerHTML = '<div class="alert alert-danger">' + esc(error.message || 'MikroTik discovery failed.') + '</div>';
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+
+                if (window.innerWidth <= 768 && typeof closeSidebarMobile === 'function') closeSidebarMobile();
+            } catch (error) {
+                dynamic.innerHTML = '<section class="admin-view p-3"><div class="alert alert-danger">' + esc(error.message || 'Unable to load MikroTik routers and network inventory.') + '</div></section>';
+            }
         }
 
 
@@ -10125,32 +10336,69 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
         const data=payload();
         if(!data.router_name||!validHost(data.host)||!data.username||!data.password){result('Enter a router name, valid IPv4/hostname, username and password.','warning','bi-exclamation-triangle');return;}
         if(!Number.isInteger(data.api_port)||data.api_port<1||data.api_port>65535){result('API port must be between 1 and 65535.','warning','bi-exclamation-triangle');return;}
-        const button=$('routerDeviceTestBtn');button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Testing…';result('Connecting to RouterOS and reading identity/resources…','info','bi-arrow-repeat');
+        const button=$('routerDeviceTestBtn');
+        button.disabled=true;
+        button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
+        result('Connecting to RouterOS and reading identity/resources…','info','bi-arrow-repeat');
         try{
-          const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(data)});
+          const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(data)});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
           if(!response.ok||!body.success){const message=body.message||'Connection failed.';result(((body.code==='CONNECTION_REFUSED'||body.errorCode==='PORT_UNREACHABLE')?'Port unreachable: ':(body.code==='AUTH_FAILED'||body.errorCode==='INVALID_CREDENTIALS')?'Invalid credentials: ':'')+message,body.status==='auth_failed'?'danger':'warning',body.status==='auth_failed'?'bi-shield-x':'bi-exclamation-triangle');return;}
-          testedFingerprint=fingerprint();$('routerDeviceLatency').textContent=body.latency_ms+' ms';$('routerDeviceBoard').textContent=body.board_model||'Unknown';$('routerDeviceVersion').textContent=body.ros_version||'Unknown';$('routerDeviceCpu').textContent=body.cpu_load===null?'N/A':body.cpu_load+'%';$('routerDeviceArchitecture').textContent=body.architecture||'Unknown';$('routerDeviceUptime').textContent=body.uptime||'Unknown';$('routerDeviceTestDetails').classList.remove('d-none');$('routerDeviceSaveBtn').disabled=false;result('Connected to '+(body.identity||'MikroTik')+' successfully. Save is enabled.','success','bi-check-circle-fill');
-        }catch(error){result(error.message||'Could not reach the server.','danger','bi-x-circle');}
-        finally{button.disabled=false;button.innerHTML='<i class="bi bi-plug me-1"></i>Test Connection';}
+          testedFingerprint=fingerprint();
+          $('routerDeviceLatency').textContent=body.latency_ms+' ms';
+          $('routerDeviceBoard').textContent=body.board_model||'Unknown';
+          $('routerDeviceVersion').textContent=body.ros_version||'Unknown';
+          $('routerDeviceCpu').textContent=body.cpu_load===null?'N/A':body.cpu_load+'%';
+          $('routerDeviceArchitecture').textContent=body.architecture||'Unknown';
+          $('routerDeviceUptime').textContent=body.uptime||'Unknown';
+          $('routerDeviceTestDetails').classList.remove('d-none');
+          $('routerDeviceSaveBtn').disabled=false;
+          result('Connected to '+(body.identity||'MikroTik')+' successfully. Save is enabled.','success','bi-check-circle-fill');
+        }catch(error){
+          result(error.message||'Could not reach the server.','danger','bi-x-circle');
+        }finally{
+          button.disabled=false;
+          button.innerHTML='<i class="bi bi-plug me-1"></i>Test Connection';
+        }
       });
       form.addEventListener('submit',async event=>{
         event.preventDefault();
-        if(!testedFingerprint||testedFingerprint!==fingerprint()) {invalidateTest();result('Test the current settings successfully before saving.','warning','bi-exclamation-triangle');return;}
-        const button=$('routerDeviceSaveBtn');button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+        if(!testedFingerprint||testedFingerprint!==fingerprint()){invalidateTest();result('Test the current settings successfully before saving.','warning','bi-exclamation-triangle');return;}
+        const routerId=String(form.dataset.routerId||'').trim();
+        const editing=Boolean(routerId);
+        const button=$('routerDeviceSaveBtn');
+        button.disabled=true;
+        button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
         try{
-          const response=await fetch('/api/mikrotik/add-device',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload())});
+          const url=editing?'/api/mikrotik/devices/'+encodeURIComponent(routerId):'/api/mikrotik/add-device';
+          const response=await fetch(url,{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(payload())});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
           if(!response.ok||!body.success)throw new Error(body.message||'Router could not be saved.');
-          result('Router saved successfully.','success','bi-check-circle-fill');
-          const modal=bootstrap.Modal.getInstance($('mikrotikAddRouterModal'));if(modal)modal.hide();
-          form.reset();invalidateTest();
+          result(editing?'Router updated successfully. Its current Active / Inactive state was preserved.':'Router saved successfully as Inactive. The live gateway was not changed.','success','bi-check-circle-fill');
+          const modal=bootstrap.Modal.getInstance($('mikrotikAddRouterModal'));
+          if(modal)modal.hide();
+          form.reset();
+          delete form.dataset.routerId;
+          invalidateTest();
           if(typeof window.loadDevices==='function')await window.loadDevices();
           else window.location.reload();
-        }catch(error){result(error.message||'Router could not be saved.','danger','bi-x-circle');}
-        finally{button.innerHTML='<i class="bi bi-check2-circle me-1"></i>Save Router';button.disabled=true;}
+        }catch(error){
+          result(error.message||'Router could not be saved.','danger','bi-x-circle');
+        }finally{
+          button.innerHTML='<i class="bi bi-check2-circle me-1"></i>Save Router';
+          button.disabled=true;
+        }
       });
-      $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{form.reset();invalidateTest();result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');});
+      $('mikrotikAddRouterModal').addEventListener('hidden.bs.modal',()=>{
+        form.reset();
+        delete form.dataset.routerId;
+        const title=$('mikrotikAddRouterTitle');
+        if(title)title.textContent='Add MikroTik Router';
+        $('routerDevicePassword').required=true;
+        $('routerDevicePassword').placeholder='RouterOS API password';
+        invalidateTest();
+        result('Enter the connection details, then test the connection before saving.','secondary','bi-info-circle');
+      });
     })();
     </script>
 
