@@ -4,3 +4,5 @@ SELECT setval(pg_get_serial_sequence('hotspot_portal_settings','id'),GREATEST((S
 
 ALTER TABLE hotspot_portal_settings ADD COLUMN IF NOT EXISTS portal_logo_url VARCHAR(500);
 ALTER TABLE hotspot_portal_settings ADD COLUMN IF NOT EXISTS default_user_profile VARCHAR(128) NOT NULL DEFAULT '';
+
+ALTER TABLE hotspot_portal_settings ADD COLUMN IF NOT EXISTS mobile_banner_url VARCHAR(500);

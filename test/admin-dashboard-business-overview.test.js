@@ -7,7 +7,7 @@ test('business overview runs KPI queries concurrently and returns normalized met
   const calls=[];
   t.mock.method(db,'query',async(sql)=>{
     calls.push(sql);
-    if(sql.includes('AS monthly_income'))return{rows:[{monthly_income:'1200.00',yearly_income:'14400.00',today_collection:'300.00',outstanding_due:'900.00',due_accounts:2}]};
+    if(sql.includes('AS monthly_income'))return{rows:[{total_income:'28800.00',weekly_income:'600.00',monthly_income:'1200.00',yearly_income:'14400.00',today_collection:'300.00',outstanding_due:'900.00',due_accounts:2}]};
     if(sql.includes('AS active_pppoe'))return{rows:[{total_pppoe:8,active_pppoe:8,active_pppoe_current:7}]};
     if(sql.includes('AS active_hotspot'))return{rows:[{active_hotspot:5,total_hotspot:12}]};
     if(sql.includes('AS active_pops'))return{rows:[{active_pops:3,active_resellers:2,active_staff:4}]};
@@ -19,7 +19,7 @@ test('business overview runs KPI queries concurrently and returns normalized met
   await controller.businessOverview({},res);
   assert.equal(statusCode,200);
   assert.equal(calls.length,5);
-  assert.deepEqual(payload.financial,{monthlyIncome:1200,yearlyIncome:14400,todayCollection:300,outstandingDue:900,dueAccounts:2});
+  assert.deepEqual(payload.financial,{totalIncome:28800,weeklyIncome:600,monthlyIncome:1200,yearlyIncome:14400,todayCollection:300,outstandingDue:900,dueAccounts:2});
   assert.deepEqual(payload.customers,{activePppoe:7,totalPppoe:8,activeHotspot:5,totalHotspot:12});
   assert.deepEqual(payload.infrastructure,{activePops:3,activeResellers:2,activeStaff:4});
   assert.deepEqual(payload.operations,{expiringSoon:3,openTickets:6});
@@ -34,6 +34,8 @@ test('business overview query and UI remain available behind the existing admin 
   assert.match(view,/business-kpi-grid\{grid-template-columns:1fr/);
   assert.match(view,/family=Outfit/);
   assert.match(view,/function bindDashboardBusinessCardActions\(\)/);
-  for(const action of ['collection','due','hotspot','pppoe','pops','resellers','staff','expiring','support','online','throughput','fiber'])assert.ok(view.includes("case'"+action+"'"),`missing card action ${action}`);
-  assert.match(view,/#view-main-dashboard \.noc-kpi\{--noc-card:/);
+  for(const action of ['collection','due','hotspot','pppoe','pops','resellers','staff','expiring','support','fiber'])assert.ok(view.includes("case'"+action+"'"),`missing card action ${action}`);
+  assert.match(view,/onclick="loadCustomerSection\('online'/);
+  assert.match(view,/onclick="loadCustomerSection\('offline'/);
+  assert.match(view,/#view-main-dashboard \.noc-kpi\{border-color:rgba\(255,255,255/);
 });

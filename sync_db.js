@@ -1,13 +1,25 @@
-﻿const { Client } = require('pg');
+const { Client } = require('pg');
+require('dotenv').config();
+
+function requireSyncConfig() {
+  const source = String(process.env.SYNC_SOURCE_DATABASE_URL || '').trim();
+  const target = String(process.env.SYNC_TARGET_DATABASE_URL || '').trim();
+  if (!source || !target) throw new Error('Set SYNC_SOURCE_DATABASE_URL and SYNC_TARGET_DATABASE_URL before running the database sync.');
+  if (process.env.SYNC_DB_ALLOW_TRUNCATE !== '1') throw new Error('Set SYNC_DB_ALLOW_TRUNCATE=1 to confirm the destination will be truncated.');
+  let targetHost;
+  try { targetHost = new URL(target).hostname.toLowerCase(); }
+  catch (_) { throw new Error('SYNC_TARGET_DATABASE_URL must be a valid PostgreSQL URL.'); }
+  const targetIsLocal = ['localhost', '127.0.0.1', '::1'].includes(targetHost);
+  if (!targetIsLocal && process.env.SYNC_ALLOW_REMOTE_TARGET !== '1') {
+    throw new Error('Remote sync destinations are disabled. Set SYNC_ALLOW_REMOTE_TARGET=1 only after reviewing the target.');
+  }
+  return { source, target, targetIsLocal };
+}
 
 async function sync() {
-  const src = new Client({
-    connectionString: 'postgresql://postgres.ydalijzvanwaughcrale:Y485S8j7e07R49Rt@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres',
-    ssl: { rejectUnauthorized: false }
-  });
-  const dst = new Client({
-    connectionString: 'postgres://postgres:admin123@localhost:5432/faznetwork_db'
-  });
+  const { source, target, targetIsLocal } = requireSyncConfig();
+  const src = new Client({ connectionString: source, ssl: { rejectUnauthorized: true } });
+  const dst = new Client({ connectionString: target, ssl: targetIsLocal ? false : { rejectUnauthorized: true } });
 
   console.log('Connecting to databases...');
   await src.connect();

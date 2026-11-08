@@ -47,13 +47,13 @@ test('RouterOS duration formats are parsed for countdown and uptime comparisons'
  assert.equal(lifecycle.durationSeconds('1d02:03:04'),93784);
  assert.equal(lifecycle.durationSeconds('1h30m'),5400);
 });
-test('reseller voucher print template has no inline executable scripts or handlers',()=>{
+test('reseller voucher print template has no inline handlers and renders a server-generated QR',()=>{
  const template=fs.readFileSync(path.join(__dirname,'..','views','reseller-voucher-print.ejs'),'utf8');
  const script=fs.readFileSync(path.join(__dirname,'..','public','js','reseller-voucher-print.js'),'utf8');
  assert.doesNotMatch(template,/<script>\s*\(/i);
  assert.doesNotMatch(template,/\sonclick=/i);
- assert.match(template,/data-username="<%= v\.username %>"/);
- assert.match(template,/data-password="<%= v\.password %>"/);
+ assert.match(template,/v\.qrDataUrl/);
+ assert.doesNotMatch(template,/cdnjs\.cloudflare\.com/);
  assert.match(template,/reseller-voucher-print\.js/);
  assert.match(script,/data-print-format/);
 });

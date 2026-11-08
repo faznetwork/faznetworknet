@@ -1,24 +1,23 @@
 const crypto=require("crypto");
 
 function getAdminCredentials(){
-  const ADMIN_USER=String(process.env.ADMIN_USERNAME||process.env.ADMIN_USER||"admin").trim()||"admin";
-  const ADMIN_PASS=String(process.env.ADMIN_PASSWORD||"faznetwork2026").trim()||"faznetwork2026";
+  const ADMIN_USER=String(process.env.ADMIN_USERNAME||process.env.ADMIN_USER||"").trim();
   const ADMIN_HASH=String(process.env.ADMIN_PASSWORD_HASH||"").trim()||null;
-  return {ADMIN_USER,ADMIN_PASS,ADMIN_HASH};
+  return {ADMIN_USER,ADMIN_HASH};
 }
 
 async function adminCredentialsValid(username,password){
-  const {ADMIN_USER,ADMIN_PASS,ADMIN_HASH}=getAdminCredentials();
+  const {ADMIN_USER,ADMIN_HASH}=getAdminCredentials();
   const inputUser=String(username||"").trim();
   const inputPass=String(password||"").trim();
-  if(!inputUser||inputUser.toLowerCase()!==ADMIN_USER.toLowerCase())return false;
-  if(ADMIN_HASH){
-    try{
-      const bcrypt=require("bcryptjs");
-      if(await bcrypt.compare(inputPass,ADMIN_HASH))return true;
-    }catch(error){console.warn("[Admin Auth] bcrypt comparison failed:",error.message);}
+  if(!ADMIN_USER||!ADMIN_HASH||!inputUser||!inputPass||inputUser.toLowerCase()!==ADMIN_USER.toLowerCase())return false;
+  try{
+    const bcrypt=require("bcryptjs");
+    return await bcrypt.compare(inputPass,ADMIN_HASH);
+  }catch(error){
+    console.warn("[Admin Auth] bcrypt comparison failed:",error.message);
+    return false;
   }
-  return inputPass===ADMIN_PASS;
 }
 
 function isAdminAuthenticated(req){

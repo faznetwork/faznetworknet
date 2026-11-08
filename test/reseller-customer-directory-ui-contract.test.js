@@ -30,12 +30,14 @@ test('customer directory preserves customer profile routing and live-status look
 });
 
 
-test('POP directory serial is a 1-based row index and summary colors are flat surfaces', () => {
+test('POP directory uses a 1-based serial and distinct solid-color KPI cards with white text', () => {
   const popUi = read('public/js/pop-reseller-admin.js');
   assert.ok(popUi.includes('state.pops.map(function (pop, index) {'));
   assert.ok(popUi.includes('(index + 1)'));
-  assert.ok(popUi.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
-  assert.ok(popUi.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
-  assert.ok(popUi.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.ok(popUi.includes('fpr-metric--pops{background:#397568}'));
+  assert.ok(popUi.includes('fpr-metric--customers{background:#4f7953}'));
+  assert.ok(popUi.includes('fpr-metric--resellers{background:#317c7a}'));
+  assert.ok(popUi.includes('fpr-metric-label{font-size:12px;color:#fff'));
+  assert.ok(popUi.includes('fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:500;color:#fff'));
   assert.ok(!popUi.includes('linear-gradient(135deg,#f5f3ff,#fffbeb)'));
 });

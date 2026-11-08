@@ -31,8 +31,9 @@ test("captive portal consumes public settings and never calls protected admin AP
  assert.match(script,/display_mode/);
  assert.match(script,/logoUrl/);
  assert.match(script,/bannerUrl/);
- assert.match(script,/features\.online_payment/);
- assert.match(script,/features\.voucher_pin/);
+ assert.match(script,/portalSettingEnabled\(features,config,\['online_payment','enable_online_purchase','enable_online_payment'\]\)/);
+ assert.match(script,/portalSettingEnabled\(features,config,\['voucher_pin','enable_voucher_login','enable_voucher_pin'\]\)/);
+ assert.match(script,/portalSettingEnabled\(features,config,\['qr_scan','enable_qr_scanner','enable_qr_scan'\]\)/);
  assert.doesNotMatch(script,/\/api\/settings\/general/);
  assert.doesNotMatch(script,/\/api\/packages-admin/);
  assert.doesNotMatch(script,/\/api\/admin\/hotspot-portal-settings/);

@@ -60,12 +60,12 @@ test('UI exposes API failures and prevents activation before invitation acceptan
 });
 
 
-test('Admin customer directory exposes composable POP and reseller filters and badges', () => {
+test('Admin customer directory exposes a POP filter and ownership badges without a duplicate reseller filter', () => {
   assert.ok(admin.includes('id="customerPopFilter"'));
-  assert.ok(admin.includes('id="customerResellerFilter"'));
   assert.ok(admin.includes('data-pop-id='));
   assert.ok(admin.includes('data-reseller-id='));
-  assert.ok(admin.includes('matchesStatus&&matchesSearch&&matchesPop&&matchesReseller'));
+  assert.ok(admin.includes('matchesStatus&&matchesSearch&&matchesPop'));
+  assert.ok(!admin.includes('id="customerResellerFilter"'));
   assert.ok(admin.includes('networkBadges'));
 });
 
@@ -288,7 +288,7 @@ test('POP directory uses a dedicated numeric ID column and clean POP name column
   assert.ok(!ui.includes(`'<td class="text-secondary fw-semibold">' + escapeHtml(pop.id) + '</td>' +`));
   assert.ok(ui.includes(`'<td><strong>' + escapeHtml(pop.name) + '</strong></td>' +`));
   assert.ok(ui.includes('<th>#</th><th>Name</th>'));
-  assert.ok(ui.includes('colspan="11"'));
+  assert.ok(ui.includes('colspan="16"'));
   assert.ok(ui.includes('fpr-metric--pops'));
   assert.ok(ui.includes('fpr-metric--customers'));
   assert.ok(ui.includes('fpr-metric--resellers'));
@@ -299,11 +299,12 @@ test('POP and reseller typography uses the approved semantic weight hierarchy', 
   const stylesStart = ui.indexOf('function sharedStyles()');
   const stylesEnd = ui.indexOf('function renderPopManagement', stylesStart);
   const styles = ui.slice(stylesStart, stylesEnd);
-  assert.ok(styles.includes('fpr-metric-label{font-size:12px;color:#64748b;font-weight:500'));
-  assert.ok(styles.includes('fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:700'));
-  assert.ok(styles.includes('fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
-  assert.ok(styles.includes('fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
-  assert.ok(styles.includes('fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.ok(styles.includes('fpr-metric-label{font-size:12px;color:#fff;font-weight:500'));
+  assert.ok(styles.includes('fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:500;color:#fff'));
+  assert.ok(styles.includes('fpr-metric--pops{background:#397568}'));
+  assert.ok(styles.includes('fpr-metric--customers{background:#4f7953}'));
+  assert.ok(styles.includes('fpr-metric--resellers{background:#317c7a}'));
+  assert.ok(styles.includes('.fpr-metric:hover{background:#64748b'));
   assert.ok(!styles.includes('linear-gradient'));
   assert.ok(styles.includes('fpr-table th{font-size:11px;font-weight:600'));
   assert.ok(styles.includes('fpr-table td{vertical-align:middle;font-weight:400'));
@@ -358,13 +359,15 @@ test('POP editor preserves established Hotspot state and sends only intentional 
 });
 
 
-test('Admin POP summary cards use three flat semantic surfaces and the directory serial is 1-based', () => {
+test('Admin POP summary cards use distinct solid surfaces and the directory serial is 1-based', () => {
   const stylesStart = ui.indexOf('function sharedStyles()');
   const stylesEnd = ui.indexOf('function renderPopManagement', stylesStart);
   const styles = ui.slice(stylesStart, stylesEnd);
-  assert.ok(styles.includes('.fpr-metric--pops{background:#f0f7ff;border-color:#d0e2ff}'));
-  assert.ok(styles.includes('.fpr-metric--customers{background:#f0fdf4;border-color:#bbf7d0}'));
-  assert.ok(styles.includes('.fpr-metric--resellers{background:#faf5ff;border-color:#e9d5ff}'));
+  assert.ok(styles.includes('.fpr-metric--pops{background:#397568}'));
+  assert.ok(styles.includes('.fpr-metric--customers{background:#4f7953}'));
+  assert.ok(styles.includes('.fpr-metric--resellers{background:#317c7a}'));
+  assert.ok(styles.includes('.fpr-metric-label{font-size:12px;color:#fff;font-weight:500'));
+  assert.ok(styles.includes('.fpr-metric-value{font-size:clamp(22px,3vw,30px);font-weight:500;color:#fff'));
   assert.doesNotMatch(styles, /\.fpr-metric--(?:pops|customers|resellers)\{[^}]*linear-gradient/i);
   const renderStart = ui.indexOf('function renderPopManagement');
   const renderEnd = ui.indexOf('function popModalHtml', renderStart);

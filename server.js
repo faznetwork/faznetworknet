@@ -13,7 +13,7 @@ if (!String(process.env.DATABASE_URL || "").trim()) {
   console.error("[Fatal Error] DATABASE_URL environment variable is missing!");
   process.exit(1);
 }
-const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
+const path=require("path");const http=require("http");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const resellerPortalController=require("./controllers/resellerPortalController");const resellerPortalRoutes=require("./routes/resellerPortalRoutes");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const publicPaymentController=require("./controllers/publicPaymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const popRoutes=require("./routes/popRoutes");const resellerRoutes=require("./routes/resellerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const {startNetworkDiscovery}=require("./jobs/networkDiscovery");const {startHotspotExpirationCleanup,startHotspotRetentionCleanup}=require("./jobs/hotspotExpirationCleanup");const {syncHotspotProfileScripts}=require("./jobs/hotspotProfileScriptSync");const ipPoolRoutes=require("./routes/ipPoolRoutes");const devicesRoutes=require("./routes/devicesRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const {requireRole,requireStaffReadOnly}=require("./middleware/rbac");
 const {loadResellerBillingAccount}=require("./middleware/resellerBillingAccount");
@@ -24,32 +24,41 @@ const resellerAuthController=require("./controllers/resellerAuthController");
 const resellerHotspotController=require("./controllers/resellerHotspotController");const resellerFinanceRoutes=require("./routes/resellerFinanceRoutes");
 const adminUserRoutes=require("./routes/adminUserRoutes");
 const adminSecurityRoutes=require("./routes/adminSecurityRoutes");
+const automationCallController=require("./controllers/automationCallController");
+const automationCallRoutes=require("./routes/automationCallRoutes");
+const androidGateway=require("./services/androidGateway");
 const appSettingsService=require("./services/appSettings");
 const settingsController=require("./controllers/settingsController");
+const isProduction=String(process.env.NODE_ENV||"").toLowerCase()==="production";
+const configuredSessionSecret=String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"").trim();
+if(isProduction&&!configuredSessionSecret)throw new Error("ADMIN_SESSION_SECRET or SESSION_SECRET is required in production.");
+const sessionSecret=configuredSessionSecret||(isProduction?"":require("crypto").randomBytes(48).toString("hex"));
+if(!sessionSecret)throw new Error("A session signing secret is required.");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 
 // Render liveness probe intentionally runs before session, PostgreSQL, branding, and other middleware.
 // It only confirms that the Node.js process can answer HTTP requests; database health is checked separately.
 app.get("/healthz",(req,res)=>res.status(200).json({status:"ok",uptime:process.uptime(),timestamp:new Date().toISOString()}));
-app.use(session({
+const sessionMiddleware=session({
   store:new pgSession({
     pool:db.getPool(),
     tableName:"session",
     createTableIfMissing:true,
     pruneSessionInterval:60*15
   }),
-  secret:String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"faz_network_super_secret_session_2026"),
+  secret:sessionSecret,
   resave:false,
   saveUninitialized:false,
   rolling:true,
   cookie:{
     maxAge:30*24*60*60*1000,
     httpOnly:true,
-    secure:false,
+    secure:isProduction,
     sameSite:"lax"
   }
-}));
+});
+app.use(sessionMiddleware);
 app.use(express.json({limit:"1mb"}));
 app.use(express.urlencoded({extended:true,limit:"1mb"}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
 app.get("/payment",(req,res)=>res.sendFile(path.join(__dirname,"public","payment.html")));
@@ -118,6 +127,7 @@ app.get(/^\/admin\/account\/(dashboard|manage)\/?$/,requireRole(["super_admin","
 app.get(/^\/admin\/vpn(?:\/port-forwarding)?\/?$/,requireRole(["super_admin"]),(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
 const renderAdminSettingsPage=(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0});
 app.get("/admin/settings",requireRole(["super_admin"]),(req,res)=>res.redirect(302,"/admin/settings/general"));
+app.get("/admin/settings/automation-call",requireRole(["super_admin"]),automationCallController.renderPage);
 app.get(/^\/admin\/settings\/(general|brand-identity|billing-expiry|payment-webhooks|sms-alerts|hotspot-portal|webhooks)\/?$/,requireRole(["super_admin"]),renderAdminSettingsPage);
 app.get(/^\/admin\/.*/,requireAdmin,(req,res,next)=>{
   const adminPath=String(req.path||"").replace(/\/+$/,"")||"/admin";
@@ -155,11 +165,16 @@ app.get("/",async (req,res)=>{
 app.get("/router",requireRole(["super_admin"]),(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
 // Resolve the configured webhook path before other POST routes so an admin-selected
 // custom endpoint remains usable even when its path overlaps an existing API path.
-app.post("/api/pppoe/sync-sessions",require("./controllers/pppoeController").syncSessions);app.use("/api/admin/hotspot-portal-settings",requireAdmin,require("./routes/hotspotPortalSettingsRoutes"));app.get("/api/public/portal-config",require("./controllers/hotspotPortalSettingsController").publicPortalConfig);app.get("/api/hotspot/public-branding",require("./controllers/hotspotPortalSettingsController").publicBranding);app.get("/api/public/payment/settings",publicPaymentController.paymentSettings);app.post("/api/public/payment/check-bill",publicPaymentController.checkSubscriber);app.post("/api/public/payment/session",publicPaymentController.createPaymentSession);app.post("/api/public/payment/confirm",publicPaymentController.confirmPayment);app.use("/api/resellers",resellerRoutes);app.use("/api/reseller-portal",resellerPortalRoutes);app.post("*",paymentController.dynamicWebhook);app.use("/api/notifications",requireRole(["super_admin","admin"]),require("./routes/notificationRoutes"));app.use("/api/admin/live-logs",requireAdmin,requireRole(["super_admin"]),require("./routes/adminLiveLogsRoutes"));app.use("/api/admin/reseller-finance",requireAdmin,requireRole(["super_admin","admin"]),resellerFinanceRoutes);app.use("/api/admin/users",requireAdmin,adminUserRoutes);app.use("/api/admin/security",requireAdmin,adminSecurityRoutes);app.use("/api/hr",require("./routes/hrRoutes"));app.use("/api/router",requireRole(["super_admin"]),routerRoutes);app.post("/api/pppoe/check-subscriber",publicPaymentController.checkSubscriber);app.post("/api/pppoe/verify-renewal",publicPaymentController.verifyRenewal);app.use("/api/pppoe",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,pppoeRoutes);app.use("/api/customer",customerSelfCareRoutes);app.use("/api/hotspot-auth",require("./routes/hotspotAuthRoutes"));app.use("/api/payments-admin",requireRole(["super_admin","admin"]),paymentRoutes);app.use("/api",paymentRoutes);app.use("/api/pops",popRoutes);app.use("/api/customers",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/packages",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/ip-pools",requireRole(["super_admin","admin"]),ipPoolRoutes);app.use("/api/mikrotik",requireRole(["super_admin","admin"]),require("./routes/routerDeviceRoutes"));app.use("/api/devices",requireRole(["super_admin","admin"]),devicesRoutes);app.use("/api/network-map",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./routes/networkMapRoutes"));app.use("/api/settings",requireRole(["super_admin"]),settingsRoutes);app.use("/api/admin/webhook-settings",requireRole(["super_admin"]),require("./routes/webhookSettingsRoutes"));app.use("/api/reports",requireRole(["super_admin","admin"]),reportRoutes);app.post("/api/admin/diagnostics/mikrotik-test",requireRole(["super_admin"]),require("./controllers/adminDiagnosticsController").mikrotikTest);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireRole(["super_admin","admin"]),hotspotRoutes);
+app.post("/api/pppoe/sync-sessions",require("./controllers/pppoeController").syncSessions);app.use("/api/admin/automation-call",requireAdmin,requireRole(["super_admin"]),automationCallRoutes);app.use("/api/admin/hotspot-portal-settings",requireAdmin,require("./routes/hotspotPortalSettingsRoutes"));app.get("/api/public/portal-config",require("./controllers/hotspotPortalSettingsController").publicPortalConfig);app.get("/api/hotspot/public-branding",require("./controllers/hotspotPortalSettingsController").publicBranding);app.get("/api/public/payment/settings",publicPaymentController.paymentSettings);app.post("/api/public/payment/check-bill",publicPaymentController.checkSubscriber);app.post("/api/public/payment/session",publicPaymentController.createPaymentSession);app.post("/api/public/payment/confirm",publicPaymentController.confirmPayment);app.use("/api/resellers",resellerRoutes);app.use("/api/reseller-portal",resellerPortalRoutes);app.post("*",paymentController.dynamicWebhook);app.use("/api/notifications",requireRole(["super_admin","admin"]),require("./routes/notificationRoutes"));app.use("/api/admin/live-logs",requireAdmin,requireRole(["super_admin"]),require("./routes/adminLiveLogsRoutes"));app.use("/api/admin/reseller-finance",requireAdmin,requireRole(["super_admin","admin"]),resellerFinanceRoutes);app.use("/api/admin/users",requireAdmin,adminUserRoutes);app.use("/api/admin/security",requireAdmin,adminSecurityRoutes);app.use("/api/hr",require("./routes/hrRoutes"));app.use("/api/router",requireRole(["super_admin"]),routerRoutes);app.post("/api/pppoe/check-subscriber",publicPaymentController.checkSubscriber);app.post("/api/pppoe/verify-renewal",publicPaymentController.verifyRenewal);app.use("/api/pppoe",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,pppoeRoutes);app.use("/api/customer",customerSelfCareRoutes);app.use("/api/hotspot-auth",require("./routes/hotspotAuthRoutes"));app.use("/api/payments-admin",requireRole(["super_admin","admin"]),paymentRoutes);app.use("/api",paymentRoutes);app.use("/api/pops",popRoutes);app.use("/api/customers",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/packages",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/ip-pools",requireRole(["super_admin","admin"]),ipPoolRoutes);app.use("/api/mikrotik",requireRole(["super_admin","admin"]),require("./routes/routerDeviceRoutes"));app.use("/api/devices",requireRole(["super_admin","admin"]),devicesRoutes);app.use("/api/network-map",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./routes/networkMapRoutes"));app.use("/api/settings",requireRole(["super_admin"]),settingsRoutes);app.use("/api/settings/brand-assets",requireRole(["super_admin"]),require("./routes/brandAssetRoutes"));app.use("/api/admin/webhook-settings",requireRole(["super_admin"]),require("./routes/webhookSettingsRoutes"));app.use("/api/reports",requireRole(["super_admin","admin"]),reportRoutes);app.post("/api/admin/diagnostics/mikrotik-test",requireRole(["super_admin"]),require("./controllers/adminDiagnosticsController").mikrotikTest);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireRole(["super_admin","admin"]),hotspotRoutes);
 app.get("/pppoe",requireRole(["super_admin","admin"]),(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireRole(["super_admin","admin"]),(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireRole(["super_admin","admin"]),(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
-const httpServer=app.listen(PORT,()=>{
+const httpServer=http.createServer(app);
+const { Server: SocketIOServer }=require("socket.io");
+const io=new SocketIOServer(httpServer,{serveClient:true,transports:["websocket","polling"],maxHttpBufferSize:1e6});
+androidGateway.attach(io,sessionMiddleware);
+httpServer.listen(PORT,()=>{
   console.log("FAZ NETWORK Server running on port "+PORT);
+  console.log("[Android Gateway] Socket.IO namespaces ready; device token "+(androidGateway.status().configured?"configured":"not configured"));
   if (deploymentInfo) {
     console.log("[DEPLOY] ========================================================");
     console.log("[DEPLOY] 🚀 DEPLOY LIVE: commit "+deploymentInfo.commitHash+" - \""+deploymentInfo.commitMessage+"\"");
@@ -175,11 +190,10 @@ async function shutdown(signal){
   console.info("[Shutdown] Received "+signal+"; stopping background workers and HTTP server.");
   try{await require("./services/emailWorker").stopEmailWorker();}
   catch(error){console.error("[Shutdown] Email worker shutdown failed:",error.message);}
-  httpServer.close(async error=>{
-    if(error)console.error("[Shutdown] HTTP server close failed:",error.message);
+  io.close(async()=>{
     try{await db.getPool().end();}
     catch(dbError){console.error("[Shutdown] PostgreSQL pool shutdown failed:",dbError.message);}
-    process.exitCode=error?1:0;
+    process.exitCode=0;
   });
   setTimeout(()=>{console.error("[Shutdown] Graceful shutdown timed out.");process.exit(1);},15000).unref();
 }
