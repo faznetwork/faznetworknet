@@ -1916,7 +1916,28 @@
         }
     })();
 </script>
-<style id="sms-history-selection-style">#smsHistorySelectPage.sms-history-select-control,#smsHistoryRows .sms-history-select-control{width:1.25rem;height:1.25rem;min-width:1.25rem;cursor:pointer;vertical-align:middle}#smsHistoryRows .sms-history-select-control{width:1.2rem;height:1.2rem}#smsHistoryDeleteSelectedBtn{font-size:1rem;min-height:40px}#smsHistoryDeleteSelectedBtn .badge{font-size:.9rem}</style></head>
+<style id="sms-history-selection-style">#smsHistorySelectPage.sms-history-select-control,#smsHistoryRows .sms-history-select-control{width:1.25rem;height:1.25rem;min-width:1.25rem;cursor:pointer;vertical-align:middle}#smsHistoryRows .sms-history-select-control{width:1.2rem;height:1.2rem}#smsHistoryDeleteSelectedBtn{font-size:1rem;min-height:40px}#smsHistoryDeleteSelectedBtn .badge{font-size:.9rem}</style><script>
+(function () {
+    function toggleSubmenu(event, button) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!button) return;
+        const submenu = button.nextElementSibling;
+        const isOpen = Boolean(submenu && !submenu.classList.contains('show'));
+        if (submenu) submenu.classList.toggle('show', isOpen);
+        button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        const arrow = button.querySelector('.arrow-icon');
+        if (arrow) {
+            arrow.classList.toggle('bi-chevron-up', isOpen);
+            arrow.classList.toggle('bi-chevron-down', !isOpen);
+        }
+    }
+    window.toggleSubmenu = toggleSubmenu;
+})();
+</script>
+
     <body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>" data-admin-id="<%= typeof currentAdminId !== 'undefined' ? currentAdminId : 0 %>" data-voucher-brand="<%= brandSettings && brandSettings.company_name || 'FAZ NETWORK' %>" data-voucher-logo="<%= brandSettings && brandSettings.logo_url || '' %>" data-voucher-template="<%= brandSettings && ['basic','standard','pro'].includes(brandSettings.voucher_template) ? brandSettings.voucher_template : 'standard' %>">
 
     <div class="sidebar" id="sidebar">
@@ -4590,24 +4611,6 @@ window.editHotspotUser=function(username,event){
         syncMobileSidebarState();
         document.documentElement.classList.remove('admin-route-restoring');
 
-        function toggleSubmenu(event, button) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            if (!button) return;
-            const submenu = button.nextElementSibling;
-            const isOpen = Boolean(submenu && !submenu.classList.contains('show'));
-            if (submenu) submenu.classList.toggle('show', isOpen);
-            button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            const arrow = button.querySelector('.arrow-icon');
-            if (arrow) {
-                arrow.classList.toggle('bi-chevron-up', isOpen);
-                arrow.classList.toggle('bi-chevron-down', !isOpen);
-            }
-        }
-        // Inline onclick handlers need this function on the global window object.
-        window.toggleSubmenu = toggleSubmenu;
         document.addEventListener('click', function(event) {
             if (window.innerWidth >= 768) return;
             const sidebar = document.getElementById('sidebar');
@@ -8864,7 +8867,7 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
         }
 
         function isAdminDashboardRoute() {
-            const path = String(window.location.pathname || '').replace(/\\/$/, '') || '/';
+            const path = String(window.location.pathname || '').replace(/\/$/, '') || '/';
             return path === '/admin' || path === '/admin/dashboard';
         }
 
