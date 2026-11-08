@@ -34,6 +34,7 @@ test('inactive routers can be activated with confirmation and a visible pending 
 test('saved routers can be edited through the existing lifecycle API without UI activation side effects', () => {
   assert.ok(devicesView.includes('data-router-edit'));
   assert.ok(devicesView.includes("form.dataset.routerId = String(router.id)"));
+  assert.ok(devicesView.includes("dispatchEvent(new Event('input', { bubbles: true }))"));
   assert.ok(adminView.includes("method:editing?'PUT':'POST'"));
   assert.ok(adminView.includes("'/api/mikrotik/devices/'+encodeURIComponent(routerId)"));
   assert.ok(adminView.includes('Its current Active / Inactive state was preserved.'));
