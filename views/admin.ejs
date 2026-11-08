@@ -8937,8 +8937,14 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
                 return;
             }
             try {
-                const data = await jsonFetch('/api/router/resources');
-                const r = data.resources || {};
+                const data = await jsonFetch('/api/router/resources', { cache: 'no-store', timeout: 10000, silent: true });
+                if (!data || data.success === false || !data.resources) {
+                    safeSetText('metricCpu', '—');
+                    safeSetText('metricRam', '—');
+                    safeSetText('dashboardRoundRouterStatus', 'Metrics unavailable');
+                    return;
+                }
+                const r = data.resources;
                 const cpu = Number(r.cpuLoad || 0);
                 const ram = Number(r.memoryUsagePercent || 0);
                 safeSetText('metricCpu', cpu + '%');
