@@ -503,7 +503,7 @@ exports.updateDevice = async (req, res) => {
       timeout: body.timeout ?? Math.min(Number(existing.timeout_ms) || 5000, 5000)
     };
     assertValidInput(input);
-    const handshake = await routerDeviceService.testConnection(input);
+    const handshake = consumeConnectionVerification(input, body.verification_token) || await routerDeviceService.testConnection(input);
     if (handshake.api_type !== 'native_api') {
       throw Object.assign(new Error('The selected endpoint did not negotiate a native RouterOS API connection.'), {
         statusCode: 409, errorCode: 'UNSUPPORTED_ROUTER_API_TYPE'
