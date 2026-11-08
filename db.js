@@ -15,9 +15,34 @@ function isConfigured() { return Boolean(String(process.env.DATABASE_URL || "").
 
 function getPool() {
   if (pool) return pool;
+  const databaseUrl = getDatabaseUrl();
+  const isProduction = process.env.NODE_ENV === "production";
+  let connectionString = databaseUrl;
+  let ssl = false;
+
+  if (isProduction) {
+    const ca = String(process.env.SUPABASE_CA_CERT || "").trim();
+    if (!ca.includes("-----BEGIN CERTIFICATE-----") ||
+        !ca.includes("-----END CERTIFICATE-----")) {
+      throw new Error(
+        "SUPABASE_CA_CERT must contain the Supabase PostgreSQL root CA certificate in PEM format."
+      );
+    }
+
+    // node-postgres lets SSL query parameters in connectionString override the
+    // explicit ssl object. Remove URL-level TLS options so the verified CA below
+    // is the single authoritative production TLS configuration.
+    const parsedUrl = new URL(databaseUrl);
+    for (const key of ["ssl", "sslmode", "sslrootcert", "sslcert", "sslkey"]) {
+      parsedUrl.searchParams.delete(key);
+    }
+    connectionString = parsedUrl.toString();
+    ssl = { ca, rejectUnauthorized: true };
+  }
+
   pool = new Pool({
-    connectionString: getDatabaseUrl(),
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
+    connectionString,
+    ssl,
     max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000, statement_timeout: 5000, query_timeout: 5000
   });
   pool.on("error", error => {
