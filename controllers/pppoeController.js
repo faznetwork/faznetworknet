@@ -29,7 +29,9 @@ async function readGlobalActiveSessions(context) {
     if (!report || !Array.isArray(report.sessions)) {
       throw new Error("MikroTik returned an invalid multi-router active-session result.");
     }
-    return report;
+    // This installation has one core gateway. If it is missing or any configured
+    // active gateway is unreachable, no partial/stale list may claim customers Online.
+    return report.liveSync === "ok" ? report : { ...report, sessions: [] };
   } catch (error) {
     console.error(`[PPPoE ${context}] Live router status unavailable; database accounts will be shown Offline.`, {
       message: error?.message || String(error),
