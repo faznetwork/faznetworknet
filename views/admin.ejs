@@ -4795,18 +4795,19 @@ window.editHotspotUser=function(username,event){
                             '<div class="me-auto"><div class="small text-success fw-bold">CORE SYSTEM / NETWORK OPERATIONS</div><h3 class="mb-1">MikroTik Management</h3><div class="text-muted">Manage saved RouterOS connections and the single active core gateway.</div></div>' +
                             '<button class="btn btn-success" id="devicesAddBtn" type="button"><i class="bi bi-router me-1"></i>Add Router</button>' +
                         '</div>' +
+                        '<div class="row g-3 mb-3" aria-label="MikroTik gateway summary">' +
+                            '<div class="col-12 col-sm-6 col-xl-4"><article class="card border-0 shadow-sm h-100"><div class="card-body d-flex align-items-center gap-3"><div class="rounded-3 bg-primary-subtle text-primary p-3"><i class="bi bi-hdd-network fs-4"></i></div><div><div class="small text-muted">Saved routers</div><div class="h4 fw-bold mb-0">' + savedRouters.length + '</div><div class="small text-muted">Configured RouterOS gateways</div></div></div></article></div>' +
+                            '<div class="col-12 col-sm-6 col-xl-4"><article class="card border-0 shadow-sm h-100"><div class="card-body d-flex align-items-center gap-3"><div class="rounded-3 bg-success-subtle text-success p-3"><i class="bi bi-router fs-4"></i></div><div class="text-truncate"><div class="small text-muted">Active gateway</div><div class="fs-6 fw-bold text-truncate">' + esc(savedRouters.find(isActive)?.router_name || 'Not selected') + '</div><div class="small text-muted">Primary route</div></div></div></article></div>' +
+                            '<div class="col-12 col-sm-6 col-xl-4"><article class="card border-0 shadow-sm h-100"><div class="card-body d-flex align-items-center gap-3"><div class="rounded-3 bg-warning-subtle text-warning-emphasis p-3"><i class="bi bi-arrow-left-right fs-4"></i></div><div><div class="small text-muted">Standby routers</div><div class="h4 fw-bold mb-0">' + savedRouters.filter(router => !isActive(router)).length + '</div><div class="small text-muted">Available for failover</div></div></div></article></div>' +
+                        '</div>' +
                         '<div class="card border-0 shadow-sm mb-3">' +
-                            '<div class="card-header bg-white py-3 d-flex flex-wrap align-items-center gap-2"><strong>Saved MikroTik Gateways</strong><span class="badge text-bg-light">' + savedRouters.length + ' saved</span><span class="small text-muted ms-auto">Exactly one router should be Active.</span></div>' +
+                            '<div class="card-header bg-white py-3 d-flex flex-wrap align-items-center gap-2"><strong>Saved MikroTik Gateways</strong><span class="small text-muted ms-auto">Exactly one router should be Active.</span></div>' +
                             '<div id="routerLifecycleFeedback" class="px-3 pt-3" role="status" aria-live="polite"></div>' +
                             '<div class="table-responsive"><table class="table table-hover align-middle mb-0" style="min-width: 850px"><colgroup><col style="width:28%"><col style="width:21%"><col style="width:14%"><col style="width:16%"><col style="width:21%"></colgroup><thead class="table-light"><tr><th>Router &amp; Identity</th><th>IP &amp; API Port</th><th>Role / Mode</th><th>Connection Status</th><th class="text-end">Actions</th></tr></thead><tbody>' +
                                 (routerRows || '<tr><td colspan="5" class="text-center text-muted py-5">No saved MikroTik routers. Add a router and complete a successful connection test before saving.</td></tr>') +
                             '</tbody></table></div>' +
                         '</div>' +
-                        '<div class="row g-3 mb-3">' +
-                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Saved Routers</div><div class="fs-3 fw-bold">' + savedRouters.length + '</div></div></div></div>' +
-                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Active Gateway</div><div class="fs-6 fw-bold">' + esc(savedRouters.find(isActive)?.router_name || 'Not selected') + '</div></div></div></div>' +
-                            '<div class="col-6 col-xl-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Standby Routers</div><div class="fs-3 fw-bold">' + savedRouters.filter(router => !isActive(router)).length + '</div></div></div></div>' +
-                        '</div>' +
+
 
                     '</section>';
 
@@ -10396,10 +10397,10 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       modalElement?.addEventListener('hide.bs.modal',()=>{
         if(modalElement.contains(document.activeElement)) document.activeElement.blur();
       });
-      let testedFingerprint='';
+      let testedFingerprint='',testedVerificationToken='';
       const fields=['routerDeviceName','routerDeviceHost','routerDevicePort','routerDeviceUsername','routerDevicePassword','routerDeviceTimeout'];
       function fingerprint(){return fields.map(id=>$(id).type==='checkbox'?String($(id).checked):String($(id).value||'')).join('|');}
-      function invalidateTest(){testedFingerprint='';$('routerDeviceSaveBtn').disabled=true;$('routerDeviceTestDetails').classList.add('d-none');}
+      function invalidateTest(){testedFingerprint='';testedVerificationToken='';$('routerDeviceSaveBtn').disabled=true;$('routerDeviceTestDetails').classList.add('d-none');}
       function result(message,kind,icon){const el=$('routerDeviceTestResult');el.className='alert alert-'+kind+' mb-0 py-2';el.textContent='';const i=document.createElement('i');i.className='bi '+icon+' me-1';el.appendChild(i);el.appendChild(document.createTextNode(message));}
       fields.forEach(id=>$(id).addEventListener('input',invalidateTest));
       $('routerDeviceTogglePassword').addEventListener('click',()=>{const p=$('routerDevicePassword'),show=p.type==='password';p.type=show?'text':'password';$('routerDeviceTogglePassword').innerHTML='<i class="bi '+(show?'bi-eye-slash':'bi-eye')+'"></i>';$('routerDeviceTogglePassword').setAttribute('aria-label',show?'Hide password':'Show password');});
@@ -10420,7 +10421,9 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
           const response=await fetch('/api/mikrotik/test-connection',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',signal:requestController.signal,body:JSON.stringify(data)});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
           if(!response.ok||!body.success){const message=body.message||'Connection failed.';result(((body.status==='unreachable'||body.code==='CONNECTION_REFUSED'||body.errorCode==='PORT_UNREACHABLE'||body.errorCode==='TIMEOUT')?'Router unreachable: ':(body.status==='auth_failed'||body.code==='AUTH_FAILED'||body.errorCode==='INVALID_CREDENTIALS')?'Invalid credentials: ':'')+message,body.status==='auth_failed'?'danger':'warning',body.status==='auth_failed'?'bi-shield-x':'bi-exclamation-triangle');return;}
+          if(!body.verification_token){result('Connection succeeded but the save verification token was missing. Test again.','danger','bi-x-circle');return;}
           testedFingerprint=fingerprint();
+          testedVerificationToken=body.verification_token;
           $('routerDeviceLatency').textContent=body.latency_ms+' ms';
           $('routerDeviceBoard').textContent=body.board_model||'Unknown';
           $('routerDeviceVersion').textContent=body.ros_version||'Unknown';
@@ -10440,7 +10443,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
       });
       form.addEventListener('submit',async event=>{
         event.preventDefault();
-        if(!testedFingerprint||testedFingerprint!==fingerprint()){invalidateTest();result('Test the current settings successfully before saving.','warning','bi-exclamation-triangle');return;}
+        if(!testedFingerprint||testedFingerprint!==fingerprint()||!testedVerificationToken){invalidateTest();result('Test the current settings successfully before saving.','warning','bi-exclamation-triangle');return;}
         const routerId=String(form.dataset.routerId||'').trim();
         const editing=Boolean(routerId);
         const button=$('routerDeviceSaveBtn');
@@ -10448,7 +10451,7 @@ function startNocPolling(){if(window.nocStatsTimer)clearInterval(window.nocStats
         button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
         try{
           const url=editing?'/api/mikrotik/devices/'+encodeURIComponent(routerId):'/api/mikrotik/add-device';
-          const response=await fetch(url,{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(payload())});
+          const response=await fetch(url,{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify({...payload(),verification_token:testedVerificationToken})});
           const body=await response.json().catch(()=>({message:'Invalid server response'}));
           if(!response.ok||!body.success)throw new Error(body.message||'Router could not be saved.');
           result(editing?'Router updated successfully. Its current Active / Inactive state was preserved.':'Router saved successfully as Inactive. The live gateway was not changed.','success','bi-check-circle-fill');
