@@ -38,8 +38,18 @@ test('saved routers can be edited through the existing lifecycle API without UI 
   assert.ok(devicesView.includes("dispatchEvent(new Event('input', { bubbles: true }))"));
   assert.ok(adminView.includes("method:editing?'PUT':'POST'"));
   assert.ok(adminView.includes("'/api/mikrotik/devices/'+encodeURIComponent(routerId)"));
+  assert.ok(adminView.includes('verification_token:testedVerificationToken'), 'save must reuse its passed connection verification');
   assert.ok(adminView.includes('Its current Active / Inactive state was preserved.'));
   assert.ok(adminView.includes('saved successfully as Inactive. The live gateway was not changed.'));
+});
+
+test('gateway summary cards appear above the saved router table', () => {
+  const summaryAt = devicesView.indexOf('aria-label="MikroTik gateway summary"');
+  const tableAt = devicesView.indexOf('IP &amp; API Port');
+  assert.ok(summaryAt >= 0 && tableAt > summaryAt, 'gateway counters should sit above the table');
+  assert.ok(devicesView.includes('Saved routers'));
+  assert.ok(devicesView.includes('Active gateway'));
+  assert.ok(devicesView.includes('Standby routers'));
 });
 
 test('MikroTik Management displays only the authoritative saved-gateway list', () => {
