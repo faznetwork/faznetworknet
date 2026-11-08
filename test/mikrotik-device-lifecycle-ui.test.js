@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 const adminView = read('views/admin.ejs');
@@ -42,4 +43,13 @@ test('saved routers can be edited through the existing lifecycle API without UI 
 test('the lifecycle endpoints remain registered on the existing MikroTik router', () => {
   assert.ok(routerRoutes.includes("router.post('/devices/:id/activate', controller.activateDevice);"));
   assert.ok(routerRoutes.includes("router.post('/devices/:id/deactivate', controller.deactivateDevice);"));
+});
+
+test('the complete devices view and router modal scripts parse as JavaScript', () => {
+  assert.doesNotThrow(() => new vm.Script(devicesView));
+  const modalStart = adminView.indexOf("<script>\\n    (function(){\\n      const form=document.getElementById('mikrotikAddRouterForm');");
+  const modalEnd = adminView.indexOf('</script>', modalStart);
+  assert.ok(modalStart >= 0 && modalEnd > modalStart, 'router modal script boundaries must exist');
+  const modalScript = adminView.slice(modalStart + '<script>'.length, modalEnd);
+  assert.doesNotThrow(() => new vm.Script(modalScript));
 });
