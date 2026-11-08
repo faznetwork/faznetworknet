@@ -38,6 +38,27 @@ function publicError(res, error) {
     message: error?.message || 'Router device operation failed.'
   });
 }
+function connectionTestError(res, error) {
+  const code = String(error?.errorCode || error?.code || '').toUpperCase();
+  const authFailure = code === 'INVALID_CREDENTIALS' || code === 'EAUTH';
+  const validationFailure = error?.statusCode === 400 || code === 'VALIDATION_ERROR';
+  const unreachable = ['TIMEOUT', 'PORT_UNREACHABLE', 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET'].includes(code);
+  const status = authFailure ? 'auth_failed' : validationFailure ? 'invalid' : unreachable ? 'unreachable' : 'error';
+  const httpStatus = validationFailure ? 400 : (authFailure || unreachable) ? 200 : (error?.statusCode || 500);
+  if (httpStatus >= 500) {
+    console.error('[Router Device API] Connection test failed', { code: code || null, message: error?.message || String(error) });
+  } else {
+    console.warn('[Router Device API] Connection test failed', { code: code || null, status, message: error?.message || String(error) });
+  }
+  return res.set('Cache-Control', 'no-store').status(httpStatus).json({
+    success: false,
+    status,
+    code: error?.errorCode || code || 'ROUTER_CONNECTION_FAILED',
+    errorCode: error?.errorCode || null,
+    message: error?.message || (unreachable ? 'Router is unreachable or its API port is closed.' : 'Router connection test failed.'),
+    protocolDiagnostics: Array.isArray(error?.protocolDiagnostics) ? error.protocolDiagnostics : []
+  });
+}
 function inputFrom(body) {
   return {
     router_name: clean(body.router_name, 120),
@@ -99,9 +120,46 @@ exports.testConnection = async (req, res) => {
     const input = inputFrom(req.body || {});
     assertValidInput(input);
     const result = await routerDeviceService.testConnection(input);
-    return res.json({ success: true, ...result, message: 'RouterOS handshake successful.' });
+    return res.set('Cache-Control', 'no-store').json({ success: true, status: 'online', ...result, message: 'RouterOS handshake successful.' });
   } catch (error) {
-    return publicError(res, error);
+    return connectionTestError(res, error);
+  }
+};
+
+exports.testSavedDevice = async (req, res) => {
+  let routerId = null;
+  try {
+    const id = positiveId(req.params.id);
+    routerId = id;
+    const result = await db.query(
+      "SELECT id,router_name,host,api_port,username,password_encrypted,timeout_ms FROM router_devices WHERE id=$1 LIMIT 2",
+      [id]
+    );
+    if ((result.rows || []).length !== 1) {
+      throw Object.assign(new Error('Saved router was not found.'), { statusCode: 404, errorCode: 'ROUTER_NOT_FOUND' });
+    }
+    const router = result.rows[0];
+    const handshake = await routerDeviceService.testConnection({
+      router_name: router.router_name,
+      host: router.host,
+      api_port: router.api_port,
+      username: router.username,
+      password: credentials.decrypt(router.password_encrypted),
+      timeout: Math.min(Number(router.timeout_ms) || 5000, 5000)
+    });
+    await db.query("UPDATE router_devices SET status='online',last_synced=NOW(),updated_at=NOW() WHERE id=$1", [id])
+      .catch(error => console.warn('[Router Device API] Could not persist successful connection check', { routerId: id, message: error?.message || String(error) }));
+    return res.set('Cache-Control', 'no-store').json({
+      success: true, status: 'online', router_id: String(router.id),
+      ...handshake, message: 'RouterOS handshake successful.'
+    });
+  } catch (error) {
+    if (routerId && error?.errorCode !== 'ROUTER_NOT_FOUND' && error?.errorCode !== 'INVALID_ROUTER_ID') {
+      const status = error?.routerStatus === 'auth_failed' || error?.errorCode === 'INVALID_CREDENTIALS' ? 'auth_failed' : 'offline';
+      await db.query("UPDATE router_devices SET status=$1,updated_at=NOW() WHERE id=$2", [status, routerId])
+        .catch(updateError => console.warn('[Router Device API] Could not persist failed connection check', { routerId, message: updateError?.message || String(updateError) }));
+    }
+    return connectionTestError(res, error);
   }
 };
 
@@ -308,6 +366,57 @@ exports.deactivateDevice = async (req, res) => {
     mikrotikService.invalidateConfigCache();
     return res.set('Cache-Control', 'no-store').json({
       success: true, router: result, message: 'Router deactivated. No core router is currently selected.'
+    });
+  } catch (error) {
+    return publicError(res, error);
+  }
+};
+
+exports.deleteDevice = async (req, res) => {
+  let deletedId = null;
+  try {
+    const id = positiveId(req.params.id);
+    const deleted = await db.withTransaction(async client => {
+      await client.query("SELECT pg_advisory_xact_lock(71420531, 1)");
+      const target = await client.query(
+        "SELECT id,is_active FROM router_devices WHERE id=$1 FOR UPDATE",
+        [id]
+      );
+      if ((target.rows || []).length !== 1) {
+        throw Object.assign(new Error('Saved router was not found.'), { statusCode: 404, errorCode: 'ROUTER_NOT_FOUND' });
+      }
+      if (target.rows[0].is_active) {
+        throw Object.assign(new Error('The active gateway cannot be deleted. Activate another router or deactivate this gateway first.'), {
+          statusCode: 409, errorCode: 'ACTIVE_ROUTER_DELETE_BLOCKED'
+        });
+      }
+      const result = await client.query(
+        "DELETE FROM router_devices WHERE id=$1 AND is_active=FALSE RETURNING id",
+        [id]
+      );
+      if ((result.rows || []).length !== 1) {
+        throw Object.assign(new Error('Router changed while deletion was in progress. Refresh and try again.'), {
+          statusCode: 409, errorCode: 'ROUTER_DELETE_CONFLICT'
+        });
+      }
+      return result.rows[0];
+    });
+    deletedId = String(deleted.id);
+    try {
+      await mikrotikService.runtimePool.invalidate(id);
+    } catch (error) {
+      console.error('[Router Device API] Router was deleted but its runtime could not be closed', {
+        routerId: deletedId, message: error?.message || String(error)
+      });
+      mikrotikService.invalidateConfigCache();
+      return res.status(200).json({
+        success: false, deleted: true, router_id: deletedId, reconnect: 'failed',
+        message: 'Router was removed, but its runtime could not be closed. Refresh the list and review service logs.'
+      });
+    }
+    mikrotikService.invalidateConfigCache();
+    return res.set('Cache-Control', 'no-store').json({
+      success: true, deleted: true, router_id: deletedId, message: 'Standby router removed.'
     });
   } catch (error) {
     return publicError(res, error);

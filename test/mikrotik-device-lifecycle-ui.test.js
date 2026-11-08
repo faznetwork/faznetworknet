@@ -14,10 +14,11 @@ const devicesStart = adminView.indexOf('window.loadDevices = loadDevices;');
 const devicesEnd = adminView.indexOf('window.loadOltManagement =', devicesStart);
 const devicesView = adminView.slice(devicesStart, devicesEnd);
 
-test('MikroTik Devices renders an Active or Inactive state for every saved router', () => {
+test('MikroTik Devices renders Primary / Standby roles and a connection status for every saved router', () => {
   assert.ok(devicesView.includes("const savedRouters = Array.isArray(routerResponse.devices) ? routerResponse.devices : [];"));
-  assert.ok(devicesView.includes('text-bg-success">Active</span>'));
-  assert.ok(devicesView.includes('text-bg-secondary">Inactive</span>'));
+  assert.ok(devicesView.includes('Primary</span>'));
+  assert.ok(devicesView.includes('Standby</span>'));
+  assert.ok(devicesView.includes('data-router-status'));
   assert.ok(devicesView.includes("savedRouters.map(router =>"));
 });
 
@@ -68,4 +69,51 @@ test('MikroTik Management does not expose or invoke the deprecated cloud-incompa
   assert.ok(!devicesView.includes('devicesDiscoverBtn'));
   assert.ok(!devicesView.includes('devicesDiscoveryResult'));
   assert.ok(!devicesView.includes('/api/devices/mikrotik/discover'));
+});
+
+test('MikroTik rows expose test, activate, edit, and safe delete actions with clear role and status labels', () => {
+  assert.ok(devicesView.includes('data-router-test'));
+  assert.ok(devicesView.includes('data-router-activate'));
+  assert.ok(devicesView.includes('data-router-edit'));
+  assert.ok(devicesView.includes('data-router-delete'));
+  assert.ok(devicesView.includes("'/api/mikrotik/devices/' + encodeURIComponent(router.id) + '/test-connection'"));
+  assert.ok(devicesView.includes("method: 'DELETE'"));
+  assert.ok(devicesView.includes('window.confirm('));
+  assert.ok(devicesView.includes('Primary'));
+  assert.ok(devicesView.includes('Standby'));
+  assert.ok(devicesView.includes('Last check: Online'));
+  assert.ok(devicesView.includes('aria-busy'));
+  assert.ok(routerRoutes.includes("router.post('/devices/:id/test-connection', controller.testSavedDevice);"));
+  assert.ok(routerRoutes.includes("router.delete('/devices/:id', controller.deleteDevice);"));
+});
+
+test('dashboard PPPoE and traffic polling requires a verified gateway and dashboard route', () => {
+  const dashboardStart = adminView.indexOf('async function refreshDashboard()');
+  const dashboardEnd = adminView.indexOf('async function loadRouterMetrics()', dashboardStart);
+  const dashboardCode = adminView.slice(dashboardStart, dashboardEnd);
+  const verifyAt = dashboardCode.indexOf('await ensureActiveGatewayVerified()');
+  const pppoeAt = dashboardCode.indexOf("jsonFetch('/api/pppoe/users'");
+  assert.ok(dashboardCode.includes('isAdminDashboardRoute()'));
+  assert.ok(verifyAt >= 0 && pppoeAt > verifyAt, 'gateway must be verified before PPPoE fetches');
+  assert.ok(dashboardCode.includes('if (gatewayVerified)'));
+  const trafficStart = adminView.indexOf('async function pollTraffic()');
+  const trafficEnd = adminView.indexOf('function startTrafficPolling()', trafficStart);
+  const trafficCode = adminView.slice(trafficStart, trafficEnd);
+  assert.ok(trafficCode.includes('await ensureActiveGatewayVerified()'));
+  assert.ok(trafficCode.includes('silent: true'));
+});
+
+test('MikroTik modal moves focus out before Bootstrap hides it', () => {
+  const modalStart = adminView.indexOf("const modalElement=$('mikrotikAddRouterModal');");
+  const modalEnd = adminView.indexOf("let testedFingerprint=", modalStart);
+  const modalCode = adminView.slice(modalStart, modalEnd);
+  assert.ok(modalCode.includes("addEventListener('hide.bs.modal'"));
+  assert.ok(modalCode.includes('modalElement.contains(document.activeElement)'));
+  assert.ok(modalCode.includes('document.activeElement.blur()'));
+});
+
+test('manual RouterOS connection checks use a bounded request timeout', () => {
+  assert.ok(adminView.includes('requestController=new AbortController()'));
+  assert.ok(adminView.includes('setTimeout(()=>requestController.abort(),15000)'));
+  assert.ok(adminView.includes("status==='unreachable'") || adminView.includes("body.status==='unreachable'"));
 });
