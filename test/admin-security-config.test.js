@@ -44,7 +44,8 @@ test('production sessions require a configured secret and use secure cookies', (
 test('production PostgreSQL TLS verifies certificates and the global bypass is absent', () => {
   const db = fs.readFileSync(path.join(__dirname, '..', 'db.js'), 'utf8');
   const syncDb = fs.readFileSync(path.join(__dirname, '..', 'sync_db.js'), 'utf8');
-  const localEnv = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+  const localEnvPath = path.join(__dirname, '..', '.env');
+  const localEnv = fs.existsSync(localEnvPath) ? fs.readFileSync(localEnvPath, 'utf8') : '';
   assert.match(db, /rejectUnauthorized:\s*true/);
   assert.doesNotMatch(db, /rejectUnauthorized:\s*false/);
   assert.match(syncDb, /rejectUnauthorized:\s*true/);
