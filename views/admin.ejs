@@ -8892,7 +8892,8 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
 
         async function refreshDashboard() {
             const dashboard = document.getElementById('view-main-dashboard');
-            if (!isAdminDashboardRoute() || !dashboard || dashboard.style.display === 'none') return;
+            if (!dashboard || dashboard.style.display === 'none') return;
+            if (!isAdminDashboardRoute()) return;
             try {
                 const gatewayVerified = await ensureActiveGatewayVerified();
                 const summaryPromise = jsonFetch('/api/payments/summary', { timeout: 10000, silent: true });
