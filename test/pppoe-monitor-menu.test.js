@@ -25,5 +25,6 @@ test('Usage counters are labelled as current session data and the tables are res
   assert.ok(adminView.includes('Current active-session byte counters only; these are not lifetime billing totals.'));
   assert.ok(adminView.includes('class="table-responsive border rounded-3"'));
   assert.ok(adminView.includes('Recent snapshot · fallback'));
-  assert.ok(adminView.includes("data.source === 'mikrotik-live' ? 'MikroTik live'"));
+  const pppoeController = read('controllers/pppoeController.js');
+  assert.ok(pppoeController.includes('"mikrotik-live"'), 'the live-session API must identify its RouterOS source');
 });
