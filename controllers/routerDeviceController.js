@@ -19,6 +19,7 @@ function connectionFingerprint(input) {
     Number(input.api_port ?? input.port),
     clean(input.username, 160),
     String(input.password ?? ''),
+    clean(input.api_type, 20),
     Math.min(Number(input.timeout) || 5000, 5000)
   ];
   return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
@@ -114,6 +115,7 @@ function inputFrom(body) {
     api_port: body.api_port ?? body.port,
     username: clean(body.username, 160),
     password: String(body.password ?? ''),
+    api_type: clean(body.api_type, 20),
     timeout: body.timeout
   };
 }
@@ -181,7 +183,7 @@ exports.testSavedDevice = async (req, res) => {
     const id = positiveId(req.params.id);
     routerId = id;
     const result = await db.query(
-      "SELECT id,router_name,host,api_port,username,password_encrypted,timeout_ms FROM router_devices WHERE id=$1 LIMIT 2",
+      "SELECT id,router_name,host,api_type,api_port,username,password_encrypted,timeout_ms FROM router_devices WHERE id=$1 LIMIT 2",
       [id]
     );
     if ((result.rows || []).length !== 1) {
@@ -194,7 +196,8 @@ exports.testSavedDevice = async (req, res) => {
       api_port: router.api_port,
       username: router.username,
       password: credentials.decrypt(router.password_encrypted),
-      timeout: Math.min(Number(router.timeout_ms) || 5000, 5000)
+      timeout: Math.min(Number(router.timeout_ms) || 5000, 5000),
+      api_type: router.api_type
     });
     await db.query("UPDATE router_devices SET status='online',last_synced=NOW(),updated_at=NOW() WHERE id=$1", [id])
       .catch(error => console.warn('[Router Device API] Could not persist successful connection check', { routerId: id, message: error?.message || String(error) }));
@@ -498,7 +501,8 @@ exports.updateDevice = async (req, res) => {
       api_port: body.api_port ?? body.port ?? existing.api_port,
       username: clean(body.username ?? existing.username, 160),
       password: String(body.password || '') || credentials.decrypt(existing.password_encrypted),
-      timeout: body.timeout ?? Math.min(Number(existing.timeout_ms) || 5000, 5000)
+      timeout: body.timeout ?? Math.min(Number(existing.timeout_ms) || 5000, 5000),
+      api_type: existing.api_type
     };
     assertValidInput(input);
     const handshake = consumeConnectionVerification(input, body.verification_token) || await routerDeviceService.testConnection(input);
