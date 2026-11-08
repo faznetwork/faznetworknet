@@ -136,11 +136,12 @@ test("optional phone never becomes NULL in Hotspot payment associations and veri
 
 
 test("RouterOS force provisioning clears matching active sessions and cookies and reports MAC auto-auth readiness",async()=>{
- const oldConnection=mikrotik._withConnection;
+ const runtime = new (require("../services/mikrotikService").MikroTikService)();
+ const oldConnection=runtime._withConnection;
  const calls=[];
  const mac="AA:BB:CC:DD:EE:FF";
  try{
-  mikrotik._withConnection=async(_label,callback)=>callback({write:async(command,params=[])=>{
+  runtime._withConnection=async(_label,callback)=>callback({write:async(command,params=[])=>{
    calls.push({command,params});
    if(command==="/ip/hotspot/user/print")return [];
    if(command==="/ip/hotspot/user/profile/print")return [{name:"1-Hour"}];
@@ -156,7 +157,7 @@ test("RouterOS force provisioning clears matching active sessions and cookies an
    ];
    return [];
   }});
-  const result=await mikrotik.forceProvisionHotspotUser({username:mac,macAddress:mac,profile:"1-Hour",validity:"1h",limitBytesTotal:0,server:"all",comment:"FAZ|FORCE"});
+  const result=await runtime.forceProvisionHotspotUser({username:mac,macAddress:mac,profile:"1-Hour",validity:"1h",limitBytesTotal:0,server:"all",comment:"FAZ|FORCE"});
   assert.equal(result.macAuthEnabled,true);
   assert.equal(result.clearedActiveSessions,1);
   assert.equal(result.clearedCookies,1);
@@ -164,6 +165,6 @@ test("RouterOS force provisioning clears matching active sessions and cookies an
   assert.ok(calls.some(call=>call.command==="/ip/hotspot/cookie/remove"&&call.params[0]==="=.id=*cookie1"));
   assert.ok(!calls.some(call=>call.params.includes("=.id=*active2")||call.params.includes("=.id=*cookie2")));
  }finally{
-  mikrotik._withConnection=oldConnection;
+  runtime._withConnection=oldConnection;
  }
 });
