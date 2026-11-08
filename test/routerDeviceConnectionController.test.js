@@ -65,6 +65,22 @@ test('invalid RouterOS test input remains a structured 400 response', async () =
   assert.equal(res.body.status, 'invalid');
 });
 
+test('custom RouterOS API ports default to native_api when the modal omits api_type', async () => {
+  let received;
+  routerService.testConnection = async input => {
+    received = input;
+    return {
+      status: 'online', identity: 'edge-router', api_type: 'native_api',
+      host: input.host, api_port: input.api_port, use_ssl: false
+    };
+  };
+  const res = response();
+  await controller.testConnection({ body: { ...validInput, api_port: 1039 } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(received.api_type, 'native_api');
+});
+
 test('successful RouterOS test returns a short-lived save verification token', async () => {
   routerService.testConnection = async () => ({
     status: 'online', identity: 'edge-router', api_type: 'native_api',
