@@ -502,7 +502,7 @@ exports.updateDevice = async (req, res) => {
       username: clean(body.username ?? existing.username, 160),
       password: String(body.password || '') || credentials.decrypt(existing.password_encrypted),
       timeout: body.timeout ?? Math.min(Number(existing.timeout_ms) || 5000, 5000),
-      api_type: existing.api_type
+      api_type: clean(body.api_type, 20)
     };
     assertValidInput(input);
     const handshake = consumeConnectionVerification(input, body.verification_token) || await routerDeviceService.testConnection(input);
