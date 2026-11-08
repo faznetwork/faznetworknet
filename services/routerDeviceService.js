@@ -34,7 +34,9 @@ function validateConfig(input) {
   if (!password || password.length > 1024) throw inputError('RouterOS password is required and must be at most 1024 characters.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('Port must be an integer between 1 and 65535.');
   if (!Number.isInteger(timeout) || timeout < 500 || timeout > DEFAULT_TIMEOUT_MS) throw inputError('Timeout must be between 500 and 5000 ms.');
-  return { host, username, password, port, timeout };
+  const api_type = String(input.api_type || '').trim().toLowerCase();
+  if (api_type && !['native_api', 'rest_api'].includes(api_type)) throw inputError('API type must be native_api or rest_api.');
+  return { host, username, password, port, timeout, api_type };
 }
 
 function classifyError(error) {
@@ -273,64 +275,123 @@ async function testRest(config, protocol) {
   };
 }
 
+async function testNativeWithApplicationClient(config, timeout) {
+  const started = Date.now();
+  const { MikroTikService } = require('./mikrotikService');
+  const runtime = new MikroTikService();
+  try {
+    const result = await runtime.testConnection({
+      host: config.host,
+      port: config.port,
+      user: config.username,
+      password: config.password,
+      timeout
+    });
+    return {
+      status: 'online',
+      identity: result.routerName,
+      board_model: result.boardName || result.model,
+      ros_version: result.version,
+      uptime: result.uptime,
+      cpu_load: null,
+      latency_ms: Date.now() - started,
+      host: config.host,
+      api_port: config.port,
+      api_type: 'native_api',
+      use_ssl: false
+    };
+  } finally {
+    // A verification runtime is deliberately short lived and independent from
+    // the live customer-session connection queue.
+    try { await runtime.close(); } catch (_) {}
+  }
+}
+
+function protocolSummary(error) {
+  const code=String(error?.code||'').toUpperCase();
+  const message=String(error?.message||'');
+  if (code==='EAUTH'||/AUTH|LOGIN|WRONG USER|INVALID USER|BAD CREDENTIAL|NOT ENOUGH PERMISSIONS|POLICY/i.test(message)) return 'authentication or API policy rejected';
+  if (/ETIMEDOUT|TIMEOUT|ABORT_ERR/.test(code)||/timed? ?out|timeout|aborted/i.test(message)) return 'connection timed out';
+  if (/ECONNREFUSED/.test(code)) return 'connection refused';
+  if (/ECONNRESET/.test(code)) return 'connection reset';
+  return 'protocol handshake failed';
+}
+
+function normalizedConnectionError(error, protocol) {
+  const classified=classifyError(error);
+  return Object.assign(new Error(classified.message + ' Protocol diagnostics: ' + protocol + ': ' + protocolSummary(error) + '.'), {
+    statusCode: classified.status==='auth_failed'?401:503,
+    routerStatus: classified.status,
+    errorCode: classified.code,
+    protocolDiagnostics: [protocol + ': ' + protocolSummary(error)],
+    cause: error
+  });
+}
+
 async function testConnection(input) {
   const config = validateConfig(input);
   const attempts = [];
+  const started=Date.now();
+  const deadline=started+config.timeout;
+  const remaining=()=>Math.max(0,deadline-Date.now());
+  const nativePreferred=config.api_type==='native_api'||(!config.api_type&&![80,443].includes(config.port));
+  const restPreferred=config.api_type==='rest_api'||(!config.api_type&&[80,443].includes(config.port));
 
-  for (const protocol of ['https:', 'http:']) {
-    try {
-      const result = await testRest({ ...config, timeout: Math.min(config.timeout, 700) }, protocol);
-      return { ...result, host: config.host, api_port: config.port };
-    } catch (error) {
-      attempts.push({
-        protocol: protocol === 'https:' ? 'HTTPS REST' : 'HTTP REST',
-        error
-      });
+  if(nativePreferred){
+    // Use the same node-routeros implementation used by customer/session APIs.
+    // This makes "Test Connection" verify the protocol the app actually uses.
+    const nativeTimeout=Math.min(remaining(),config.api_type==='native_api'?config.timeout:3500);
+    try{
+      const result=await testNativeWithApplicationClient(config,nativeTimeout);
+      return result;
+    }catch(error){
+      if(config.api_type==='native_api')throw normalizedConnectionError(error,'Native API (application client)');
+      attempts.push({protocol:'Native API (application client)',error});
     }
   }
 
-  // A REST 401/403 on a forwarded native-API port does not prove that
-  // RouterOS API credentials are invalid. Always try both native transports.
-  for (const secure of [true, false]) {
-    const protocol = secure ? 'Native API over TLS' : 'Native API';
-    try {
-      const result = await nativeRequest({ ...config, timeout: Math.min(config.timeout, 1700) }, secure);
-      return { ...result, host: config.host, api_port: config.port, use_ssl: secure };
-    } catch (error) {
-      attempts.push({ protocol, error });
+  if(!nativePreferred||remaining()>0){
+    for(const protocol of ['https:','http:']){
+      const timeout=Math.min(remaining(),700);
+      if(timeout<=0)break;
+      try{
+        const result=await testRest({...config,timeout},protocol);
+        return {...result,host:config.host,api_port:config.port};
+      }catch(error){
+        attempts.push({protocol:protocol==='https:'?'HTTPS REST':'HTTP REST',error});
+      }
     }
   }
 
-  const authenticationFailure = attempts.find(attempt => attempt.error?.code === 'EAUTH');
-  const timeoutFailure = attempts.find(attempt => attempt.error?.code === 'ETIMEDOUT');
-  const selected = authenticationFailure || timeoutFailure || attempts[attempts.length - 1];
-  const classified = classifyError(selected?.error || new Error('RouterOS service was not detected.'));
-  const diagnostics = attempts.map(({ protocol, error }) => {
-    const code = String(error?.code || 'UNKNOWN').toUpperCase();
-    const summary = code === 'EAUTH'
-      ? 'authentication or API policy rejected'
-      : code === 'ETIMEDOUT'
-        ? 'connection timed out'
-        : code === 'ENOTREST'
-          ? 'not a REST endpoint'
-          : code === 'ECONNREFUSED'
-            ? 'connection refused'
-            : code === 'ECONNRESET'
-              ? 'connection reset'
-              : 'protocol handshake failed';
-    return protocol + ': ' + summary;
-  });
+  // Preserve the older protocol autodetection path only when the form did not
+  // specify native_api/rest_api and the application client was not the selected
+  // protocol. Every probe shares one overall deadline.
+  if(!nativePreferred&&config.api_type!=='rest_api'){
+    for(const secure of [true,false]){
+      const timeout=Math.min(remaining(),1700);
+      if(timeout<=0)break;
+      const protocol=secure?'Native API over TLS':'Native API';
+      try{
+        const result=await nativeRequest({...config,timeout},secure);
+        return {...result,host:config.host,api_port:config.port,use_ssl:secure};
+      }catch(error){attempts.push({protocol,error});}
+    }
+  }
 
+  const authenticationFailure=attempts.find(attempt=>classifyError(attempt.error).status==='auth_failed');
+  const timeoutFailure=attempts.find(attempt=>classifyError(attempt.error).code==='TIMEOUT');
+  const selected=authenticationFailure||timeoutFailure||attempts[attempts.length-1];
+  const classified=classifyError(selected?.error||new Error('RouterOS service was not detected.'));
+  const diagnostics=attempts.map(({protocol,error})=>protocol+': '+protocolSummary(error));
   throw Object.assign(
-    new Error(classified.message + ' Protocol diagnostics: ' + diagnostics.join('; ') + '.'),
+    new Error(classified.message+' Protocol diagnostics: '+diagnostics.join('; ')+'.'),
     {
-      statusCode: authenticationFailure ? 401 : 503,
-      routerStatus: classified.status,
-      errorCode: classified.code,
-      latency_ms: null,
-      protocolDiagnostics: diagnostics
+      statusCode:authenticationFailure?401:503,
+      routerStatus:classified.status,
+      errorCode:classified.code,
+      latency_ms:null,
+      protocolDiagnostics:diagnostics
     }
   );
 }
-
 module.exports = { validateConfig, testConnection, classifyError, encodeLength, decodeLength, encodeSentence, decodeSentences };
