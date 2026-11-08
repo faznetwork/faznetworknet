@@ -17,7 +17,7 @@ function getPool() {
   if (pool) return pool;
   pool = new Pool({
     connectionString: getDatabaseUrl(),
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
     max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000, statement_timeout: 5000, query_timeout: 5000
   });
   pool.on("error", error => {

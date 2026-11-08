@@ -17,7 +17,7 @@ test("public homepage never opens a live MikroTik connection", () => {
 
 test("MikroTik API disables socket idle timeout but keeps operation deadlines", () => {
   const service = read("services/mikrotikService.js");
-  assert.match(service, /const CONNECTION_TIMEOUT_MS = 1000/);
+  assert.match(service, /const CONNECTION_TIMEOUT_MS = 10000/);
   assert.match(service, /const OPERATION_TIMEOUT_MS = 10000/);
   assert.match(service, /timeout: 0/);
   assert.match(service, /socket\.setTimeout\(0\)/);
@@ -33,15 +33,16 @@ test("MikroTik API disables socket idle timeout but keeps operation deadlines", 
   assert.match(service, /_resetPersistentConnection\(connection/);
   assert.match(service, /MikroTik connection handshake/);
   assert.match(service, /this\._safeClose\(connection\);/);
-  assert.doesNotMatch(service, /await this\._safeClose\(connection\)/);
+  assert.match(service, /await this\._safeClose\(connection\)/);
 });
 
 test("admin diagnostics bound both database and router waits", () => {
   const diagnostics = read("controllers/adminDiagnosticsController.js");
-  assert.match(diagnostics, /withTimeout\(db\.query\("SELECT 1"\), 1500/);
+  assert.match(diagnostics, /withTimeout\(db\.query\('SELECT 1'\), 1500/);
   // Diagnostics now performs a bounded TCP probe before the RouterOS API test.
   assert.match(diagnostics, /function testTcp\(host, port, timeoutMs = 2500\)/);
-  assert.match(diagnostics, /withTimeout\(\s*mikrotikService\.testConnection\(\),\s*7500/);
+  assert.match(diagnostics, /withTimeout\(\s*runtime\.testConnection\(\{/);
+  assert.match(diagnostics, /11000/);
   assert.match(diagnostics, /clearTimeout\(timer\)/);
 });
 

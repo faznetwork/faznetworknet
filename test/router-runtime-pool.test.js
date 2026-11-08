@@ -38,10 +38,10 @@ test('isolates runtime instances by router ID and enforces capacity', async () =
   assert.deepEqual(created.map(runtime => runtime.routerId), ['1', '2']);
 });
 
-test('requires a persisted router ID and a valid runtime factory result', async () => {
+test('requires a persisted router ID and a runtime factory result with close()', async () => {
   const pool = new RouterRuntimePool({ createRuntime: async () => null });
   await assert.rejects(pool.getRuntime({ host: '192.0.2.1' }), /persisted router ID is required/);
-  await assert.rejects(pool.getRuntime({ id: 5 }), /Invalid runtime returned for router 5/);
+  await assert.rejects(pool.getRuntime({ id: 5 }), /must expose close/);
   assert.equal(pool.runtimes.size, 0);
   assert.equal(pool.pending.size, 0);
 });
@@ -59,6 +59,50 @@ test('failed initialization is not cached and can be retried', async () => {
   await assert.rejects(pool.getRuntime({ id: 9 }), /initialization failed/);
   assert.equal(await pool.getRuntime({ id: 9 }), runtime);
   assert.equal(attempts, 2);
+});
+
+test('invalidate waits for pending creation and closes a runtime that was never published', async () => {
+  let finishCreation;
+  const events = [];
+  const pool = new RouterRuntimePool({
+    createRuntime: () => new Promise(resolve => {
+      finishCreation = () => resolve({ close: async () => { events.push('close'); } });
+    })
+  });
+  const pending = pool.getRuntime({ id: 12 });
+  await Promise.resolve();
+  const invalidation = pool.invalidate(12);
+  finishCreation();
+  await assert.rejects(pending, /was invalidated during initialization/);
+  await invalidation;
+  assert.deepEqual(events, ['close']);
+  assert.equal(pool.runtimes.has('12'), false);
+  assert.equal(pool.pending.has('12'), false);
+});
+
+test('replace closes the previous runtime before creating the replacement', async () => {
+  const events = [];
+  let creates = 0;
+  const pool = new RouterRuntimePool({
+    createRuntime: async router => {
+      creates += 1;
+      events.push('create:' + String(router.id) + ':' + String(router.host));
+      return {
+        generation: creates,
+        close: async () => { events.push('close:' + creates); }
+      };
+    }
+  });
+  const first = await pool.getRuntime({ id: 13, host: '192.0.2.13' });
+  const replacement = await pool.replace(13, { id: '13', host: '198.51.100.13' });
+  assert.equal(first.generation, 1);
+  assert.equal(replacement.generation, 2);
+  assert.deepEqual(events, [
+    'create:13:192.0.2.13',
+    'close:1',
+    'create:13:198.51.100.13'
+  ]);
+  assert.equal(await pool.getRuntime({ id: 13 }), replacement);
 });
 
 test('closeAll closes every runtime once and rejects future lookups', async () => {
@@ -88,7 +132,7 @@ test('shutdown waits for in-flight initialization and closes the created runtime
   await Promise.resolve();
   const shutdown = pool.closeAll();
   finishCreation();
-  await assert.rejects(pending, /Pool closed while router 4 was initializing/);
+  await assert.rejects(pending, /was invalidated during initialization/);
   await shutdown;
   assert.deepEqual(closed, ['router-4']);
   assert.equal(pool.runtimes.size, 0);

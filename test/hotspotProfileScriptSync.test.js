@@ -2,7 +2,8 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
-const mikrotikService=require("../services/mikrotikService");
+const MikroTikService=require("../services/mikrotikService").MikroTikService;
+const mikrotikService=new MikroTikService();
 
 test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks safely",async()=>{
   const updates=[];

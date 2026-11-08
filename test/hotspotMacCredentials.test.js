@@ -1,5 +1,5 @@
 "use strict";
-const test=require("node:test"),assert=require("node:assert/strict"),mikrotik=require("../services/mikrotikService");
+const test=require("node:test"),assert=require("node:assert/strict"),MikroTikService=require("../services/mikrotikService").MikroTikService,mikrotik=new MikroTikService();
 const MAC="AA:BB:CC:DD:EE:FF";
 function findParam(calls,command,prefix){const call=calls.find(x=>x.command===command);assert.ok(call,"missing "+command);return call.params.find(x=>x.startsWith(prefix));}
 test("createHotspotUser uses normalized MAC for name/password/mac-address and no scheduler",async()=>{

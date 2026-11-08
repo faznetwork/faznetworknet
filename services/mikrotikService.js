@@ -61,69 +61,50 @@ class MikroTikService {
   }
 
   async _getConfig(override) {
-    const supplied=override&&typeof override==="object"?override:{};
+    const supplied = override && typeof override === 'object' ? override : {};
     const hasOverride = Object.keys(supplied).length > 0;
-    if (!hasOverride && this._configCache && Date.now() < this._configCacheUntil) {
-      return { ...this._configCache };
+    if (!hasOverride && this._configCache && Date.now() < this._configCacheUntil) return { ...this._configCache };
+    if (hasOverride) {
+      const host = String(supplied.host ?? '').trim();
+      const port = Number(supplied.port);
+      const user = String(supplied.user ?? '').trim();
+      const password = String(supplied.password ?? '');
+      if (!host) throw new Error('MikroTik test configuration requires an explicit host.');
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('MikroTik test configuration requires a valid API port.');
+      if (!user) throw new Error('MikroTik test configuration requires an API username.');
+      if (!password) throw new Error('MikroTik test configuration requires an API password.');
+      return { host, port, user, password };
     }
-
-    const database = require("../db");
-    let saved = {};
-    if (!hasOverride) {
-      // A router becomes operational only after an administrator tests and saves
-      // it in the UI. Imported records and legacy settings alone are not active.
-      const result = this.routerId
-        ? await database.query(
-          "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2",
-          [this.routerId]
-        )
-        : await database.query(
-          "SELECT id,host,api_type,api_port,username,password_encrypted,status,use_ssl FROM router_devices WHERE host='10.10.10.1' AND api_port=8728 AND is_active=TRUE AND api_type='native_api' LIMIT 2"
-        );
-      if ((result.rows || []).length !== 1) {
-        throw new Error(this.routerId
-          ? `MikroTik configuration error: Active native API router ${this.routerId} was not found uniquely.`
-          : "MikroTik configuration error: Expected exactly one active canonical router at 10.10.10.1:8728.");
-      }
-      const router = result.rows?.[0];
-      if (!router) {
-        throw new Error("MikroTik configuration error: No router has been manually added. Use Add Device to test and save the router first.");
-      }
-      const host = String(router.host || "").trim();
-      const port = Number.parseInt(String(router.api_port || DEFAULT_PORT), 10);
-      const user = String(router.username || "").trim();
-      const password = deviceCredentials.decrypt(router.password_encrypted);
-      if (!host) throw new Error("MikroTik configuration error: Router Host / IP is not configured in router_devices.");
-      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("MikroTik configuration error: router_devices API port is invalid.");
-      if (!user) throw new Error("MikroTik configuration error: router_devices API username is not configured.");
-      if (!password) throw new Error("MikroTik configuration error: router_devices API password is not configured.");
-      const config = { host, port, user, password };
-      this._configCache = config;
-      this._configCacheUntil = Date.now() + 5000;
-      return { ...config };
+    const database = require('../db');
+    const result = this.routerId
+      ? await database.query("SELECT id,host,api_type,api_port,username,password_encrypted,is_active FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2", [this.routerId])
+      : await database.query("SELECT id,host,api_type,api_port,username,password_encrypted,is_active FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 2");
+    const rows = result.rows || [];
+    if (rows.length !== 1) {
+      const error = new Error(this.routerId
+        ? 'Active native API router ' + this.routerId + ' was not found uniquely.'
+        : rows.length === 0
+          ? 'No active native API router is configured in router_devices.'
+          : 'Multiple active native API routers exist. Supply an explicit router ID.');
+      error.statusCode = rows.length > 1 ? 409 : 503;
+      error.code = rows.length > 1 ? 'MULTIPLE_ACTIVE_ROUTERS' : 'ROUTER_NOT_CONFIGURED';
+      throw error;
     }
-
-    try {
-      const result=await database.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
-      saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
-    } catch(error) {
-      if (!hasOverride) throw error;
-      console.warn("[MikroTik Settings] PostgreSQL settings unavailable for explicit connection override:",error.message);
-    }
-    const host=String(supplied.host??saved.mikrotik_host??process.env.ROUTER_HOST??"").trim();
-    const port=Number.parseInt(String(supplied.port??saved.mikrotik_port??process.env.ROUTER_PORT??DEFAULT_PORT),10);
-    const user=String(supplied.user??saved.mikrotik_user??process.env.ROUTER_USER??"").trim();
-    const password=String(supplied.password??saved.mikrotik_password??process.env.ROUTER_PASS??"");
-    if(!host)throw new Error("MikroTik configuration error: Router Host / IP is not configured.");
-    if(!Number.isInteger(port)||port<1||port>65535)throw new Error("MikroTik configuration error: API Port must be a valid TCP port.");
-    if(!user)throw new Error("MikroTik configuration error: API Username is not configured.");
-    const config={host,port,user,password};
-    if (!hasOverride) {
-      this._configCache = config;
-      this._configCacheUntil = Date.now() + 5000;
-    }
-    return config;
+    const router = rows[0];
+    const host = String(router.host || '').trim();
+    const port = Number(router.api_port);
+    const user = String(router.username || '').trim();
+    const password = deviceCredentials.decrypt(router.password_encrypted);
+    if (!host) throw new Error('router_devices host is not configured.');
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('router_devices API port is invalid.');
+    if (!user) throw new Error('router_devices API username is not configured.');
+    if (!password) throw new Error('router_devices API password is not configured.');
+    const config = { host, port, user, password };
+    this._configCache = config;
+    this._configCacheUntil = Date.now() + 5000;
+    return { ...config };
   }
+
   invalidateConfigCache() {
     this._configCache = null;
     this._configCacheUntil = 0;
@@ -153,7 +134,7 @@ class MikroTikService {
           closeReason: connection.__fazCloseReason || null
         });
         if (this._connection === connection) {
-          this._resetPersistentConnection(connection, "socket error: " + detail);
+          this._resetPersistentConnection(connection, "socket error: " + detail).catch(closeError => console.error("[MikroTik Connection] Socket cleanup failed", { message: closeError?.message || String(closeError) }));
         }
       });
       connection.on("close", () => {
@@ -239,7 +220,7 @@ class MikroTikService {
             message: error?.message || String(error), code: error?.code || null
           });
           if (this._connection === connection && this._isConnectionFailure(error)) {
-            this._resetPersistentConnection(connection, "heartbeat failed: " + (error?.message || error));
+            this._resetPersistentConnection(connection, "heartbeat failed: " + (error?.message || error)).catch(closeError => console.error("[MikroTik Heartbeat] Socket cleanup failed", { message: closeError?.message || String(closeError) }));
           }
         }
       });
@@ -251,7 +232,7 @@ class MikroTikService {
     }
   }
 
-  _resetPersistentConnection(connection, reason = "explicit reset / reconnect") {
+  async _resetPersistentConnection(connection, reason = 'explicit reset / reconnect') {
     if (!connection) return;
     connection.__fazCloseReason = reason;
     this._stopHeartbeat(connection);
@@ -259,41 +240,43 @@ class MikroTikService {
       this._connection = null;
       this._connectionKey = null;
     }
-    this._safeClose(connection);
+    await this._safeClose(connection);
   }
 
   async _getPersistentConnection(config) {
-    const key = JSON.stringify({host:config.host,port:config.port,user:config.user,password:config.password});
+    const key = JSON.stringify({ host: config.host, port: config.port, user: config.user, password: config.password });
     if (this._connectionPromise) {
       if (this._connectionPromiseKey === key) return this._connectionPromise;
-      await this._connectionPromise.catch(() => {});
+      await this._connectionPromise;
       return this._getPersistentConnection(config);
     }
     if (this._connection && this._connectionKey === key && this._connection.connected) return this._connection;
     if (this._connection) {
-      this._resetPersistentConnection(this._connection,
-        this._connectionKey !== key ? "router configuration changed" : "persistent connection is no longer connected");
+      await this._resetPersistentConnection(this._connection,
+        this._connectionKey !== key ? 'router configuration changed' : 'persistent connection is no longer connected');
     }
-
     const connectPromise = (async () => {
       const connection = this._createConnection(config);
       this._connection = connection;
       this._connectionKey = key;
       try {
-        // Calling connect() synchronously creates connector.socket and initially
-        // applies node-routeros' default 10s socket timeout. Clear that idle timer
-        // immediately; the Promise.race below still caps the connection handshake.
         const connect = connection.connect();
-        this._disableSocketInactivityTimeout(connection, "initial connect");
-        await this._executeWithTimeout(connect, CONNECTION_TIMEOUT_MS, "MikroTik connection handshake");
-        this._disableSocketInactivityTimeout(connection, "after handshake");
+        this._disableSocketInactivityTimeout(connection, 'initial connect');
+        await this._executeWithTimeout(connect, CONNECTION_TIMEOUT_MS, 'MikroTik connection handshake');
+        this._disableSocketInactivityTimeout(connection, 'after handshake');
         this._startHeartbeat(connection);
-        console.log("[MikroTik Connection] persistent session established", {
-          host: config.host, port: config.port, keepalive: "30s API heartbeat"
+        console.log('[MikroTik Connection] persistent session established', {
+          host: config.host, port: config.port, keepalive: '30s API heartbeat'
         });
         return connection;
       } catch (error) {
-        this._resetPersistentConnection(connection, "connect/handshake failed: " + (error?.message || error));
+        try {
+          await this._resetPersistentConnection(connection, 'connect/handshake failed: ' + (error?.message || error));
+        } catch (closeError) {
+          console.error('[MikroTik Connection] Failed to close socket after handshake failure', {
+            host: config.host, port: config.port, message: closeError?.message || String(closeError)
+          });
+        }
         throw error;
       }
     })();
@@ -330,7 +313,15 @@ class MikroTikService {
         if (connection && this._isConnectionFailure(error)) {
           // Discard a timed-out/uncertain socket so the next queued request
           // performs a fresh handshake rather than reusing a poisoned session.
-          this._resetPersistentConnection(connection, "operation failed: " + (error?.message || error));
+          try {
+            await this._resetPersistentConnection(connection, "operation failed: " + (error?.message || error));
+          } catch (closeError) {
+            console.error("[MikroTik Connection] Operation socket cleanup failed", {
+              routerId: this.routerId,
+              operationName,
+              message: closeError?.message || String(closeError)
+            });
+          }
         }
         const details=this._extractRouterError(error);
         const wrapped=new Error(details.message);
@@ -364,16 +355,19 @@ class MikroTikService {
       if (timer) clearTimeout(timer);
     }
   }
-  _safeClose(connection) {
+  async _safeClose(connection) {
     if (!connection) return;
-    try {
-      let result;
-      if (typeof connection.close === "function") result = connection.close();
-      else if (typeof connection.disconnect === "function") result = connection.disconnect();
-      else if (typeof connection.destroy === "function") result = connection.destroy();
-      if (result && typeof result.then === "function") result.catch(() => {});
-    } catch (_) {}
+    let closeResult;
+    if (typeof connection.close === 'function') closeResult = connection.close();
+    else if (typeof connection.disconnect === 'function') closeResult = connection.disconnect();
+    else if (typeof connection.destroy === 'function') closeResult = connection.destroy();
+    else if (connection.connector?.socket && typeof connection.connector.socket.destroy === 'function') {
+      connection.connector.socket.destroy();
+      return;
+    } else throw new TypeError('RouterOS connection does not expose a supported close operation.');
+    if (closeResult && typeof closeResult.then === 'function') await closeResult;
   }
+
   _firstRow(rows, operationName) { if (!Array.isArray(rows) || rows.length === 0) throw new Error("MikroTik " + operationName + " returned no data."); return rows[0]; }
   _number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
   _bool(value) { return String(value || "false").toLowerCase() === "true"; }
@@ -1827,35 +1821,73 @@ class MikroTikService {
   }
   async close() {
     await this._operationQueue;
-    const connection=this._connection;
-    this._connection=null;this._connectionKey=null;this._connectionPromise=null;this._connectionPromiseKey=null;
-    this.invalidateConfigCache();this._ipPoolCache=null;this._activeSessionsCache=null;
-    this._activeSessionsCacheAt=0;this._activeSessionsCacheUntil=0;
-    if(!connection)return;
-    if(typeof connection.close==='function')await connection.close();
-    else if(typeof connection.disconnect==='function')await connection.disconnect();
-    else if(typeof connection.destroy==='function')await connection.destroy();
-    else throw new Error('RouterOS connection does not expose close, disconnect, or destroy.');
+    const pendingConnection = this._connectionPromise;
+    if (pendingConnection) {
+      try {
+        await pendingConnection;
+      } catch (error) {
+        console.warn('[MikroTik Connection] Pending handshake ended during runtime close', {
+          routerId: this.routerId, message: error?.message || String(error)
+        });
+      }
+    }
+    const connection = this._connection;
+    this._connection = null;
+    this._connectionKey = null;
+    this._connectionPromise = null;
+    this._connectionPromiseKey = null;
+    this.invalidateConfigCache();
+    this._ipPoolCache = null;
+    this._activeSessionsCache = null;
+    this._activeSessionsCacheAt = 0;
+    this._activeSessionsCacheUntil = 0;
+    this._activeSessionsFailures = 0;
+    this._activeSessionsCircuitUntil = 0;
+    if (connection) await this._safeClose(connection);
   }
 }
-const RouterRuntimePool=require("./RouterRuntimePool");
-const canonicalRuntime=new MikroTikService();
-canonicalRuntime.ipv4ToInt=ipv4ToInt;canonicalRuntime.ipMatchesPoolRange=ipMatchesPoolRange;
-canonicalRuntime.resolvePoolFromRanges=resolvePoolFromRanges;canonicalRuntime.normalizeHotspotMac=normalizeHotspotMac;
-const runtimePool=new RouterRuntimePool({
-  createRuntime:router=>new MikroTikService(String(router.id)),
-  maxRuntimes:Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES||"100",10)
+
+const RouterRuntimePool = require('./RouterRuntimePool');
+const canonicalRuntime = new MikroTikService();
+canonicalRuntime.ipv4ToInt = ipv4ToInt;
+canonicalRuntime.ipMatchesPoolRange = ipMatchesPoolRange;
+canonicalRuntime.resolvePoolFromRanges = resolvePoolFromRanges;
+canonicalRuntime.normalizeHotspotMac = normalizeHotspotMac;
+const runtimePool = new RouterRuntimePool({
+  createRuntime: router => new MikroTikService(String(router.id)),
+  maxRuntimes: Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES || '100', 10)
 });
 const activeSessionFailureLogAt = new Map();
 const ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS = 60000;
-
+async function resolveActiveRouter(routerId) {
+  const database = require('../db');
+  const suppliedId = routerId == null || String(routerId).trim() === '' ? null : String(routerId).trim();
+  if (suppliedId && !/^[1-9]\d*$/.test(suppliedId)) {
+    throw Object.assign(new TypeError('A positive integer router ID is required.'), { statusCode: 400, code: 'INVALID_ROUTER_ID' });
+  }
+  const result = suppliedId
+    ? await database.query(
+        "SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,use_ssl,timeout_ms,status FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2",
+        [suppliedId]
+      )
+    : await database.query(
+        "SELECT id,router_name,host,api_type,api_port,username,password_encrypted,is_active,use_ssl,timeout_ms,status FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 2"
+      );
+  const rows = result.rows || [];
+  if (rows.length !== 1) {
+    const error = new Error(rows.length === 0
+      ? (suppliedId ? 'Selected router was not found, inactive, or is not a native API router.' : 'No active native API router is configured.')
+      : 'Multiple active native API routers exist. Select a router by ID.');
+    error.statusCode = rows.length > 1 ? 409 : (suppliedId ? 404 : 503);
+    error.code = rows.length > 1 ? 'MULTIPLE_ACTIVE_ROUTERS' : 'ROUTER_NOT_FOUND';
+    throw error;
+  }
+  return rows[0];
+}
 async function getAllActiveSessionsWithStatus() {
-  const database = require("../db");
-  const result = await database.query(
-    "SELECT id,router_name FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC"
-  );
+  const database = require('../db');
+  const result = await database.query("SELECT id,router_name FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC");
   const routers = result.rows || [];
-
   const outcomes = await Promise.all(routers.map(async router => {
     const routerId = String(router.id);
     try {
@@ -1867,73 +1899,56 @@ async function getAllActiveSessionsWithStatus() {
       const now = Date.now();
       const lastLoggedAt = activeSessionFailureLogAt.get(routerId) || 0;
       if (now - lastLoggedAt >= ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS) {
-        console.warn("[MikroTik Active Sessions] Router session query failed", {
-          routerId,
-          routerName: String(router.router_name || ""),
-          code: error?.code || null,
-          message: error?.message || String(error)
+        console.warn('[MikroTik Active Sessions] Router session query failed', {
+          routerId, routerName: String(router.router_name || ''),
+          code: error?.code || null, message: error?.message || String(error)
         });
         activeSessionFailureLogAt.set(routerId, now);
       }
       return { router, sessions: [], reachable: false };
     }
   }));
-
   const reachableRouterCount = outcomes.filter(item => item.reachable).length;
-  const failedRouters = outcomes
-    .filter(item => !item.reachable)
-    .map(item => ({ id: String(item.router.id), name: String(item.router.router_name || "") }));
+  const failedRouters = outcomes.filter(item => !item.reachable)
+    .map(item => ({ id: String(item.router.id), name: String(item.router.router_name || '') }));
   const sessions = outcomes.flatMap(({ router, sessions: rows }) => rows.map(session => ({
-    ...session,
-    routerId: String(router.id),
-    routerName: String(router.router_name || "")
+    ...session, routerId: String(router.id), routerName: String(router.router_name || '')
   })));
-
   return {
     sessions,
-    liveSync: routers.length === 0
-      ? "unavailable"
-      : failedRouters.length === 0
-        ? "ok"
-        : reachableRouterCount > 0 ? "partial" : "unavailable",
-    routerCount: routers.length,
-    reachableRouterCount,
-    failedRouterCount: failedRouters.length,
-    failedRouters
+    liveSync: routers.length === 0 ? 'unavailable' : failedRouters.length === 0 ? 'ok' : reachableRouterCount > 0 ? 'partial' : 'unavailable',
+    routerCount: routers.length, reachableRouterCount, failedRouterCount: failedRouters.length, failedRouters
   };
 }
-
 async function getAllActiveSessions() {
   const result = await getAllActiveSessionsWithStatus();
   return result.sessions;
 }
-
 async function getMikroTikService(routerId) {
-  const database = require("../db");
-  const suppliedId = routerId === undefined || routerId === null || String(routerId).trim() === ""
-    ? "3"
-    : String(routerId).trim();
-  if (!/^[1-9]\d*$/.test(suppliedId)) {
-    throw new TypeError("A positive integer router ID is required.");
-  }
-  const result = await database.query(
-    "SELECT id,router_name,host,api_type,api_port,is_active FROM router_devices WHERE id=$1 AND api_type='native_api' AND is_active=TRUE LIMIT 2",
-    [suppliedId]
-  );
-  if ((result.rows || []).length !== 1) {
-    throw new Error(`Active native API router ${suppliedId} was not found uniquely.`);
-  }
-  return runtimePool.getRuntime(result.rows[0]);
+  const router = await resolveActiveRouter(routerId);
+  return runtimePool.getRuntime(router);
 }
-const mikrotikService=new Proxy(canonicalRuntime,{
-  get(target,property,receiver){
-    if(property==="getActiveSessions"||property==="getAllActiveSessions")return getAllActiveSessions;
-    if(property==="getAllActiveSessionsWithStatus")return getAllActiveSessionsWithStatus;
-    if(property==="getMikroTikService")return getMikroTikService;
-    if(property==="runtimePool")return runtimePool;
-    if(property==="MikroTikService")return MikroTikService;
-    return Reflect.get(target,property,receiver);
+const mikrotikService = new Proxy(canonicalRuntime, {
+  get(target, property, receiver) {
+    if (property === 'getActiveSessions' || property === 'getAllActiveSessions') return getAllActiveSessions;
+    if (property === 'getAllActiveSessionsWithStatus') return getAllActiveSessionsWithStatus;
+    if (property === 'resolveActiveRouter') return resolveActiveRouter;
+    if (property === 'getMikroTikService') return getMikroTikService;
+    if (property === 'runtimePool') return runtimePool;
+    if (property === 'MikroTikService') return MikroTikService;
+    const value = Reflect.get(target, property, receiver);
+    if (typeof value !== 'function' || typeof property !== 'string') return value;
+    if (property.startsWith('_') || property === 'constructor' || property === 'close' || property === 'invalidateConfigCache') {
+      return value.bind(target);
+    }
+    if (Object.prototype.hasOwnProperty.call(target, property)) return value.bind(target);
+    if (property === 'testConnection') {
+      return (...args) => {
+        if (args[0] && typeof args[0] === 'object' && Object.keys(args[0]).length) return value.apply(target, args);
+        return getMikroTikService().then(runtime => runtime.testConnection());
+      };
+    }
+    return (...args) => getMikroTikService().then(runtime => runtime[property](...args));
   }
 });
-module.exports=mikrotikService;
-
+module.exports = mikrotikService;

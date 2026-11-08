@@ -1,7 +1,8 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const mikrotikService = require("../services/mikrotikService");
+const MikroTikService = require("../services/mikrotikService").MikroTikService;
+const mikrotikService = new MikroTikService();
 
 test("kickActiveUser removes a matching PPPoE session regardless of username casing", async () => {
   const originalWithConnection = mikrotikService._withConnection;

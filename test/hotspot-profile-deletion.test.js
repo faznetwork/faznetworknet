@@ -3,7 +3,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const router = require("../services/mikrotikService");
+const MikroTikService = require("../services/mikrotikService").MikroTikService;
+const router = new MikroTikService();
 
 function withFakeRouterOS(responses, fn) {
   const original = router._withConnection;
