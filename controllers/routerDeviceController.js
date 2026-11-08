@@ -110,7 +110,7 @@ exports.listDevices = async (_req, res) => {
     const result = await db.query(
       "SELECT id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status," +
       "last_synced,board_model,ros_version,cpu_load,identity,is_active " +
-      "FROM router_devices WHERE is_active=TRUE ORDER BY id ASC"
+      "FROM router_devices ORDER BY is_active DESC,id ASC"
     );
     return res.json({ success: true, devices: result.rows || [] });
   } catch (error) {
@@ -152,7 +152,7 @@ exports.addDevice = async (req, res) => {
             "UPDATE router_devices SET router_name=$1,host=$2,api_type=$3,api_port=$4," +
             "username=$5,password_encrypted=$6,use_ssl=$7,timeout_ms=$8,status='online'," +
             "last_synced=NOW(),board_model=$9,ros_version=$10,cpu_load=$11,identity=$12," +
-            "is_active=TRUE,updated_at=NOW() WHERE id=$13 " +
+            "is_active=FALSE,updated_at=NOW() WHERE id=$13 " +
             "RETURNING id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status," +
             "last_synced,board_model,ros_version,cpu_load,identity,is_active,created_at",
             [...values, duplicate.rows[0].id]
@@ -160,7 +160,7 @@ exports.addDevice = async (req, res) => {
         : await client.query(
             "INSERT INTO router_devices " +
             "(router_name,host,api_type,api_port,username,password_encrypted,use_ssl,timeout_ms,status,last_synced,board_model,ros_version,cpu_load,identity,is_active) " +
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'online',NOW(),$9,$10,$11,$12,TRUE) " +
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'online',NOW(),$9,$10,$11,$12,FALSE) " +
             "RETURNING id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status," +
             "last_synced,board_model,ros_version,cpu_load,identity,is_active,created_at",
             values
@@ -219,13 +219,102 @@ exports.addDevice = async (req, res) => {
   }
 };
 
+exports.activateDevice = async (req, res) => {
+  try {
+    const id = positiveId(req.params.id);
+    const activated = await db.withTransaction(async client => {
+      await client.query("SELECT pg_advisory_xact_lock(71420531, 1)");
+      const target = await client.query(
+        "SELECT id,api_type FROM router_devices WHERE id=$1 FOR UPDATE",
+        [id]
+      );
+      if ((target.rows || []).length !== 1) {
+        throw Object.assign(new Error('Saved router was not found.'), {
+          statusCode: 404, errorCode: 'ROUTER_NOT_FOUND'
+        });
+      }
+      if (target.rows[0].api_type !== 'native_api') {
+        throw Object.assign(new Error('Only a native RouterOS API device can be the active core router.'), {
+          statusCode: 409, errorCode: 'UNSUPPORTED_ROUTER_API_TYPE'
+        });
+      }
+      await client.query(
+        "UPDATE router_devices SET is_active=FALSE,updated_at=NOW() WHERE is_active=TRUE AND api_type='native_api' AND id<>$1",
+        [id]
+      );
+      const result = await client.query(
+        "UPDATE router_devices SET is_active=TRUE,updated_at=NOW() WHERE id=$1 " +
+        "RETURNING id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status,is_active",
+        [id]
+      );
+      return result.rows[0];
+    });
+    try {
+      await mikrotikService.runtimePool.invalidateAll();
+    } catch (error) {
+      console.error('[Router Device API] Router activated but runtime pool invalidation failed', {
+        routerId: String(id), message: error?.message || String(error)
+      });
+      mikrotikService.invalidateConfigCache();
+      return res.status(503).json({
+        success: false, saved: true, reconnect: 'failed', router: activated,
+        message: 'Router activation was saved, but existing RouterOS runtime cleanup failed. Review service logs before retrying.'
+      });
+    }
+    mikrotikService.invalidateConfigCache();
+    return res.set('Cache-Control', 'no-store').json({
+      success: true, router: activated, message: 'Router activated as the sole core MikroTik router.'
+    });
+  } catch (error) {
+    return publicError(res, error);
+  }
+};
+
+exports.deactivateDevice = async (req, res) => {
+  try {
+    const id = positiveId(req.params.id);
+    const result = await db.withTransaction(async client => {
+      await client.query("SELECT pg_advisory_xact_lock(71420531, 1)");
+      const updated = await client.query(
+        "UPDATE router_devices SET is_active=FALSE,updated_at=NOW() " +
+        "WHERE id=$1 AND api_type='native_api' RETURNING id,is_active",
+        [id]
+      );
+      if ((updated.rows || []).length !== 1) {
+        throw Object.assign(new Error('Saved native API router was not found.'), {
+          statusCode: 404, errorCode: 'ROUTER_NOT_FOUND'
+        });
+      }
+      return updated.rows[0];
+    });
+    try {
+      await mikrotikService.runtimePool.invalidate(id);
+    } catch (error) {
+      console.error('[Router Device API] Router deactivated but runtime invalidation failed', {
+        routerId: String(id), message: error?.message || String(error)
+      });
+      mikrotikService.invalidateConfigCache();
+      return res.status(503).json({
+        success: false, saved: true, reconnect: 'failed', router: result,
+        message: 'Router deactivation was saved, but its runtime could not be closed. Review service logs.'
+      });
+    }
+    mikrotikService.invalidateConfigCache();
+    return res.set('Cache-Control', 'no-store').json({
+      success: true, router: result, message: 'Router deactivated. No core router is currently selected.'
+    });
+  } catch (error) {
+    return publicError(res, error);
+  }
+};
+
 exports.updateDevice = async (req, res) => {
   let persisted = false;
   try {
     const id = positiveId(req.params.id);
     const existingResult = await db.query(
       "SELECT id,router_name,host,api_type,api_port,username,password_encrypted,use_ssl,timeout_ms,is_active " +
-      "FROM router_devices WHERE id=$1 AND is_active=TRUE LIMIT 2",
+      "FROM router_devices WHERE id=$1 LIMIT 2",
       [id]
     );
     if ((existingResult.rows || []).length !== 1) {
@@ -263,7 +352,7 @@ exports.updateDevice = async (req, res) => {
     const saved = await db.withTransaction(async client => {
       const locked = await client.query(
         "SELECT id,router_name,host,api_type,api_port FROM router_devices " +
-        "WHERE id=$1 AND is_active=TRUE FOR UPDATE",
+        "WHERE id=$1 FOR UPDATE",
         [id]
       );
       if ((locked.rows || []).length !== 1) {
@@ -287,7 +376,7 @@ exports.updateDevice = async (req, res) => {
         "UPDATE router_devices SET router_name=$1,host=$2,api_type='native_api',api_port=$3," +
         "username=$4,password_encrypted=$5,use_ssl=$6,timeout_ms=$7,status='online'," +
         "last_synced=NOW(),board_model=$8,ros_version=$9,cpu_load=$10,identity=$11,updated_at=NOW() " +
-        "WHERE id=$12 AND is_active=TRUE " +
+        "WHERE id=$12 " +
         "RETURNING id,router_name,host,api_type,api_port,username,use_ssl,timeout_ms,status," +
         "last_synced,board_model,ros_version,cpu_load,identity,is_active,created_at",
         [
@@ -312,7 +401,7 @@ exports.updateDevice = async (req, res) => {
       host: saved.router.host,
       api_type: 'native_api',
       api_port: Number(saved.router.api_port),
-      is_active: true
+      is_active: Boolean(saved.router.is_active)
     };
     const replaced = await invalidateAfterSave(id, replacement);
     if (!replaced) {
