@@ -654,7 +654,7 @@ async function listCustomers(req,res){
       // Collector snapshots are historical data and must never override an unreachable router.
       sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),10000);
       if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
-      if(sessionReport.liveSync==="ok")sessions=sessionReport.sessions;
+      if(["ok","partial","stale"].includes(sessionReport.liveSync))sessions=sessionReport.sessions;
     }catch(error){
       console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable; customers will be shown Offline:",error.message||error);
     }
@@ -687,6 +687,9 @@ async function listCustomers(req,res){
         badgeClass:billing.badgeClass,
         active:Boolean(session),
         online:Boolean(session),
+        connection_state:session ? (session.connectionState || (sessionReport.liveSync === "ok" ? "online" : "stale")) : (sessionReport.liveSync === "ok" ? "offline" : "unknown"),
+        session_status:session ? (session.connectionState || (sessionReport.liveSync === "ok" ? "online" : "stale")) : (sessionReport.liveSync === "ok" ? "offline" : "unknown"),
+        router_unreachable:sessionReport.liveSync !== "ok",
         session:session||null,
         session_ip:session?.address||null,
         session_uptime:session?.uptime||null,

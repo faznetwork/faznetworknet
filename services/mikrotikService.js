@@ -77,7 +77,7 @@ class MikroTikService {
     }
     const database = require('../db');
     const result = this.routerId
-      ? await database.query("SELECT id,host,api_type,api_port,username,password_encrypted,is_active FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2", [this.routerId])
+      ? await database.query("SELECT id,host,api_type,api_port,username,password_encrypted,is_active,use_ssl FROM router_devices WHERE id=$1 AND is_active=TRUE AND api_type='native_api' LIMIT 2", [this.routerId])
       : await database.query("SELECT id,host,api_type,api_port,username,password_encrypted,is_active FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC LIMIT 2");
     const rows = result.rows || [];
     if (rows.length !== 1) {
@@ -99,7 +99,7 @@ class MikroTikService {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('router_devices API port is invalid.');
     if (!user) throw new Error('router_devices API username is not configured.');
     if (!password) throw new Error('router_devices API password is not configured.');
-    const config = { host, port, user, password };
+    const config = { host, port, user, password, use_ssl: Boolean(router.use_ssl) || port === 8729 };
     this._configCache = config;
     this._configCacheUntil = Date.now() + 5000;
     return { ...config };
@@ -115,6 +115,7 @@ class MikroTikService {
       port: config.port,
       user: config.user,
       password: config.password,
+      ...(config.use_ssl ? { tls: { rejectUnauthorized: process.env.MIKROTIK_TLS_ALLOW_SELF_SIGNED === "true" ? false : true, ...(process.env.MIKROTIK_TLS_ALLOW_SELF_SIGNED === "true" ? { servername: config.host } : {}) } } : {}),
       // node-routeros currently coerces timeout: 0 to its 10s default.
       // _getPersistentConnection() disables the underlying socket timer directly
       // immediately after connect() creates the socket; operation deadlines are
@@ -730,45 +731,54 @@ class MikroTikService {
 
   async getActiveSessionsSafe() {
     const now = Date.now();
+    const GRACE_MS = 4 * 60 * 1000;
     if (this._activeSessionsCache && now < this._activeSessionsCacheUntil) {
-      return { sessions: this._activeSessionsCache, live_sync: "cached", checkedAt: new Date(this._activeSessionsCacheAt).toISOString() };
+      return { sessions: this._activeSessionsCache, live_sync: "cached", checkedAt: new Date(this._activeSessionsCacheAt).toISOString(), reachable: true };
     }
-    if (now < this._activeSessionsCircuitUntil) {
-      return { sessions: [], live_sync: "timeout", checkedAt: new Date().toISOString() };
+    if (now < this._activeSessionsCircuitUntil && this._activeSessionsCache) {
+      return { sessions: this._activeSessionsCache, live_sync: "stale", checkedAt: new Date(this._activeSessionsCacheAt).toISOString(), reachable: false, errorCode: "CIRCUIT_OPEN" };
     }
-    try {
-      // Keep the tighter deadline scoped to Customer 360; existing callers of
-      // getActiveSessions() retain their original timeout behavior.
-      const sessions = await this._withConnection("Customer 360 active PPPoE session query", async (connection) => {
-        const rows = await connection.write("/ppp/active/print");
-        return (Array.isArray(rows) ? rows : [])
-          .filter((item) => this._str(item.service).toLowerCase() === "pppoe")
-          .map((item) => ({
-            id: this._str(item[".id"]), username: this._str(item.name),
-            service: this._str(item.service), address: this._str(item.address),
-            uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
-            bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
-            encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
-            radius: this._str(item.radius), raw: item
-          })).filter((item) => item.username);
-      }, undefined, 3500);
-      this._activeSessionsCache = sessions;
-      this._activeSessionsCacheAt = Date.now();
-      this._activeSessionsCacheUntil = Date.now() + 4000;
-      this._activeSessionsFailures = 0;
-      this._activeSessionsCircuitUntil = 0;
-      return { sessions, live_sync: "ok", checkedAt: new Date(this._activeSessionsCacheAt).toISOString() };
-    } catch (error) {
-      this._activeSessionsFailures += 1;
-      if (this._activeSessionsFailures >= 3) {
-        this._activeSessionsCircuitUntil = Date.now() + 5000;
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const sessions = await this._withConnection("PPPoE active-session preflight and query", async (connection) => {
+          // A successful identity read proves the API path is alive before accepting even an empty session list.
+          await connection.write("/system/identity/print");
+          const rows = await connection.write("/ppp/active/print");
+          if (!Array.isArray(rows)) {
+            const error = new Error("Router returned an invalid active-session payload.");
+            error.code = "INVALID_ROUTER_PAYLOAD";
+            throw error;
+          }
+          return rows.filter(item => this._str(item.service).toLowerCase() === "pppoe")
+            .map(item => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service),
+              address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
+              bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding),
+              sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter(item => item.username);
+        }, undefined, 5000);
+        this._activeSessionsCache = sessions;
+        this._activeSessionsCacheAt = Date.now();
+        this._activeSessionsCacheUntil = Date.now() + 10000;
         this._activeSessionsFailures = 0;
+        this._activeSessionsCircuitUntil = 0;
+        return { sessions, live_sync: "ok", checkedAt: new Date(this._activeSessionsCacheAt).toISOString(), reachable: true, latencyMs: Date.now() - now };
+      } catch (error) {
+        lastError = error;
+        const code = String(error?.code || "");
+        if (/AUTH|LOGIN|CREDENTIAL|CERT|TLS/i.test(code + " " + (error?.message || ""))) break;
+        if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 250 * (2 ** attempt) + Math.floor(Math.random() * 150)));
       }
-      const timedOut = /timeout|timed out|ETIMEDOUT/i.test(String(error?.message || error || ""));
-      return { sessions: [], live_sync: timedOut ? "timeout" : "unavailable", checkedAt: new Date().toISOString() };
     }
+    this._activeSessionsFailures = (this._activeSessionsFailures || 0) + 1;
+    this._activeSessionsCircuitUntil = Date.now() + Math.min(15000 * (2 ** Math.min(this._activeSessionsFailures - 1, 3)), 120000);
+    const ageMs = this._activeSessionsCacheAt ? Date.now() - this._activeSessionsCacheAt : Infinity;
+    const msg = String(lastError?.message || lastError || "Router API unavailable");
+    const errorCode = lastError?.code || (/timeout/i.test(msg) ? "ETIMEDOUT" : /refused/i.test(msg) ? "ECONNREFUSED" : /auth|login|password/i.test(msg) ? "BAD_CREDENTIALS" : "ROUTER_UNREACHABLE");
+    return { sessions: ageMs <= GRACE_MS ? (this._activeSessionsCache || []) : [], live_sync: ageMs <= GRACE_MS ? "stale" : "unavailable",
+      checkedAt: this._activeSessionsCacheAt ? new Date(this._activeSessionsCacheAt).toISOString() : null,
+      reachable: false, errorCode, error: msg.slice(0, 240), staleForMs: ageMs };
   }
-  async getVpnInventory() {
+    async getVpnInventory() {
     return this._withConnection("VPN inventory query", async (connection) => {
       const sections = {};
       const warnings = [];
@@ -1876,6 +1886,9 @@ const runtimePool = new RouterRuntimePool({
   maxRuntimes: Number.parseInt(process.env.MIKROTIK_MAX_ROUTER_RUNTIMES || '100', 10)
 });
 const activeSessionFailureLogAt = new Map();
+// In-process last-known sessions protect dashboards from brief VPN/WAN flaps.
+const activeSessionLastGood = new Map();
+const ACTIVE_SESSION_GRACE_MS = 4 * 60 * 1000;
 const ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS = 60000;
 async function resolveActiveRouter(routerId) {
   const database = require('../db');
@@ -1910,33 +1923,44 @@ async function getAllActiveSessionsWithStatus() {
     const routerId = String(router.id);
     try {
       const runtime = await runtimePool.getRuntime(router);
-      const sessions = await runtime.getActiveSessions();
-      activeSessionFailureLogAt.delete(routerId);
-      return { router, sessions, reachable: true };
-    } catch (error) {
-      const now = Date.now();
-      const lastLoggedAt = activeSessionFailureLogAt.get(routerId) || 0;
+      const report = await runtime.getActiveSessionsSafe();
+      if (report.reachable) {
+        activeSessionFailureLogAt.delete(routerId);
+        activeSessionLastGood.set(routerId, { sessions: report.sessions, at: Date.now(), syncedAt: report.checkedAt, latencyMs: report.latencyMs });
+        return { router, sessions: report.sessions, reachable: true, lastSyncAt: report.checkedAt, latencyMs: report.latencyMs };
+      }
+      const cached = activeSessionLastGood.get(routerId);
+      const fresh = cached && Date.now() - cached.at <= ACTIVE_SESSION_GRACE_MS;
+      const err = { id: routerId, name: String(router.router_name || ''), code: report.errorCode || "ROUTER_UNREACHABLE",
+        message: report.error || "Router API unavailable", reachable: false, lastSyncAt: cached?.syncedAt || null,
+        stale: Boolean(fresh), lastKnownActiveCount: fresh ? cached.sessions.length : null };
+      const now = Date.now(), lastLoggedAt = activeSessionFailureLogAt.get(routerId) || 0;
       if (now - lastLoggedAt >= ACTIVE_SESSION_FAILURE_LOG_INTERVAL_MS) {
-        console.warn('[MikroTik Active Sessions] Router session query failed', {
-          routerId, routerName: String(router.router_name || ''),
-          code: error?.code || null, message: error?.message || String(error)
-        });
+        console.warn('[MikroTik Active Sessions] Router session query failed', { routerId, routerName: err.name, code: err.code, message: err.message });
         activeSessionFailureLogAt.set(routerId, now);
       }
-      return { router, sessions: [], reachable: false };
+      return { router, sessions: fresh ? cached.sessions : [], reachable: false, error: err, lastSyncAt: err.lastSyncAt };
+    } catch (error) {
+      const cached = activeSessionLastGood.get(routerId);
+      const fresh = cached && Date.now() - cached.at <= ACTIVE_SESSION_GRACE_MS;
+      return { router, sessions: fresh ? cached.sessions : [], reachable: false,
+        error: { id: routerId, name: String(router.router_name || ''), code: error?.code || "ROUTER_UNREACHABLE",
+          message: String(error?.message || error).slice(0, 240), reachable: false, stale: Boolean(fresh),
+          lastSyncAt: cached?.syncedAt || null, lastKnownActiveCount: fresh ? cached.sessions.length : null } };
     }
   }));
   const reachableRouterCount = outcomes.filter(item => item.reachable).length;
-  const failedRouters = outcomes.filter(item => !item.reachable)
-    .map(item => ({ id: String(item.router.id), name: String(item.router.router_name || '') }));
+  const failedRouters = outcomes.filter(item => !item.reachable).map(item => item.error);
   const sessions = outcomes.flatMap(({ router, sessions: rows }) => rows.map(session => ({
-    ...session, routerId: String(router.id), routerName: String(router.router_name || '')
+    ...session, routerId: String(router.id), routerName: String(router.router_name || ''),
+    connectionState: outcomes.find(x => String(x.router.id) === String(router.id))?.reachable ? 'online' : 'stale'
   })));
-  return {
-    sessions,
-    liveSync: routers.length === 0 ? 'unavailable' : failedRouters.length === 0 ? 'ok' : reachableRouterCount > 0 ? 'partial' : 'unavailable',
-    routerCount: routers.length, reachableRouterCount, failedRouterCount: failedRouters.length, failedRouters
-  };
+  const liveSync = routers.length === 0 ? 'unavailable' : failedRouters.length === 0 ? 'ok' : reachableRouterCount > 0 ? 'partial' :
+    sessions.length > 0 ? 'stale' : 'unavailable';
+  return { sessions, liveSync, routerCount: routers.length, reachableRouterCount, failedRouterCount: failedRouters.length,
+    failedRouters, lastSyncAt: outcomes.map(x => x.lastSyncAt).filter(Boolean).sort().at(-1) || null,
+    latencyMs: outcomes.filter(x => x.reachable).map(x => x.latencyMs).filter(Number.isFinite).reduce((a,b)=>a+b,0),
+    activeCount: liveSync === 'ok' ? sessions.length : null, lastKnownActiveCount: sessions.length };
 }
 async function getAllActiveSessions() {
   const result = await getAllActiveSessionsWithStatus();

@@ -26,25 +26,15 @@ function clean(value, max = 255) {
 async function readGlobalActiveSessions(context) {
   try {
     const report = await mikrotikService.getAllActiveSessionsWithStatus();
-    if (!report || !Array.isArray(report.sessions)) {
-      throw new Error("MikroTik returned an invalid multi-router active-session result.");
-    }
-    // This installation has one core gateway. If it is missing or any configured
-    // active gateway is unreachable, no partial/stale list may claim customers Online.
-    return report.liveSync === "ok" ? report : { ...report, sessions: [] };
+    if (!report || !Array.isArray(report.sessions)) throw new Error("Invalid multi-router active-session result.");
+    // Retain last-known rows during the 4-minute router grace period; callers can render them as stale.
+    return report;
   } catch (error) {
-    console.error(`[PPPoE ${context}] Live router status unavailable; database accounts will be shown Offline.`, {
-      message: error?.message || String(error),
-      code: error?.code || null
+    console.error(`[PPPoE ${context}] Router status unavailable; preserving unknown state.`, {
+      message: error?.message || String(error), code: error?.code || null
     });
-    return {
-      sessions: [],
-      liveSync: "unavailable",
-      routerCount: 0,
-      reachableRouterCount: 0,
-      failedRouterCount: 0,
-      failedRouters: []
-    };
+    return { sessions: [], liveSync: "unavailable", routerCount: 0, reachableRouterCount: 0, failedRouterCount: 0,
+      failedRouters: [{ code: error?.code || "ROUTER_UNREACHABLE", message: String(error?.message || error).slice(0, 240) }] };
   }
 }
 
@@ -230,6 +220,10 @@ async function ingestLiveSessions(req, res) {
     const declaredCount = Number(body.count);
     if (!Number.isInteger(declaredCount) || declaredCount !== body.sessions.length) {
       return res.status(400).json({ success: false, message: "count must equal sessions.length." });
+    }
+    // An empty payload may mean a failed collector poll; never erase the last good snapshot unless explicitly complete.
+    if (body.sessions.length === 0 && !(body.complete === true && body.routerReachable === true)) {
+      return res.status(409).json({ success: false, message: "Empty session snapshot rejected unless routerReachable and complete are true." });
     }
 
     const sessions = [];
