@@ -727,60 +727,49 @@ class MikroTikService {
   }
 
   async getActiveSessionsSafe() {
-    const checkedAt = new Date().toISOString();
-    let lastError = null;
+    const startedAt = Date.now();
+    let config = null;
+    try {
+      config = await this._getConfig();
+      // Check that the currently configured host/port is reachable before starting RouterOS commands.
+      await new Promise((resolve, reject) => {
+        const socket = net.createConnection({ host: config.host, port: config.port });
+        const timer = setTimeout(() => socket.destroy(Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" })), 600);
+        socket.once("connect", () => { clearTimeout(timer); socket.destroy(); resolve(); });
+        socket.once("error", error => { clearTimeout(timer); reject(error); });
+      });
 
-    // One short socket preflight catches VPN/WAN routing failures before issuing RouterOS commands.
-    // A single retry after resetting the socket handles stale persistent connections without serving cached state.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      let config;
-      try {
-        config = await this._getConfig();
-        await new Promise((resolve, reject) => {
-          const socket = net.createConnection({ host: config.host, port: config.port });
-          const timer = setTimeout(() => socket.destroy(Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" })), 900);
-          socket.once("connect", () => { clearTimeout(timer); socket.destroy(); resolve(); });
-          socket.once("error", error => { clearTimeout(timer); reject(error); });
-        });
-
-        const sessions = await this._withConnection("Real-time PPPoE active session query", async connection => {
-          await connection.write("/system/identity/print");
-          const rows = await connection.write("/ppp/active/print");
-          if (!Array.isArray(rows)) {
-            const error = new Error("Router returned an invalid active-session payload.");
-            error.code = "INVALID_ROUTER_PAYLOAD";
-            throw error;
-          }
-          return rows.filter(item => this._str(item.service).toLowerCase() === "pppoe")
-            .map(item => ({
-              id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service),
-              address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
-              bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
-              encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
-              radius: this._str(item.radius), raw: item
-            })).filter(item => item.username);
-        }, undefined, 2500);
-        return { sessions, live_sync: "ok", reachable: true, checkedAt: new Date().toISOString(),
-          latencyMs: Math.max(0, Date.now() - Date.parse(checkedAt)) };
-      } catch (error) {
-        lastError = error;
-        const detail = String(error?.code || "") + " " + String(error?.message || error);
-        if (/AUTH|LOGIN|CREDENTIAL|BAD_PASSWORD|INVALID_ROUTER_PAYLOAD/i.test(detail)) break;
-        // Discard the failed socket and reload the router address before the one bounded reconnect attempt.
-        this.invalidateConfigCache();
-        if (this._connection) {
-          try { await this._resetPersistentConnection(this._connection, "active-session poll failed: " + (error?.message || error)); } catch (_) {}
+      // One current RouterOS query per request: no session cache, stale snapshot, or extra API command.
+      const sessions = await this._withConnection("Real-time PPPoE active session query", async connection => {
+        const rows = await connection.write("/ppp/active/print");
+        if (!Array.isArray(rows)) {
+          const error = new Error("Router returned an invalid active-session payload.");
+          error.code = "INVALID_ROUTER_PAYLOAD";
+          throw error;
         }
-        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 120));
-      }
-    }
+        return rows.filter(item => this._str(item.service).toLowerCase() === "pppoe")
+          .map(item => ({
+            id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service),
+            address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
+            bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
+            encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
+            radius: this._str(item.radius), raw: item
+          })).filter(item => item.username);
+      }, config, 5500, 2500);
 
-    const message = String(lastError?.message || lastError || "Router API unavailable");
-    const code = lastError?.code || (/timed?s*out/i.test(message) ? "ETIMEDOUT" :
-      /refused/i.test(message) ? "ECONNREFUSED" : /auth|login|password/i.test(message) ? "BAD_CREDENTIALS" : "ROUTER_UNREACHABLE");
-    return { sessions: [], live_sync: /ETIMEDOUT|timeout/i.test(code + " " + message) ? "timeout" : "unavailable",
-      reachable: false, checkedAt: new Date().toISOString(), latencyMs: Math.max(0, Date.now() - Date.parse(checkedAt)),
-      errorCode: code, error: message.slice(0, 240) };
+      return { sessions, live_sync: "ok", reachable: true, checkedAt: new Date().toISOString(), latencyMs: Date.now() - startedAt };
+    } catch (error) {
+      this.invalidateConfigCache();
+      if (this._connection) {
+        try { await this._resetPersistentConnection(this._connection, "active-session poll failed: " + (error?.message || error)); } catch (_) {}
+      }
+      const message = String(error?.message || error || "Router API unavailable");
+      const code = error?.code || (/timed?\s*out/i.test(message) ? "ETIMEDOUT" :
+        /refused/i.test(message) ? "ECONNREFUSED" : /auth|login|password/i.test(message) ? "BAD_CREDENTIALS" : "ROUTER_UNREACHABLE");
+      return { sessions: [], live_sync: /ETIMEDOUT|timeout/i.test(code + " " + message) ? "timeout" : "unavailable",
+        reachable: false, checkedAt: new Date().toISOString(), latencyMs: Date.now() - startedAt,
+        errorCode: code, error: message.slice(0, 240) };
+    }
   }
     async getVpnInventory() {
     return this._withConnection("VPN inventory query", async (connection) => {
