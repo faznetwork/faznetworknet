@@ -577,20 +577,18 @@ exports.updateDevice = async (req, res) => {
       api_port: Number(saved.router.api_port),
       is_active: Boolean(saved.router.is_active)
     };
-    const replaced = await invalidateAfterSave(id, saved.router.is_active ? replacement : null);
-    if (!replaced) {
-      return res.status(503).json({
-        success: false, saved: true, reconnect: 'failed',
-        router: saved.router, inventory_id: saved.inventory_id,
-        inventory_sync: saved.inventory_sync,
-        message: 'Router details were saved, but the stale RouterOS socket could not be closed. The new runtime was not confirmed.'
-      });
-    }
+    // Persist first; runtime close may be waiting on an in-flight RouterOS read.
+    // Start replacement in the background so the Save request always returns after the DB commit.
+    void invalidateAfterSave(id, saved.router.is_active ? replacement : null).then(replaced => {
+      if (!replaced) console.error('[Router Device API] Router details saved; runtime refresh did not finish.', { routerId: String(id) });
+    }).catch(error => console.error('[Router Device API] Background runtime refresh failed.', {
+      routerId: String(id), message: error?.message || String(error)
+    }));
     return res.set('Cache-Control', 'no-store').json({
-      success: true, saved: true, reconnect: 'runtime_replaced',
+      success: true, saved: true, reconnect: 'scheduled',
       router: saved.router, inventory_id: saved.inventory_id,
       inventory_sync: saved.inventory_sync,
-      message: 'Router updated in place. The previous runtime was closed and a fresh runtime instance is installed; it will connect on the next RouterOS operation.'
+      message: 'Router details saved. The runtime connection is refreshing in the background.'
     });
   } catch (error) {
     if (persisted) {
