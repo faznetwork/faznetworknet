@@ -726,12 +726,12 @@ class MikroTikService {
     });
   }
 
-  async getActiveSessionsSafe() {
+  async getActiveSessionsSafe(configOverride = null) {
     const startedAt = Date.now();
     let config = null;
     try {
-      config = await this._getConfig();
-      // Check that the currently configured host/port is reachable before starting RouterOS commands.
+      config = await this._getConfig(configOverride || undefined);
+      // Fail quickly when the current router address/port is unreachable; all session data below is live.
       await new Promise((resolve, reject) => {
         const socket = net.createConnection({ host: config.host, port: config.port });
         const timer = setTimeout(() => socket.destroy(Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" })), 600);
@@ -739,7 +739,7 @@ class MikroTikService {
         socket.once("error", error => { clearTimeout(timer); reject(error); });
       });
 
-      // One current RouterOS query per request: no session cache, stale snapshot, or extra API command.
+      // Read the live PPPoE table on every request. Do not reuse old sessions after any API failure.
       const sessions = await this._withConnection("Real-time PPPoE active session query", async connection => {
         const rows = await connection.write("/ppp/active/print");
         if (!Array.isArray(rows)) {
@@ -755,7 +755,7 @@ class MikroTikService {
             encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
             radius: this._str(item.radius), raw: item
           })).filter(item => item.username);
-      }, config, 5500, 2500);
+      }, config, 8000, 3000);
 
       return { sessions, live_sync: "ok", reachable: true, checkedAt: new Date().toISOString(), latencyMs: Date.now() - startedAt };
     } catch (error) {
@@ -1905,13 +1905,24 @@ async function resolveActiveRouter(routerId) {
 }
 async function getAllActiveSessionsWithStatus() {
   const database = require('../db');
-  const result = await database.query("SELECT id,router_name FROM router_devices WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC");
+  const result = await database.query(
+    "SELECT id,router_name,host,api_port,username,password_encrypted,use_ssl FROM router_devices " +
+    "WHERE is_active=TRUE AND api_type='native_api' ORDER BY id ASC"
+  );
   const routers = result.rows || [];
   const outcomes = await Promise.all(routers.map(async router => {
     const routerId = String(router.id);
     try {
       const runtime = await runtimePool.getRuntime(router);
-      const report = await runtime.getActiveSessionsSafe();
+      // Reuse this fresh row for the poll instead of issuing a second DB lookup inside the API timeout window.
+      const config = {
+        host: String(router.host || '').trim(),
+        port: Number(router.api_port),
+        user: String(router.username || '').trim(),
+        password: deviceCredentials.decrypt(router.password_encrypted),
+        use_ssl: Boolean(router.use_ssl) || Number(router.api_port) === 8729
+      };
+      const report = await runtime.getActiveSessionsSafe(config);
       if (report.reachable) {
         activeSessionFailureLogAt.delete(routerId);
         return { router, sessions: report.sessions, reachable: true, latencyMs: report.latencyMs, lastSyncAt: report.checkedAt };

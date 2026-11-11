@@ -652,7 +652,7 @@ async function listCustomers(req,res){
     try{
       // Only a fresh response from every active core gateway can mark a customer Online.
       // Collector snapshots are historical data and must never override an unreachable router.
-      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),10000);
+      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),18000);
       if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
       if(sessionReport.liveSync==="ok")sessions=sessionReport.sessions;
     }catch(error){
