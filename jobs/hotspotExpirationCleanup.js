@@ -130,16 +130,13 @@ function createHotspotExpirationCleanup(deps = {}) {
       // Database expiry must continue even during a temporary RouterOS outage.
       // In that case, persist expired/pending state and let the targeted router
       // cleanup fail safely so the next hourly run can retry it.
-      let snapshot = { users: [], schedulerNames: [] };
-      let snapshotAvailable = true;
+      let snapshot = { users: [] };
       try {
         snapshot = await router.getHotspotExpirationSnapshot();
       } catch (error) {
-        snapshotAvailable = false;
         logger.warn("[HOTSPOT EXPIRY] RouterOS snapshot unavailable; using persisted expiry and retrying cleanup later:", error.message);
       }
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
-      const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
 
       const candidates = Array.isArray(result.rows) ? result.rows : [];
       const batchRows = candidates.slice(0, MAX_EXPIRY_BATCH_SIZE);
