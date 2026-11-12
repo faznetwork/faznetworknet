@@ -228,7 +228,8 @@ function createHotspotExpirationCleanup(deps = {}) {
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
         const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
-        const quotaExhausted = Boolean(user &&
+        const quotaExhausted = Boolean(!stagedFutureRenewal && user &&
+          ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           Number(user.limitBytesTotal) > 0 &&
           Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0) >= Number(user.limitBytesTotal));
         if (!databaseExpiryReached && !commentExpiryReached && !quotaExhausted) continue;
@@ -239,7 +240,7 @@ function createHotspotExpirationCleanup(deps = {}) {
         );
         expired++;
         const contact=voucher;
-        const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
+        const actualExpiry=databaseExpiryReached?expiryAt:commentExpiryReached?commentExpiry:currentTime;
         if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
         try {
           await purgeExpiredHotspotUser(router, username, voucherMac);
