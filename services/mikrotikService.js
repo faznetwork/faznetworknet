@@ -567,108 +567,162 @@ class MikroTikService {
 
   async syncPanelCustomerSecrets(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
-    return this._withConnection("bulk panel-to-MikroTik PPPoE sync", async (connection) => {
-      // Read all secrets as well as PPP profiles. This explicit Billing Panel
-      // action updates known PPPoE accounts and provisions missing accounts from
-      // current panel records; unrelated VPN service users are never overwritten.
-      const [rows, profileRows] = await Promise.all([
+
+    // Snapshot RouterOS state first. Each write below uses the service queue
+    // independently so a dropped API socket can be reopened for the next user.
+    const [rows, profileRows] = await this._withConnection(
+      "bulk panel-to-MikroTik PPPoE sync snapshot",
+      async connection => Promise.all([
         connection.write("/ppp/secret/print"),
         connection.write("/ppp/profile/print")
-      ]);
-      const allSecrets = new Map((Array.isArray(rows) ? rows : [])
-        .map(item => [this._str(item.name).trim().toLowerCase(), item]));
-      const secrets = new Map((Array.isArray(rows) ? rows : [])
-        .filter(item => {
-          const service = this._str(item.service).trim().toLowerCase() || "any";
-          return ["pppoe", "any"].includes(service);
-        })
-        .map(item => [this._str(item.name).trim().toLowerCase(), item]));
-      const profiles = new Set((Array.isArray(profileRows) ? profileRows : [])
-        .map(item => this._str(item.name).trim().toLowerCase())
-        .filter(Boolean));
-      const results = []; let updated = 0, created = 0, skipped = 0, failed = 0;
-      for (const customer of customers) {
-        const username = this._str(customer && customer.username).trim();
-        const usernameKey = username.toLowerCase();
-        if (!username) { skipped++; results.push({username,status:"skipped",reason:"Missing username."}); continue; }
-        let secret = secrets.get(usernameKey);
-        const conflictingSecret = allSecrets.get(usernameKey);
-        const callerIdForMatch = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim().toLowerCase();
-        // A customer may have had their PPPoE username changed or the RouterOS
-        // secret may be missing under the panel username. Match by the saved
-        // ONU/MAC Caller ID as a secondary identity, but only among PPPoE-capable
-        // secrets; unrelated RouterOS users remain untouched.
-        if (!secret && !conflictingSecret && callerIdForMatch) {
-          const macMatches = [...secrets.values()].filter(item =>
-            this._str(item["caller-id"]).trim().toLowerCase() === callerIdForMatch
-          );
-          if (macMatches.length === 1) secret = macMatches[0];
-          else if (macMatches.length > 1) {
-            failed++;
-            results.push({username,status:"failed",reason:"Caller ID matches multiple MikroTik PPPoE secrets; no RouterOS change was made."});
-            continue;
-          }
-        }
-        const password = this._str(customer.password || this._str(secret?.password)).trim();
-        const profile = this._str(customer.profile || this._str(secret?.profile)).trim();
-        if (!secret && conflictingSecret) {
+      ]),
+      undefined,
+      20000,
+      10000
+    );
+    const allSecrets = new Map((Array.isArray(rows) ? rows : [])
+      .map(item => [this._str(item.name).trim().toLowerCase(), item]));
+    const secrets = new Map((Array.isArray(rows) ? rows : [])
+      .filter(item => {
+        const service = this._str(item.service).trim().toLowerCase() || "any";
+        return ["pppoe", "any"].includes(service);
+      })
+      .map(item => [this._str(item.name).trim().toLowerCase(), item]));
+    const profiles = new Set((Array.isArray(profileRows) ? profileRows : [])
+      .map(item => this._str(item.name).trim().toLowerCase())
+      .filter(Boolean));
+    const results = [];
+    let updated = 0, created = 0, skipped = 0, failed = 0;
+
+    const runRouterCommand = (operationName, command) => this._withConnection(
+      operationName,
+      connection => connection.write(command),
+      undefined,
+      OPERATION_TIMEOUT_MS,
+      CONNECTION_TIMEOUT_MS
+    );
+    const isPppoeSecret = item => ["pppoe", "any"].includes(
+      this._str(item?.service).trim().toLowerCase() || "any"
+    );
+
+    for (const customer of customers) {
+      const username = this._str(customer && customer.username).trim();
+      const usernameKey = username.toLowerCase();
+      if (!username) { skipped++; results.push({username,status:"skipped",reason:"Missing username."}); continue; }
+
+      let secret = secrets.get(usernameKey);
+      const conflictingSecret = allSecrets.get(usernameKey);
+      const callerIdForMatch = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim().toLowerCase();
+      // A customer may have had their PPPoE username changed or the RouterOS
+      // secret may be missing under the panel username. Match by saved MAC only
+      // when the match is unique and the secret can serve PPPoE.
+      if (!secret && !conflictingSecret && callerIdForMatch) {
+        const macMatches = [...secrets.values()].filter(item =>
+          this._str(item["caller-id"]).trim().toLowerCase() === callerIdForMatch
+        );
+        if (macMatches.length === 1) secret = macMatches[0];
+        else if (macMatches.length > 1) {
           failed++;
-          results.push({username,status:"failed",reason:"A MikroTik secret with this username exists for a non-PPPoE service; it was not changed."});
+          results.push({username,status:"failed",reason:"Caller ID matches multiple MikroTik PPPoE secrets; no RouterOS change was made."});
           continue;
         }
-        if (!password) {
-          failed++;
-          results.push({username,status:"failed",reason:secret ? "Panel password is empty and RouterOS password could not be read." : "Cannot create the missing PPPoE secret because the Billing Panel password is empty."});
-          continue;
+      }
+
+      const password = this._str(customer.password || this._str(secret?.password)).trim();
+      const profile = this._str(customer.profile || this._str(secret?.profile)).trim();
+      if (!secret && conflictingSecret) {
+        failed++;
+        results.push({username,status:"failed",reason:"A MikroTik secret with this username exists for a non-PPPoE service; it was not changed."});
+        continue;
+      }
+      if (!password) {
+        failed++;
+        results.push({username,status:"failed",reason:secret ? "Panel password is empty and RouterOS password could not be read." : "Cannot create the missing PPPoE secret because the Billing Panel password is empty."});
+        continue;
+      }
+      if (!profile) {
+        failed++;
+        results.push({username,status:"failed",reason:"A PPP profile is required; no RouterOS change was made."});
+        continue;
+      }
+      if (!profiles.has(profile.toLowerCase())) {
+        failed++;
+        results.push({username,status:"failed",reason:'MikroTik PPP profile "' + profile + '" does not exist; no RouterOS change was made.'});
+        continue;
+      }
+
+      const expiryDate = this._str(customer.expiryDate || customer.expiry_date || customer.expirationDate || customer.expiration_date).trim();
+      const canonicalComment = /^\d{4}-\d{2}-\d{2}$/.test(expiryDate)
+        ? "EXP: " + expiryDate
+        : this._str(customer.comment).trim();
+      const callerId = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim();
+      const params = this._writeParams({
+        ...(secret && this._str(secret.name).trim() !== username ? {name: username} : {}),
+        password,
+        profile,
+        "caller-id": callerId || undefined,
+        comment: canonicalComment,
+        disabled: customer.disabled ? "yes" : "no"
+      });
+      const addCommand = ["/ppp/secret/add", ...this._writeParams({
+        name: username, password, service: "pppoe", profile,
+        "caller-id": callerId || undefined, comment: canonicalComment,
+        disabled: customer.disabled ? "yes" : "no"
+      })];
+      const setCommand = item => ["/ppp/secret/set", "=.id=" + item[".id"], ...params];
+
+      try {
+        const wasExisting = Boolean(secret && secret[".id"]);
+        if (wasExisting) {
+          await runRouterCommand("update PPPoE secret " + username, setCommand(secret));
+          updated++;
+          results.push({username,status:"updated",profile,disabled:Boolean(customer.disabled)});
+        } else {
+          await runRouterCommand("create PPPoE secret " + username, addCommand);
+          created++;
+          results.push({username,status:"created",profile,disabled:Boolean(customer.disabled)});
         }
-        if (!profile) {
+      } catch (error) {
+        // A lost acknowledgement can happen after RouterOS has already applied
+        // a write. Reconnect and inspect the live secret table before retrying,
+        // so the retry is idempotent and cannot create a duplicate user.
+        if (!this._isConnectionFailure(error)) {
           failed++;
-          results.push({username,status:"failed",reason:"A PPP profile is required; no RouterOS change was made."});
-          continue;
-        }
-        if (!profiles.has(profile.toLowerCase())) {
-          failed++;
-          results.push({username,status:"failed",reason:'MikroTik PPP profile "' + profile + '" does not exist; no RouterOS change was made.'});
+          results.push({username,status:"failed",reason:error?.message||"RouterOS update failed."});
           continue;
         }
         try {
-          const expiryDate = this._str(customer.expiryDate || customer.expiry_date || customer.expirationDate || customer.expiration_date).trim();
-          const canonicalComment = /^\d{4}-\d{2}-\d{2}$/.test(expiryDate)
-            ? "EXP: " + expiryDate
-            : this._str(customer.comment).trim();
-          const callerId = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim();
-          const params = this._writeParams({
-            ...(secret && this._str(secret.name).trim() !== username ? {name: username} : {}),
-            password,
-            profile,
-            "caller-id": callerId || undefined,
-            comment: canonicalComment,
-            disabled: customer.disabled ? "yes" : "no"
-          });
-          if (secret && secret[".id"]) {
-            await connection.write(["/ppp/secret/set", "=.id=" + secret[".id"], ...params]);
-            updated++;
-            results.push({username,status:"updated",profile,disabled:Boolean(customer.disabled)});
-          } else {
-            await connection.write("/ppp/secret/add", this._writeParams({
-              name: username,
-              password,
-              service: "pppoe",
-              profile,
-              "caller-id": callerId || undefined,
-              comment: canonicalComment,
-              disabled: customer.disabled ? "yes" : "no"
-            }));
-            created++;
-            results.push({username,status:"created",profile,disabled:Boolean(customer.disabled)});
+          const refreshedRows = await runRouterCommand("verify PPPoE secret after reconnect " + username, "/ppp/secret/print");
+          const refreshed = Array.isArray(refreshedRows) ? refreshedRows : [];
+          let current = refreshed.find(item => this._str(item.name).trim().toLowerCase() === usernameKey && isPppoeSecret(item));
+          if (!current && callerIdForMatch) {
+            const matches = refreshed.filter(item => isPppoeSecret(item) && this._str(item["caller-id"]).trim().toLowerCase() === callerIdForMatch);
+            if (matches.length === 1) current = matches[0];
+            else if (matches.length > 1) throw new Error("Caller ID matches multiple PPPoE secrets after reconnect; no retry was made.");
           }
-        } catch (error) {
+          if (current && !current[".id"]) throw new Error("RouterOS did not return an ID for the existing PPPoE secret.");
+          if (current) {
+            await runRouterCommand("reconcile PPPoE secret " + username, setCommand(current));
+            if (secret) updated++; else created++;
+            secrets.set(usernameKey, {...current,name:username});
+            allSecrets.set(usernameKey, {...current,name:username});
+            results.push({username,status:secret?"updated":"created",profile,disabled:Boolean(customer.disabled),recoveredAfterReconnect:true});
+          } else {
+            await runRouterCommand("retry create PPPoE secret " + username, addCommand);
+            created++;
+            results.push({username,status:"created",profile,disabled:Boolean(customer.disabled),recoveredAfterReconnect:true});
+          }
+        } catch (recoveryError) {
           failed++;
-          results.push({username,status:"failed",reason:error && error.message ? error.message : "RouterOS update failed."});
+          results.push({
+            username,status:"failed",
+            reason:"RouterOS connection failed and the account could not be confirmed after reconnect: " +
+              String(recoveryError?.message || recoveryError || error?.message || "unknown API error").slice(0, 220)
+          });
         }
       }
-      return {total:customers.length,updated,created,skipped,failed,results};
-    }, undefined, 90000);
+    }
+    return {total:customers.length,updated,created,skipped,failed,results};
   }
   async syncPppoeExpiryComments(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
