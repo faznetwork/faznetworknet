@@ -731,32 +731,67 @@ class MikroTikService {
     let config = null;
     try {
       config = await this._getConfig(configOverride || undefined);
-      // Fail quickly when the current router address/port is unreachable; all session data below is live.
-      await new Promise((resolve, reject) => {
-        const socket = net.createConnection({ host: config.host, port: config.port });
-        const timer = setTimeout(() => socket.destroy(Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" })), 600);
-        socket.once("connect", () => { clearTimeout(timer); socket.destroy(); resolve(); });
-        socket.once("error", error => { clearTimeout(timer); reject(error); });
-      });
+      let sessions = null;
+      let lastError = null;
+      const maxAttempts = 2;
 
-      // Read the live PPPoE table on every request. Do not reuse old sessions after any API failure.
-      const sessions = await this._withConnection("Real-time PPPoE active session query", async connection => {
-        const rows = await connection.write("/ppp/active/print");
-        if (!Array.isArray(rows)) {
-          const error = new Error("Router returned an invalid active-session payload.");
-          error.code = "INVALID_ROUTER_PAYLOAD";
-          throw error;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          // A fresh socket check catches changing SSTP/VPN routes before the API query.
+          await new Promise((resolve, reject) => {
+            const socket = net.createConnection({ host: config.host, port: config.port });
+            const timer = setTimeout(() => {
+              const error = Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" });
+              socket.destroy(error);
+              reject(error);
+            }, 600);
+            socket.once("connect", () => {
+              clearTimeout(timer);
+              socket.destroy();
+              resolve();
+            });
+            socket.once("error", error => {
+              clearTimeout(timer);
+              reject(error);
+            });
+          });
+
+          // Every attempt reads the live PPPoE table; failed attempts never become empty session data.
+          sessions = await this._withConnection("Real-time PPPoE active session query", async connection => {
+            const rows = await connection.write("/ppp/active/print");
+            if (!Array.isArray(rows)) {
+              const error = new Error("Router returned an invalid active-session payload.");
+              error.code = "INVALID_ROUTER_PAYLOAD";
+              throw error;
+            }
+            return rows.filter(item => this._str(item.service).toLowerCase() === "pppoe")
+              .map(item => ({
+                id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service),
+                address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
+                bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
+                encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
+                radius: this._str(item.radius), raw: item
+              })).filter(item => item.username);
+          }, config, 8000, 3000);
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt >= maxAttempts || !this._isConnectionFailure(error)) break;
+
+          console.warn("[MikroTik Active Sessions] transient live poll failure; reconnecting once", {
+            host: config.host, port: config.port, code: error?.code || null,
+            attempt, message: error?.message || String(error)
+          });
+          if (this._connection) {
+            try {
+              await this._resetPersistentConnection(this._connection, "retrying active-session poll: " + (error?.message || error));
+            } catch (_) {}
+          }
+          await new Promise(resolve => setTimeout(resolve, 350));
         }
-        return rows.filter(item => this._str(item.service).toLowerCase() === "pppoe")
-          .map(item => ({
-            id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service),
-            address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]),
-            bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]),
-            encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
-            radius: this._str(item.radius), raw: item
-          })).filter(item => item.username);
-      }, config, 8000, 3000);
+      }
 
+      if (!Array.isArray(sessions)) throw lastError || new Error("Router API active-session poll failed.");
       return { sessions, live_sync: "ok", reachable: true, checkedAt: new Date().toISOString(), latencyMs: Date.now() - startedAt };
     } catch (error) {
       this.invalidateConfigCache();
