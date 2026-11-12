@@ -4212,7 +4212,7 @@ window.editHotspotUser=function(username,event){
                         '<div class="hp-profiles-shell">' +
                             '<header class="hp-profiles-header">' +
                                 '<div><h2 class="hp-profiles-heading"><i class="bi bi-wifi text-success" aria-hidden="true"></i>Hotspot Profiles <span class="hp-profiles-count">' + profileDetails.length + '</span></h2><p class="hp-profiles-subtitle">Manage package speeds, prices, and validity for MikroTik Hotspot.</p></div>' +
-                                '<div class="hp-profiles-actions"><button type="button" class="btn btn-outline-success" onclick="syncHotspotProfiles(this)"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Sync All Profiles</button><button type="button" class="btn btn-success" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create Profile</button></div>' +
+                                '<div class="hp-profiles-actions"><button type="button" class="btn btn-outline-success" onclick="syncHotspotProfiles(this)"><i class="bi bi-cloud-upload me-1" aria-hidden="true"></i>Sync from Panel</button><button type="button" class="btn btn-success" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create Profile</button></div>' +
                             '</header>' +
                             '<div class="hp-profiles-surface">' +
                                 '<div class="hp-profiles-surface-head"><h3 class="hp-profiles-surface-title">Profile inventory</h3><span class="hp-profiles-surface-note">' + profileDetails.length + ' profile' + (profileDetails.length === 1 ? '' : 's') + '</span></div>' +
@@ -4299,8 +4299,8 @@ window.editHotspotUser=function(username,event){
             button.innerHTML='<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Syncing…';
             try{
                 const data=await jsonFetch('/api/hotspot/profiles/sync',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({})});
-                const sync=data.sync||{},auth=sync.serverAuth||{};
-                const summary='Hotspot User Profiles: '+Number(sync.updated||0)+' updated, '+Number(sync.unchanged||0)+' already up-to-date, '+Number(sync.ineligible||0)+' not eligible for time-profile sync, '+Number(sync.failed||0)+' failed. MAC authentication: '+Number(auth.updated||0)+' server profile(s) updated, '+Number(auth.skipped||0)+' already correct, '+Number(auth.failed||0)+' failed.';
+                const sync=data.sync||{},auth=sync.serverAuth||{},panel=sync.panelProfiles||{};
+                const summary='Panel profiles: '+Number(panel.created||0)+' added, '+Number(panel.updated||0)+' updated, '+Number(panel.failed||0)+' failed. Session/profile maintenance: '+Number(sync.updated||0)+' updated, '+Number(sync.unchanged||0)+' already current, '+Number(sync.ineligible||0)+' not time-profile eligible, '+Number(sync.failed||0)+' failed. MAC authentication: '+Number(auth.updated||0)+' server profile(s) updated, '+Number(auth.skipped||0)+' already correct, '+Number(auth.failed||0)+' failed.';
                 await loadHotspotProfiles('hotspot_profile');
                 alert(summary);
             }catch(error){alert(error.message||'Hotspot profile sync failed.');}
