@@ -95,10 +95,49 @@ async function updateProfile(req,res){try{
 }catch(e){return errorResponse(res,e);}}
 async function syncProfiles(req,res){
  try{
-  const sync=await syncHotspotProfileScripts();
-  const serverAuth=sync.serverAuth||{checked:0,updated:0,skipped:0,failed:0};
-  const success=Number(sync.failed||0)===0&&Number(serverAuth.failed||0)===0;
-  return res.status(success?200:502).json({success,message:success?"Hotspot profile sync completed.":"Hotspot profile sync completed with errors; review the per-profile results.",sync});
+  const [routerProfiles,metadata]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
+  if(!Array.isArray(routerProfiles))throw new Error("MikroTik returned an invalid Hotspot profile list.");
+  const routerByName=new Map(routerProfiles.map(profile=>[String(profile.name||"").trim(),profile]).filter(([name])=>name));
+  const panelProfiles=Object.entries(metadata||{}).filter(([name,value])=>name&&name.trim().toLowerCase()!=="default"&&value&&typeof value==="object"&&!Array.isArray(value));
+  const names=new Set([...routerByName.keys(),...panelProfiles.map(([name])=>name.trim())]);
+  const panelByName=new Map(panelProfiles.map(([name,value])=>[name.trim(),value]));
+  const result={checked:0,created:0,updated:0,failed:0,results:[]};
+  for(const name of names){
+   if(!name||name.toLowerCase()==="default")continue;
+   const current=routerByName.get(name)||null,panel=panelByName.get(name)||{};
+   result.checked++;
+   try{
+    let validity;
+    try{
+     validity=panel.validityValue!==undefined&&panel.validityUnit
+      ?normalizeProfileValidity(panel.validityValue,panel.validityUnit)
+      :current?parseStoredValidity(current):normalizeProfileValidity(0,"gb");
+    }catch(_){
+     if(!current)throw new Error("Panel profile has invalid validity settings.");
+     validity=parseStoredValidity(current);
+    }
+    const sharedUsers=Number(panel.sharedUsers||panel.shared_users||current?.sharedUsers||1);
+    if(!Number.isSafeInteger(sharedUsers)||sharedUsers<1)throw new Error("Panel profile has invalid shared-user settings.");
+    const storedRateLimit=Object.prototype.hasOwnProperty.call(panel,"rateLimit")?panel.rateLimit:panel.rate_limit;
+    const rateLimit=storedRateLimit!==undefined?clean(storedRateLimit,100):clean(current?.rateLimit,100);
+    const existingLogin=String(current?.raw?.["on-login"]||"");
+    const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:validity.value,validityUnit:validity.unit});
+    const customScript=existingLogin.trim()&&!existingLogin.includes("FAZ|PROFILE=")?" ; "+existingLogin.trim():"";
+    const profileData={name,rateLimit,sharedUsers,sessionTimeout:validity.validity,clearSessionTimeout:validity.unit==="gb",keepaliveTimeout:current?.keepaliveTimeout||"",onLogin:onLogin+customScript};
+    if(current){await mikrotikService.updateHotspotProfile(profileData);result.updated++;}
+    else{await mikrotikService.createHotspotProfile(profileData);result.created++;}
+    result.results.push({name,status:current?"updated":"created"});
+   }catch(error){
+    result.failed++;
+    result.results.push({name,status:"failed",error:error?.message||"Profile sync failed."});
+   }
+  }
+  // Keep the established session-expiry and MAC-auth profile maintenance after the panel settings are applied.
+  const scriptSync=await syncHotspotProfileScripts();
+  const serverAuth=scriptSync.serverAuth||{checked:0,updated:0,skipped:0,failed:0};
+  const sync={panelProfiles:result,...scriptSync,serverAuth};
+  const success=result.failed===0&&Number(scriptSync.failed||0)===0&&Number(serverAuth.failed||0)===0;
+  return res.status(success?200:502).json({success,message:success?"Panel Hotspot profiles synced to MikroTik.":"Panel profile sync completed with errors; review the per-profile results.",sync});
  }catch(e){return errorResponse(res,e);}
 }
 async function deleteProfile(req,res){
