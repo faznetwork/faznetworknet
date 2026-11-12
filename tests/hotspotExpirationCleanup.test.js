@@ -62,7 +62,7 @@ test("promotes a used voucher and records first-login expiry without expiring it
 });
 
 test("expires marked users, hard-purges RouterOS credentials, and retains rows for 30-day visibility", async () => {
-  const rows = [{ id: 2, username: "VOUCHER2", status: "active", cleanup_status: "not_required" }];
+  const rows = [{ id: 2, username: "VOUCHER2", status: "active", expires_at: new Date("2026-10-10T10:00:00.000Z"), cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const cleaned = [];
   const router = {
@@ -271,7 +271,7 @@ test("does not expire an unused voucher solely because it was created long ago",
 });
 
 test("keeps cleanup pending and records the error when MikroTik removal fails", async () => {
-  const rows = [{ id: 3, username: "VOUCHER3", status: "active", cleanup_status: "not_required" }];
+  const rows = [{ id: 3, username: "VOUCHER3", status: "active", expires_at: new Date("2026-10-10T10:00:00.000Z"), cleanup_status: "not_required" }];
   const database = mockDb(rows);
   const router = {
     async getHotspotExpirationSnapshot() {
