@@ -7701,7 +7701,7 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
                                     <input id="customerImportFile" type="file" accept=".csv,text/csv" hidden onchange="handleCustomerImportSelection(this)">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportAllCustomersCsv()" title="Export customer records to CSV"><i class="bi bi-download me-1"></i>Export</button>
                                     <button type="button" class="btn btn-success btn-add-customer" onclick="showAddCustomerForm()"><i class="bi bi-plus-lg me-1"></i>Add Customer</button>
-                                    <button type="button" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync to MikroTik</button>
+                                    <button type="button" class="btn btn-success btn-sm" title="Push current Billing Panel customers: update existing PPPoE secrets and create missing ones." onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up me-1"></i>Sync from Panel</button>
                                     <button type="button" class="btn btn-outline-success btn-sm" onclick="refreshCustomerSection()" title="Refresh customer records" aria-label="Refresh customer records"><i class="bi bi-arrow-clockwise"></i></button>
                                 </div>
                             </div>
@@ -8366,7 +8366,10 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
             button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing all customers...';
             try{
                 const data=await jsonFetch('/api/customers/sync-panel-to-mikrotik',{method:'POST',timeout:120000});
-                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Created: '+(data.created??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0));
+                const failedItems=(Array.isArray(data.results)?data.results:[]).filter(item=>item.status==='failed');
+                const failureDetails=failedItems.slice(0,10).map(item=>(item.username||'Unknown user')+': '+(item.reason||item.message||'Unknown failure')).join('\\n');
+                const remaining=failedItems.length>10?'\\n...and '+(failedItems.length-10)+' more.':'';
+                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Created: '+(data.created??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0)+(failureDetails?'\\n\\nFailure details:\\n'+failureDetails+remaining:''));
                 await fetchCustomers();await refreshDashboard();
             }catch(error){alert('Sync to MikroTik failed: '+(error.message||'Unknown error'));}
             finally{button.disabled=false;button.innerHTML=original;}
