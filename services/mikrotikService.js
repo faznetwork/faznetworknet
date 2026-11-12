@@ -961,6 +961,23 @@ class MikroTikService {
           continue;
         }
         const existing = byName.get(macAddress);
+        if (voucher?.expired) {
+          // Expired candidates are cleanup-only: never add or refresh credentials.
+          // Disable an existing RouterOS identity before disconnecting its sessions.
+          if (existing) {
+            await connection.write("/ip/hotspot/user/set", this._writeParams({
+              ".id": existing[".id"], disabled: "yes"
+            }));
+          }
+          for (const session of activeSessions.filter(item =>
+            this._str(item.user).trim().toUpperCase() === macAddress && item[".id"]
+          )) {
+            await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
+            disconnected++;
+          }
+          skipped++;
+          continue;
+        }
         if (existing) {
           await connection.write("/ip/hotspot/user/set", this._writeParams({
             ".id": existing[".id"], profile, comment
@@ -972,14 +989,6 @@ class MikroTikService {
             "mac-address": macAddress, server: this._str(voucher?.server).trim() || "all"
           }));
           provisioned++;
-        }
-        if (voucher?.expired) {
-          for (const session of activeSessions.filter(item =>
-            this._str(item.user).trim().toUpperCase() === macAddress && item[".id"]
-          )) {
-            await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
-            disconnected++;
-          }
         }
       }
       return { provisioned, refreshed, skipped, disconnected };
