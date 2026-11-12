@@ -190,6 +190,38 @@ async function remove(req,res){
 }
 async function deletePlan(req,res){return remove(req,res);}
 
+
+let panelSyncInFlight=false;
+async function syncPanelToMikrotik(req,res){
+  if(panelSyncInFlight)return res.status(409).json({success:false,message:"Panel-to-MikroTik plan sync is already running."});
+  panelSyncInFlight=true;
+  try{
+    const result=await db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name");
+    const outcomes=[];
+    for(const row of result.rows||[]){
+      const name=clean(row.profile_name||row.plan_name,120);
+      try{
+        if(isSystemProfile(name))throw new Error("System/internal profiles are protected.");
+        const existing=await findProfileByName(name);
+        await syncMikrotikProfile({
+          planName:name,
+          localAddress:clean(row.local_address,255),
+          remoteAddress:clean(row.remote_address||row.pool_name,255),
+          dnsServer:clean(row.dns_server,255),
+          changeTcpMss:clean(row.change_tcp_mss||"default",20).toLowerCase(),
+          rateLimit:clean(row.rate_limit,100)
+        },row.profile_name||row.plan_name);
+        outcomes.push({name,status:existing?"updated":"created"});
+      }catch(error){outcomes.push({name,status:"failed",message:routerError(error)});}
+    }
+    const created=outcomes.filter(x=>x.status==="created").length;
+    const updated=outcomes.filter(x=>x.status==="updated").length;
+    const failed=outcomes.filter(x=>x.status==="failed").length;
+    return res.json({success:true,total:outcomes.length,created,updated,failed,results:outcomes,message:"Panel-to-MikroTik sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."});
+  }catch(error){return errorResponse(res,error);}
+  finally{panelSyncInFlight=false;}
+}
+
 let syncInFlight = false;
 
 async function sync(req,res){
@@ -305,4 +337,4 @@ async function sync(req,res){
   }
 }
 
-module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync};
+module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync,syncPanelToMikrotik};
