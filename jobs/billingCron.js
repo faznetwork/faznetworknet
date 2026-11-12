@@ -2,7 +2,7 @@ const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 const {logAuditAction}=require("../utils/auditLogger");
 
-const EXPIRED_PROFILE="EXPIRED-PROFILE";
+const EXPIRED_PROFILE=String(process.env.EXPIRED_PROFILE_NAME||"EXPIRED-PROFILE").trim()||"EXPIRED-PROFILE";
 let expiryWarningInterval=null;
 const WARNING_RETRY_MINUTES=[15,30,60,180,360,360,360];
 
@@ -95,7 +95,7 @@ async function runBillingExpiration(){
     // The quarantine profile is only needed for subscribers without an explicit
     // migration override. Never touch MikroTik for override customers.
     if(expiryAction==="quarantine"&&q.rows.some(customer=>customer.billing_expiry_override!==true)){
-      await mikrotikService.ensureExpiredProfile();
+      await mikrotikService.ensureExpiredProfile(EXPIRED_PROFILE);
     }
     let expired=0,failed=0;
     for(const customer of q.rows){
