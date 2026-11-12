@@ -224,28 +224,21 @@ function createHotspotExpirationCleanup(deps = {}) {
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
         const commentExpiry = parseCommentExpiry(voucher.comment);
-        // A successful router snapshot that no longer contains a MAC-named account
-        // means its one-shot expiry scheduler (or an administrator) removed it.
-        // Do not infer absence while RouterOS itself is unreachable.
-        const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
-        // A renewal is deliberately staged in PostgreSQL before RouterOS is touched.
-        // The old RouterOS scheduler may remove the prior user at its original deadline;
-        // do not mistake that expected gap for expiry while the staged cumulative expiry is still future.
+        // A staged future renewal remains valid while RouterOS is being synchronized.
+        // RouterOS user absence, disabled state, scheduler state, and expiry comments
+        // are synchronization signals only; none can independently expire a voucher.
         const stagedFutureRenewal = effectiveStatus === "pending_claim" && voucher.renewal_stacked === true &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
-        const missingMacUser = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
-          ["active", "unused", "pending_claim"].includes(effectiveStatus);
         const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
-        const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
-        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
-
-        const dataOnlyQuotaExhausted = Boolean(user && /^FAZ\|DATA_ONLY$/i.test(String(user.comment || "").trim()) &&
-          Number(user.limitBytesTotal) > 0 && Number(user.bytesIn || 0) + Number(user.bytesOut || 0) >= Number(user.limitBytesTotal));
+        const quotaExhausted = Boolean(user &&
+          Number(user.limitBytesTotal) > 0 &&
+          Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0) >= Number(user.limitBytesTotal));
+        if (!databaseExpiryReached && !commentExpiryReached && !quotaExhausted) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expires_at=CASE WHEN $4::boolean THEN expires_at ELSE COALESCE(expires_at,$2) END,expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id, dataOnlyQuotaExhausted]
+          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id, quotaExhausted]
         );
         expired++;
         const contact=voucher;
