@@ -656,8 +656,8 @@ class MikroTikService {
         ? "EXP: " + expiryDate
         : this._str(customer.comment).trim();
       const callerId = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim();
-      const params = this._writeParams({
-        ...(secret && this._str(secret.name).trim() !== username ? {name: username} : {}),
+      const paramsForSecret = current => this._writeParams({
+        ...(current && this._str(current.name).trim() !== username ? {name: username} : {}),
         password,
         profile,
         "caller-id": callerId || undefined,
@@ -669,7 +669,7 @@ class MikroTikService {
         "caller-id": callerId || undefined, comment: canonicalComment,
         disabled: customer.disabled ? "yes" : "no"
       })];
-      const setCommand = item => ["/ppp/secret/set", "=.id=" + item[".id"], ...params];
+      const setCommand = item => ["/ppp/secret/set", "=.id=" + item[".id"], ...paramsForSecret(item)];
 
       try {
         const wasExisting = Boolean(secret && secret[".id"]);
