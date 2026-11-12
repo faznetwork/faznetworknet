@@ -650,11 +650,11 @@ async function listCustomers(req,res){
     let sessions=[];
     let sessionReport={liveSync:"unavailable",routerCount:0,reachableRouterCount:0,failedRouterCount:0,failedRouters:[]};
     try{
-      // Only a fresh response from every active core gateway can mark a customer Online.
-      // Collector snapshots are historical data and must never override an unreachable router.
-      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),18000);
+      // Each router's live PPPoE poll has its own bounded socket, handshake and retry logic.
+      // Do not let one outer timeout discard sessions already returned by healthy routers.
+      sessionReport=await mikrotikService.getAllActiveSessionsWithStatus();
       if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
-      if(sessionReport.liveSync==="ok")sessions=sessionReport.sessions;
+      if(sessionReport.liveSync==="ok"||sessionReport.liveSync==="partial")sessions=sessionReport.sessions;
     }catch(error){
       console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable; customers will be shown Offline:",error.message||error);
     }
