@@ -799,7 +799,7 @@ class MikroTikService {
         try { await this._resetPersistentConnection(this._connection, "active-session poll failed: " + (error?.message || error)); } catch (_) {}
       }
       const message = String(error?.message || error || "Router API unavailable");
-      const code = error?.code || (/timed?\\s*out/i.test(message) ? "ETIMEDOUT" :
+      const code = error?.code || (/timed?\s*out/i.test(message) ? "ETIMEDOUT" :
         /refused/i.test(message) ? "ECONNREFUSED" : /auth|login|password/i.test(message) ? "BAD_CREDENTIALS" : "ROUTER_UNREACHABLE");
       return { sessions: [], live_sync: /ETIMEDOUT|timeout/i.test(code + " " + message) ? "timeout" : "unavailable",
         reachable: false, checkedAt: new Date().toISOString(), latencyMs: Date.now() - startedAt,
