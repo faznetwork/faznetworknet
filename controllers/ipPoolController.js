@@ -73,4 +73,29 @@ async function remove(req,res){
   try{const identifier=clean(req.params.id,100);if(!identifier||/^default(?:[-_].*)?$/i.test(identifier))return res.status(400).json({success:false,message:"The default system IP pool cannot be deleted."});const result=await mikrotikService.deleteIpPool(identifier);return res.json({success:true,message:"IP pool removed successfully from MikroTik.",pool:result});}
   catch(error){return errorResponse(res,error);}
 }
-module.exports={list,create,update,saveOrUpdateIpPool,remove};
+
+async function syncPanelToMikrotik(req,res){
+  try{
+    const device=await mikrotikService.getRouterIdentity();
+    const saved=await db.query("SELECT name,ranges,next_pool FROM ip_pools WHERE lower(COALESCE(device_name,''))=lower($1) ORDER BY name ASC",[device]);
+    if(!saved.rows?.length)return res.status(409).json({success:false,message:"No IP pools saved in the panel for this MikroTik. Save each pool from the panel first, then sync again."});
+    const live=await mikrotikService.getIpPools();
+    const liveByName=new Map((live||[]).map(item=>[String(item.name||"").toLowerCase(),item]));
+    const results=[];
+    for(const row of saved.rows){
+      const name=clean(row.name,100),ranges=clean(row.ranges,1000),nextPool=clean(row.next_pool||"none",100)||"none";
+      try{
+        if(!name||/^default(?:[-_].*)?$/i.test(name))throw new Error("Default/system pool names cannot be synced.");
+        if(!ranges||ranges.split(",").some(part=>!validRangePart(part)))throw new Error("Invalid saved IPv4 range.");
+        const existing=liveByName.get(name.toLowerCase());
+        if(existing)await mikrotikService.updateIpPool(existing.id||existing.name,{name,ranges,nextPool});
+        else await mikrotikService.createIpPool({name,ranges,nextPool});
+        results.push({name,status:existing?"updated":"created"});
+      }catch(error){results.push({name,status:"failed",message:error?.message||"IP pool sync failed."});}
+    }
+    const created=results.filter(x=>x.status==="created").length,updated=results.filter(x=>x.status==="updated").length,failed=results.filter(x=>x.status==="failed").length;
+    return res.json({success:true,total:results.length,created,updated,failed,results,message:"Panel-to-MikroTik IP pool sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."});
+  }catch(error){return errorResponse(res,error);}
+}
+
+module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik};
