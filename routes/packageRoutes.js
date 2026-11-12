@@ -9,4 +9,5 @@ router.put("/:id",controller.update);
 router.delete("/:id",controller.remove);
 router.post("/delete",controller.deletePlan||controller.remove);
 router.post("/sync",controller.sync);
+router.post("/sync-to-mikrotik",controller.syncPanelToMikrotik);
 module.exports=router;
