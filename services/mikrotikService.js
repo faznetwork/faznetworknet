@@ -1879,8 +1879,9 @@ class MikroTikService {
     });
   }
 
-  async ensureExpiredProfile(){
-    const name="EXPIRED-PROFILE";
+  async ensureExpiredProfile(profileNameValue="EXPIRED-PROFILE"){
+    const name=this._str(profileNameValue||"EXPIRED-PROFILE").trim();
+    if(!name||name.length>100)throw new Error("A valid expired PPPoE profile name is required.");
     const existing=await this.fetchExistingProfiles();
     const profile=(Array.isArray(existing)?existing:[]).find(item=>String(item.name||"").toLowerCase()===name.toLowerCase());
     if(!profile){
