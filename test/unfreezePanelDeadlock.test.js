@@ -28,7 +28,7 @@ test("MikroTik API disables socket idle timeout but keeps operation deadlines", 
   assert.match(service, /connection\.on\("error"/);
   assert.match(service, /this\._connection = null/);
   assert.match(service, /this\._operationQueue = Promise\.resolve\(\)/);
-  assert.match(service, /_getPersistentConnection\(config\)/);
+  assert.match(service, /_getPersistentConnection\(config/);
   assert.match(service, /connection\.write = \(\.\.\.args\) =>/);
   assert.match(service, /_resetPersistentConnection\(connection/);
   assert.match(service, /MikroTik connection handshake/);

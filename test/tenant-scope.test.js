@@ -31,7 +31,8 @@ test('staff read scope remains global for backward-compatible read-only access',
 test('customer list and live-session fallback apply reseller POP scoping',()=>{
  const source=fs.readFileSync(path.join(root,'controllers/customerController.js'),'utf8');
  assert.match(source,/c\.pop_id\s*=\s*ANY\(\$1::bigint\[\]\)/);
- assert.match(source,/username IN \(SELECT username FROM customers WHERE pop_id=ANY\(\$1::bigint\[\]\)\)/);
+ const liveSession = source.slice(source.indexOf('async function getCustomerLiveSession'), source.indexOf('function usageDate'));
+ assert.match(liveSession, /pop_id=ANY\(\$2::bigint\[\]\)/);
 });
 test('Customer 360, live metrics, and usage retrieval carry the authenticated POP predicate',()=>{
  const source=fs.readFileSync(path.join(root,'controllers/customerController.js'),'utf8');

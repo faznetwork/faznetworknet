@@ -7,7 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-const adminView = read('views/admin.ejs');
+const adminView = read('views/admin.ejs').replace(/\r\n/g, '\n');
 const routerRoutes = read('routes/routerDeviceRoutes.js');
 
 const devicesStart = adminView.indexOf('window.loadDevices = loadDevices;');

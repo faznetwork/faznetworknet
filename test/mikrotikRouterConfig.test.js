@@ -33,7 +33,7 @@ test('MikroTik config resolves the sole active native API router dynamically', a
   mikrotikService.invalidateConfigCache();
   try {
     assert.deepEqual(await mikrotikService._getConfig(), {
-      host: '103.54.37.182', port: 1039, user: 'smsbot', password: 'router-secret'
+      host: '103.54.37.182', port: 1039, user: 'smsbot', password: 'router-secret', use_ssl: false
     });
     assert.equal(calls.length, 1);
     assert.match(calls[0].sql, /api_type='native_api'/);
@@ -103,7 +103,7 @@ test('explicit unsaved connection config is validated without database fallback'
     assert.deepEqual(await mikrotikService._getConfig({
       host: '103.54.37.182', port: 1039, user: 'test', password: 'secret'
     }), {
-      host: '103.54.37.182', port: 1039, user: 'test', password: 'secret'
+      host: '103.54.37.182', port: 1039, user: 'test', password: 'secret', use_ssl: false
     });
     await assert.rejects(mikrotikService._getConfig({
       host: '103.54.37.182', port: 0, user: 'test', password: 'secret'

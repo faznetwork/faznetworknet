@@ -48,17 +48,18 @@ async function startRouterFixture({ rejectNativeLogin = false } = {}) {
 
       for (const words of decoded.sentences) {
         const command = words[0];
+        const tag = words.find(word => word.startsWith('.tag=')) || '.tag=0';
         if (command === '/login') {
           nativeProtocol = true;
           socket.write(routerDeviceService.encodeSentence(
             rejectNativeLogin
-              ? ['!trap', '=message=not enough permissions or invalid login']
-              : ['!done']
+              ? ['!trap', '=message=not enough permissions or invalid login', tag]
+              : ['!done', tag]
           ));
           if (rejectNativeLogin) socket.end();
         } else if (command === '/system/identity/print') {
-          socket.write(routerDeviceService.encodeSentence(['!re', '=name=RB4011'])); 
-          socket.write(routerDeviceService.encodeSentence(['!done']));
+          socket.write(routerDeviceService.encodeSentence(['!re', '=name=RB4011', tag])); 
+          socket.write(routerDeviceService.encodeSentence(['!done', tag]));
         } else if (command === '/system/resource/print') {
           socket.write(routerDeviceService.encodeSentence([
             '!re',
@@ -66,9 +67,10 @@ async function startRouterFixture({ rejectNativeLogin = false } = {}) {
             '=architecture-name=arm',
             '=version=7.16.2',
             '=uptime=1d2h',
-            '=cpu-load=4'
+            '=cpu-load=4',
+            tag
           ]));
-          socket.write(routerDeviceService.encodeSentence(['!done']));
+          socket.write(routerDeviceService.encodeSentence(['!done', tag]));
         }
       }
     });
@@ -110,9 +112,9 @@ test('all protocol failures return a combined diagnostic and preserve authentica
         assert.equal(error.errorCode, 'INVALID_CREDENTIALS');
         assert.match(error.message, /HTTPS REST:/);
         assert.match(error.message, /HTTP REST: authentication or API policy rejected/);
-        assert.match(error.message, /Native API: authentication or API policy rejected/);
+        assert.match(error.message, /Native API \(application client\): authentication or API policy rejected/);
         assert.ok(Array.isArray(error.protocolDiagnostics));
-        assert.equal(error.protocolDiagnostics.length, 4);
+        assert.equal(error.protocolDiagnostics.length, 3);
         return true;
       }
     );

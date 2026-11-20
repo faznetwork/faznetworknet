@@ -130,7 +130,7 @@ test('customer creation locks and validates the POP in the same transaction as I
   const transaction = controller.indexOf('const creation = await db.withTransaction');
   const lock = controller.indexOf("status='active' FOR UPDATE", transaction);
   const insert = controller.indexOf('INSERT INTO customers', transaction);
-  const routerProvision = controller.indexOf('getCustomerRouterService({router_id: customer.routerId})', insert);
+  const routerProvision = controller.indexOf('getCustomerRouterService()', insert);
   assert.ok(transaction >= 0);
   assert.ok(lock > transaction);
   assert.ok(insert > lock);
