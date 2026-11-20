@@ -63,7 +63,6 @@ function routerUserExpired(user, schedulerNames) {
     const expDate = Number.isFinite(epoch) ? new Date(epoch) : dhakaMatch
       ? new Date(dhakaMatch[1] + "-" + dhakaMatch[2] + "-" + dhakaMatch[3] + "T" + dhakaMatch[4] + "+06:00")
       : dateOnly ? new Date(dateOnly[1] + "T23:59:59+06:00") : new Date(expValue);
-    // RouterOS schedulers are not authoritative; expiry is reconciled centrally.
     if (!Number.isNaN(expDate.getTime()) && expDate.getTime() <= Date.now()) return true;
   }
   if (!managed && !dataOnly) return false;
@@ -104,21 +103,29 @@ function createHotspotExpirationCleanup(deps = {}) {
     batchContinuation = false;
     batchContinuationUrgent = false;
     try {
-      // Atomically claim due alerts so multiple application instances cannot send the same voucher alert twice.
       try {
         const dueAlerts = await database.query(
-          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC, id ASC LIMIT $1 FOR UPDATE SKIP LOCKED) UPDATE hotspot_vouchers AS v SET pre_expiry_notified=TRUE, updated_at=NOW() FROM due WHERE v.id=due.id RETURNING v.id,v.username,v.phone,v.customer_name,v.profile,v.price,v.expires_at",
+          "WITH due AS (SELECT id FROM hotspot_vouchers WHERE status='active' AND expires_at > NOW() AND expires_at <= NOW() + INTERVAL '5 minutes' AND pre_expiry_notified IS NOT TRUE ORDER BY expires_at ASC LIMIT $1) UPDATE hotspot_vouchers SET pre_expiry_notified=TRUE WHERE id IN (SELECT id FROM due) RETURNING id,username,phone,customer_name,price,profile",
           [MAX_EXPIRY_BATCH_SIZE]
         );
-        await Promise.all((dueAlerts.rows||[]).map(async voucher=>{
-          const phone=String(voucher.phone||'').trim();
-          if(!phone||phone.toLowerCase()==='unlinked'){ logger.warn('[HOTSPOT PRE-EXPIRY] Skipped voucher '+voucher.id+': no linked customer phone.'); return; }
-          const customerName=String(voucher.customer_name||'গ্রাহক').trim()||'গ্রাহক';
-          const notification=notificationDispatcher.dispatchNotification({userType:'hotspot',event:'hotspot_expiring_soon',to:phone,recipient:phone,phone,username:voucher.username,customerName,customer:{username:voucher.username,name:customerName,phone,profile:voucher.profile},message:`আসসালামু আলাইকুম ${customerName}, আপনার FAZ NETWORK হটস্পট প্যাকেজের মেয়াদ আগামী ৫ মিনিটের মধ্যে শেষ হতে যাচ্ছে। নিরবচ্ছিন্ন ইন্টারনেট সংযোগ বজায় রাখতে এখনই রিচার্জ করুন। হেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:['sms','whatsapp'],variables:{name:customerName,username:voucher.username,package:voucher.profile||'হটস্পট প্যাকেজ',profile:voucher.profile||'',amount:voucher.price,expiry_date:voucher.expires_at?new Date(voucher.expires_at).toISOString():''}});
-          if(notification?.task){ const delivery=await notification.task; if(!delivery?.success)logger.warn('[HOTSPOT PRE-EXPIRY] One or more notification channels failed for voucher '+voucher.id+'. The alert claim is retained to avoid duplicate SMS retries.'); }
+        await Promise.all((dueAlerts.rows || []).map(async voucher => {
+          const phone = String(voucher.phone || "").trim();
+          if (!phone || phone.toLowerCase() === "unlinked") {
+            logger.warn("[HOTSPOT PRE-EXPIRY] Skipped voucher " + voucher.id + ": no linked customer phone.");
+            return;
+          }
+          const customerName = String(voucher.customer_name || "গ্রাহক").trim() || "গ্রাহক";
+          const notification = notificationDispatcher.dispatchNotification({ userType: "hotspot", event: "hotspot_expiring_soon", to: phone, recipient: phone, phone, username: voucher.username, customerName, package: voucher.profile || "", amount: voucher.price });
+          if (notification?.task) {
+            const delivery = await notification.task;
+            if (!delivery?.success) logger.warn("[HOTSPOT PRE-EXPIRY] One or more notification channels failed for voucher " + voucher.id + ".");
+          }
           preExpiryNotified++;
         }));
-      } catch (alertError) { logger.error('[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:',alertError.message); }
+      } catch (alertError) {
+        logger.error("[HOTSPOT PRE-EXPIRY] Scanner failed; normal expiry cleanup will continue:", alertError.message);
+      }
+
       const result = await database.query(
         "SELECT id,username,status,comment,validity,first_login_at,expires_at,cleanup_status,phone,price,profile,renewal_stacked,mac_address,last_known_mac " +
         "FROM hotspot_vouchers WHERE (status IN ('unused','active') OR (status='pending_claim' AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed'))) " +
@@ -127,27 +134,19 @@ function createHotspotExpirationCleanup(deps = {}) {
         [scanCursor, MAX_EXPIRY_BATCH_SIZE]
       );
 
-      // Database expiry must continue even during a temporary RouterOS outage.
-      // In that case, persist expired/pending state and let the targeted router
-      // cleanup fail safely so the next hourly run can retry it.
-      let snapshot = { users: [], schedulerNames: [] };
-      let snapshotAvailable = true;
+      let snapshot = { users: [] };
       try {
         snapshot = await router.getHotspotExpirationSnapshot();
       } catch (error) {
-        snapshotAvailable = false;
         logger.warn("[HOTSPOT EXPIRY] RouterOS snapshot unavailable; using persisted expiry and retrying cleanup later:", error.message);
       }
       const users = new Map((snapshot.users || []).map(user => [String(user.username || "").toLowerCase(), user]));
-      const schedulerNames = new Set((snapshot.schedulerNames || []).map(name => String(name).toLowerCase()));
 
       const candidates = Array.isArray(result.rows) ? result.rows : [];
       const batchRows = candidates.slice(0, MAX_EXPIRY_BATCH_SIZE);
       batchContinuation = candidates.length >= MAX_EXPIRY_BATCH_SIZE;
-      batchContinuationUrgent = batchRows.some(voucher => voucher.status !== "expired" &&
-        voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime());
-      const rotatingRows = batchRows.filter(voucher => voucher.status !== "expired" &&
-        !(voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime()));
+      batchContinuationUrgent = batchRows.some(voucher => voucher.status !== "expired" && voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime());
+      const rotatingRows = batchRows.filter(voucher => voucher.status !== "expired" && !(voucher.expires_at && new Date(voucher.expires_at).getTime() <= now().getTime()));
       if (rotatingRows.length) scanCursor = Math.max(scanCursor, ...rotatingRows.map(voucher => Number(voucher.id) || 0));
       if (batchRows.length < MAX_EXPIRY_BATCH_SIZE && scanCursor > 0) {
         scanCursor = 0;
@@ -165,7 +164,7 @@ function createHotspotExpirationCleanup(deps = {}) {
             await purgeExpiredHotspotUser(router, username, voucherMac);
             await database.query(
               "UPDATE hotspot_vouchers AS v SET status='expired', " +
-              "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE COALESCE(v.mac_audit_history,'[]'::jsonb) END, " +
+              "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE v.mac_audit_history END, " +
               "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''),NULLIF($2::text,'')), mac_address=NULL, " +
               "cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1 AND status='expired'",
               [voucher.id, voucherMac]
@@ -207,55 +206,37 @@ function createHotspotExpirationCleanup(deps = {}) {
           );
         }
 
-        // Persist the absolute deadline marker for auditability; PostgreSQL remains authoritative.
-        if (hasLoginMarker && expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
-            /(?:^|\|)EXP(?::|=)\s*(?:PENDING|0)(?:\||$)/i.test(comment) && typeof router.setHotspotUserComment === "function") {
-          const absoluteExpiry = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(expiryAt).replace("T", " ");
-          const absoluteComment = "Exp: " + absoluteExpiry;
-          await router.setHotspotUserComment(username, absoluteComment).catch(error =>
-            logger.warn("[HOTSPOT EXPIRY] Could not persist absolute expiry comment for " + username + ": " + error.message));
-        }
-
-        // PostgreSQL's first-login expiry is authoritative when available. This
-        // covers missed RouterOS scheduler events and users already absent from
-        // the router, without ever expiring an unused voucher by creation date.
         const currentTime = now();
         const databaseExpiryReached = ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
           expiryAt.getTime() <= currentTime.getTime();
         const commentExpiry = parseCommentExpiry(voucher.comment);
-        // A successful router snapshot that no longer contains a MAC-named account
-        // means its one-shot expiry scheduler (or an administrator) removed it.
-        // Do not infer absence while RouterOS itself is unreachable.
-        const macNamedVoucher = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(username);
-        // A renewal is deliberately staged in PostgreSQL before RouterOS is touched.
-        // The old RouterOS scheduler may remove the prior user at its original deadline;
-        // do not mistake that expected gap for expiry while the staged cumulative expiry is still future.
         const stagedFutureRenewal = effectiveStatus === "pending_claim" && voucher.renewal_stacked === true &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
-        const missingMacUser = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
-          ["active", "unused", "pending_claim"].includes(effectiveStatus);
         const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
-        const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
-        if (!databaseExpiryReached && !commentExpiryReached && !routerExpiryReached && !missingMacUser) continue;
-
-        const dataOnlyQuotaExhausted = Boolean(user && /^FAZ\|DATA_ONLY$/i.test(String(user.comment || "").trim()) &&
-          Number(user.limitBytesTotal) > 0 && Number(user.bytesIn || 0) + Number(user.bytesOut || 0) >= Number(user.limitBytesTotal));
+        const managedComment = /FAZ\|PROFILE=/i.test(String(user?.comment || ""));
+        const dataOnlyComment = /^FAZ\|DATA_ONLY$/i.test(String(user?.comment || "").trim());
+        const quotaExhausted = Boolean(!stagedFutureRenewal && user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
+          (managedComment || dataOnlyComment) && Number(user.limitBytesTotal) > 0 &&
+          Math.max(0, Number(user.bytesIn) || 0) + Math.max(0, Number(user.bytesOut) || 0) >= Number(user.limitBytesTotal));
+        if (!databaseExpiryReached && !commentExpiryReached && !quotaExhausted) continue;
 
         await database.query(
           "UPDATE hotspot_vouchers SET status='expired',first_login_at=COALESCE(first_login_at,$1),expires_at=CASE WHEN $4::boolean THEN expires_at ELSE COALESCE(expires_at,$2) END,expired_at=COALESCE(expired_at,$2),cleanup_status='pending',cleanup_error=NULL,updated_at=NOW() WHERE id=$3",
-          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id, dataOnlyQuotaExhausted]
+          [firstLogin, databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime, voucher.id, quotaExhausted]
         );
         expired++;
-        const contact=voucher;
-        const actualExpiry=expiryAt instanceof Date?expiryAt:(commentExpiry instanceof Date?commentExpiry:currentTime);
-        if(contact.phone){require("../services/notificationDispatcher").dispatchNotification({userType:"hotspot",event:"hotspot_expired",to:contact.phone,username,message:"প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।",variables:{name:contact.phone||username,username,package:contact.profile||"",amount:contact.price,expiry_date:actualExpiry.toISOString().slice(0,10)}});}
+        const contact = voucher;
+        const actualExpiry = databaseExpiryReached ? expiryAt : commentExpiryReached ? commentExpiry : currentTime;
+        if (contact.phone) {
+          require("../services/notificationDispatcher").dispatchNotification({ userType: "hotspot", event: "hotspot_expired", to: contact.phone, username, message: "প্রিয় {name}, আপনার হটস্পট প্যাকেজের মেয়াদ শেষ হয়েছে। ইন্টারনেট সেবা পেতে নতুন প্যাকেজ ক্রয় করুন।", variables: { name: contact.phone || username, username, package: contact.profile || "", amount: contact.price, expiry_date: actualExpiry.toISOString().slice(0, 10) } });
+        }
         try {
           await purgeExpiredHotspotUser(router, username, voucherMac);
           await database.query(
             "UPDATE hotspot_vouchers AS v SET status='expired', " +
-            "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE COALESCE(v.mac_audit_history,'[]'::jsonb) END, " +
+            "mac_audit_history=CASE WHEN NULLIF($2::text,'') IS NOT NULL AND NOT (COALESCE(v.mac_audit_history,'[]'::jsonb) @> jsonb_build_array($2::text)) THEN COALESCE(v.mac_audit_history,'[]'::jsonb) || jsonb_build_array($2::text) ELSE v.mac_audit_history END, " +
             "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''),NULLIF($2::text,'')), mac_address=NULL, " +
             "cleanup_status='completed',cleanup_attempts=cleanup_attempts+1,cleanup_error=NULL,updated_at=NOW() WHERE id=$1 AND status='expired'",
             [voucher.id, voucherMac]
@@ -281,10 +262,7 @@ function createHotspotExpirationCleanup(deps = {}) {
       running = false;
     }
   };
-  runHotspotExpirationCleanup.getBatchContinuationState = () => ({
-    pending: batchContinuation,
-    urgent: batchContinuationUrgent
-  });
+  runHotspotExpirationCleanup.getBatchContinuationState = () => ({ pending: batchContinuation, urgent: batchContinuationUrgent });
   return runHotspotExpirationCleanup;
 }
 
@@ -293,7 +271,6 @@ async function runHotspotRetentionCleanup(deps = {}) {
   const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
   try {
-    // Retain voucher sales/reporting rows for 395 days. Financial transactions are never deleted here.
     const candidates = await database.query(
       "SELECT id,username,mac_address FROM hotspot_vouchers WHERE status='expired' AND cleanup_status='completed' AND expires_at < NOW() - INTERVAL '395 days' ORDER BY id ASC"
     );
@@ -318,7 +295,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     );
     const archivedVouchers = await database.query(
       "UPDATE hotspot_vouchers AS v SET status='archived', " +
-      "mac_audit_history=COALESCE(v.mac_audit_history,'[]'::jsonb) || COALESCE((SELECT jsonb_agg(mac_value ORDER BY ordinal) FROM (SELECT DISTINCT ON (mac_value) mac_value,ordinal FROM (VALUES (1,NULLIF(v.last_known_mac,'')),(2,NULLIF(v.mac_address,''))) AS candidates(ordinal,mac_value) WHERE mac_value IS NOT NULL AND mac_value<>'' ORDER BY mac_value,ordinal) AS unique_macs),'[]'::jsonb), " +
+      "mac_audit_history=COALESCE(v.mac_audit_history,'[]'::jsonb) || COALESCE((SELECT jsonb_agg(mac_value ORDER BY ordinal) FROM (SELECT DISTINCT ON (mac_value) mac_value,ordinal FROM (VALUES (1,COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,''))) ) AS ordered(mac_value,ordinal) ) x), '[]'::jsonb), " +
       "last_known_mac=COALESCE(NULLIF(v.mac_address,''),NULLIF(v.last_known_mac,'')), mac_address=NULL, " +
       "updated_at=NOW() WHERE v.id = ANY($1::bigint[]) AND v.status='expired' AND v.cleanup_status='completed' " +
       "AND v.expires_at < NOW() - INTERVAL '395 days' RETURNING v.id",
@@ -336,6 +313,7 @@ async function runHotspotRetentionCleanup(deps = {}) {
     return { archivedTransactions: 0, deletedVouchers: 0, error: error.message };
   }
 }
+
 const runHotspotExpirationCleanup = createHotspotExpirationCleanup();
 
 function startHotspotExpirationCleanup(deps = {}) {
@@ -348,7 +326,7 @@ function startHotspotExpirationCleanup(deps = {}) {
     if (stopped) return;
     if (timer) clearTimeout(timer);
     try {
-      const next = await database.query("SELECT MIN(CASE WHEN status='active' AND pre_expiry_notified IS NOT TRUE AND expires_at > NOW() THEN expires_at - INTERVAL '5 minutes' ELSE expires_at END) AS next_at, BOOL_OR(status='expired' AND cleanup_status IN ('pending','not_required','failed')) AS retry_due FROM hotspot_vouchers WHERE ((status IN ('unused','active','pending_claim') AND expires_at IS NOT NULL) OR (status='expired' AND cleanup_status IN ('pending','not_required','failed')))");
+      const next = await database.query("SELECT MIN(CASE WHEN status='active' AND pre_expiry_notified IS NOT TRUE AND expires_at > NOW() THEN expires_at - INTERVAL '5 minutes' ELSE expires_at END) AS next_at, BOOL_OR(status='expired' AND cleanup_status IN ('pending','failed')) AS retry_due FROM hotspot_vouchers", []);
       const row = next.rows?.[0] || {};
       const nextAt = row.next_at ? new Date(row.next_at).getTime() : Infinity;
       const continuation = runCleanup.getBatchContinuationState();

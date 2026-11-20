@@ -127,14 +127,14 @@ test("Push endpoint selects only active/unused voucher candidates and formats Ro
   }
 });
 
-test("RouterOS push adds MAC credentials and preserves existing sessions unless expired",async()=>{
+test("RouterOS push refreshes valid users and disables expired users without provisioning them",async()=>{
   const routerRuntime = new (require('../services/mikrotikService').MikroTikService)();
   const originalWithConnection=routerRuntime._withConnection;
   const calls=[];
   routerRuntime._withConnection=async function(_label,callback){
     const connection={write:async(command,params=[])=>{
       calls.push({command,params});
-      if(command==="/ip/hotspot/user/print")return [{".id":"*1",name:MAC_A,profile:"Old",comment:"Exp: 2029-01-01 00:00:00"}];
+      if(command==="/ip/hotspot/user/print")return [{".id":"*1",name:MAC_A,profile:"Old",comment:"Exp: 2029-01-01 00:00:00"},{".id":"*2",name:MAC_B,profile:"Silver",comment:"Exp: 2020-01-02 03:04:05"}];
       if(command==="/ip/hotspot/active/print")return [{".id":"*a",user:MAC_A},{".id":"*b",user:MAC_B}];
       return [];
     }};
@@ -145,18 +145,17 @@ test("RouterOS push adds MAC credentials and preserves existing sessions unless 
       {macAddress:MAC_A,profile:"Gold",comment:"Exp: 2030-01-02 03:04:05",expired:false},
       {macAddress:MAC_B,profile:"Silver",comment:"Exp: 2020-01-02 03:04:05",expired:true}
     ]);
-    assert.deepEqual(result,{provisioned:1,refreshed:1,skipped:0,disconnected:1});
+    assert.deepEqual(result,{provisioned:0,refreshed:1,skipped:1,disconnected:1});
     const set=calls.find(c=>c.command==="/ip/hotspot/user/set");
     assert.ok(set);
     assert.ok(set.params.includes("=.id=*1"));
     assert.ok(set.params.includes("=profile=Gold"));
     assert.ok(set.params.includes("=comment=Exp: 2030-01-02 03:04:05"));
     assert.ok(!set.params.some(p=>p.startsWith("=password=")),"refresh must not reset credentials or session");
-    const add=calls.find(c=>c.command==="/ip/hotspot/user/add");
-    assert.ok(add);
-    assert.ok(add.params.includes("=name="+MAC_B));
-    assert.ok(add.params.includes("=password="+MAC_B));
-    assert.ok(add.params.includes("=mac-address="+MAC_B));
+    const expiredSet=calls.find(c=>c.command==="/ip/hotspot/user/set"&&c.params.includes("=.id=*2"));
+    assert.ok(expiredSet);
+    assert.ok(expiredSet.params.includes("=disabled=yes"));
+    assert.equal(calls.some(c=>c.command==="/ip/hotspot/user/add"),false,"expired identities must never be provisioned");
     const removals=calls.filter(c=>c.command==="/ip/hotspot/active/remove");
     assert.deepEqual(removals,[{command:"/ip/hotspot/active/remove",params:["=.id=*b"]}]);
     assert.ok(!calls.some(c=>c.command==="/ip/hotspot/user/reset-counters"));
