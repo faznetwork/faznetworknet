@@ -18,15 +18,15 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $git = 'D:\Git\cmd\git.exe'
-          $repo = 'D:\faznetworknet'
+          $git = 'E:\Git\cmd\git.exe'
+          $repo = 'E:\faznetworknet'
           $pm2 = 'C:\Users\RABBI-PC\AppData\Roaming\npm\pm2.cmd'
 
           $env:GIT_TERMINAL_PROMPT = '0'
           $env:GCM_INTERACTIVE = 'Never'
           $env:PM2_HOME = 'C:\Users\RABBI-PC\.pm2'
 
-          & $git config --system --add safe.directory D:/faznetworknet
+          & $git config --system --add safe.directory E:/faznetworknet
           if ($LASTEXITCODE -ne 0) { throw 'Could not configure Git safe.directory for the deployment repository.' }
 
           if ([string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
