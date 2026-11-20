@@ -109,14 +109,18 @@ async function markDelivered(id, { providerMessageId = null } = {}) {
 
 async function scheduleRetry(id, { attempts, code = "DELIVERY_FAILED", message = "Email delivery failed.", retryAfterMs, maxAttempts = 8 } = {}) {
   const terminal = Number(attempts) >= Number(maxAttempts);
+  // $2 is used in two type contexts (SET target and CASE WHEN); Postgres rejects that
+  // with "inconsistent types deduced for parameter $2", so the retry status is passed
+  // twice: $2 for SET, $6 for the WHEN comparison.
+  const nextStatus = terminal ? "failed" : "pending";
   const exponential = Math.min(60 * 60 * 1000, 5000 * (2 ** Math.max(0, Number(attempts || 1) - 1)));
   const delayMs = Math.max(1000, Math.min(60 * 60 * 1000, Number(retryAfterMs) || exponential + Math.floor(Math.random() * Math.min(exponential / 4, 30000))));
   const result = await db.query(
     `UPDATE email_outbox
-     SET status=$2, available_at=CASE WHEN $2='pending' THEN NOW()+($3::bigint * INTERVAL '1 millisecond') ELSE available_at END,
+     SET status=$2, available_at=CASE WHEN $6='pending' THEN NOW()+($3::bigint * INTERVAL '1 millisecond') ELSE available_at END,
          lease_until=NULL,last_error_code=$4,last_error_message=$5,updated_at=NOW()
      WHERE id=$1 AND status='processing'`,
-    [id, terminal ? "failed" : "pending", delayMs, String(code).slice(0, 80), String(message).replace(/[\r\n\t]+/g, " ").slice(0, 500)]
+    [id, nextStatus, delayMs, String(code).slice(0, 80), String(message).replace(/[\r\n\t]+/g, " ").slice(0, 500), nextStatus]
   );
   if (result.rowCount !== 1) throw new Error("Email outbox retry state was not saved because its processing lease was lost.");
   if (terminal) {
