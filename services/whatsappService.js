@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const db = require("../db");
 
 let socket = null;
@@ -16,7 +17,9 @@ let reconnectAllowed = true;
 let accountMetadata = null;
 let socketLockClient = null;
 let socketOwner = false;
+let socketOwnerToken = null;
 let socketHeartbeatTimer = null;
+let freshQrResetPending = false;
 let startupOwnershipResetAttempted = false;
 const SOCKET_ADVISORY_LOCK_KEY = 20261017;
 const SOCKET_LOCK_STALE_MS = 90_000;
@@ -264,6 +267,29 @@ async function resetUnregisteredAuthRows(database = db, baileys = getBaileys()) 
   return { reset: true, reason: raw ? "unregistered" : "missing_creds" };
 }
 
+// A registered session that WhatsApp revoked server-side can never emit a QR
+// code: Baileys retries the dead credentials instead of pairing. Clear the
+// dead rows (creds, Signal keys, and linked-account metadata) so the next
+// pairing starts clean. Only called when WhatsApp itself already reported the
+// session logged out, or the user explicitly unlinks the device.
+async function resetRegisteredAuthRows(database = db) {
+  await ensureSessionTable(database);
+  const purge = async tx => {
+    await tx.query("DELETE FROM whatsapp_sessions WHERE key = $1 OR key LIKE $2", ["creds", "key:%"]);
+    await tx.query("DELETE FROM whatsapp_sessions WHERE key = $1", ["metadata"]);
+  };
+  if (typeof database.withTransaction === "function") await database.withTransaction(purge);
+  else {
+    await database.query("BEGIN");
+    try { await purge(database); await database.query("COMMIT"); }
+    catch (error) { try { await database.query("ROLLBACK"); } catch (_) {} throw error; }
+  }
+  activeCreds = null;
+  authConfigured = false;
+  accountMetadata = null;
+  return { reset: true, reason: "registered_revoked" };
+}
+
 async function ensureSocketLeaseTable(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS whatsapp_socket_lease (
@@ -272,43 +298,51 @@ async function ensureSocketLeaseTable(client) {
       heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // owner_token identifies one acquire across Supavisor transaction pooling,
+  // where pg_backend_pid() can differ per query and must never be used to
+  // match the heartbeat or the release to this owner.
+  await client.query("ALTER TABLE whatsapp_socket_lease ADD COLUMN IF NOT EXISTS owner_token TEXT");
 }
 
 async function heartbeatSocketLease(client) {
   try {
+    if (!socketOwnerToken) return;
     await client.query(
-      "UPDATE whatsapp_socket_lease SET heartbeat_at=NOW() WHERE lock_key=$1 AND owner_pid=pg_backend_pid()",
-      [SOCKET_ADVISORY_LOCK_KEY]
+      "UPDATE whatsapp_socket_lease SET heartbeat_at=NOW() WHERE lock_key=$1 AND owner_token=$2",
+      [SOCKET_ADVISORY_LOCK_KEY, socketOwnerToken]
     );
   } catch (error) {
     console.warn("[WhatsApp] Ownership heartbeat failed:", error.message);
   }
 }
 
-// Startup cleanup for the lease row only. Never terminate another backend
-// here: a live owner on another instance would lose its advisory lock and
-// reconnect, and the two instances would keep killing each other's lock —
-// every reconnect re-invalidates the shared Baileys session until WhatsApp
-// logs the device out. Genuinely stale owners are handled by the lease-age
-// check in acquireSocketOwnership.
+// Startup cleanup for stale lease rows only. Never terminate another backend
+// here, and never delete a live owner's row: a fresh heartbeat is the only
+// proof an owner is alive, and deleting it would let a later acquire mistake
+// a healthy owner for an orphaned lock. Genuinely stale owners are handled by
+// the lease-age check in acquireSocketOwnership.
 async function forceClearLegacySocketLock(client) {
   if (startupOwnershipResetAttempted) return;
   startupOwnershipResetAttempted = true;
   await ensureSocketLeaseTable(client);
-  // A lease row alone is not a lock. Clear only the lease metadata for this
-  // dedicated key; preserve whatsapp_sessions and all saved Baileys credentials.
-  await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1", [SOCKET_ADVISORY_LOCK_KEY]);
+  // A lease row alone is not a lock. Clear only lease metadata whose heartbeat
+  // is already stale; preserve whatsapp_sessions and all saved Baileys credentials.
+  await client.query(
+    "DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND heartbeat_at < NOW() - INTERVAL '90 seconds'",
+    [SOCKET_ADVISORY_LOCK_KEY]
+  );
 }
 
-async function acquireSocketOwnership() {
+async function acquireSocketOwnership(poolOverride) {
   if (socketLockClient && socketOwner) return;
-  const pool = typeof db.getPool === "function" ? db.getPool() : null;
+  const pool = poolOverride || (typeof db.getPool === "function" ? db.getPool() : null);
   if (!pool || typeof pool.connect !== "function") return;
   const client = await pool.connect();
   client.on("error", error => {
     if (socketLockClient !== client) return;
     socketLockClient = null;
     socketOwner = false;
+    socketOwnerToken = null;
     if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
     lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
     const activeSocket = socket;
@@ -331,11 +365,25 @@ async function acquireSocketOwnership() {
         [SOCKET_ADVISORY_LOCK_KEY]
       );
       const owner = lease.rows?.[0];
-      if (owner && Number(owner.age_ms) > SOCKET_LOCK_STALE_MS && Number(owner.owner_pid) !== Number(client.processID)) {
-        const oldPid = Number(owner.owner_pid);
-        console.warn("[WhatsApp] Stale ownership heartbeat detected; terminating abandoned PostgreSQL lock backend.", { ownerPid: oldPid, staleMs: Number(owner.age_ms) });
-        await client.query("SELECT pg_terminate_backend($1) WHERE $1 <> pg_backend_pid()", [oldPid]);
-        await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=$2", [SOCKET_ADVISORY_LOCK_KEY, oldPid]);
+      const ownerStale = !owner || Number(owner.age_ms) > SOCKET_LOCK_STALE_MS;
+      if (ownerStale) {
+        // No live owner, yet the advisory lock is held: the lock is orphaned.
+        // Supavisor transaction pooling can strand a session-level lock when
+        // its backend is recycled, or an unlock lands on a different backend
+        // than the lock. A live owner always has a fresh lease row, so this
+        // never fires while another instance is healthy. Terminate the holder
+        // backend and retry the lock once instead of failing forever.
+        const holders = await client.query(
+          "SELECT pid FROM pg_locks WHERE locktype='advisory' AND objid=$1 AND granted",
+          [SOCKET_ADVISORY_LOCK_KEY]
+        );
+        for (const holder of holders.rows || []) {
+          console.warn("[WhatsApp] Orphaned socket lock detected; terminating abandoned lock backend.", { ownerPid: Number(holder.pid) });
+          await client.query("SELECT pg_terminate_backend($1) WHERE $1 <> pg_backend_pid()", [Number(holder.pid)]);
+        }
+        if (owner) {
+          await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1", [SOCKET_ADVISORY_LOCK_KEY]);
+        }
         result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
       }
       if (!result.rows?.[0]?.locked) {
@@ -346,12 +394,13 @@ async function acquireSocketOwnership() {
     }
     socketLockClient = client;
     socketOwner = true;
+    socketOwnerToken = crypto.randomUUID();
     const pidResult = await client.query("SELECT pg_backend_pid() AS pid");
     await client.query(
-      `INSERT INTO whatsapp_socket_lease(lock_key, owner_pid, heartbeat_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT(lock_key) DO UPDATE SET owner_pid=EXCLUDED.owner_pid, heartbeat_at=NOW()`,
-      [SOCKET_ADVISORY_LOCK_KEY, Number(pidResult.rows[0].pid)]
+      `INSERT INTO whatsapp_socket_lease(lock_key, owner_pid, owner_token, heartbeat_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT(lock_key) DO UPDATE SET owner_pid=EXCLUDED.owner_pid, owner_token=EXCLUDED.owner_token, heartbeat_at=NOW()`,
+      [SOCKET_ADVISORY_LOCK_KEY, Number(pidResult.rows[0].pid), socketOwnerToken]
     );
     if (socketHeartbeatTimer) clearInterval(socketHeartbeatTimer);
     socketHeartbeatTimer = setInterval(() => { heartbeatSocketLease(client); }, SOCKET_HEARTBEAT_MS);
@@ -367,11 +416,16 @@ async function acquireSocketOwnership() {
 
 async function releaseSocketOwnership() {
   const client = socketLockClient;
+  const token = socketOwnerToken;
   socketLockClient = null;
   socketOwner = false;
+  socketOwnerToken = null;
   if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
   if (!client) return;
-  try { await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=pg_backend_pid()", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
+  try {
+    if (token) await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_token=$2", [SOCKET_ADVISORY_LOCK_KEY, token]);
+    else await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=pg_backend_pid()", [SOCKET_ADVISORY_LOCK_KEY]);
+  } catch (_) {}
   try { await client.query("SELECT pg_advisory_unlock($1)", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
   try { client.release(); } catch (_) {}
 }
@@ -399,6 +453,20 @@ async function handleConnectionClose(update, baileys, closedSocket) {
       reconnectTimer = null;
     }
     console.warn("[WhatsApp] Session requires re-linking; preserving PostgreSQL auth rows.");
+    if (freshQrResetPending) {
+      // A fresh-QR request was waiting on exactly this verdict: the stored
+      // session is dead, so clear it and pair fresh instead of retrying it.
+      // The scheduled reconnect then starts a clean pairing and emits a QR.
+      freshQrResetPending = false;
+      try {
+        await resetRegisteredAuthRows(db);
+        console.log("[WhatsApp] Logged-out session cleared for the pending fresh-QR request; starting a clean pairing.");
+      } catch (error) {
+        console.warn("[WhatsApp] Could not clear revoked auth rows:", error.message);
+      }
+      reconnectAttempt = 0;
+      scheduleReconnect();
+    }
   } else if (!reconnectAllowed) {
     connection = "disconnected";
   } else {
@@ -479,11 +547,28 @@ async function connect(options = {}) {
 
     if (options.freshQr === true) {
       // Manual pairing is a clean path only for unregistered/missing credentials.
-      // Registered sessions are preserved and must reconnect silently.
+      // Registered sessions are preserved and must reconnect silently — unless
+      // WhatsApp already reported this session logged out, in which case the
+      // stored creds are dead and can never emit a QR code. Clear them and
+      // pair fresh; otherwise arm a reset if this attempt is then reported
+      // logged out, so one Connect click still ends with a QR code.
       const reset = await resetUnregisteredAuthRows(db, baileys);
       if (reset.reason === "registered") {
-        console.log("[WhatsApp] Fresh-QR request found registered credentials; preserving auth and restoring existing session.");
+        const sessionKnownDead = connection === "reconnect_required" || /logged out/i.test(String(lastError || ""));
+        if (sessionKnownDead) {
+          await resetRegisteredAuthRows(db);
+          console.log("[WhatsApp] Fresh-QR request found a revoked registered session; cleared dead auth rows for a clean pairing.");
+          if (socket) { try { socket.end(undefined); } catch (_) {} socket = null; }
+          activeCreds = null;
+          qrDataUrl = null;
+          qrText = null;
+          connection = "disconnected";
+        } else {
+          freshQrResetPending = true;
+          console.log("[WhatsApp] Fresh-QR request found registered credentials; preserving auth and restoring existing session.");
+        }
       } else {
+        freshQrResetPending = false;
         console.log("[WhatsApp] Fresh pairing auth reset:", reset.reason);
         if (socket) { try { socket.end(undefined); } catch (_) {} socket = null; }
         activeCreds = null;
@@ -792,6 +877,7 @@ module.exports = {
   extractConnectedAccount,
   createDatabaseAuthState,
   _resetUnregisteredAuthRows: resetUnregisteredAuthRows,
+  _resetRegisteredAuthRows: resetRegisteredAuthRows,
   _handleConnectionClose: handleConnectionClose,
   _inspectStoredSession: inspectStoredSession,
   _isSocketReady: isSocketReady,

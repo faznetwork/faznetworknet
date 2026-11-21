@@ -1,7 +1,8 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createDatabaseAuthState, normalizePhone, extractConnectedAccount } = require("../services/whatsappService");
+const whatsappService = require("../services/whatsappService");
+const { createDatabaseAuthState, normalizePhone, extractConnectedAccount } = whatsappService;
 
 function fakeBaileys() {
   return {
@@ -262,4 +263,113 @@ test("socket ownership conflict releases the candidate DB client without touchin
     db.getPool = originalGetPool;
     await whatsappService._releaseSocketOwnership();
   }
+});
+
+/* Socket-ownership tests: the advisory lock is held through the Supabase
+ * transaction pooler, where pg_backend_pid() can differ per query, so the
+ * lease row (owner_token + heartbeat) is the source of truth for liveness. */
+
+function fakeLockClient(script = {}) {
+  const queries = [];
+  let tryLockCalls = 0;
+  const client = {
+    queries,
+    processID: script.backendPid || 1111,
+    released: false,
+    handlers: {},
+    on(event, fn) { this.handlers[event] = fn; },
+    release() { this.released = true; },
+    async query(sql, params = []) {
+      const flat = sql.trim().replace(/\s+/g, " ");
+      queries.push({ sql: flat, params });
+      if (flat.startsWith("CREATE TABLE IF NOT EXISTS whatsapp_socket_lease")) return { rows: [] };
+      if (flat.startsWith("ALTER TABLE whatsapp_socket_lease")) return { rows: [] };
+      if (flat.startsWith("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND heartbeat_at")) return { rows: [] };
+      if (flat.startsWith("SELECT pg_try_advisory_lock")) {
+        const locked = script.tryLock ? (script.tryLock[tryLockCalls++] ?? false) : true;
+        return { rows: [{ locked }] };
+      }
+      if (flat.includes("FROM whatsapp_socket_lease WHERE lock_key=$1")) {
+        return { rows: script.leaseRows || [] };
+      }
+      if (flat.includes("FROM pg_locks WHERE locktype")) {
+        return { rows: script.holders || [] };
+      }
+      if (flat.startsWith("SELECT pg_terminate_backend")) return { rows: [{ terminated: true }] };
+      if (flat.startsWith("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1")) return { rows: [] };
+      if (flat.startsWith("SELECT pg_backend_pid")) return { rows: [{ pid: script.backendPid || 1111 }] };
+      if (flat.startsWith("INSERT INTO whatsapp_socket_lease")) return { rows: [] };
+      if (flat.startsWith("SELECT pg_advisory_unlock")) return { rows: [] };
+      throw new Error("Unexpected lock query: " + flat);
+    }
+  };
+  return client;
+}
+
+function fakeLockPool(client) {
+  return { async connect() { return client; } };
+}
+
+function lockQueryTexts(client, prefix) {
+  return client.queries.filter(q => q.sql.startsWith(prefix)).map(q => q.sql);
+}
+
+test("socket ownership: free lock writes a token-based lease row and never terminates", async () => {
+  const client = fakeLockClient({ tryLock: [true] });
+  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
+  const inserts = client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease"));
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0].params.length, 3);
+  assert.match(inserts[0].params[2], /^[0-9a-f-]{36}$/);
+  assert.equal(lockQueryTexts(client, "SELECT pg_terminate_backend").length, 0);
+  await whatsappService._releaseSocketOwnership();
+  assert.equal(client.released, true);
+});
+
+test("socket ownership: orphaned lock with no lease row is terminated and retried", async () => {
+  const client = fakeLockClient({ tryLock: [false, true], leaseRows: [], holders: [{ pid: 9999 }] });
+  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
+  const terminates = client.queries.filter(q => q.sql.startsWith("SELECT pg_terminate_backend"));
+  assert.equal(terminates.length, 1);
+  assert.equal(terminates[0].params[0], 9999);
+  assert.equal(client.queries.filter(q => q.sql.startsWith("SELECT pg_try_advisory_lock")).length, 2);
+  assert.equal(client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 1);
+  await whatsappService._releaseSocketOwnership();
+});
+
+test("socket ownership: live owner with a fresh lease row is never terminated", async () => {
+  const client = fakeLockClient({ tryLock: [false], leaseRows: [{ owner_pid: 5555, age_ms: 5000 }], holders: [{ pid: 5555 }] });
+  await assert.rejects(
+    () => whatsappService._acquireSocketOwnership(fakeLockPool(client)),
+    error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
+  );
+  assert.equal(lockQueryTexts(client, "SELECT pg_terminate_backend").length, 0);
+  await whatsappService._releaseSocketOwnership();
+});
+
+test("socket ownership: stale lease row owner is terminated and the lock is retried", async () => {
+  const client = fakeLockClient({ tryLock: [false, true], leaseRows: [{ owner_pid: 5555, age_ms: 120000 }], holders: [{ pid: 5555 }] });
+  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
+  const terminates = client.queries.filter(q => q.sql.startsWith("SELECT pg_terminate_backend"));
+  assert.equal(terminates.length, 1);
+  assert.equal(terminates[0].params[0], 5555);
+  assert.equal(client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 1);
+  await whatsappService._releaseSocketOwnership();
+});
+
+test("resetRegisteredAuthRows purges dead creds, Signal keys and metadata", async () => {
+  const database = fakeDatabase();
+  const baileys = fakeBaileys();
+  const auth = await createDatabaseAuthState({ database, baileys });
+  auth.state.creds.registered = true;
+  await auth.saveCreds();
+  await auth.state.keys.set({ "session": { "abc": { private: Buffer.from([4, 5, 6]) } } });
+  database.rows.set("metadata", { phone: "+8801712345678" });
+  assert.equal(database.rows.has("creds"), true);
+  assert.equal(database.rows.has("metadata"), true);
+  const result = await whatsappService._resetRegisteredAuthRows(database);
+  assert.equal(result.reset, true);
+  assert.equal(database.rows.has("creds"), false);
+  assert.equal(database.rows.has("key:session:abc"), false);
+  assert.equal(database.rows.has("metadata"), false);
 });
