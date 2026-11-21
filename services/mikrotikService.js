@@ -780,14 +780,21 @@ class MikroTikService {
     });
   }
 
-  async getActiveSessionsSafe(configOverride = null) {
+  async getActiveSessionsSafe(configOverride = null, options = {}) {
     const startedAt = Date.now();
     let config = null;
     try {
       config = await this._getConfig(configOverride || undefined);
       let sessions = null;
       let lastError = null;
-      const maxAttempts = 2;
+      // Interactive callers (Customer 360) need a tight budget: one attempt and
+      // a short deadline, so a stalled router path can never push the HTTP
+      // response past the browser's 7-8s timeout. Defaults preserve the old
+      // behavior (2 attempts, 8s operation, 3s handshake, 600ms preflight).
+      const maxAttempts = Number.isFinite(Number(options.maxAttempts)) ? Math.max(1, Math.min(3, Number(options.maxAttempts))) : 2;
+      const operationTimeoutMs = Number.isFinite(Number(options.operationTimeoutMs)) ? Math.max(500, Number(options.operationTimeoutMs)) : 8000;
+      const handshakeTimeoutMs = Number.isFinite(Number(options.handshakeTimeoutMs)) ? Math.max(250, Number(options.handshakeTimeoutMs)) : 3000;
+      const preflightTimeoutMs = Number.isFinite(Number(options.preflightTimeoutMs)) ? Math.max(200, Number(options.preflightTimeoutMs)) : 600;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
@@ -798,7 +805,7 @@ class MikroTikService {
               const error = Object.assign(new Error("Router API socket preflight timed out"), { code: "ETIMEDOUT" });
               socket.destroy(error);
               reject(error);
-            }, 600);
+            }, preflightTimeoutMs);
             socket.once("connect", () => {
               clearTimeout(timer);
               socket.destroy();
@@ -826,7 +833,7 @@ class MikroTikService {
                 encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]),
                 radius: this._str(item.radius), raw: item
               })).filter(item => item.username);
-          }, config, 8000, 3000);
+          }, config, operationTimeoutMs, handshakeTimeoutMs);
           break;
         } catch (error) {
           lastError = error;

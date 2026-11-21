@@ -285,25 +285,16 @@ async function heartbeatSocketLease(client) {
   }
 }
 
-// Emergency startup recovery for legacy advisory locks created before lease heartbeats
-// existed. This targets only our dedicated WhatsApp advisory-lock key, never auth rows.
+// Startup cleanup for the lease row only. Never terminate another backend
+// here: a live owner on another instance would lose its advisory lock and
+// reconnect, and the two instances would keep killing each other's lock —
+// every reconnect re-invalidates the shared Baileys session until WhatsApp
+// logs the device out. Genuinely stale owners are handled by the lease-age
+// check in acquireSocketOwnership.
 async function forceClearLegacySocketLock(client) {
   if (startupOwnershipResetAttempted) return;
   startupOwnershipResetAttempted = true;
   await ensureSocketLeaseTable(client);
-  const holders = await client.query(
-    `SELECT DISTINCT pid FROM pg_locks
-     WHERE locktype='advisory' AND granted=true
-       AND classid=0 AND objid=$1::oid AND objsubid=1
-       AND pid IS NOT NULL AND pid <> pg_backend_pid()`,
-    [SOCKET_ADVISORY_LOCK_KEY]
-  );
-  for (const row of holders.rows || []) {
-    const pid = Number(row.pid);
-    if (!Number.isInteger(pid) || pid <= 0) continue;
-    console.warn("[WhatsApp] Clearing legacy advisory lock held by previous backend.", { ownerPid: pid });
-    await client.query("SELECT pg_terminate_backend($1) WHERE $1 <> pg_backend_pid()", [pid]);
-  }
   // A lease row alone is not a lock. Clear only the lease metadata for this
   // dedicated key; preserve whatsapp_sessions and all saved Baileys credentials.
   await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1", [SOCKET_ADVISORY_LOCK_KEY]);

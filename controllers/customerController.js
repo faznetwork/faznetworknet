@@ -1313,7 +1313,11 @@ async function resolveCustomer360(idValue,tenantScope){
   let routerStatus="unreachable";
   try {
     const routerService=await getCustomerRouterService(customer);
-    const liveResult=await routerService.getActiveSessionsSafe();
+    // Customer 360 must answer inside the browser's 7s timeout even when the
+    // router path stalls: one attempt, short router budget, and a hard 3s
+    // cap on the whole live lookup. On timeout the customer is shown Offline
+    // (same as today's failure behavior) — the page itself never hangs.
+    const liveResult=await withTimeout(()=>routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
     if (
       liveResult &&
       !["timeout", "unavailable"].includes(liveResult.live_sync) &&
@@ -1368,7 +1372,9 @@ async function getCustomerLiveSession(req,res){
     const storedMac=clean(q.rows?.[0]?.caller_id,100);
     try {
       const routerService=await getCustomerRouterService(customer);
-      const liveResult=await routerService.getActiveSessionsSafe();
+      // Same tight budget as the 360 profile: the live-status check must never
+      // outlive the browser timeout when the router path stalls.
+      const liveResult=await withTimeout(()=>routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
       if(liveResult?.live_sync==="timeout"||liveResult?.live_sync==="unavailable"||!Array.isArray(liveResult?.sessions)){
         return res.json({success:true,live:offlineLive(storedMac,"Target router live status is temporarily unavailable.",liveResult?.live_sync||"unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
       }
