@@ -21,4 +21,19 @@
     }
 
     window.toggleSubmenu = toggleSubmenu;
+
+    // Delegated fallback: the sidebar buttons also carry an inline
+    // onclick="toggleSubmenu(event, this)". The inline handler stops
+    // propagation, so this listener only fires when the inline handler
+    // did not run (for example a stale cached page, or an attribute that
+    // was stripped). Without it a single failed load silently kills
+    // every sidebar menu. The guard below also makes double-toggling
+    // impossible: a click already handled inline never reaches here.
+    document.addEventListener('click', function (event) {
+        const target = event.target;
+        if (!target || typeof target.closest !== 'function') return;
+        const button = target.closest('#sidebar button.dropdown-toggle');
+        if (!button) return;
+        toggleSubmenu(event, button);
+    });
 })();
