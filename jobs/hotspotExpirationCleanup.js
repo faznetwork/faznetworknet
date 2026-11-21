@@ -233,8 +233,20 @@ function createHotspotExpirationCleanup(deps = {}) {
         // do not mistake that expected gap for expiry while the staged cumulative expiry is still future.
         const stagedFutureRenewal = effectiveStatus === "pending_claim" && voucher.renewal_stacked === true &&
           expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) && expiryAt.getTime() > currentTime.getTime();
-        const missingMacUser = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
+        // Router absence alone must never cut a paid validity short. A user can be
+        // missing from the snapshot because its router account is still being
+        // created (activation race), an administrator removed it, or the snapshot
+        // missed it — none of those mean the customer's meyad ended. Only treat
+        // absence as expiry when PostgreSQL holds no future expiry for it. A
+        // still-valid voucher stays active so the portal can re-provision it.
+        const hasFutureDbExpiry = expiryAt instanceof Date && !Number.isNaN(expiryAt.getTime()) &&
+          expiryAt.getTime() > currentTime.getTime();
+        const routerUserMissing = !stagedFutureRenewal && snapshotAvailable && !user && macNamedVoucher &&
           ["active", "unused", "pending_claim"].includes(effectiveStatus);
+        const missingMacUser = routerUserMissing && !hasFutureDbExpiry;
+        if (routerUserMissing && !missingMacUser) {
+          logger.warn("[HOTSPOT EXPIRY] Router user missing for still-valid voucher " + username + " (expires " + expiryAt.toISOString() + "); leaving active for portal re-provision.");
+        }
         const commentExpiryReached = !stagedFutureRenewal && !user && ["active", "unused", "pending_claim"].includes(effectiveStatus) &&
           commentExpiry instanceof Date && commentExpiry.getTime() <= currentTime.getTime();
         const routerExpiryReached = !stagedFutureRenewal && Boolean(user && routerUserExpired(user, schedulerNames));
