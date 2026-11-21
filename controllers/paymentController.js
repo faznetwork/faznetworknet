@@ -51,8 +51,6 @@ function profileIdentifierMatches(profileName,metadata,requested){
  const target=normalizeProfileIdentifier(requested);
  return Boolean(target)&&candidates.some(value=>normalizeProfileIdentifier(value)===target);
 }
-function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
-function addDays(v,days){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;d.setUTCDate(d.getUTCDate()+Number(days));return d.toISOString().slice(0,10);}
 function calculateHotspotExpiryDate(validityConfig){
  const amount=Number(validityConfig?.value);
  const rawUnit=String(validityConfig?.unit||"").trim().toLowerCase();
@@ -75,12 +73,12 @@ function calculateHotspotExpiryDate(validityConfig){
  }
  return expiry.toISOString().slice(0,10);
 }
-function endOfBillingMonth(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Math.max(1,Number(months)||1),0)).toISOString().slice(0,10);}
-async function renewalExpirationDate(durationMonths,query=db.query,currentExpiryDate=null){
- return renewalService.calculateExpiry({durationMonths,query,currentExpiryDate});
+async function renewalExpirationDate(durationMonths,currentExpiryDate=null,now=new Date()){
+ // Single fixed billing cycle: same-date monthly (see services/renewalService).
+ return renewalService.calculateExpiry({durationMonths,currentExpiryDate,now});
 }
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
-async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const currentExpiry=renewalService.normalizeDate(c.expiration_date??c.expiry_date);const expiration=await renewalExpirationDate(c.duration_months,query,currentExpiry),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await renewalService.applyRouterRenewal(mikrotikService,c.username,{password:c.password,profile,comment,disabled:false,onMutation:onRouterMutation});const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
+async function renewCustomer(c,{persist=true,query=db.query,onRouterMutation=()=>{}}={}){const currentExpiry=renewalService.normalizeDate(c.expiration_date??c.expiry_date);const expiration=await renewalExpirationDate(c.duration_months,currentExpiry),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await renewalService.applyRouterRenewal(mikrotikService,c.username,{password:c.password,profile,comment,disabled:false,onMutation:onRouterMutation});const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
 async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 const webhookQuarantineBuckets=new Map();
 function allowWebhookQuarantine(req) {

@@ -98,16 +98,18 @@ test("billing cron marks a past-due migration override expired without changing 
 
 test("billing cron includes a customer on the exact Dhaka expiry date and confirms RouterOS session removal",async()=>{
   const originalQuery=db.query,originalTransaction=db.withTransaction;
-  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser;
+  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser,originalEnsure=mikrotik.ensureExpiredProfile,originalChange=mikrotik.changeSecretProfile;
   const calls=[];
   try{
     db.query=async(sql,params=[])=>{
       calls.push({sql,params});
-      if(sql.includes("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')"))return {rows:[{key:"grace_period_days",value:"0"},{key:"expiry_action",value:"disable_secret"}]};
+      if(sql.includes("SELECT key,value FROM app_settings WHERE key='grace_period_days'"))return {rows:[{key:"grace_period_days",value:"0"}]};
       if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:43,username:"expiry-day-user",full_name:"Expiry Day User",package_name:"Home 30",phone:null,expiration_date:"2026-10-25",status:"active",billing_expiry_override:false}]};
       return {rows:[]};
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{calls.push({sql,params});return {rows:[],rowCount:1};}});
+    mikrotik.ensureExpiredProfile=async()=>({name:"EXPIRED-PROFILE",rateLimit:"1k/1k",created:false});
+    mikrotik.changeSecretProfile=async(username,profile)=>({username,profile});
     mikrotik.toggleSecret=async()=>({success:true});
     let kickedUsername=null;
     mikrotik.kickActiveUser=async username=>{kickedUsername=username;return {username,kicked:true,count:1,message:"Active PPPoE session disconnected."};};
@@ -124,21 +126,25 @@ test("billing cron includes a customer on the exact Dhaka expiry date and confir
     db.withTransaction=originalTransaction;
     mikrotik.toggleSecret=originalToggle;
     mikrotik.kickActiveUser=originalKick;
+    mikrotik.ensureExpiredProfile=originalEnsure;
+    mikrotik.changeSecretProfile=originalChange;
   }
 });
 
 test("billing cron does not mark a subscriber expired when RouterOS session removal fails",async()=>{
   const originalQuery=db.query,originalTransaction=db.withTransaction;
-  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser;
+  const originalToggle=mikrotik.toggleSecret,originalKick=mikrotik.kickActiveUser,originalEnsure=mikrotik.ensureExpiredProfile,originalChange=mikrotik.changeSecretProfile;
   const calls=[];
   try{
     db.query=async(sql,params=[])=>{
       calls.push({sql,params});
-      if(sql.includes("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')"))return {rows:[{key:"grace_period_days",value:"0"},{key:"expiry_action",value:"disable_secret"}]};
+      if(sql.includes("SELECT key,value FROM app_settings WHERE key='grace_period_days'"))return {rows:[{key:"grace_period_days",value:"0"}]};
       if(sql.startsWith("SELECT id,username,full_name,package_name,phone,expiration_date,status,billing_expiry_override FROM customers"))return {rows:[{id:44,username:"router-kick-failure",full_name:"Kick Failure",package_name:"Home 30",phone:null,expiration_date:"2026-10-25",status:"active",billing_expiry_override:false}]};
       return {rows:[]};
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{calls.push({sql,params});return {rows:[],rowCount:1};}});
+    mikrotik.ensureExpiredProfile=async()=>({name:"EXPIRED-PROFILE",rateLimit:"1k/1k",created:false});
+    mikrotik.changeSecretProfile=async(username,profile)=>({username,profile});
     mikrotik.toggleSecret=async()=>({success:true});
     mikrotik.kickActiveUser=async()=>{throw new Error("RouterOS API remove failed");};
     const {runBillingExpiration}=require("../jobs/billingCron");
@@ -151,6 +157,8 @@ test("billing cron does not mark a subscriber expired when RouterOS session remo
     db.withTransaction=originalTransaction;
     mikrotik.toggleSecret=originalToggle;
     mikrotik.kickActiveUser=originalKick;
+    mikrotik.ensureExpiredProfile=originalEnsure;
+    mikrotik.changeSecretProfile=originalChange;
   }
 });
 

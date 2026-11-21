@@ -108,6 +108,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Fixed billing policy: same-date monthly cycle, quarantine-only expiry.
+-- Existing production values are never overwritten by this seed; legacy
+-- values are normalized by db/migrations/20261121_single_billing_cycle_quarantine.sql.
+INSERT INTO app_settings(key,value) VALUES
+ ('billing_cycle_type','same_date_monthly'),
+ ('expiry_action','quarantine')
+ON CONFLICT(key) DO NOTHING;
+
 -- Ensure dynamic MFS and webhook configuration keys exist without overwriting production values.
 INSERT INTO app_settings(key,value) VALUES
  ('mfs_bkash_number',''),

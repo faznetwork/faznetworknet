@@ -49,26 +49,21 @@ test("Hotspot verification rejects requests with no service type or Hotspot-spec
   }
 });
 
-test("PPPoE rolling-30 renewal stacks on an existing future expiry", async () => {
-  const query = async () => ({ rows: [{ value: "rolling_30" }] });
-  const result = await paymentController.renewalExpirationDate(1, query, "2099-01-10");
-  assert.equal(result, "2099-02-09");
+test("PPPoE same-date monthly renewal stacks on an existing future expiry", async () => {
+  const result = await paymentController.renewalExpirationDate(1, "2099-01-10");
+  assert.equal(result, "2099-02-10");
 });
 
-test("PPPoE rolling-30 renewal starts today when the previous expiry is in the past", async () => {
-  const query = async () => ({ rows: [{ value: "rolling_30" }] });
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const expected = new Date(today + "T00:00:00Z");
-  expected.setUTCDate(expected.getUTCDate() + 30);
-  const result = await paymentController.renewalExpirationDate(1, query, "2000-01-01");
-  assert.equal(result, expected.toISOString().slice(0, 10));
+test("PPPoE same-date monthly renewal starts today when the previous expiry is in the past", async () => {
+  const now = new Date("2026-10-25T12:00:00Z");
+  const result = await paymentController.renewalExpirationDate(1, "2000-01-01", now);
+  assert.equal(result, "2026-11-25");
 });
 
 test("shared renewal service stacks future expiry and starts expired accounts from Dhaka today",async()=>{
  const service=require("../services/renewalService");
- const query=async()=>({rows:[{value:"rolling_30"}]});
- assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2099-01-10",now:new Date("2026-10-25T12:00:00Z")}),"2099-02-09");
- assert.equal(await service.calculateExpiry({durationMonths:1,query,currentExpiryDate:"2000-01-01",now:new Date("2026-10-25T12:00:00Z")}),"2026-11-24");
+ assert.equal(await service.calculateExpiry({durationMonths:1,currentExpiryDate:"2099-01-10",now:new Date("2026-10-25T12:00:00Z")}),"2099-02-10");
+ assert.equal(await service.calculateExpiry({durationMonths:1,currentExpiryDate:"2000-01-01",now:new Date("2026-10-25T12:00:00Z")}),"2026-11-25");
 });
 test("new payment records and manual claims explicitly separate PPPoE and Hotspot",()=>{
  const schema=fs.readFileSync(path.join(root,"db/schema.sql"),"utf8");

@@ -91,7 +91,6 @@ test("manual PPPoE match normalizes Date expiry before renewal validation and Ro
  try{
   db.query=async(sql,params=[])=>{
    if(sql.startsWith("SELECT * FROM transactions"))return {rows:[transaction()]};
-   if(sql.startsWith("SELECT value FROM app_settings WHERE key='billing_cycle_type'"))return {rows:[]};
    if(sql.startsWith("SELECT username FROM (SELECT username FROM pppoe_users"))return {rows:[{username:"10006"}]};
    if(sql.startsWith("SELECT c.*,p.plan_name"))return {rows:[customer]};
    if(sql.startsWith("UPDATE transactions SET status='processing'"))return {rows:[{id:77}]};

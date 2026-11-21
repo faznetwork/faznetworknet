@@ -77,10 +77,13 @@ async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
     await runExpiryWarnings();
-    const policyRows=await db.query("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')");
+    // Single fixed expiry policy: quarantine only. The grace period is the
+    // only configurable part: expiry is acted on once
+    // expiration_date <= (Dhaka today - graceDays). With grace 0, a customer
+    // whose expiry date is today is expired at 00:00 Asia/Dhaka today.
+    const policyRows=await db.query("SELECT key,value FROM app_settings WHERE key='grace_period_days'");
     const policy=Object.fromEntries((policyRows.rows||[]).map(row=>[row.key,row.value]));
     const graceDays=Math.max(0,Math.min(7,Number.parseInt(policy.grace_period_days||"0",10)||0));
-    const expiryAction=policy.expiry_action==="disable_secret"?"disable_secret":"quarantine";
     // Expiration dates are Bangladesh calendar dates. An explicit migration
     // override allows billing to be marked expired without changing live service.
     const q=await db.query(
@@ -94,7 +97,7 @@ async function runBillingExpiration(){
 
     // The quarantine profile is only needed for subscribers without an explicit
     // migration override. Never touch MikroTik for override customers.
-    if(expiryAction==="quarantine"&&q.rows.some(customer=>customer.billing_expiry_override!==true)){
+    if(q.rows.some(customer=>customer.billing_expiry_override!==true)){
       await mikrotikService.ensureExpiredProfile();
     }
     let expired=0,failed=0;
@@ -103,13 +106,12 @@ async function runBillingExpiration(){
         const overridden=customer.billing_expiry_override===true;
         let disconnected=false;
         if(!overridden){
-          if(expiryAction==="disable_secret"){
-            await mikrotikService.toggleSecret(customer.username,true);
-          }else{
-            // Quarantine preserves the secret and MAC visibility while applying the expired profile.
-            await mikrotikService.toggleSecret(customer.username,false);
-            await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
-          }
+          // Quarantine only: the secret stays enabled and MAC binding intact
+          // while the expired profile limits the line. Secrets are never
+          // disabled here (disabled secrets flood MikroTik logs with
+          // repeated authentication failures).
+          await mikrotikService.toggleSecret(customer.username,false);
+          await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
           // Do not mark billing expiry complete when RouterOS session removal fails.
           // A confirmed empty active-session list is also a successful disconnect outcome.
           const result=await mikrotikService.kickActiveUser(customer.username);
@@ -137,12 +139,9 @@ async function runBillingExpiration(){
               "UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
               [customer.username]
             );
-          }else if(expiryAction==="disable_secret"){
-            await client.query(
-              "UPDATE pppoe_users SET status='expired',disabled=TRUE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
-              [customer.username]
-            );
           }else{
+            // Quarantine only: profile switches to EXPIRED-PROFILE, the
+            // secret stays enabled (disabled=FALSE).
             await client.query(
               "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
               [EXPIRED_PROFILE,customer.username]
@@ -164,13 +163,11 @@ async function runBillingExpiration(){
           details:{
             message:overridden
               ?"Billing marked expired under explicit migration override; live PPPoE service unchanged"
-              :expiryAction==="disable_secret"
-                ?"Auto-expired: PPPoE secret disabled due to unpaid bill"
-                :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
+              :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
             username:customer.username,
             expirationDate:customer.expiration_date,
-            expiredProfile:overridden||expiryAction==="disable_secret"?null:EXPIRED_PROFILE,
-            expiryAction:overridden?"migration_override":expiryAction,
+            expiredProfile:overridden?null:EXPIRED_PROFILE,
+            expiryAction:overridden?"migration_override":"quarantine",
             gracePeriodDays:graceDays,
             migrationOverride:overridden,
             sessionDisconnected:disconnected
@@ -197,10 +194,22 @@ function startBillingCron(){
   if(expiryWarningInterval)clearInterval(expiryWarningInterval);
   expiryWarningInterval=setInterval(()=>runExpiryWarnings().catch(error=>console.error("[Notification Hub] Expiry warning retry scan failed:",error.message)),15*60*1000);
   expiryWarningInterval.unref?.();
-  return setInterval(
-    ()=>runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Scheduled run failed:",error.message)),
-    60*60*1000
-  );
+  // Align the hourly expiry run to the top of the clock hour. Asia/Dhaka is a
+  // whole-hour offset from UTC, so a run at the top of the hour also lands at
+  // 00:00 Asia/Dhaka — the moment an expiry date becomes the first expired
+  // day. Without alignment the run could land up to ~59 minutes late.
+  const msPerHour=60*60*1000;
+  const delayMs=msPerHour-(Date.now()%msPerHour);
+  const timer=setTimeout(()=>{
+    runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Scheduled run failed:",error.message));
+    const interval=setInterval(
+      ()=>runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Scheduled run failed:",error.message)),
+      msPerHour
+    );
+    interval.unref?.();
+  },delayMs);
+  timer.unref?.();
+  return timer;
 }
 
 module.exports={runBillingExpiration,startBillingCron,runExpiryWarnings,EXPIRED_PROFILE};

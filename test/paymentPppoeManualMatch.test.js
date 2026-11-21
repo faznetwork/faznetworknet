@@ -22,7 +22,6 @@ test("PPPoE manual match renews RouterOS, persists expiry, and finalizes only th
    if(sql.startsWith("SELECT username FROM (SELECT username FROM pppoe_users"))return {rows:[{username:"customer-10006"}]};
    if(sql.startsWith("UPDATE transactions SET status='processing'"))return {rows:[{id:701}],rowCount:1};
    if(sql.startsWith("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c"))return {rows:[{id:10006,username:"customer-10006",full_name:"Test Customer",phone:"01712345678",password:"secret",package_name:"Home 500",profile:"HOME-500",plan_name:"Home 500",pool_name:"",price:500,duration_months:1,profile_name:"HOME-500",expiration_date:"2026-10-25"}]};
-   if(sql.includes("key='billing_cycle_type'"))return {rows:[{value:"same_date_monthly"}]};
    if(sql.startsWith("UPDATE transactions SET needs_reconciliation=true"))return {rows:[{id:701}]};
    if(sql.startsWith("INSERT INTO payment_reconciliation_audit"))return {rows:[{id:1}]};
    throw new Error("Unexpected database query: "+sql);

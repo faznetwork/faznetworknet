@@ -4,7 +4,7 @@ const assert=require("node:assert/strict");
 const service=require("../services/appSettings");
 test("default branding and billing policy are conservative",()=>{
  assert.equal(service.DEFAULTS.company_name,"FAZ NETWORK");
- assert.equal(service.DEFAULTS.billing_cycle_type,"rolling_30");
+ assert.equal(service.DEFAULTS.billing_cycle_type,"same_date_monthly");
  assert.equal(service.DEFAULTS.grace_period_days,"0");
  assert.equal(service.DEFAULTS.expiry_action,"quarantine");
  assert.match(service.DEFAULTS.footer_copyright,/{year}/);

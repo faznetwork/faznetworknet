@@ -5,7 +5,7 @@ const DEFAULTS={
  company_name:"FAZ NETWORK",public_base_url:"",logo_url:"",favicon_url:"",admin_avatar_url:"",voucher_template:"standard",
  support_phone:"01339932887",whatsapp_number:"8801339932887",office_address:"FAZ NETWORK, Bangladesh",
  btrc_license_number:"",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved.",
- billing_cycle_type:"rolling_30",grace_period_days:"0",expiry_action:"quarantine",
+ billing_cycle_type:"same_date_monthly",grace_period_days:"0",expiry_action:"quarantine",
  sms_gateway_mode:"disabled",sms_provider_mode:"disabled",sms_provider_preset:"custom",sms_api_url:"",sms_api_key:"",sms_sender_id:"",sms_api_method:"POST_JSON",sms_http_param_mapping:'{"to":"{to}","message":"{message}","token":"{token}","sender_id":"{sender_id}"}',
  sms_device_url:"",sms_device_webhook_url:"",sms_device_token:"",sms_device_http_method:"POST_JSON",sms_device_param_mapping:'{"to":"{to}","message":"{message}","token":"{token}"}',
  notification_channel_sms_enabled:"true",notification_channel_whatsapp_enabled:"true",notification_channel_email_enabled:"false",

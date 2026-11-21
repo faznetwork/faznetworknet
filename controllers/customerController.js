@@ -444,11 +444,14 @@ async function syncPanelCustomersToMikroTik(req,res){
       const preservePastDue=Boolean(customer.billing_expiry_override);
       const customerState=String(customer.status||"").toLowerCase();
       const profile=preservePastDue?clean(customer.profile,120):effectiveProfile(clean(customer.profile,120),expiry);
+      // Expiry alone never disables a secret: an expired line is quarantined
+      // (EXPIRED-PROFILE) by the billing cron. Only inactive/suspended
+      // status, or an already-disabled router secret, disables it here.
       const disabled=customer.router_disabled===null||customer.router_disabled===undefined
-        ? Boolean(expired||["inactive","suspended"].includes(customerState))
+        ? ["inactive","suspended"].includes(customerState)
         : preservePastDue
           ? Boolean(customer.router_disabled)
-          : Boolean(expired||customer.router_disabled||["inactive","suspended"].includes(customerState));
+          : Boolean(customer.router_disabled||["inactive","suspended"].includes(customerState));
       const finalStatus=expired?"expired":(disabled?"suspended":dateStatus(expiry));
       return {
         id:customer.id,username,password:customer.password||"",profile,comment,disabled,
@@ -519,13 +522,15 @@ async function syncSingleCustomerToMikroTik(req,res){
         else return res.status(409).json({success:false,message:'This customer is expired, but neither MikroTik PPP profile "EXPIRED" nor "EXPIRED-PROFILE" exists. No RouterOS change was made. Configure the intended expiry profile first.'});
       }
     }
+    // Expiry alone never disables a secret (see syncPanelCustomersToMikroTik):
+    // an expired line is quarantined (EXPIRED-PROFILE) by the billing cron.
     const disabled=preservePastDue
       ? (row.router_disabled===null||row.router_disabled===undefined
           ? ["inactive","suspended"].includes(customerState)
           : Boolean(row.router_disabled))
       : row.router_disabled===null||row.router_disabled===undefined
-        ? Boolean(expired||["inactive","suspended"].includes(customerState))
-        : Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
+        ? ["inactive","suspended"].includes(customerState)
+        : Boolean(row.router_disabled||["inactive","suspended"].includes(customerState));
     const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
     const callerId=clean(row.router_mac||row.stored_caller_id,100);
     const sync=await routerService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);

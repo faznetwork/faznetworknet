@@ -1,5 +1,11 @@
 "use strict";
 
+// Single fixed billing policy for the whole system: Same-Date Monthly.
+// A recharge on day D expires at 00:00:00 Asia/Dhaka on day D of the next
+// month (month-end clamped: 31 Jan -> 28 Feb, 31 Mar -> 30 Apr). There is no
+// rolling-30 or calendar-1st cycle anymore, and no billing-cycle setting is
+// read here; do not reintroduce a policy lookup.
+
 const TIME_ZONE = "Asia/Dhaka";
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -40,12 +46,6 @@ function parseDateOnly(value, label = "date") {
   return { year, month, day };
 }
 
-function addDays(value, days) {
-  const { year, month, day } = parseDateOnly(value, "base date");
-  const result = new Date(Date.UTC(year, month - 1, day + days));
-  return result.toISOString().slice(0, 10);
-}
-
 function addCalendarMonths(value, months) {
   const { year, month, day } = parseDateOnly(value, "base date");
   const target = new Date(Date.UTC(year, month - 1 + months, 1));
@@ -65,23 +65,9 @@ function calculateSameDateExpiry(durationMonths = 1, currentExpiryDate = null, n
   return addCalendarMonths(baseDate, months);
 }
 
-function formatExpiryCutoff(expiryDate) {
-  parseDateOnly(expiryDate, "expiry date");
-  return String(expiryDate) + " 00:00:00";
-}
-
-async function calculateExpiry({ durationMonths, query, currentExpiryDate, now = new Date() }) {
-  if (typeof query !== "function") throw new TypeError("A database query function is required to read the billing-cycle setting.");
-  const result = await query("SELECT value FROM app_settings WHERE key='billing_cycle_type' LIMIT 1");
-  const policy = String(result.rows?.[0]?.value || "");
-  const today = dhakaDate(now);
-  const current = normalizeDate(currentExpiryDate, now);
-  const base = current && current > today ? (parseDateOnly(current, "current expiry") && current) : today;
-  const months = Math.max(1, Math.trunc(Number(durationMonths) || 1));
-  if (policy === "rolling_30") return addDays(base, 30 * months);
-  // monthly_1st retains its existing calendar-month behaviour; same_date_monthly
-  // explicitly selects the same calendar day next month with month-end clamping.
-  return addCalendarMonths(base, months);
+async function calculateExpiry({ durationMonths, currentExpiryDate, now = new Date() }) {
+  // Same-date monthly only; no billing-cycle setting is consulted.
+  return calculateSameDateExpiry(durationMonths, currentExpiryDate, now);
 }
 
 async function applyRouterRenewal(mikrotikService, username, { password, profile, comment, disabled = false, onMutation = () => {} }) {
@@ -96,7 +82,6 @@ module.exports = {
   dhakaDate,
   normalizeDate,
   calculateSameDateExpiry,
-  formatExpiryCutoff,
   calculateExpiry,
   applyRouterRenewal
 };

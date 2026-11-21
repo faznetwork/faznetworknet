@@ -29,16 +29,12 @@ test("same-date monthly renewal stacks from a future expiry and returns date-onl
   assert.match(result,/^\d{4}-\d{2}-\d{2}$/);
 });
 
-test("cutoff formatter validates date-only calendar dates",()=>{
-  assert.equal(service.formatExpiryCutoff("2026-11-30"),"2026-11-30 00:00:00");
-  assert.throws(()=>service.formatExpiryCutoff("2026-02-30"),/real calendar date/);
-});
-
-test("settings-backed calculation uses same-date monthly policy and preserves rolling-30 compatibility",async()=>{
-  const sameDateQuery=async()=>({rows:[{value:"same_date_monthly"}]});
-  const rollingQuery=async()=>({rows:[{value:"rolling_30"}]});
-  assert.equal(await service.calculateExpiry({durationMonths:1,query:sameDateQuery,currentExpiryDate:"2026-01-31",now:new Date("2026-01-01T00:00:00.000Z")}),"2026-02-28");
-  assert.equal(await service.calculateExpiry({durationMonths:1,query:rollingQuery,currentExpiryDate:"2026-01-31",now:new Date("2026-01-01T00:00:00.000Z")}),"2026-03-02");
+test("expiry always uses same-date monthly (21 Nov -> 21 Dec, 31 Jan -> 28 Feb, 1st -> 1st)",async()=>{
+  // There is no billing-cycle setting anymore: the result depends only on
+  // the base date, never on a legacy policy value.
+  assert.equal(await service.calculateExpiry({durationMonths:1,currentExpiryDate:"2026-11-21",now:new Date("2026-11-21T00:00:00.000Z")}),"2026-12-21");
+  assert.equal(await service.calculateExpiry({durationMonths:1,currentExpiryDate:"2026-01-31",now:new Date("2026-01-01T00:00:00.000Z")}),"2026-02-28");
+  assert.equal(await service.calculateExpiry({durationMonths:1,currentExpiryDate:"2026-01-01",now:new Date("2026-01-01T00:00:00.000Z")}),"2026-02-01");
 });
 
 test("shared RouterOS renewal retains the existing mutation callback and session-kick contract",async()=>{

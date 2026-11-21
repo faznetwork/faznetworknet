@@ -26,7 +26,6 @@ test("SMS Ref customer ID auto-renews PPPoE when service_type is omitted",async(
    if(sql.startsWith("SELECT id,status,used FROM transactions"))return {rows:[]};
    if(sql.includes("FROM (SELECT username FROM customers WHERE id::text=$1"))return {rows:[{normalized_username:"customer-10006",username:"customer-10006"}]};
    if(sql.startsWith("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c"))return {rows:[{id:10006,username:"customer-10006",full_name:"Test Customer",phone:"01712345678",password:"secret",package_name:"Home 500",profile:"HOME-500",plan_name:"Home 500",pool_name:"",price:500,duration_months:1,profile_name:"HOME-500",expiration_date:"2026-10-25"}]};
-   if(sql.includes("key='billing_cycle_type'"))return {rows:[{value:"same_date_monthly"}]};
    if(sql.startsWith("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claimed_at,claimed_by,claim_flow,service_type,reference_user)"))return {rows:[{id:702}]};
    if(sql.startsWith("UPDATE transactions SET needs_reconciliation=true"))return {rows:[{id:702}]};
    if(sql.startsWith("INSERT INTO payment_reconciliation_audit"))return {rows:[{id:2}]};
