@@ -40,6 +40,30 @@
             font-weight: 500;
             letter-spacing: -0.02em;
         }
+        .billing-policy-tile{height:100%;display:flex;flex-direction:column;gap:10px;padding:18px 20px;border:1px solid #e3e8ef;border-radius:14px;background:#fbfcfe}
+        .billing-policy-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+        .billing-policy-icon{display:grid;width:34px;height:34px;flex:0 0 34px;place-items:center;border-radius:10px;background:#e7f7ef;color:#0a7a4d;font-size:1rem}
+        .billing-pill{padding:3px 9px;border:1px solid #bfe9d4;border-radius:999px;background:#ecfdf5;color:#0a7a4d;font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+        .billing-policy-value{font-family:var(--font-heading);font-size:1.12rem;font-weight:600;color:#17283d;letter-spacing:-.015em;line-height:1.3}
+        .billing-policy-desc{margin:0;color:#5b6b7e;font-size:.85rem;line-height:1.55}
+        .billing-policy-desc code{color:#0a7a4d;background:#ecfdf5;padding:1px 5px;border-radius:5px;font-size:.8rem}
+        .billing-grace{margin-top:16px;padding:20px;border:1px solid #e3e8ef;border-radius:14px;background:#fff}
+        .billing-grace-label{font-size:.92rem;font-weight:600;color:#17283d;margin-bottom:4px}
+        .billing-grace-desc{margin:0;color:#5b6b7e;font-size:.85rem;line-height:1.55}
+        .billing-stepper{display:inline-flex;align-items:center;gap:2px;padding:4px;border:1px solid #d5dde6;border-radius:999px;background:#f8fafc}
+        .billing-stepper button{width:38px;height:38px;border:0;border-radius:50%;background:#fff;color:#0a3d2e;font-size:1.15rem;line-height:1;box-shadow:0 1px 3px rgba(15,23,42,.12);cursor:pointer}
+        .billing-stepper button:hover{background:#ecfdf5}
+        .billing-stepper button:active{transform:scale(.96)}
+        .billing-stepper button:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+        .billing-stepper input{width:74px;border:0;background:transparent;text-align:center;font-size:1.15rem;font-weight:700;color:#17283d;font-variant-numeric:tabular-nums;outline:none;-moz-appearance:textfield}
+        .billing-stepper input::-webkit-outer-spin-button,.billing-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+        .billing-stepper-unit{padding-right:12px;color:#65758b;font-size:.82rem;font-weight:600}
+        .billing-stepper-wrap{display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+        .billing-stepper-range{color:#8a99ab;font-size:.75rem;white-space:nowrap}
+        .billing-preview{display:flex;gap:9px;align-items:flex-start;margin-top:16px;padding:11px 14px;border:1px solid #d1fae5;border-radius:11px;background:#ecfdf5;color:#14532d;font-size:.85rem;line-height:1.5}
+        .billing-preview i{flex:0 0 auto;margin-top:2px;color:#0a7a4d}
+        .billing-preview strong{font-weight:700}
+        @media(max-width:991.98px){.billing-stepper-wrap{justify-content:flex-start}}
         .business-overview{--bo-heading:'Outfit',var(--font-ui);margin:0 0 28px;padding:22px;border:1px solid #e1e7ee;border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(15,23,42,.035)}
         .business-overview-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
         .business-overview-kicker{color:#65758b;font-size:.68rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
@@ -2350,13 +2374,13 @@
               </div>
               <div id="general-settings-panel-billing" class="general-settings-panel" style="display:none">
                 <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-calendar2-check text-success fs-5"></i><div><div class="fw-semibold">Billing &amp; Expiry Lifecycle</div><small class="text-muted fw-normal">These values are saved as policy settings; they do not immediately modify any active router secret.</small></div></div>
-                <div class="card-body p-4"><form id="systemBillingForm" novalidate><div class="row g-4">
-                  <div class="col-md-6"><label class="form-label">Billing Cycle Type</label><div class="form-control bg-light"><strong>Same-Date Monthly</strong><div class="small text-muted">Fixed system policy: validity expires at 12:00 AM (Asia/Dhaka) on the same date next month (month-end clamped, e.g. 31 Jan &rarr; 28 Feb).</div></div></div>
-                  <div class="col-md-6"><label class="form-label" for="setGraceDays">Grace Period Before Line Cut (days)</label><input id="setGraceDays" type="number" class="form-control" min="0" max="7" step="1" value="0"></div>
-                  <div class="col-12"><label class="form-label d-block">Action on Expiry</label>
-                    <div class="border rounded p-3"><strong>Auto-switch to Expired Profile</strong><div class="small text-muted">Fixed system policy: on expiry the PPPoE secret is switched to EXPIRED-PROFILE (1k/1k rate limit). The secret stays enabled and the MAC binding stays intact; the active session is kicked so the profile applies immediately.</div></div>
+                <div class="card-body p-4"><form id="systemBillingForm" novalidate>
+                  <div class="row g-3">
+                    <div class="col-md-6"><div class="billing-policy-tile"><div class="billing-policy-top"><span class="billing-policy-icon"><i class="bi bi-calendar-range"></i></span><span class="billing-pill">Fixed policy</span></div><div><div class="billing-policy-value">Same-Date Monthly</div><p class="billing-policy-desc">Validity expires at <strong>12:00 AM (Asia/Dhaka)</strong> on the same date next month. Month-end is clamped &mdash; 31 Jan &rarr; 28 Feb, 31 Mar &rarr; 30 Apr.</p></div></div></div>
+                    <div class="col-md-6"><div class="billing-policy-tile"><div class="billing-policy-top"><span class="billing-policy-icon"><i class="bi bi-arrow-repeat"></i></span><span class="billing-pill">Fixed policy</span></div><div><div class="billing-policy-value">Auto-switch to Expired Profile</div><p class="billing-policy-desc">On expiry the PPPoE secret moves to <code>EXPIRED-PROFILE</code> (1k/1k). The secret stays enabled, the MAC binding stays intact, and the active session is kicked so the new profile applies immediately.</p></div></div></div>
                   </div>
-                </div><div id="systemBillingResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button type="submit" id="systemBillingSaveBtn" class="btn btn-success">Save Billing Policy</button></div></form></div></div>
+                  <div class="billing-grace"><div class="row align-items-center g-3"><div class="col-lg-7"><div class="billing-grace-label"><label class="form-label mb-0" for="setGraceDays">Grace Period Before Line Cut</label></div><p class="billing-grace-desc">Extra days a customer keeps service after the expiry date, before the line is cut. Set 0 to cut the line at 12:00 AM on the expiry date itself.</p></div><div class="col-lg-5"><div class="billing-stepper-wrap"><span class="billing-stepper-range">0 &ndash; 7 days</span><span class="billing-stepper"><button type="button" id="graceMinus" aria-label="Decrease grace days">&minus;</button><input id="setGraceDays" type="number" min="0" max="7" step="1" value="0" inputmode="numeric" aria-label="Grace period in days"><span class="billing-stepper-unit">days</span><button type="button" id="gracePlus" aria-label="Increase grace days">+</button></span></div></div></div><div class="billing-preview"><i class="bi bi-info-circle"></i><span id="gracePreviewText"></span></div></div>
+                  <div id="systemBillingResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4"><small class="text-muted">Saving only changes the grace period. Fixed policies apply at every expiry check.</small><button type="submit" id="systemBillingSaveBtn" class="btn btn-success px-4">Save Billing Policy</button></div></form></div></div>
               </div>
               <div id="general-settings-panel-sms" class="general-settings-panel" style="display:none">
   <div class="card card-custom border-0 shadow-sm">
@@ -5754,7 +5778,7 @@ async function deletePlan(id,name){
             renderNotificationMapping('smsMappingRows',parseNotificationMapping(s.sms_http_param_mapping,{to:'{to}',message:'{message}',token:'{token}',sender_id:'{sender_id}'}));
             renderNotificationMapping('smsDeviceMappingRows',parseNotificationMapping(s.sms_device_param_mapping,{to:'{to}',message:'{message}',token:'{token}'}));
             renderNotificationRules(s);
-            toggleSmsProviderFields();toggleEmailProviderFields();systemSettingsLoaded=true;
+            toggleSmsProviderFields();toggleEmailProviderFields();systemSettingsLoaded=true;window.updateGracePreview&&window.updateGracePreview();
           }catch(e){generalSettingsResult('systemBrandResult',e.message||'Unable to load system settings.',false);}
         }
         async function saveSystemSettings(payload,buttonId,resultId){const d=await generalSettingsPost('/api/settings/update',payload,buttonId,resultId,'Saving settings…');systemSettingsLoaded=false;generalSettingsLoaded=false;await loadSystemSettings(true);return d;}
@@ -5764,6 +5788,7 @@ async function deletePlan(id,name){
 document.getElementById('setLogoUpload')?.addEventListener('click',()=>uploadBrandImage('logo','setLogoFile','setLogoPreview'));document.getElementById('setAvatarUpload')?.addEventListener('click',()=>uploadBrandImage('avatar','setAvatarFile','setAvatarPreview'));
 document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({company_name:document.getElementById('setCompanyName').value,public_base_url:document.getElementById('setPublicBaseUrl').value,logo_url:document.getElementById('setLogoUrl').value,favicon_url:document.getElementById('setFaviconUrl').value,support_phone:document.getElementById('setSupportPhone').value,whatsapp_number:document.getElementById('setWhatsapp').value,office_address:document.getElementById('setOfficeAddress').value,btrc_license_number:document.getElementById('setBtrcLicense').value,footer_copyright:document.getElementById('setCopyright').value},'systemBrandSaveBtn','systemBrandResult');}catch(_){}});
         document.getElementById('systemBillingForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await saveSystemSettings({grace_period_days:document.getElementById('setGraceDays').value},'systemBillingSaveBtn','systemBillingResult');}catch(_){}});
+        (function(){var input=document.getElementById('setGraceDays'),minus=document.getElementById('graceMinus'),plus=document.getElementById('gracePlus'),preview=document.getElementById('gracePreviewText');if(!input||!minus||!plus||!preview)return;function clamp(v){v=parseInt(v,10);if(isNaN(v))v=0;return Math.max(0,Math.min(7,v));}function dhakaToday(){var p=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dhaka',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date()),o={};p.forEach(function(x){o[x.type]=x.value;});return new Date(Date.UTC(+o.year,+o.month-1,+o.day));}function fmt(d){return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(d);}window.updateGracePreview=function(){var g=clamp(input.value);input.value=g;minus.disabled=g<=0;plus.disabled=g>=7;var start=dhakaToday(),cut=new Date(start.getTime()+g*86400000);preview.innerHTML=g===0?'Example &mdash; validity ends <strong>'+fmt(start)+'</strong> &rarr; line cut <strong>'+fmt(cut)+'</strong> at 12:00 AM (Asia/Dhaka).':'Example &mdash; validity ends <strong>'+fmt(start)+'</strong> &rarr; line stays on for <strong>'+g+' day'+(g>1?'s':'')+'</strong>, cut <strong>'+fmt(cut)+'</strong> at 12:00 AM (Asia/Dhaka).';};minus.addEventListener('click',function(){input.value=clamp(input.value)-1;window.updateGracePreview();});plus.addEventListener('click',function(){input.value=clamp(input.value)+1;window.updateGracePreview();});input.addEventListener('input',window.updateGracePreview);input.addEventListener('change',window.updateGracePreview);window.updateGracePreview();})();
         function collectNotificationPayload(){
           const mode=document.getElementById('setSmsMode').value;
           const payload={
