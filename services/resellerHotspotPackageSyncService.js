@@ -53,7 +53,7 @@ function resolveCatalogEntry(profileKey, metadata) {
     profileKey: key,
     packageName,
     validitySeconds: String(durationMs / 1000),
-    dataLimitBytes,
+    dataLimitBytes: dataLimitBytes > 0 ? dataLimitBytes : null,
     retailPrice: (retailCents / 100).toFixed(2),
     wholesalePrice
   };

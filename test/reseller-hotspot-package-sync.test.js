@@ -31,7 +31,7 @@ test('core Hotspot metadata is materialized with a 30 percent reseller margin', 
   assert.equal(inserts[0].values[1], '1-Hour');
   assert.equal(inserts[0].values[2], '1-Hour');
   assert.equal(inserts[0].values[3], '3600');
-  assert.equal(inserts[0].values[4], 0);
+  assert.equal(inserts[0].values[4], null);
   assert.equal(inserts[0].values[5], '10.00');
   assert.equal(inserts[0].values[6], '7.00');
   assert.equal(inserts[1].values[3], '0');
@@ -51,7 +51,7 @@ test('legacy profile metadata with a validity label remains mappable without rew
   const entry = resolveCatalogEntry('Legacy 30-Day', { price: 100, validityValue: 30, validityUnit: 'days', validityLabel: '30 days' });
   assert.deepEqual(entry, {
     profileKey: 'Legacy 30-Day', packageName: 'Legacy 30-Day', validitySeconds: '2592000',
-    dataLimitBytes: 0,
+    dataLimitBytes: null,
     retailPrice: '100.00',
     wholesalePrice: '70.00'
   });

@@ -41,7 +41,7 @@ function packageFromRow(row) {
     validity: formatValiditySeconds(row.validity_seconds),
     validitySeconds: String(row.validity_seconds),
     timeLimit: BigInt(row.validity_seconds || 0) > 0n ? String(row.validity_seconds) + 's' : null,
-    dataLimit: row.data_limit_bytes != null ? String(row.data_limit_bytes) : null,
+    dataLimit: row.data_limit_bytes != null && Number(row.data_limit_bytes) > 0 ? String(row.data_limit_bytes) : null,
     retailPrice,
     wholesalePrice,
     expectedMargin: moneyFromCents(moneyCents(retailPrice) - moneyCents(wholesalePrice))

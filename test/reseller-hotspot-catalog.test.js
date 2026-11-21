@@ -44,7 +44,7 @@ test('catalog automatically materializes core profiles only for an active Hotspo
   assert.equal(result.pops[0].packages[0].validitySeconds, '2592000');
   assert.equal(result.pops[0].packages[0].retailPrice, '150.00');
   assert.equal(result.pops[0].packages[0].wholesalePrice, '105.00');
-  assert.equal(result.pops[0].packages[0].dataLimit, '0');
+  assert.equal(result.pops[0].packages[0].dataLimit, null);
   assert.equal(result.pops[0].packages[2].validity, 'Data / quota package');
   assert.equal(result.pops[0].packages[2].validitySeconds, '0');
   assert.equal(result.pops[0].packages[2].timeLimit, null);
