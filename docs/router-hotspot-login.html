@@ -7,6 +7,17 @@
   the browser to the panel login page (public/login.html on faznetwork.com),
   passing the RouterOS variables as query params. The panel login page
   reads: mac, ip, link-login-only, link-orig, chap-id, chap-challenge.
+  The redirect carries the MAC so the login page can bind the device.
+
+  WHAT THE LOGIN PAGE LOOKS LIKE NOW (2026-11-22, Phase 4):
+  two tabs — Recharge (MFS Send Money, verified by TrxID or sender phone)
+  and Voucher PIN / QR (scratch-card PIN + card password, or QR scan).
+  Optional Phone Number + Name fields are on every login form:
+  the Voucher PIN / QR form, the Recharge verify form, and the
+  Existing Customer Login form on /portal. Phone/Name are saved on the
+  voucher record only when the record has none yet (fill-if-empty);
+  leaving them blank still logs the customer in exactly as before
+  (username and password are both the device MAC).
 
   HOW TO INSTALL (manual step — do this once, in WinBox or via FTP):
     1. In WinBox: Files -> upload this file to /hotspot/login.html
@@ -18,11 +29,12 @@
        in. The browser must land on
        https://faznetwork.com/login.html?mac=<your MAC>&ip=...&link-login-only=...
     4. If the redirect does not happen, check that the file on the router
-       is this one (size ~1.5 KB, not the stock 502 bytes).
+       is this one (size ~2 KB, not the stock 502 bytes).
 
   DO NOT put this file in the panel repo's public/ folder — the router
   serves it, not the panel. It lives in docs/ so the manual step is
-  documented next to the code.
+  documented next to the code. There is NO form on this router page —
+  the Phone/Name fields live on /login.html (and /portal).
 -->
 <html>
 <head>
@@ -38,12 +50,16 @@
     + "&link-orig=" + encodeURIComponent("$(link-orig)")
     + "&chap-id=$(chap-id)"
     + "&chap-challenge=$(chap-challenge)";
+  // Keep the MAC on the fallback link too, so a manual click (or a
+  // browser without JS) lands on the same login page with the MAC.
+  var link = document.getElementById("login-link");
+  if (link) link.href = target;
   window.location.replace(target);
 })();
 </script>
 </head>
 <body>
 <p>FAZ NETWORK Wi-Fi-তে সংযোগ হচ্ছে…</p>
-<p><a href="https://faznetwork.com/login.html">লগইন পেজে যেতে এখানে ক্লিক করুন</a></p>
+<p><a id="login-link" href="https://faznetwork.com/login.html">লগইন পেজে যেতে এখানে ক্লিক করুন</a></p>
 </body>
 </html>

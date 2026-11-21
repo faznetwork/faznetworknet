@@ -468,3 +468,153 @@ test("verifyTrx stores a provided customer_name on INSERT and never overwrites o
     notificationDispatcher.dispatchNow=originalDispatchNow;notificationDispatcher.dispatchNotification=originalNotify;
   }
 });
+
+// ---- Phase 4: optional Phone + Name on every login form ----
+// claimVoucher must pass a provided phone/name through to activate()
+// (which stores them fill-if-empty) instead of overwriting phone with "".
+function scratchRow(overrides={}){
+  return {id:201,username:"PIN7777",password:"secret12",status:"unused",mac_address:null,expires_at:null,comment:"",profile:"30-Day",price:150,phone:"Unlinked",subscriber_type:"legacy",activation_type:"scratch_card",customer_name:null,...overrides};
+}
+function installClaimVoucherFakes({row}){
+  const queries=[],routerCalls=[];
+  const originalQuery=db.query,originalTransaction=db.withTransaction;
+  const originalOnNetwork=mikrotik.isDeviceOnNetwork,originalProfiles=mikrotik.getHotspotProfiles;
+  const originalRecharge=mikrotik.rechargeHotspotUser,originalNotify=notificationDispatcher.dispatchNotification;
+  const boundRow={...row,mac_address:MAC};
+  mikrotik.isDeviceOnNetwork=async()=>{routerCalls.push({method:"isDeviceOnNetwork"});return true;};
+  mikrotik.getHotspotProfiles=async()=>[{name:"30-Day",sessionTimeout:"30d"}];
+  mikrotik.rechargeHotspotUser=async(data)=>{routerCalls.push({method:"rechargeHotspotUser",data});return {username:data.username};};
+  notificationDispatcher.dispatchNotification=()=>{};
+  db.query=async(sql,params=[])=>{
+    queries.push({sql,params,scope:"pool"});
+    if(sql.includes("FROM app_settings"))return {rows:[{value:JSON.stringify(METADATA)}]};
+    if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:row.id,username:MAC,status:"active",first_login_at:new Date(),expires_at:new Date(Date.now()+30*24*3600*1000),transaction_id:9001}]};
+    if(sql.startsWith("INSERT INTO transactions"))return {rows:[{id:777}]};
+    if(sql.startsWith("INSERT INTO hotspot_voucher_payments"))return {rows:[]};
+    throw new Error("Unexpected claimVoucher pool query: "+sql);
+  };
+  db.withTransaction=async(callback)=>callback({query:async(sql,params=[])=>{
+    queries.push({sql,params,scope:"transaction"});
+    if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+    if(sql.startsWith("SELECT id,username,password,status,mac_address,expires_at,comment,profile,price,phone,subscriber_type,activation_type FROM hotspot_vouchers")){
+      return {rows:params[0]===row.username&&params[1]===row.password?[row]:[]};
+    }
+    if(sql.startsWith("SELECT id,status,expires_at,comment FROM hotspot_vouchers"))return {rows:[]};
+    if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1::text,updated_at=NOW()"))return {rows:[],rowCount:1};
+    if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:[boundRow]};
+    if(sql.includes("first_login_at=COALESCE(first_login_at,$2::timestamptz)")){
+      const locked={...boundRow,mac_address:params[0],first_login_at:params[1],expires_at:params[2],comment:params[3],phone:(boundRow.phone&&boundRow.phone!=="Unlinked")?boundRow.phone:(params[4]||"Unlinked"),customer_name:boundRow.customer_name||params[6]||null};
+      return {rows:[locked]};
+    }
+    throw new Error("Unexpected claimVoucher transactional query: "+sql);
+  }});
+  return {queries,routerCalls,restore(){
+    db.query=originalQuery;db.withTransaction=originalTransaction;
+    mikrotik.isDeviceOnNetwork=originalOnNetwork;mikrotik.getHotspotProfiles=originalProfiles;
+    mikrotik.rechargeHotspotUser=originalRecharge;notificationDispatcher.dispatchNotification=originalNotify;
+  }};
+}
+
+test("P4: claimVoucher passes a provided phone + customer_name through to activate() and the sales audit",async()=>{
+  resetLimits();
+  const row=scratchRow();
+  const fakes=installClaimVoucherFakes({row});
+  try{
+    const res=response();
+    await controller.claimVoucher({ip:"10.0.0.40",body:{voucher_code:"PIN7777",voucher_password:"secret12",mac:MAC,phone:"01811111111",customer_name:"Rahim Uddin"}},res);
+    assert.equal(res.statusCode,200);
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.username,MAC,"MAC stays the username");
+    const reservation=fakes.queries.find(q=>q.sql.includes("first_login_at=COALESCE(first_login_at,$2::timestamptz)"));
+    assert.ok(reservation,"activate must run its reservation UPDATE");
+    assert.equal(reservation.params[4],"01811111111","activate must receive the provided phone, not phone: \"\"");
+    assert.equal(reservation.params[6],"Rahim Uddin","activate must receive the provided customer_name");
+    const txInsert=fakes.queries.find(q=>q.sql.startsWith("INSERT INTO transactions"));
+    assert.ok(txInsert,"the first-use sales audit must run");
+    assert.equal(txInsert.params[1],"01811111111","audit sender_phone uses the provided phone when the row has none");
+    const payInsert=fakes.queries.find(q=>q.sql.startsWith("INSERT INTO hotspot_voucher_payments"));
+    assert.ok(payInsert,"the voucher payment audit must run");
+    assert.equal(payInsert.params[2],"01811111111","audit phone uses the provided phone when the row has none");
+  }finally{fakes.restore();}
+});
+
+test("P4: claimVoucher with an entered-but-invalid phone -> 400 INVALID_ACCOUNT_PHONE, no DB bind, no router call",async()=>{
+  resetLimits();
+  let transactionCalls=0,onNetworkCalls=0;
+  const originalTransaction=db.withTransaction,originalOnNetwork=mikrotik.isDeviceOnNetwork;
+  db.withTransaction=async()=>{transactionCalls++;throw new Error("withTransaction must not run for an invalid phone");};
+  mikrotik.isDeviceOnNetwork=async()=>{onNetworkCalls++;return true;};
+  try{
+    const res=response();
+    await controller.claimVoucher({ip:"10.0.0.42",body:{voucher_code:"PIN9999",voucher_password:"secret12",mac:MAC,phone:"12345"}},res);
+    assert.equal(res.statusCode,400);
+    assert.equal(res.body.code,"INVALID_ACCOUNT_PHONE");
+    assert.equal(transactionCalls,0,"an invalid phone must fail before any DB bind");
+    assert.equal(onNetworkCalls,0,"an invalid phone must fail before any router call");
+  }finally{db.withTransaction=originalTransaction;mikrotik.isDeviceOnNetwork=originalOnNetwork;}
+});
+
+test("P4: claimVoucher with blank phone/name still claims exactly as before",async()=>{
+  resetLimits();
+  const row=scratchRow({username:"PIN8888"});
+  const fakes=installClaimVoucherFakes({row});
+  try{
+    const res=response();
+    await controller.claimVoucher({ip:"10.0.0.41",body:{voucher_code:"PIN8888",voucher_password:"secret12",mac:MAC}},res);
+    assert.equal(res.statusCode,200);
+    assert.equal(res.body.success,true);
+    const reservation=fakes.queries.find(q=>q.sql.includes("first_login_at=COALESCE(first_login_at,$2::timestamptz)"));
+    assert.ok(reservation,"activate must run its reservation UPDATE");
+    assert.equal(reservation.params[4],"","blank phone passes through as empty, never a guess");
+    assert.equal(reservation.params[6],"","blank name passes through as empty");
+    const txInsert=fakes.queries.find(q=>q.sql.startsWith("INSERT INTO transactions"));
+    assert.equal(txInsert.params[1],null,"audit sender_phone stays null when no phone was given");
+    const payInsert=fakes.queries.find(q=>q.sql.startsWith("INSERT INTO hotspot_voucher_payments"));
+    assert.equal(payInsert.params[2],"Unlinked","audit phone stays Unlinked when no phone was given");
+  }finally{fakes.restore();}
+});
+
+test("P4: portal voucher PIN form + always-visible existing login (no toggle, no hidden)",()=>{
+  const portal=fs.readFileSync(path.join(__dirname,"..","views","portal.ejs"),"utf8");
+  for(const id of ["voucher-pin","voucher-password","voucher-phone","voucher-name"])assert.ok(portal.includes(`id="${id}"`),`voucher claim form needs ${id}`);
+  assert.ok(portal.includes('id="voucher-claim-submit"'),"voucher claim form needs a submit button");
+  assert.ok(portal.includes("submitVoucherClaim"),"the portal must wire the voucher claim submit handler");
+  assert.ok(portal.includes('id="existing-phone"'),"existing login needs an optional Phone field");
+  assert.ok(portal.includes('id="existing-name"'),"existing login needs an optional Name field");
+  const formDiv=portal.match(/<div id="existing-login-form"[^>]*>/);
+  assert.ok(formDiv,"existing login form must exist");
+  assert.doesNotMatch(formDiv[0],/hidden/,"existing login must be visible on first paint, not hidden behind a toggle");
+  assert.equal(portal.includes('id="existing-mac-login"'),false,"the toggle button must be gone");
+  assert.ok(portal.includes('id="phone"'),"recharge form still needs its Phone field");
+  assert.ok(portal.includes('id="customer-name"'),"recharge form still needs its Name field");
+  assert.ok(portal.includes('id="claim-code-box"'),"the claim-code box must still exist");
+  assert.ok(portal.includes('id="result"'),"the shared status area must still exist");
+});
+
+test("P4: login.html voucher form has Phone + Name, handleVoucherLogin sends them, TrxID mode sends phone",()=>{
+  const login=fs.readFileSync(path.join(__dirname,"..","public","login.html"),"utf8");
+  assert.ok(login.includes('id="voucher_phone"'),"voucher section needs an optional Phone field");
+  assert.ok(login.includes('id="voucher_name"'),"voucher section needs an optional Name field");
+  const voucherFn=login.slice(login.indexOf("async function handleVoucherLogin()"),login.indexOf("window.switchPortalTab"));
+  assert.ok(voucherFn.includes("/api/hotspot-auth/claim-voucher"),"handleVoucherLogin must post to claim-voucher");
+  assert.ok(voucherFn.includes("customer_name"),"handleVoucherLogin must send customer_name with the claim");
+  assert.ok(voucherFn.includes("phone:voucherPhone"),"handleVoucherLogin must send the phone with the claim");
+  assert.ok(voucherFn.includes("সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।"),"an invalid entered phone must be rejected with the Bangla message");
+  const verifyFn=login.slice(login.indexOf("async function handleVerification()"),login.indexOf("function parseQrCredentials"));
+  assert.ok(verifyFn.includes("payload.phone"),"handleVerification must send phone in TrxID mode");
+  assert.ok(verifyFn.includes("payload.senderPhoneNumber"),"senderPhoneNumber mode must keep sending senderPhoneNumber");
+  assert.ok(login.includes("byId('sender-phone-field').hidden=false"),"the phone field must be shown in both verification modes");
+  assert.ok(login.includes("cust_phone_label"),"the phone label must switch text per mode");
+  const qrFn=login.slice(login.indexOf("function applyScannedCredentials"),login.indexOf("async function handleVoucherLogin()"));
+  assert.equal(qrFn.includes("voucher_phone"),false,"QR fill must not touch the phone field");
+  assert.equal(qrFn.includes("voucher_name"),false,"QR fill must not touch the name field");
+});
+
+test("P4: router login page still redirects with the MAC and its fallback link keeps the MAC",()=>{
+  const routerPage=fs.readFileSync(path.join(__dirname,"..","docs","router-hotspot-login.html"),"utf8");
+  assert.ok(routerPage.includes("https://faznetwork.com/login.html"),"the router page must redirect to /login.html");
+  assert.ok(routerPage.includes("?mac=$(mac)"),"the redirect must carry the device MAC");
+  assert.ok(routerPage.includes('id="login-link"'),"the fallback link must have an id so JS can set it");
+  assert.ok(routerPage.includes("link.href = target"),"the fallback link href must be set from JS to the full redirect target");
+  assert.ok(routerPage.includes("window.location.replace(target)"),"the instant redirect must stay");
+});

@@ -677,6 +677,14 @@
                 <label for="voucher_password">ভাউচার পাসওয়ার্ড</label>
                 <div class="input-box"><input type="password" id="voucher_password" placeholder="ভাউচার পাসওয়ার্ড লিখুন" autocomplete="current-password" required></div>
             </div>
+            <div class="input-group">
+                <label for="voucher_phone">ফোন নম্বর (ঐচ্ছিক)</label>
+                <div class="input-box"><input type="tel" id="voucher_phone" maxlength="11" autocomplete="tel" placeholder="01712345678"></div>
+            </div>
+            <div class="input-group">
+                <label for="voucher_name">আপনার নাম (ঐচ্ছিক)</label>
+                <div class="input-box"><input type="text" id="voucher_name" maxlength="120" autocomplete="name" placeholder="আপনার নাম"></div>
+            </div>
             <button type="button" id="voucher-login-button" class="btn-action" onclick="handleVoucherLogin()">ভেরিফাই করে সংযোগ করুন</button>
             <p class="voucher-help">ক্যামেরা আইকনে চাপ দিয়ে QR কোড স্ক্যান করুন অথবা পিন লিখুন।</p>
         </div>
@@ -722,7 +730,7 @@
         </div>
 
         <div class="input-group verify-field" id="sender-phone-field" hidden>
-            <label for="cust_phone">যে নম্বর থেকে টাকা পাঠিয়েছেন</label>
+            <label for="cust_phone" id="cust_phone_label">যে নম্বর থেকে টাকা পাঠিয়েছেন</label>
             <div class="input-box"><input type="tel" id="cust_phone" maxlength="11"></div>
         </div>
 
@@ -774,6 +782,13 @@ function normalizeMac(value){
     const raw=String(value||'').trim();
     if(!raw || raw.includes('$(')) return '';
     return raw.toUpperCase().replace(/-/g,':');
+}
+
+function normalizePhoneInput(value){
+    const bangla='০১২৩৪৫৬৭৮৯';
+    let digits=String(value||'').replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,'');
+    if(digits.startsWith('880')&&digits.length===13)digits='0'+digits.slice(3);
+    return digits;
 }
 
 function updateDeviceBadge(){
@@ -954,7 +969,8 @@ function openMfsModal(provider,number){
 
     byId('trx-field').hidden=verificationMethod==='senderPhoneNumber';
     byId('cust_trx').required=verificationMethod!=='senderPhoneNumber';
-    byId('sender-phone-field').hidden=verificationMethod!=='senderPhoneNumber';
+    byId('sender-phone-field').hidden=false;
+    byId('cust_phone_label').textContent=verificationMethod==='senderPhoneNumber'?'যে নম্বর থেকে টাকা পাঠিয়েছেন':'ফোন নম্বর (ঐচ্ছিক)';
     byId('cust_phone').required=verificationMethod==='senderPhoneNumber';
     byId('cust_trx').value='';
     byId('cust_phone').value='';
@@ -967,7 +983,7 @@ function openMfsModal(provider,number){
 function closeMfsModal(){byId('mfs-modal').style.display='none';if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null;}}
 async function copyWalletNumber(){const number=byId('modal-wallet-number').textContent;try{await navigator.clipboard.writeText(number);showStatus('পেমেন্ট নম্বর কপি হয়েছে।');}catch(error){showStatus('নম্বর কপি করা যায়নি। নম্বরটি হাতে কপি করুন: '+number,true);}}
 function startCountdown(seconds){if(countdownTimer)clearInterval(countdownTimer);let remaining=seconds;const display=byId('payment-timer');const tick=()=>{const m=String(Math.floor(Math.max(remaining,0)/60)).padStart(2,'0'),s=String(Math.max(remaining,0)%60).padStart(2,'0');display.textContent=m+':'+s;if(remaining<=0){closeMfsModal();showStatus('পেমেন্ট যাচাইয়ের সময় শেষ। আবার চেষ্টা করুন।',true);return;}remaining--;};tick();countdownTimer=setInterval(tick,1000);}
-async function handleVerification(){const phone=byId('cust_phone').value.trim(),trx=byId('cust_trx').value.trim().toUpperCase(),customerName=byId('cust_name').value.trim(),button=byId('btn-verify-payment');if(Date.now()>=paymentSessionExpiresAt){closeMfsModal();showStatus('পেমেন্ট সেশনের সময় শেষ। আবার শুরু করুন।',true);return;}if(verificationMethod==='senderPhoneNumber'&&!/^01\d{9}$/.test(phone)){showStatus('যে নম্বর থেকে টাকা পাঠিয়েছেন সেই ১১ ডিজিটের নম্বর দিন।',true);return;}if(verificationMethod!=='senderPhoneNumber'&&(!trx||trx.length<4)){showStatus('সঠিক TrxID প্রদান করুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}if(!selectedPackage){showStatus('প্রথমে একটি প্যাকেজ নির্বাচন করুন।',true);return;}button.disabled=true;button.textContent='যাচাই করা হচ্ছে…';try{const payload={username:device.mac,password:device.mac,amount:selectedPackage.price,profile_id:selectedPackage.profile,paymentMethod:currentProvider,mac:device.mac,ip:device.ip,service_type:'hotspot'};if(customerName)payload.customer_name=customerName;if(verificationMethod==='senderPhoneNumber')payload.senderPhoneNumber=phone;else payload.trxId=trx;const result=await requestJson(BACKEND_BASE_URL+'/api/public/payment/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(result?.success===false&&result?.activation_pending===true){closeMfsModal();showStatus(result.message||'পেমেন্ট গৃহীত হয়েছে, কিন্তু সংযোগ চালু করা যায়নি।',true);return;}if(result?.success!==true)throw new Error(result?.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে।');closeMfsModal();showStatus('পেমেন্ট যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username||device.mac,result.password||device.mac,result.redirect_url);}catch(error){showStatus(error.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='পেমেন্ট নিশ্চিত ও সংযোগ করুন';}}
+async function handleVerification(){const phone=byId('cust_phone').value.trim(),trx=byId('cust_trx').value.trim().toUpperCase(),customerName=byId('cust_name').value.trim(),button=byId('btn-verify-payment');if(Date.now()>=paymentSessionExpiresAt){closeMfsModal();showStatus('পেমেন্ট সেশনের সময় শেষ। আবার শুরু করুন।',true);return;}if(verificationMethod==='senderPhoneNumber'&&!/^01\d{9}$/.test(phone)){showStatus('যে নম্বর থেকে টাকা পাঠিয়েছেন সেই ১১ ডিজিটের নম্বর দিন।',true);return;}const normalizedPhone=normalizePhoneInput(phone);if(verificationMethod!=='senderPhoneNumber'&&phone&&!/^01\d{9}$/.test(normalizedPhone)){showStatus('সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।',true);return;}if(verificationMethod!=='senderPhoneNumber'&&(!trx||trx.length<4)){showStatus('সঠিক TrxID প্রদান করুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}if(!selectedPackage){showStatus('প্রথমে একটি প্যাকেজ নির্বাচন করুন।',true);return;}button.disabled=true;button.textContent='যাচাই করা হচ্ছে…';try{const payload={username:device.mac,password:device.mac,amount:selectedPackage.price,profile_id:selectedPackage.profile,paymentMethod:currentProvider,mac:device.mac,ip:device.ip,service_type:'hotspot'};if(customerName)payload.customer_name=customerName;if(verificationMethod==='senderPhoneNumber')payload.senderPhoneNumber=phone;else{payload.trxId=trx;if(normalizedPhone)payload.phone=normalizedPhone;}const result=await requestJson(BACKEND_BASE_URL+'/api/public/payment/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(result?.success===false&&result?.activation_pending===true){closeMfsModal();showStatus(result.message||'পেমেন্ট গৃহীত হয়েছে, কিন্তু সংযোগ চালু করা যায়নি।',true);return;}if(result?.success!==true)throw new Error(result?.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে।');closeMfsModal();showStatus('পেমেন্ট যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username||device.mac,result.password||device.mac,result.redirect_url);}catch(error){showStatus(error.message||'পেমেন্ট যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='পেমেন্ট নিশ্চিত ও সংযোগ করুন';}}
 
 function parseQrCredentials(raw){const value=String(raw||'').trim();if(!value)return null;try{const parsed=JSON.parse(value);if(parsed&&typeof parsed==='object'){const username=String(parsed.username||parsed.user||parsed.pin||parsed.voucher_code||'').trim(),password=String(parsed.password||parsed.pass||parsed.voucher_password||'').trim();if(username)return{username,password};}}catch(e){}try{const url=new URL(value);const username=url.searchParams.get('username')||url.searchParams.get('user')||url.searchParams.get('pin'),password=url.searchParams.get('password')||url.searchParams.get('pass');if(username)return{username,password:password||''};}catch(e){}const match=value.match(/^([^:|\s]+)\s*[:|]\s*(.+)$/);if(match)return{username:match[1].trim(),password:match[2].trim()};return{username:value,password:''};}
 
@@ -1043,7 +1059,7 @@ async function openQrScanner(){
 }
 
 function applyScannedCredentials(raw){const credentials=parseQrCredentials(raw);if(!credentials?.username){showStatus('QR কোডে ভাউচার ইউজারনেম পাওয়া যায়নি।',true);return;}byId('voucher_pin').value=credentials.username.toUpperCase();if(credentials.password)byId('voucher_password').value=credentials.password;showStatus(credentials.password?'QR থেকে ভাউচার তথ্য পড়া হয়েছে।':'QR থেকে ইউজারনেম পড়া হয়েছে; পাসওয়ার্ড লিখুন।');}
-async function handleVoucherLogin(){const username=byId('voucher_pin').value.trim().toUpperCase(),password=byId('voucher_password').value,button=byId('voucher-login-button');if(!username||!password){showStatus('ভাউচার ইউজারনেম এবং পাসওয়ার্ড—দুটিই লিখুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}button.disabled=true;button.textContent='ভাউচার যাচাই হচ্ছে…';try{const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:username,voucher_password:password,mac:device.mac,ip:device.ip,login_url:device.login})});if(!result.username||!result.password)throw new Error('ভাউচার যাচাই হয়েছে, কিন্তু লগইন তথ্য ফেরত আসেনি। সাপোর্টে যোগাযোগ করুন।');showStatus('ভাউচার যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username,result.password,result.redirect_url);}catch(error){showStatus(error.message||'ভাউচার যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='ভেরিফাই করে সংযোগ করুন';}}
+async function handleVoucherLogin(){const username=byId('voucher_pin').value.trim().toUpperCase(),password=byId('voucher_password').value,button=byId('voucher-login-button');if(!username||!password){showStatus('ভাউচার ইউজারনেম এবং পাসওয়ার্ড—দুটিই লিখুন।',true);return;}const voucherPhone=normalizePhoneInput(byId('voucher_phone').value),voucherName=byId('voucher_name').value.trim();if(voucherPhone&&!/^01\d{9}$/.test(voucherPhone)){showStatus('সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।',true);return;}if(!device.mac){showStatus('রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। হটস্পট লগইন পেজটি রাউটার থেকে খুলুন।',true);return;}button.disabled=true;button.textContent='ভাউচার যাচাই হচ্ছে…';try{const result=await requestJson(BACKEND_BASE_URL+'/api/hotspot-auth/claim-voucher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucher_code:username,voucher_password:password,mac:device.mac,ip:device.ip,login_url:device.login,phone:voucherPhone,customer_name:voucherName})});if(!result.username||!result.password)throw new Error('ভাউচার যাচাই হয়েছে, কিন্তু লগইন তথ্য ফেরত আসেনি। সাপোর্টে যোগাযোগ করুন।');showStatus('ভাউচার যাচাই সফল। সংযোগ করা হচ্ছে…');submitMikrotikLogin(result.username,result.password,result.redirect_url);}catch(error){showStatus(error.message||'ভাউচার যাচাই ব্যর্থ হয়েছে।',true);}finally{button.disabled=false;button.textContent='ভেরিফাই করে সংযোগ করুন';}}
 
 document.addEventListener('DOMContentLoaded',()=>{
     updateDeviceBadge();

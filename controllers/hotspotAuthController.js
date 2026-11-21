@@ -285,9 +285,14 @@ async function claimVoucher(req,res){
   const pin=String(req.body?.voucher_code||req.body?.pin||"").trim().toUpperCase();
   const password=String(req.body?.voucher_password||req.body?.password||"").trim();
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||"");
+  // P4: an optional phone/name supplied with the voucher claim is passed
+  // through to activate(), which stores it fill-if-empty on the row.
+  const phone=normalizePhone(req.body?.phone||req.body?.account_phone||"");
+  const customerName=String(req.body?.customer_name||req.body?.customerName||req.body?.name||"").trim().slice(0,120);
   if(!pin||pin.length<4||pin.length>100)return fail(400,"INVALID_VOUCHER_PIN","Enter the voucher PIN printed on your card.");
   if(!password||password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Enter the voucher card password.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi phone number when supplying one.");
   // H6: per-IP limit + per-PIN lockout (5 failed attempts -> 15 min lock).
   const ipLimit=rateLimit.checkLimit({keys:["ip:"+(req.ip||"unknown")],limit:12,windowMs:60000});
   if(!ipLimit.allowed)return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
@@ -333,14 +338,17 @@ async function claimVoucher(req,res){
             const saleType=claimed.subscriberType==="admin_voucher"?"manual":"scratch_card";
             const auditLabel=saleType==="manual"?"Admin manual voucher redemption":"Scratch-card redemption";
             const trxId=(saleType==="manual"?"ADM-MANUAL-":"SCRATCH-")+claimed.id+"-"+Date.now();
-            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot',$6,NOW(),$7) RETURNING id",[trxId,claimed.phone==="Unlinked"?null:claimed.phone,claimed.price,mac,auditLabel+" for voucher "+claimed.id,saleType+":"+claimed.id,"hotspot_user"]);
-            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,$6::text) ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,claimed.phone,claimed.price,claimed.profile,saleType]);
+            // P4: audit phone = the row's stored phone when it has one,
+            // else the phone supplied with this claim, else "Unlinked".
+            const auditPhone=claimed.phone&&claimed.phone!=="Unlinked"?claimed.phone:(phone||"Unlinked");
+            const tx=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used,claim_flow,sale_type,claimed_at,claimed_by) VALUES('cash',$1,$2,$3,'processed',$4,$5,true,'manual_hotspot',$6,NOW(),$7) RETURNING id",[trxId,auditPhone==="Unlinked"?null:auditPhone,claimed.price,mac,auditLabel+" for voucher "+claimed.id,saleType+":"+claimed.id,"hotspot_user"]);
+            await db.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,$6::text) ON CONFLICT(transaction_id) DO NOTHING",[tx.rows[0].id,claimed.id,auditPhone,claimed.price,claimed.profile,saleType]);
           }catch(auditError){console.error("[Hotspot voucher sales audit] Failed to record sale:",JSON.stringify({voucherId:claimed.id,subscriberType:claimed.subscriberType,error:auditError.message}));body.sale_audit_warning=true;}
         }
         return res.status(statusCode).json(body);
       }
     };
-    return activate({...req,ip:req.ip,_hotspotInternalClaim:true,body:{...(req.body||{}),mac,phone:""}},responseProxy);
+    return activate({...req,ip:req.ip,_hotspotInternalClaim:true,body:{...(req.body||{}),mac,phone,customer_name:customerName}},responseProxy);
   }catch(error){
     // H6: a wrong PIN/password counts toward the per-PIN lockout
     // (5 failures -> 15 min lock).
