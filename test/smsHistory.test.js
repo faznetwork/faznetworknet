@@ -44,6 +44,26 @@ test("PPPoE and Unclassified filters remain separate",async()=>{
  try{const pppoe=await run("pppoe"),legacy=await run("unclassified");assert.ok(pppoe.calls[0].sql.includes("user_type=$1"));assert.equal(pppoe.calls[0].sql.includes("IS NULL"),false);assert.ok(legacy.calls[0].sql.includes("user_type IS NULL"));}
  finally{db.query=original;}
 });
+test("SMS history never lists staff or admin notification events",async()=>{
+ const original=db.query,calls=[];
+ db.query=async(sql,params)=>{calls.push({sql,params});if(sql.includes("COUNT(*)"))return {rows:[{total:0,sent:0,failed:0,skipped:0}]};return {rows:[]};};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},set(){return this;},json(body){this.body=body;return this;}};
+ try{
+  await controller.list({query:{userType:"all"}},res);
+  assert.equal(res.statusCode,200);
+  assert.equal(calls.length,2);
+  for(const call of calls)assert.ok(call.sql.includes(controller.STAFF_EVENT_EXCLUSION),call.sql);
+  // The exclusion is a fixed clause: it adds no query parameters.
+  assert.equal(calls[0].params.length,0);
+  // Customer events are not allowlisted away: manual and broadcast stay visible.
+  assert.equal(calls[0].sql.includes("event_key IN"),false);
+  // The email-channel filter still hides staff and admin emails.
+  calls.length=0;
+  await controller.list({query:{userType:"all",channel:"email"}},res);
+  assert.ok(calls[0].sql.includes(controller.STAFF_EVENT_EXCLUSION));
+  assert.match(calls[0].sql,/channel=\$1/);
+ }finally{db.query=original;}
+});
 test("History UI uses one selected Delete action and defaults to All customers",()=>{
  const fs=require("node:fs"),path=require("node:path"),source=fs.readFileSync(path.join(__dirname,"../views/admin.ejs"),"utf8");
  assert.match(source,/option value="all" selected>All customers/);

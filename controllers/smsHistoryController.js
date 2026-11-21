@@ -4,6 +4,13 @@ const ALLOWED_STATUS=new Set(["sent","failed","skipped"]);
 const ALLOWED_CHANNEL=new Set(["sms","whatsapp","email"]);
 const ALLOWED_USER_TYPE=new Set(["all","hotspot","pppoe","unclassified"]);
 const ALLOWED_EVENTS=new Set(["manual","broadcast","payment","payment_receipt","renewal","welcome","expiry_warning","expired","line_expiry","recharge","pppoe_payment","pppoe_renewal","pppoe_expiry_warning","pppoe_expired","hotspot_purchase","hotspot_renewal","hotspot_expiry_warning","hotspot_expired"]);
+// SMS & Alerts is the customer notification log. Staff/admin emails (login and
+// logout alerts, staff and reseller invitations) are written into the same
+// sms_delivery_logs table by the email outbox, but they are not customer
+// messages and must never appear here. They remain visible in the email outbox
+// and the admin audit log. Customer events are never allowlisted away: manual,
+// broadcast, suspension and hotspot_voucher_created stay visible.
+const STAFF_EVENT_EXCLUSION="event_key NOT LIKE 'admin\\_%' AND event_key NOT LIKE '%\\_invitation'";
 function boundedInt(value,fallback,min,max){const parsed=Number.parseInt(String(value??""),10);return Number.isInteger(parsed)?Math.max(min,Math.min(max,parsed)):fallback;}
 function validDate(value,label){const raw=String(value||"").trim();if(!raw)return null;if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||Number.isNaN(Date.parse(raw+"T00:00:00Z"))||new Date(raw+"T00:00:00Z").toISOString().slice(0,10)!==raw)throw new Error("Invalid "+label+" date.");return raw;}
 async function list(req,res){
@@ -17,6 +24,7 @@ async function list(req,res){
   const clauses=[],params=[];
   if(userType==="pppoe"||userType==="hotspot"){params.push(userType);clauses.push("user_type=$"+params.length);}else if(userType==="unclassified"){clauses.push("user_type IS NULL");}
   if(!status)clauses.push("status <> 'skipped'");
+  clauses.push(STAFF_EVENT_EXCLUSION);
   if(query){params.push("%"+query+"%");clauses.push("(recipient_address ILIKE $"+params.length+" OR recipient_phone ILIKE $"+params.length+" OR message ILIKE $"+params.length+" OR event_key ILIKE $"+params.length+" OR error ILIKE $"+params.length+")");}
   if(status){params.push(status);clauses.push("status=$"+params.length);}
   if(channel){params.push(channel);clauses.push("channel=$"+params.length);}
@@ -75,4 +83,4 @@ async function deleteFiltered(req,res){
  try{const built=historyDeleteFilters(req.body&&req.body.filters||{});const result=await db.query("DELETE FROM sms_delivery_logs WHERE "+built.where+" RETURNING id",built.params);return res.set("Cache-Control","no-store").json({success:true,deleted:result.rowCount||0,message:"Filtered notification history deleted."});}catch(error){return res.status(400).set("Cache-Control","no-store").json({success:false,message:String(error&&error.message||"Unable to delete filtered history.")});}
 }
 
-module.exports={list,retry,deleteSelected,deleteFiltered,historyDeleteFilters,boundedInt,validDate,ALLOWED_STATUS,ALLOWED_CHANNEL,ALLOWED_USER_TYPE,ALLOWED_EVENTS};
+module.exports={list,retry,deleteSelected,deleteFiltered,historyDeleteFilters,boundedInt,validDate,ALLOWED_STATUS,ALLOWED_CHANNEL,ALLOWED_USER_TYPE,ALLOWED_EVENTS,STAFF_EVENT_EXCLUSION};
