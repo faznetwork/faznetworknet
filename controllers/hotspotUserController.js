@@ -156,17 +156,50 @@ async function updateProfile(req, res) {
   if (rawMac && !mac) return error(res, 400, "Enter a valid MAC address.");
   try {
     const found = await db.query(
-      "SELECT id FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY CASE WHEN ($1::bigint IS NOT NULL AND id=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1",
+      "SELECT id,mac_address,username,profile,comment FROM hotspot_vouchers WHERE ($1::bigint IS NOT NULL AND id=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY CASE WHEN ($1::bigint IS NOT NULL AND id=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1",
       [/^\d+$/.test(identifier) && Number.isSafeInteger(Number(identifier)) ? Number(identifier) : null, identifier, identifier]
     );
     const row = found.rows?.[0];
     if (!row) return error(res, 404, "No PostgreSQL voucher matches this subscriber. RouterOS was not changed.");
+    // MAC change: refuse when another live voucher already holds that MAC.
+    const oldMac = normalizeMac(row.mac_address) || normalizeMac(row.username);
+    if (mac && oldMac && mac !== oldMac) {
+      const conflict = await db.query(
+        "SELECT id FROM hotspot_vouchers WHERE id<>$1::bigint AND LOWER(COALESCE(mac_address,''))=LOWER($2::text) AND LOWER(COALESCE(status,'')) IN ('active','pending_claim','unused') LIMIT 1",
+        [row.id, mac]
+      );
+      if (conflict.rows?.length) return error(res, 409, "Another live subscriber is already bound to this MAC address.");
+    }
+    // Partial updates only: a field that is absent from the request is
+    // left untouched — it must never wipe the stored name/phone/note.
+    const sets = [], params = [];
+    let idx = 1;
+    if (body.customer_name !== undefined || body.name !== undefined) { sets.push(`customer_name=$${idx}`); params.push(name); idx++; }
+    if (body.phone !== undefined || body.customer_phone !== undefined) { sets.push(`phone=$${idx}`); params.push(phone); idx++; }
+    if (mac) { sets.push(`mac_address=$${idx}`); params.push(mac); idx++; }
+    if (body.note !== undefined || body.notes !== undefined) { sets.push(`note=$${idx}`); params.push(note); idx++; }
+    if (macLock !== undefined) { sets.push(`mac_lock=$${idx}`); params.push(macLock); idx++; }
+    if (!sets.length) return error(res, 400, "Nothing to update.");
+    sets.push("updated_at=NOW()");
     const saved = await db.query(
-      "UPDATE hotspot_vouchers SET customer_name=$1,phone=$2,mac_address=COALESCE(NULLIF($3,''),mac_address),note=$4,mac_lock=COALESCE($5,mac_lock),updated_at=NOW() WHERE id=$6 RETURNING id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,mac_lock",
-      [name, phone, mac, note, macLock, row.id]
+      `UPDATE hotspot_vouchers SET ${sets.join(",")} WHERE id=$${idx} RETURNING id,username,customer_name,phone,mac_address,note,profile,profile_id,status,expires_at,mac_lock`,
+      [...params, row.id]
     );
     if (!saved.rows?.length) return error(res, 404, "Subscriber profile was not saved.");
-    return res.json({ success: true, message: "Profile updated successfully", subscriber: saved.rows[0] });
+    // Router sync on a MAC change: rename the RouterOS user to the new
+    // MAC (password stays the MAC, as today). The panel row is master —
+    // a router failure is reported, not rolled back.
+    let routerSync = true, routerSyncMessage = null;
+    if (mac && oldMac && mac !== oldMac) {
+      try {
+        await mikrotikService.updateHotspotUser(mac, row.profile, row.comment, mac, mac, oldMac);
+      } catch (routerError) {
+        routerSync = false;
+        routerSyncMessage = String(routerError?.message || routerError).slice(0, 300);
+        console.warn("[Hotspot Subscriber 360] Router sync failed for MAC change:", routerError?.message || routerError);
+      }
+    }
+    return res.json({ success: true, message: "Profile updated successfully", subscriber: saved.rows[0], router_sync: routerSync, ...(routerSyncMessage ? { router_sync_message: routerSyncMessage } : {}) });
   } catch (e) {
     console.error("[Hotspot Subscriber 360] Profile update failed:", e?.message || e);
     return error(res, 503, "Profile update failed. PostgreSQL did not confirm the save.");

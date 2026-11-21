@@ -26,10 +26,14 @@ async function applyRouterRenewal(payload, router = mikrotikService) {
   });
 }
 
-async function cleanupStaleRenewals(database, olderThanSeconds = 60) {
-  const ageSeconds = Math.max(60, Math.floor(Number(olderThanSeconds) || 60));
+async function cleanupStaleRenewals(database, olderThanSeconds = 1800) {
+  const ageSeconds = Math.max(60, Math.floor(Number(olderThanSeconds) || 1800));
+  // Past-due staleness only: a pending op whose next attempt is still in
+  // the future is NEVER stale (it may be leased by the reconciler right
+  // now). The attempts>=5 backstop also only fires once the op is past
+  // due, so a mid-lease op is never killed.
   return database.query(
-    "UPDATE hotspot_renewal_operations SET status='failed',last_error=COALESCE(NULLIF(last_error,''),'Stale pending renewal timed out.'),updated_at=NOW() WHERE status='pending' AND created_at<=NOW()-($1::text||' seconds')::interval RETURNING id",
+    "UPDATE hotspot_renewal_operations SET status='failed',last_error=COALESCE(NULLIF(last_error,''),'Stale pending renewal timed out.'),updated_at=NOW() WHERE status='pending' AND (next_attempt_at<=NOW()-($1::text||' seconds')::interval OR (attempts>=5 AND next_attempt_at<=NOW())) RETURNING id",
     [String(ageSeconds)]
   );
 }
@@ -37,8 +41,10 @@ async function cleanupStaleRenewals(database, olderThanSeconds = 60) {
 async function failRenewal(database, operationId, error) {
   if (!operationId) return null;
   const message = String(error?.message || error || "Renewal failed.").slice(0, 1000);
+  // Backoff grows with each failure (5, 10, 15, 20 min, capped at 30);
+  // the 5th failure is terminal — no further retries.
   return database.query(
-    "UPDATE hotspot_renewal_operations SET status='failed',attempts=attempts+1,last_error=$2,next_attempt_at=NOW(),updated_at=NOW() WHERE id=$1::uuid AND status='pending' RETURNING id",
+    "UPDATE hotspot_renewal_operations SET status=CASE WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END,attempts=attempts+1,last_error=$2,next_attempt_at=CASE WHEN attempts+1>=5 THEN NULL ELSE NOW()+(LEAST(5*(attempts+1),30)||' minutes')::interval END,updated_at=NOW() WHERE id=$1::uuid AND status='pending' RETURNING id",
     [operationId, message]
   );
 }

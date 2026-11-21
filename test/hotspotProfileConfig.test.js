@@ -7,7 +7,7 @@ test("parses RouterOS compound timeout 4w2d as a 30-day package",()=>{const v=pa
 test("rejects invalid values and unsafe quotas",()=>{assert.throws(()=>normalizeProfileValidity(0,"days"));assert.throws(()=>normalizeProfileValidity(1.5,"hours"));assert.throws(()=>normalizeProfileValidity(Number.MAX_SAFE_INTEGER,"gb"));assert.throws(()=>normalizeProfileValidity(5,"weeks"));});
 test("timed on-login hook only performs session MAC binding",()=>{
  const s=buildHotspotOnLoginScript({name:"30-Day",sharedUsers:1,validityValue:30,validityUnit:"days"});
- assert.match(s,/FAZ_HOTSPOT_SESSION_BINDING_V4/);
+ assert.match(s,/FAZ_HOTSPOT_SESSION_BINDING_V5/);
  assert.match(s,/mac-address=\$uMac/);
  assert.doesNotMatch(s,/system scheduler|scheduler add|EXP_|hotspot active remove|cookie remove|hotspot host remove|hotspot user remove|get .*uid comment/i);
 });
@@ -23,5 +23,5 @@ test("GB package does not create a scheduler or alter user quota",()=>{
 test("shared-user profiles do not bind one MAC to the whole profile",()=>{
  const s=buildHotspotOnLoginScript({sharedUsers:2,validityValue:1,validityUnit:"hours"});
  assert.doesNotMatch(s,/hotspot user set \$uid mac-address/);
- assert.match(s,/FAZ_HOTSPOT_SESSION_BINDING_V4/);
+ assert.match(s,/FAZ_HOTSPOT_SESSION_BINDING_V5/);
 });

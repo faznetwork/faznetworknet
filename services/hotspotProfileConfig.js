@@ -81,11 +81,14 @@ function buildHotspotOnLoginScript(config = {}) {
   // Validate package validity centrally, but never create or manage RouterOS schedulers.
   if (config.validityValue !== undefined && config.validityValue !== null && config.validityUnit) normalizeProfileValidity(config.validityValue, config.validityUnit);
   const sharedUsers = Math.max(1, Number(config.sharedUsers) || 1);
+  // V5 (bind-once): bind the device MAC only when the router user has no
+  // mac-address yet. A later login from a different device must NOT
+  // overwrite the first binding.
   const bindMac = sharedUsers === 1
-    ? ':if ([:len $uid] > 0 && [:len $uMac] > 0) do={ /ip hotspot user set $uid mac-address=$uMac; }'
+    ? ':if ([:len $uid] > 0 && [:len $uMac] > 0) do={ :local curMac [/ip hotspot user get $uid mac-address]; :if ($curMac = "") do={ /ip hotspot user set $uid mac-address=$uMac; } }'
     : '';
   return [
-    ':local fazManaged "FAZ_HOTSPOT_SESSION_BINDING_V4"',
+    ':local fazManaged "FAZ_HOTSPOT_SESSION_BINDING_V5"',
     ':local uName $user',
     ':local uMac $"mac-address"',
     ':local uid [/ip hotspot user find where name=$uName]',

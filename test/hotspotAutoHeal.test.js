@@ -55,7 +55,7 @@ test("auto-heal re-creates missing panel profiles and missing active users, and 
   const oneGb=deps.calls.profiles.find(call=>call.name==="1GB");
   assert.equal(oneGb.clearSessionTimeout,true,"a GB profile must not carry a session-timeout");
   assert.equal(oneGb.sessionTimeout,"");
-  assert.match(oneGb.onLogin,/FAZ_HOTSPOT_SESSION_BINDING_V4/);
+  assert.match(oneGb.onLogin,/FAZ_HOTSPOT_SESSION_BINDING_V5/);
   const threeHundredGb=deps.calls.profiles.find(call=>call.name==="300GB (Unlimited)");
   assert.equal(threeHundredGb.clearSessionTimeout,true);
   assert.equal(deps.calls.users.length,2);

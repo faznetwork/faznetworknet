@@ -44,7 +44,7 @@ test("Profile edit persists customer_name and phone through PostgreSQL before re
     assert.equal(res.body.subscriber.phone, "01712345678");
     assert.equal(getRouterWrites(), 0, "profile edit must not call RouterOS mutation methods");
   }, async (sql, params) => {
-    if (sql.startsWith("SELECT id FROM hotspot_vouchers")) return { rows: [{ id: 41 }] };
+    if (sql.startsWith("SELECT id,mac_address,username,profile,comment FROM hotspot_vouchers")) return { rows: [{ id: 41, mac_address: "AA:BB:CC:DD:EE:FF", username: "AA:BB:CC:DD:EE:FF", profile: "Daily", comment: "" }] };
     if (sql.startsWith("UPDATE hotspot_vouchers SET customer_name=")) {
       assert.equal(params[0], "Test Subscriber");
       assert.equal(params[1], "01712345678");

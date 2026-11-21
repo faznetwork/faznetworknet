@@ -37,7 +37,13 @@ test("Unified routes direct list, edit, renew and archive to the safe controller
   assert.equal(archiveRoute.route.stack[0].handle, require("../controllers/hotspotUserController").archive);
   const controller = read("controllers/hotspotUserController.js");
   assert.match(controller, /SELECT id,username,customer_name,phone,mac_address/);
-  assert.match(controller, /UPDATE hotspot_vouchers SET customer_name=\$1,phone=\$2/);
+  // Phase 3 (§F): partial updates only — the UPDATE is built dynamically
+  // from the fields actually present, and a MAC change is refused when
+  // another live voucher already holds that MAC.
+  assert.match(controller, /UPDATE hotspot_vouchers SET \$\{sets\.join\(",\"\)\} WHERE id=\$\$\{idx\}/);
+  assert.match(controller, /customer_name=\$\$\{idx\}/);
+  assert.match(controller, /mac_lock=\$\$\{idx\}/);
+  assert.match(controller, /Another live subscriber is already bound to this MAC address/);
   assert.match(controller, /deleteHotspotSubscriber/);
 });
 

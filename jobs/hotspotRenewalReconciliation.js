@@ -11,10 +11,10 @@ function createHotspotRenewalReconciliation(deps={}){
   running=true;
   let reconciled=0,failed=0;
   try{
-   const stale=await operations.cleanupStaleRenewals(database,60);
+   const stale=await operations.cleanupStaleRenewals(database,1800);
    if(stale.rowCount)logger.warn("[HOTSPOT RENEWAL RECONCILIATION] Marked "+stale.rowCount+" stale pending renewal(s) as failed.");
    const due=await database.withTransaction(async client=>{
-    const selected=await client.query("SELECT id,payload,router_applied FROM hotspot_renewal_operations WHERE status='pending' AND next_attempt_at<=NOW() ORDER BY created_at,id LIMIT 10 FOR UPDATE SKIP LOCKED");
+    const selected=await client.query("SELECT id,payload,router_applied FROM hotspot_renewal_operations WHERE status='pending' AND attempts<5 AND next_attempt_at<=NOW() ORDER BY created_at,id LIMIT 10 FOR UPDATE SKIP LOCKED");
     for(const row of selected.rows||[])await client.query("UPDATE hotspot_renewal_operations SET next_attempt_at=NOW()+INTERVAL '5 minutes',updated_at=NOW() WHERE id=$1::uuid",[row.id]);
     return selected.rows||[];
    });

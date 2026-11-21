@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!--
+  FAZ NETWORK — MikroTik Hotspot login page (router-side).
+  ========================================================
+  WHAT THIS IS: the captive-portal page the MikroTik router itself serves
+  when a customer joins the FAZ NETWORK Wi-Fi. It immediately redirects
+  the browser to the panel login page (public/login.html on faznetwork.com),
+  passing the RouterOS variables as query params. The panel login page
+  reads: mac, ip, link-login-only, link-orig, chap-id, chap-challenge.
+
+  HOW TO INSTALL (manual step — do this once, in WinBox or via FTP):
+    1. In WinBox: Files -> upload this file to /hotspot/login.html
+       (overwrite the stock 502-byte login.html).
+       Or via FTP to the router: put this file at /hotspot/login.html.
+    2. Hotspot server profile hsprof1 already uses html-directory "hotspot",
+       so no server/profile change is needed.
+    3. Test: join the FAZ NETWORK Wi-Fi from a phone that is NOT logged
+       in. The browser must land on
+       https://faznetwork.com/login.html?mac=<your MAC>&ip=...&link-login-only=...
+    4. If the redirect does not happen, check that the file on the router
+       is this one (size ~1.5 KB, not the stock 502 bytes).
+
+  DO NOT put this file in the panel repo's public/ folder — the router
+  serves it, not the panel. It lives in docs/ so the manual step is
+  documented next to the code.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAZ NETWORK</title>
+<script>
+(function () {
+  var target = "https://faznetwork.com/login.html"
+    + "?mac=$(mac)"
+    + "&ip=$(ip)"
+    + "&link-login-only=" + encodeURIComponent("$(link-login-only)")
+    + "&link-orig=" + encodeURIComponent("$(link-orig)")
+    + "&chap-id=$(chap-id)"
+    + "&chap-challenge=$(chap-challenge)";
+  window.location.replace(target);
+})();
+</script>
+</head>
+<body>
+<p>FAZ NETWORK Wi-Fi-তে সংযোগ হচ্ছে…</p>
+<p><a href="https://faznetwork.com/login.html">লগইন পেজে যেতে এখানে ক্লিক করুন</a></p>
+</body>
+</html>

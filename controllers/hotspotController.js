@@ -79,7 +79,7 @@ function previewProfileScript(req,res){
   if(!Number.isSafeInteger(sharedUsers)||sharedUsers<1)return res.status(400).json({success:false,message:"Shared users must be a positive whole number."});
   const validity=normalizeProfileValidity(body.validityValue??1,body.validityUnit||"days");
   const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:validity.value,validityUnit:validity.unit});
-  return res.json({success:true,scriptVersion:"FAZ_HOTSPOT_SESSION_BINDING_V4",onLogin});
+  return res.json({success:true,scriptVersion:"FAZ_HOTSPOT_SESSION_BINDING_V5",onLogin});
  }catch(error){
   return res.status(400).json({success:false,message:error?.message||"Unable to generate the RouterOS on-login preview."});
  }
@@ -908,7 +908,9 @@ async function manualRenew(req,res){
    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["hotspot-renew:"+username.toLowerCase()]);
    const found=await client.query("SELECT * FROM hotspot_vouchers WHERE ($1<>'' AND id::text=$1) OR LOWER(username)=LOWER($2) OR ($3<>'' AND LOWER(mac_address)=LOWER($3)) ORDER BY CASE WHEN ($1<>'' AND id::text=$1) THEN 0 ELSE 1 END,id DESC LIMIT 1 FOR UPDATE",[requestedId,username,requestedMac]),voucher=found.rows?.[0];
    if(!voucher)throw hotspotError("HOTSPOT_VOUCHER_NOT_FOUND",404,"The Hotspot voucher was not found in PostgreSQL.");
-   await hotspotRenewalOperations.cleanupStaleRenewals(client,60);
+   // No cleanup here: reconciliation owns stale-op cleanup. (The old
+   // cleanupStaleRenewals(client, 60) call killed pending ops — created
+   // with a 5-minute first retry — before they were ever due.)
    const pending=await client.query("SELECT id FROM hotspot_renewal_operations WHERE voucher_id=$1 AND status='pending' LIMIT 1",[voucher.id]);
    if(pending.rows?.length)throw hotspotError("HOTSPOT_RENEWAL_PENDING",409,"A previous Hotspot renewal is still being synchronized. Wait for reconciliation before retrying.");
    const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);

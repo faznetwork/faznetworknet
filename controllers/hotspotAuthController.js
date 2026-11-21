@@ -3,9 +3,13 @@
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 const notificationDispatcher=require("../services/notificationDispatcher");
+const rateLimit=require("../services/hotspotAuthRateLimit");
+const claimOtpService=require("../services/hotspotClaimOtpService");
 const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
 
-const attempts=new Map();
+function cleanCustomerName(value){
+  return String(value??"").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim().slice(0,160);
+}
 function normalizePhone(value){
   const bangla="০১২৩৪৫৬৭৮৯";
   let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");
@@ -41,11 +45,30 @@ function dhakaTimestamp(value){
   return field("year")+"-"+field("month")+"-"+field("day")+" "+field("hour")+":"+field("minute")+":"+field("second");
 }
 function makeError(code,statusCode,message){const error=new Error(message);error.code=code;error.statusCode=statusCode;return error;}
-function allowAttempt(ip){
-  const now=Date.now(),key=String(ip||"unknown"),bucket=attempts.get(key)||{start:now,count:0};
-  if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}
-  bucket.count++;attempts.set(key,bucket);
-  return bucket.count<=12;
+// C1: verify the claim secret for an unbound pending_claim/unused package.
+// Accepts either the payment TrxID (must be THE transaction that staged
+// this voucher) or the OTP sent to the registered phone. Returns
+// {ok:true} or {ok:false, code, message}. No secret -> CLAIM_SECRET_REQUIRED.
+async function verifyClaimSecret({client,row,phone,body}){
+  const trxId=String(body?.trxId||body?.trx_id||body?.transaction_id||"").trim().toUpperCase();
+  const otp=String(body?.otp||body?.claim_code||body?.code||"").trim();
+  if(trxId){
+    try{
+      const found=await client.query("SELECT id,status FROM transactions WHERE UPPER(TRIM(trx_id))=$1::text LIMIT 1",[trxId]);
+      const tx=found.rows?.[0];
+      const paid=["processed","paid","processing"].includes(String(tx?.status||"").trim().toLowerCase());
+      if(tx&&Number(tx.id)===Number(row.transaction_id)&&paid)return {ok:true};
+    }catch(_){/* fall through to invalid */}
+    return {ok:false,code:"CLAIM_SECRET_INVALID",message:"The TrxID does not match this package's payment."};
+  }
+  if(otp){
+    const result=await claimOtpService.verifyClaimOtp({phone:row.phone||phone,voucherId:row.id,code:otp,client});
+    if(result.ok)return {ok:true};
+    if(result.code==="OTP_LOCKED")return {ok:false,code:"OTP_LOCKED",message:"Too many wrong claim codes for this package. Request a new code later."};
+    if(result.code==="OTP_NOT_FOUND_OR_EXPIRED")return {ok:false,code:"OTP_NOT_FOUND_OR_EXPIRED",message:"No valid claim code was found for this package. Request a new code."};
+    return {ok:false,code:"OTP_INVALID",message:"The claim code is incorrect."};
+  }
+  return {ok:false,code:"CLAIM_SECRET_REQUIRED",message:"This package needs its payment TrxID or the claim code sent to the registered phone."};
 }
 function cleanMetadata(value){try{const parsed=JSON.parse(value||"{}");return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:{};}catch(_){return {};}}
 function getPackageDuration(row,metadata,profile){
@@ -94,23 +117,15 @@ async function deviceLookup(req,res){
     const phoneMatched=phone?rows.filter(row=>normalizePhone(row.phone)===phone):[];
     const candidates=macBound.length?macBound:phoneMatched;
     if(candidates.length>1)return fail(409,"AMBIGUOUS_SUBSCRIBER","Multiple direct subscriber records match. Contact FAZ NETWORK support.");
-    if(!candidates.length)return res.json({success:true,found:false,requires_phone:true,message:"No direct subscriber is bound to this MAC. A staged subscriber must be identified by its registered phone number or existing payment/voucher credentials."});
+    if(!candidates.length)return res.json({success:true,found:false,status:null,requires_claim_secret:false,can_recharge:false});
     const row=candidates[0],status=String(row.status||"").toLowerCase();
     if(normalizeMac(row.mac_address)&&normalizeMac(row.mac_address)!==mac)return fail(403,"MAC_ALREADY_BOUND","This subscriber is permanently bound to another device.");
+    // M14: unauthenticated lookups are a pure read. No profile, no
+    // expiry, no username, no phone — and NO router/DB side effects.
+    // Expiry enforcement belongs to jobs/hotspotExpirationCleanup.js.
     const expired=status==="expired"||(row.expires_at&&new Date(row.expires_at).getTime()<=Date.now());
-    if(expired){
-      try{
-        if(String(row.cleanup_status||"").toLowerCase()!=="completed"){
-          await mikrotikService.disableExpiredDirectHotspotUser(row.username||mac,row.mac_address||mac);
-          await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='completed',cleanup_error=NULL,updated_at=NOW() WHERE id=$1",[row.id]);
-        }
-      }catch(releaseError){
-        console.error("[Hotspot expired portal release]",releaseError.message);
-        await db.query("UPDATE hotspot_vouchers SET status='expired',profile='expired_profile',cleanup_status='failed',cleanup_error=$2,updated_at=NOW() WHERE id=$1",[row.id,String(releaseError.message||releaseError).slice(0,500)]).catch(()=>{});
-      }
-      return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status:"expired",expired:true,can_recharge:true,session_released:true,profile:"expired_profile",expires_at:row.expires_at||null,message:"আপনার প্যাকেজের মেয়াদ শেষ হয়েছে। পুরোনো সেশন বন্ধ করা হয়েছে—নতুন প্যাকেজ কিনে রিচার্জ করুন।"});
-    }
-    return res.json({success:true,found:true,subscriber_type:"direct_subscriber",activation_type:row.activation_type||"legacy",requires_phone:!normalizeMac(row.mac_address)&&!normalizeMac(row.username),status,expired:false,can_recharge:false,profile:row.profile||"",expires_at:row.expires_at||null});
+    const requiresClaimSecret=(status==="pending_claim"||status==="unused")&&getKnownMac(row)!==mac;
+    return res.json({success:true,found:true,status:expired?"expired":status,requires_claim_secret:requiresClaimSecret,can_recharge:expired});
   }catch(error){
     console.error("[Hotspot device lookup]",error.message);
     return fail(503,"DEVICE_LOOKUP_FAILED","Unable to check the subscriber record right now.");
@@ -119,15 +134,38 @@ async function deviceLookup(req,res){
 
 async function activate(req,res){
   const fail=(status,code,message,extra={})=>res.status(status).json({success:false,code,message,error:message,...extra});
-  if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
   const phone=normalizePhone(req.body?.phone||req.body?.account_phone||"");
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||req.body?.macAddress||"");
+  const customerName=cleanCustomerName(req.body?.customer_name||req.body?.customerName||req.body?.name||"");
   if(phone&&!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi phone number when supplying one.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  // H6: per-IP + per-phone rate limits, then the per-phone lockout for
+  // failed claim attempts (5 failures -> 15 min lock).
+  const ipLimit=rateLimit.checkLimit({keys:["ip:"+(req.ip||"unknown")],limit:12,windowMs:60000});
+  if(!ipLimit.allowed)return fail(429,"RATE_LIMITED","Too many login attempts. Wait a minute and try again.");
+  if(phone){
+    const phoneLimit=rateLimit.checkLimit({keys:["phone:"+phone],limit:10,windowMs:60000});
+    if(!phoneLimit.allowed)return fail(429,"RATE_LIMITED","Too many login attempts for this phone number. Wait a minute and try again.");
+    if(rateLimit.isLocked("phone:"+phone))return fail(429,"PHONE_LOCKED","Too many failed claim attempts for this phone number. Try again in 15 minutes.");
+  }
   const requestedLoginUrl=String(req.body?.login_url||req.body?.link_login_only||"").trim();
   const redirectUrl=/^https?:\/\//i.test(requestedLoginUrl)&&requestedLoginUrl.length<=2048?requestedLoginUrl:null;
   let reservation=null,routerSucceeded=false;
   try{
+    // C2: a returning bound login must come from the device itself — the
+    // MAC has to be visible on the network right now. Checked BEFORE any
+    // binding or credential is returned. Skipped for the claim path
+    // (TrxID/OTP is the proof there) and for internal PIN claims.
+    if(req._hotspotInternalClaim!==true){
+      const boundCheck=await db.query("SELECT mac_address,username,status FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1::text) OR LOWER(username)=LOWER($1::text)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active','unused') ORDER BY id DESC LIMIT 1",[mac]);
+      const boundRow=boundCheck.rows?.[0];
+      if(boundRow&&getKnownMac(boundRow)===mac&&["pending_claim","active"].includes(String(boundRow.status||"").toLowerCase())){
+        let onNetwork;
+        try{onNetwork=await mikrotikService.isDeviceOnNetwork(mac);}
+        catch(networkError){console.error("[Hotspot activation] On-network check failed:",networkError.message);return fail(503,"NETWORK_CHECK_FAILED","Could not verify the device is on the FAZ NETWORK Wi-Fi. Retry in a moment.");}
+        if(!onNetwork)return fail(403,"MAC_NOT_ON_NETWORK","Connect to the FAZ NETWORK Wi-Fi and retry from the same device.");
+      }
+    }
     const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
     const metadata=cleanMetadata(metaResult.rows?.[0]?.value);
     const routerProfiles=await mikrotikService.getHotspotProfiles();
@@ -154,6 +192,17 @@ async function activate(req,res){
       }
       if(candidates.length>1)throw makeError("MULTIPLE_LIVE_PACKAGES",409,"Multiple live Hotspot packages are linked to this phone. Contact support before signing in.");
       const row=candidates[0],status=String(row.status||"").toLowerCase();
+      // A MAC-locked account may never bind a new/different MAC, even with
+      // a valid claim secret. (A row already bound to this caller passes.)
+      if(row.mac_lock===true&&getKnownMac(row)!==mac)throw makeError("MAC_LOCKED",403,"This account's device is locked. Contact support to request a device change.");
+      // C1: an unbound pending_claim/unused package needs the payment
+      // TrxID or the claim code sent to the registered phone. Phone + MAC
+      // alone must never claim a package.
+      const needsClaimSecret=["pending_claim","unused"].includes(status)&&getKnownMac(row)!==mac;
+      if(needsClaimSecret){
+        const secret=await verifyClaimSecret({client,row,phone,body:req.body||{}});
+        if(!secret.ok)throw makeError(secret.code,403,secret.message);
+      }
       const profile=routerProfiles.find(item=>String(item.name||"").toLowerCase()===String(row.profile||"").toLowerCase());
       if(!profile)throw makeError("PROFILE_NOT_FOUND",503,"The saved Hotspot package profile is unavailable on RouterOS. Please contact support.");
       const profileMeta=metadata[String(profile.name||"")]||{};
@@ -181,7 +230,7 @@ async function activate(req,res){
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
       const comment=expiresAt?"Exp: "+dhakaTimestamp(expiresAt):"FAZ|DATA_ONLY";
       const previousUsername=String(row.username||"").trim();
-      const locked=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $3::timestamptz WHEN $3::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$3::timestamptz) END,comment=$4::text,phone=COALESCE(NULLIF($5::text,''),NULLIF(phone,''),'Unlinked'),updated_at=NOW() WHERE id=$6::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,firstLoginAt,expiresAt,comment,phone,row.id]);
+      const locked=await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,first_login_at=COALESCE(first_login_at,$2::timestamptz),expires_at=CASE WHEN LOWER(COALESCE(status,'')) IN ('unused','pending_claim') THEN $3::timestamptz WHEN $3::timestamptz IS NULL THEN NULL ELSE COALESCE(expires_at,$3::timestamptz) END,comment=$4::text,phone=CASE WHEN COALESCE(NULLIF(phone,''),'Unlinked')='Unlinked' THEN COALESCE(NULLIF($5::text,''),'Unlinked') ELSE phone END,customer_name=COALESCE(NULLIF(customer_name,''),NULLIF($7::text,'')),updated_at=NOW() WHERE id=$6::bigint AND (mac_address IS NULL OR LOWER(mac_address)=LOWER($1::text)) RETURNING id,username,password,profile,profile_id,validity,price,status,comment,phone,customer_name,server,time_limit,data_limit,mac_address,first_login_at,expires_at,transaction_id,renewal_stacked",[mac,firstLoginAt,expiresAt,comment,phone,row.id,customerName]);
       if(!locked.rows?.length)throw makeError("MAC_MISMATCH",403,"This phone is already bound to another device.");
       const account=locked.rows[0];
       return {account:{...account,mac_address:mac,profile:profile.name,first_login_at:account.first_login_at||firstLoginAt,expires_at:account.expires_at??expiresAt,comment},profile:profile.name,validity:packageInfo.validity,quota:packageInfo.quota,firstActivation:status==="unused"||(status==="pending_claim"&&!getKnownMac(row)),stackedRenewal:Boolean(row.renewal_stacked),previousUsername,mac,phone};
@@ -211,7 +260,7 @@ async function activate(req,res){
       await db.query("UPDATE hotspot_vouchers SET status='expired',expired_at=COALESCE(expired_at,NOW()),cleanup_status='pending',updated_at=NOW() WHERE id=$1::bigint AND mac_address=$2::text",[account.id,mac]).catch(()=>{});
       return fail(410,"PACKAGE_EXPIRED","The package expired before RouterOS activation completed. Purchase a new package to continue.");
     }
-    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,phone=COALESCE(NULLIF($4::text,''),NULLIF(phone,''),'Unlinked'),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone]);
+    const activated=await db.query("UPDATE hotspot_vouchers SET status='active',mac_address=$2::text,phone=CASE WHEN COALESCE(NULLIF(phone,''),'Unlinked')='Unlinked' THEN COALESCE(NULLIF($4::text,''),'Unlinked') ELSE phone END,customer_name=COALESCE(NULLIF(customer_name,''),NULLIF($5::text,'')),comment=$3,renewal_stacked=false,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$1::bigint AND LOWER(mac_address)=LOWER($2::text) RETURNING id,username,status,first_login_at,expires_at,transaction_id",[account.id,mac,account.comment,phone,customerName]);
     if(!activated.rows?.length)throw new Error("RouterOS activation succeeded but the database account could not be finalized. Retry from the same device; the MAC binding is reserved.");
     routerSucceeded=true;
     if(reservation.firstActivation&&phone&&phone!=="Unlinked"){
@@ -220,22 +269,36 @@ async function activate(req,res){
       const voucherCredential=String(account.username||"").trim();
       notificationDispatcher.dispatchNotification({userType:"hotspot",event:"hotspot_first_login",to:phone,recipient:phone,phone,username:voucherCredential,customer:{username:voucherCredential,name:customerName,phone,profile:reservation.profile},customerName,message:`আসসালামু আলাইকুম ${customerName}, FAZ NETWORK হটস্পটে স্বাগতম!\nআপনার ${reservation.profile} প্যাকেজটি সক্রিয় হয়েছে।\nমেয়াদ: ${expiryStr} পর্যন্ত।\nহেল্পলাইন: 01339932887`,useMessageDirectly:true,channels:["sms","whatsapp"],variables:{name:customerName,username:voucherCredential,profile:reservation.profile,package:reservation.profile,expiry_date:expiryStr}});
     }
+    if(phone)rateLimit.clearFailures("phone:"+phone);
     return res.json({success:true,message:"Hotspot account activated for this device.",username:mac,password:mac,mac,phone,profile:reservation.profile,first_login_at:account.first_login_at,expires_at:expiry?expiry.toISOString():null,validity:reservation.validity,redirect_url:redirectUrl});
   }catch(error){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});
+    // H6: a wrong claim secret counts toward the per-phone lockout
+    // (5 failures -> 15 min lock).
+    if(phone&&["CLAIM_SECRET_INVALID","OTP_INVALID"].includes(error.code))rateLimit.recordFailure("phone:"+phone,{maxFailures:5,lockMs:15*60*1000});
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");
   }
 }
 
 async function claimVoucher(req,res){
   const fail=(status,code,message)=>res.status(status).json({success:false,code,message,error:message});
-  if(!allowAttempt(req.ip))return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
   const pin=String(req.body?.voucher_code||req.body?.pin||"").trim().toUpperCase();
   const password=String(req.body?.voucher_password||req.body?.password||"").trim();
   const mac=normalizeMac(req.body?.mac||req.body?.device_mac||"");
   if(!pin||pin.length<4||pin.length>100)return fail(400,"INVALID_VOUCHER_PIN","Enter the voucher PIN printed on your card.");
   if(!password||password.length>160)return fail(400,"INVALID_VOUCHER_PASSWORD","Enter the voucher card password.");
   if(!mac)return fail(400,"INVALID_MAC","RouterOS did not provide a valid device MAC address.");
+  // H6: per-IP limit + per-PIN lockout (5 failed attempts -> 15 min lock).
+  const ipLimit=rateLimit.checkLimit({keys:["ip:"+(req.ip||"unknown")],limit:12,windowMs:60000});
+  if(!ipLimit.allowed)return fail(429,"RATE_LIMITED","Too many voucher attempts. Wait a minute and try again.");
+  if(rateLimit.isLocked("pin:"+pin))return fail(429,"PIN_LOCKED","Too many failed attempts for this voucher PIN. Try again in 15 minutes.");
+  // Soft on-network check (before any binding): the PIN already proves
+  // ownership, so a router error must NOT fail the claim — only a
+  // successful "device absent" blocks it.
+  try{
+    const onNetwork=await mikrotikService.isDeviceOnNetwork(mac);
+    if(!onNetwork)return fail(403,"MAC_NOT_ON_NETWORK","Connect to the FAZ NETWORK Wi-Fi and retry from the same device.");
+  }catch(networkError){console.warn("[Hotspot voucher claim] On-network check unavailable, proceeding on PIN proof:",networkError.message);}
   try{
     const claimed=await db.withTransaction(async client=>{
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-voucher-pin:"+pin]);
@@ -259,6 +322,8 @@ async function claimVoucher(req,res){
       await client.query("UPDATE hotspot_vouchers SET mac_address=$1::text,updated_at=NOW() WHERE id=$2::bigint",[mac,row.id]);
       return {id:row.id,phone:String(row.phone||"Unlinked"),profile:String(row.profile||"Hotspot"),price:Number(row.price||0),subscriberType:String(row.subscriber_type||"legacy"),firstUse:status==="unused"||status==="pending_claim"};
     });
+    // The PIN was verified — clear any earlier failed attempts for it.
+    rateLimit.clearFailures("pin:"+pin);
     let statusCode=200;
     const responseProxy={
       status(code){statusCode=code;return this;},
@@ -275,9 +340,41 @@ async function claimVoucher(req,res){
         return res.status(statusCode).json(body);
       }
     };
-    return activate({...req,ip:req.ip,body:{...(req.body||{}),mac,phone:""}},responseProxy);
+    return activate({...req,ip:req.ip,_hotspotInternalClaim:true,body:{...(req.body||{}),mac,phone:""}},responseProxy);
   }catch(error){
+    // H6: a wrong PIN/password counts toward the per-PIN lockout
+    // (5 failures -> 15 min lock).
+    if(error.code==="VOUCHER_INVALID")rateLimit.recordFailure("pin:"+pin,{maxFailures:5,lockMs:15*60*1000});
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
 }
-module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac,getPackageDuration};
+
+// POST /api/hotspot-auth/request-claim-otp — send a 6-digit claim code to
+// the registered phone of an unbound pending_claim package (C1). The
+// response is deliberately generic: it never reveals whether a package
+// exists for the number, and the code is never returned. The TrxID claim
+// path remains available when no code can be sent.
+async function requestClaimOtp(req,res){
+  const fail=(status,code,message)=>res.status(status).json({success:false,code,message});
+  const generic={success:true,message:"If a pending package exists for this number, a claim code was sent."};
+  const phone=normalizePhone(req.body?.phone||req.body?.account_phone||"");
+  if(!phone||!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi phone number.");
+  // H6: phone 3/hour + IP 10/hour.
+  const ipLimit=rateLimit.checkLimit({keys:["ip:"+(req.ip||"unknown")],limit:10,windowMs:60*60*1000});
+  if(!ipLimit.allowed)return fail(429,"RATE_LIMITED","Too many code requests. Try again later.");
+  const phoneLimit=rateLimit.checkLimit({keys:["claimotp-phone:"+phone],limit:3,windowMs:60*60*1000});
+  if(!phoneLimit.allowed)return fail(429,"RATE_LIMITED","Too many code requests for this phone number. Try again later.");
+  try{
+    const found=await db.query("SELECT id,phone,mac_address,username FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused') ORDER BY id DESC LIMIT 1",[phone]);
+    const row=found.rows?.[0];
+    if(!row)return res.json(generic);
+    if(getKnownMac(row))return res.json(generic); // already bound — no code needed, no oracle
+    const result=await claimOtpService.requestClaimOtp({phone:row.phone||phone,voucherId:row.id});
+    if(!result.sent)console.warn("[Hotspot claim OTP] Could not send claim code for voucher "+row.id+": "+(result.reason||"unknown"));
+    return res.json(generic);
+  }catch(error){
+    console.error("[Hotspot claim OTP] Request failed:",error.message);
+    return res.json(generic);
+  }
+}
+module.exports={activate,claimVoucher,deviceLookup,requestClaimOtp,normalizePhone,normalizeMac,getPackageDuration};

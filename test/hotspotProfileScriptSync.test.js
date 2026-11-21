@@ -32,10 +32,10 @@ test("startup sync normalizes legacy FAZ profiles and preserves unrelated hooks 
   const hour=updates.find(x=>x.name==="1-Hour").onLogin;
   const custom=updates.find(x=>x.name==="NewPlan").onLogin;
   const manual=updates.find(x=>x.name==="Manual-1h").onLogin;
-  assert.match(thirty,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(thirty,/mac-address/); assert.doesNotMatch(thirty,/system scheduler|scheduler add|EXP_|get .*uid comment/i);
-  assert.match(hour,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(hour,/mac-address/); assert.doesNotMatch(hour,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
-  assert.match(custom,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(custom,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(custom,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
-  assert.match(manual,/FAZ_HOTSPOT_SESSION_BINDING_V4/); assert.match(manual,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(manual,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
+  assert.match(thirty,/FAZ_HOTSPOT_SESSION_BINDING_V5/); assert.match(thirty,/mac-address/); assert.doesNotMatch(thirty,/system scheduler|scheduler add|EXP_|get .*uid comment/i);
+  assert.match(hour,/FAZ_HOTSPOT_SESSION_BINDING_V5/); assert.match(hour,/mac-address/); assert.doesNotMatch(hour,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
+  assert.match(custom,/FAZ_HOTSPOT_SESSION_BINDING_V5/); assert.match(custom,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(custom,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
+  assert.match(manual,/FAZ_HOTSPOT_SESSION_BINDING_V5/); assert.match(manual,/CUSTOM_PROFILE_HOOK/); assert.doesNotMatch(manual,/system scheduler|scheduler add|EXP_|start-time=|get .*uid comment/i);
   assert.match(manual,/CUSTOM_PROFILE_HOOK/);
   assert.match(custom,/CUSTOM_PROFILE_HOOK/);
   for(const update of updates){

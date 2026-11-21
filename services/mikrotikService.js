@@ -428,6 +428,44 @@ class MikroTikService {
     });
   }
 
+  async getHotspotHosts() {
+    return this._withConnection("Hotspot host discovery", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/host/print");
+      return (Array.isArray(rows) ? rows : []).map((item) => ({
+        macAddress: this._str(item["mac-address"]),
+        address: this._str(item.address),
+        authorized: this._bool(item.authorized),
+        bypassed: this._bool(item.bypassed),
+        idleTime: this._str(item["idle-time"])
+      })).filter((item) => item.macAddress);
+    });
+  }
+
+  // C2: is this device actually on the network right now? True when the
+  // MAC appears in the bridge hosts, the Hotspot hosts, or an active
+  // Hotspot session. Fail-closed: if any source errors, throw (the
+  // caller turns it into a retryable 503) instead of guessing "absent".
+  async isDeviceOnNetwork(macAddressValue) {
+    const mac = normalizeHotspotMac(macAddressValue || "");
+    if (!mac) return false;
+    const needle = mac.toUpperCase();
+    const checks = await Promise.allSettled([
+      this.getBridgeHosts(),
+      this.getHotspotHosts(),
+      this.getActiveHotspotSessions()
+    ]);
+    for (const check of checks) {
+      if (check.status !== "fulfilled") continue;
+      for (const item of Array.isArray(check.value) ? check.value : []) {
+        const found = String(item.macAddress || item.mac || "").toUpperCase();
+        if (found === needle) return true;
+      }
+    }
+    const failed = checks.find((check) => check.status === "rejected");
+    if (failed) throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason || "MikroTik device check failed."));
+    return false;
+  }
+
   async getInterfaceTraffic(interfaceName) {
     const name = String(interfaceName || "").trim();
     if (!name || name.length > 100 || /[\r\n\0]/.test(name)) {
@@ -1175,13 +1213,14 @@ class MikroTikService {
       return { username, updated: true };
     });
   }
-  async updateHotspotUser(usernameValue,profileValue,commentValue,passwordValue,macAddressValue){
+  async updateHotspotUser(usernameValue,profileValue,commentValue,passwordValue,macAddressValue,previousUsernameValue){
     const macAddress=normalizeHotspotMac(macAddressValue||usernameValue),username=macAddress,profile=this._str(profileValue).trim(),requestedComment=this._str(commentValue).trim();
+    const previousUsername=normalizeHotspotMac(previousUsernameValue||"")||username;
     if(!macAddress)throw new Error("A valid normalized device MAC address is required for Hotspot credentials.");
     if(!profile||profile.length>100)throw new Error("A valid Hotspot profile is required.");
     return this._withConnection("Hotspot user update",async connection=>{
       const [users,profiles]=await Promise.all([connection.write("/ip/hotspot/user/print"),connection.write("/ip/hotspot/user/profile/print")]);
-      const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toUpperCase()===username&&r[".id"]);
+      const user=(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toUpperCase()===username&&r[".id"])||(Array.isArray(users)?users:[]).find(r=>this._str(r.name).trim().toUpperCase()===previousUsername&&r[".id"]);
       if(!user)throw new Error("Hotspot user \""+username+"\" was not found on MikroTik.");
       if(!(Array.isArray(profiles)?profiles:[]).some(r=>this._str(r.name)===profile))throw new Error("Selected Hotspot profile does not exist on MikroTik.");
       const comment=this._hotspotExpiryComment({comment:requestedComment})||this._hotspotExpiryComment({comment:this._str(user.comment)});

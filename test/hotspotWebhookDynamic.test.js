@@ -271,6 +271,7 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
   try{
     db.query=async(sql,params=[])=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("SELECT mac_address,username,status FROM hotspot_vouchers"))return {rows:[]};
       if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'")){
         activeUpdate={sql,params};
         return {rows:[{id:41,username:params[1],status:"active",first_login_at:new Date(params[1])}]};
@@ -279,9 +280,10 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+      if(sql.startsWith("SELECT id,status FROM transactions"))return {rows:[{id:5,status:"processed"}]};
       if(sql.startsWith("SELECT * FROM hotspot_vouchers")){
         assert.match(sql,/mac_address/);
-        return {rows:[pendingVoucher()]};
+        return {rows:[pendingVoucher({transaction_id:5})]};
       }
       if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")){
         const row=pendingVoucher({mac_address:params[0],first_login_at:params[1],expires_at:params[2],comment:params[3]});
@@ -293,7 +295,7 @@ test("first captive login normalizes and binds MAC, then provisions RouterOS wit
     mikrotik.rechargeHotspotUser=async payload=>{routerPayload=payload;return {username:payload.username};};
     mikrotik.createHotspotUser=async()=>{throw new Error("first activation should use the existing-user-aware recharge provisioner");};
     const res=responseRecorder();
-    await hotspotAuthController.activate({ip:"first-bind-test",body:{mac:"aa-bb-cc-dd-ee-ff",phone:"01712345678"}},res);
+    await hotspotAuthController.activate({ip:"first-bind-test",body:{mac:"aa-bb-cc-dd-ee-ff",phone:"01712345678",trxId:"TXN-TEST-5"}},res);
     assert.equal(res.statusCode,200);
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
@@ -323,18 +325,20 @@ test("manually generated unused voucher activates from phone number and captive-
   try{
     db.query=async(sql,params=[])=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("SELECT mac_address,username,status FROM hotspot_vouchers"))return {rows:[]};
       if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:41,username:params[1],status:"active",first_login_at:new Date()}]};
       throw new Error("Unexpected database query: "+sql);
     };
     db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{
       if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
+      if(sql.startsWith("SELECT id,status FROM transactions"))return {rows:[{id:5,status:"processed"}]};
       if(sql.startsWith("SELECT * FROM hotspot_vouchers")){
         activationQuery=sql;
         assert.match(sql,/pending_claim/);
         assert.match(sql,/unused/);
         assert.match(sql,/IN \('pending_claim','unused','active','expired'\)/);
         assert.doesNotMatch(sql,/expires_at IS NULL OR expires_at > NOW\(\)/,"unstarted vouchers must not be filtered by expiry");
-        return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:new Date(Date.now()-86400000),first_login_at:null})]};
+        return {rows:[pendingVoucher({username:"PENDING-01712345678",status:"unused",mac_address:null,expires_at:new Date(Date.now()-86400000),first_login_at:null,transaction_id:5})]};
       }
       if(sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")){
         assert.match(sql,/IN \('unused','pending_claim'\) THEN \$3::timestamptz/,"first login must overwrite stale expiry");
@@ -347,7 +351,7 @@ test("manually generated unused voucher activates from phone number and captive-
     mikrotik.getHotspotProfiles=async()=>oneHourProfile();
     mikrotik.rechargeHotspotUser=async payload=>{routerPayload=payload;return {username:payload.username};};
     const res=responseRecorder();
-    await hotspotAuthController.activate({ip:"manual-unused-activation-test",body:{phone:"01712345678",mac:"aa-bb-cc-dd-ee-ff"}},res);
+    await hotspotAuthController.activate({ip:"manual-unused-activation-test",body:{phone:"01712345678",mac:"aa-bb-cc-dd-ee-ff",trxId:"TXN-TEST-5"}},res);
     assert.equal(res.statusCode,200,JSON.stringify(res.body));
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"AA:BB:CC:DD:EE:FF");
@@ -369,6 +373,7 @@ test("an already-bound phone rejects a different device MAC before touching Rout
   try{
     db.query=async sql=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("SELECT mac_address,username,status FROM hotspot_vouchers"))return {rows:[]};
       throw new Error("Unexpected database query: "+sql);
     };
     db.withTransaction=async callback=>callback({query:async sql=>{
@@ -395,6 +400,7 @@ test("the same MAC resolves and updates the phone when a customer changes SIM",a
   try{
     db.query=async sql=>{
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata())}]};
+      if(sql.startsWith("SELECT mac_address,username,status FROM hotspot_vouchers"))return {rows:[{mac_address:"AA:BB:CC:DD:EE:FF",username:"AA:BB:CC:DD:EE:FF",status:"unused"}]};
       if(sql.startsWith("UPDATE hotspot_vouchers SET status='active'"))return {rows:[{id:41,username:"AA:BB:CC:DD:EE:FF",status:"active",expires_at:new Date(Date.now()+3600000),transaction_id:5}]};
       throw new Error("Unexpected database query: "+sql);
     };
