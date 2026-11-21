@@ -955,41 +955,57 @@ class MikroTikService {
         const name = this._str(row?.name).trim().toUpperCase();
         if (name && row[".id"] && !byName.has(name)) byName.set(name, row);
       }
-      const expiredNames = new Set(candidates.filter(v => v?.expired).map(v => normalizeHotspotMac(v?.macAddress || v?.mac_address)).filter(Boolean));
-      const activeRows = expiredNames.size ? await connection.write("/ip/hotspot/active/print") : [];
-      const activeSessions = Array.isArray(activeRows) ? activeRows : [];
-      let provisioned = 0, refreshed = 0, skipped = 0, disconnected = 0;
+      // Panel is the master. Each voucher is pushed in isolation: one bad
+      // voucher is recorded and the batch continues. Expired candidates are
+      // never (re-)created; expiry enforcement stays with the cleanup job.
+      let provisioned = 0, refreshed = 0, skipped = 0;
+      const failed = [];
+      const expiryComment = /^Exp: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/;
+      const dataOnlyComment = /^FAZ\|DATA_ONLY$/i;
       for (const voucher of candidates) {
         const macAddress = normalizeHotspotMac(voucher?.macAddress || voucher?.mac_address);
+        const username = this._str(voucher?.username).trim() || macAddress;
+        const password = this._str(voucher?.password).trim() || username;
         const profile = this._str(voucher?.profile).trim();
         const comment = this._str(voucher?.comment).trim();
-        if (!macAddress || !profile || !new RegExp("^Exp: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$").test(comment)) {
+        const limitBytesTotal = Math.max(0, Math.floor(Number(voucher?.limitBytesTotal || voucher?.dataLimit || 0)));
+        if (!username || !profile || (!expiryComment.test(comment) && !dataOnlyComment.test(comment))) {
           skipped++;
           continue;
         }
-        const existing = byName.get(macAddress);
-        if (existing) {
-          await connection.write("/ip/hotspot/user/set", this._writeParams({
-            ".id": existing[".id"], profile, comment
-          }));
-          refreshed++;
-        } else {
-          await connection.write("/ip/hotspot/user/add", this._writeParams({
-            name: macAddress, password: macAddress, profile, comment,
-            "mac-address": macAddress, server: this._str(voucher?.server).trim() || "all"
-          }));
-          provisioned++;
-        }
         if (voucher?.expired) {
-          for (const session of activeSessions.filter(item =>
-            this._str(item.user).trim().toUpperCase() === macAddress && item[".id"]
-          )) {
-            await connection.write("/ip/hotspot/active/remove", ["=.id=" + session[".id"]]);
-            disconnected++;
+          skipped++;
+          continue;
+        }
+        try {
+          const existing = byName.get(username.toUpperCase()) || (macAddress ? byName.get(macAddress) : null);
+          if (existing) {
+            const params = this._writeParams({
+              ".id": existing[".id"], profile, comment,
+              "mac-address": macAddress || undefined
+            });
+            // A time-only package must not keep a stale data quota from a
+            // previous package: clear the field explicitly. (_writeParams
+            // drops empty values, so the empty param is pushed manually.)
+            if (limitBytesTotal > 0) params.push("=limit-bytes-total=" + String(limitBytesTotal));
+            else params.push("=limit-bytes-total=");
+            await connection.write("/ip/hotspot/user/set", params);
+            refreshed++;
+          } else {
+            const params = this._writeParams({
+              name: username, password, profile, comment,
+              "mac-address": macAddress || undefined,
+              server: this._str(voucher?.server).trim() || "all",
+              "limit-bytes-total": limitBytesTotal > 0 ? String(limitBytesTotal) : undefined
+            });
+            await connection.write("/ip/hotspot/user/add", params);
+            provisioned++;
           }
+        } catch (error) {
+          failed.push({ username, error: String(error?.message || error).slice(0, 300) });
         }
       }
-      return { provisioned, refreshed, skipped, disconnected };
+      return { provisioned, refreshed, skipped, disconnected: 0, failed };
     });
   }
 

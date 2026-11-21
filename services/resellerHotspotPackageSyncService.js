@@ -43,11 +43,17 @@ function resolveCatalogEntry(profileKey, metadata) {
     console.warn('[POP Hotspot packages] Skipping core profile with invalid duration.', { profileKey: key });
     return null;
   }
+  const dataLimitBytes = Math.max(0, Math.floor(Number(resolved.limitBytesTotal || 0)));
+  if (!Number.isSafeInteger(dataLimitBytes)) {
+    console.warn('[POP Hotspot packages] Skipping core profile with invalid data quota.', { profileKey: key });
+    return null;
+  }
 
   return {
     profileKey: key,
     packageName,
     validitySeconds: String(durationMs / 1000),
+    dataLimitBytes,
     retailPrice: (retailCents / 100).toFixed(2),
     wholesalePrice
   };
@@ -62,7 +68,7 @@ async function syncPopPackages(client, popId) {
   );
   const raw = settings.rows?.[0]?.value;
   if (raw == null || String(raw).trim() === '') {
-    return { created: 0, skipped: 0, reason: 'core_profile_metadata_not_configured' };
+    return { created: 0, updated: 0, deactivated: 0, skipped: 0, reason: 'core_profile_metadata_not_configured' };
   }
 
   let metadata;
@@ -76,24 +82,70 @@ async function syncPopPackages(client, popId) {
   }
 
   let created = 0;
+  let updated = 0;
   let skipped = 0;
+  const syncedKeys = [];
   for (const [profileKey, profileMetadata] of Object.entries(metadata)) {
     const entry = resolveCatalogEntry(profileKey, profileMetadata);
     if (!entry) {
       skipped += 1;
       continue;
     }
-    const inserted = await client.query(
+    // Panel is the master: an existing POP row is updated in place so price,
+    // validity, quota and active state stay in sync with the core profile.
+    // (xmax = 0) distinguishes a fresh insert from an ON CONFLICT update.
+    const result = await client.query(
       `INSERT INTO public.pop_hotspot_packages
-         (pop_id,package_name,profile_key,validity_seconds,retail_price,wholesale_price,is_active)
-       VALUES ($1,$2,$3,$4::bigint,$5::numeric,$6::numeric,TRUE)
-       ON CONFLICT (pop_id,profile_key) DO NOTHING
-       RETURNING id`,
-      [popId, entry.packageName, entry.profileKey, entry.validitySeconds, entry.retailPrice, entry.wholesalePrice]
+         (pop_id,package_name,profile_key,validity_seconds,data_limit_bytes,retail_price,wholesale_price,is_active)
+       VALUES ($1,$2,$3,$4::bigint,$5::bigint,$6::numeric,$7::numeric,TRUE)
+       ON CONFLICT (pop_id,profile_key) DO UPDATE SET
+         package_name=EXCLUDED.package_name,
+         validity_seconds=EXCLUDED.validity_seconds,
+         data_limit_bytes=EXCLUDED.data_limit_bytes,
+         retail_price=EXCLUDED.retail_price,
+         wholesale_price=EXCLUDED.wholesale_price,
+         is_active=TRUE,
+         updated_at=NOW()
+       RETURNING id, (xmax = 0) AS inserted`,
+      [popId, entry.packageName, entry.profileKey, entry.validitySeconds, entry.dataLimitBytes, entry.retailPrice, entry.wholesalePrice]
     );
-    if (inserted.rows?.length) created += 1;
+    if (result.rows?.length) {
+      if (result.rows[0].inserted === false) updated += 1;
+      else created += 1;
+    }
+    syncedKeys.push(entry.profileKey);
   }
-  return { created, skipped, reason: null };
+
+  // A profile removed from core metadata stops selling: deactivate its POP
+  // rows instead of leaving a stale package on sale. Guarded so a transient
+  // empty/invalid metadata read can never wipe the catalogue: deactivation
+  // runs only when at least one profile synced successfully.
+  let deactivated = 0;
+  if (syncedKeys.length) {
+    const deactivatedResult = await client.query(
+      `UPDATE public.pop_hotspot_packages
+          SET is_active=FALSE, updated_at=NOW()
+        WHERE pop_id=$1 AND is_active=TRUE AND NOT (profile_key = ANY($2::text[]))`,
+      [popId, syncedKeys]
+    );
+    deactivated = Number(deactivatedResult?.rowCount || 0);
+  }
+  return { created, updated, deactivated, skipped, reason: null };
 }
 
-module.exports = { syncPopPackages, resolveCatalogEntry };
+async function syncAllPopPackages(client) {
+  if (!client || typeof client.query !== 'function') {
+    throw new TypeError('A PostgreSQL client is required to sync POP Hotspot packages.');
+  }
+  const pops = await client.query('SELECT id FROM public.pops ORDER BY id ASC');
+  const results = [];
+  for (const pop of pops.rows || []) {
+    const popId = Number(pop.id);
+    if (!Number.isSafeInteger(popId) || popId < 1) continue;
+    const result = await syncPopPackages(client, popId);
+    results.push({ popId, ...result });
+  }
+  return results;
+}
+
+module.exports = { syncPopPackages, syncAllPopPackages, resolveCatalogEntry };

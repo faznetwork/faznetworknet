@@ -229,7 +229,7 @@ async function issueBatch(input) {
               b.id AS binding_id, b.router_key, b.hotspot_server,
               b.hotspot_interface, b.vlan_id, b.ip_pool,
               pkg.id AS package_id, pkg.package_name, pkg.profile_key,
-              pkg.validity_seconds,
+              pkg.validity_seconds, pkg.data_limit_bytes,
               pkg.retail_price, pkg.wholesale_price,
               a.id AS billing_account_id, a.billing_mode,
               a.wallet_balance, a.receivable_balance, a.credit_limit,
@@ -339,9 +339,11 @@ async function issueBatch(input) {
       client,
       profileName: eligible.profile_key,
       profileId: eligible.profile_key,
-      validity,
+      // A data-only package stores no time validity on the voucher; its
+      // quota travels in data_limit so activation never gains a time expiry.
+      validity: validitySeconds > 0n ? validity : '',
       timeLimit: validitySeconds > 0n ? validitySeconds.toString() + 's' : '',
-      dataLimit: '',
+      dataLimit: eligible.data_limit_bytes != null && Number(eligible.data_limit_bytes) > 0 ? String(eligible.data_limit_bytes) : '',
       price: Number(eligible.retail_price),
       server: eligible.hotspot_server,
       quantity,

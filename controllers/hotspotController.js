@@ -1,4 +1,4 @@
-const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,resolveHotspotPackage,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");
+const crypto=require("crypto");const db=require("../db");const mikrotikService=require("../services/mikrotikService");const {normalizeProfileValidity,parseStoredValidity,resolveHotspotPackage,buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");const {syncHotspotProfileScripts}=require("../jobs/hotspotProfileScriptSync");const {syncAllPopPackages}=require("../services/resellerHotspotPackageSyncService");
 const notificationDispatcher=require("../services/notificationDispatcher");
 const hotspotRenewalOperations=require("../services/hotspotRenewalOperationService");
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
@@ -41,6 +41,20 @@ async function ensureCalendarProfile(profile, routerProfile, profileValidity) {
   return { updated: true, result };
 }
 async function writeProfileMetadata(v){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_profile_metadata',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(v)]);}
+// Panel is the master for POP packages: after a profile change, sync every
+// POP's package rows from core metadata. Best-effort — the router profile
+// and metadata are already saved, so a POP sync failure is reported as a
+// warning instead of rolling the profile change back.
+async function syncPopPackagesBestEffort(){
+ try{
+  const results=await syncAllPopPackages(db);
+  return {popSync:results};
+ }catch(error){
+  const warning="Panel profile saved, but POP packages could not be synced: "+String(error.message||error).slice(0,200);
+  console.warn("[Hotspot POP package sync]",warning);
+  return {popSyncWarning:warning};
+ }
+}
 async function servers(req,res){try{const data=await mikrotikService.getHotspotServers();return res.json({success:true,servers:data.map(s=>({name:s.name,interface:s.interface,profile:s.profile}))});}catch(e){return errorResponse(res,e);}}
 async function listServerProfiles(req,res){try{const profiles=await mikrotikService.getHotspotServerProfiles();return res.set("Cache-Control","no-store").json({success:true,profiles:profiles.filter(profile=>String(profile.name||"").trim().toLowerCase()!=="default").map(profile=>({...profile,loginBy:String(profile.loginBy||"").split(",").map(value=>value.trim()).filter(Boolean)}))});}catch(e){return errorResponse(res,e);}}
 async function listMikrotikFiles(req,res){try{const directories=await mikrotikService.getMikrotikDirectories();return res.set("Cache-Control","no-store").json({success:true,directories});}catch(e){return errorResponse(res,e);}}
@@ -79,7 +93,8 @@ async function createProfile(req,res){try{
  const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:v.value,validityUnit:v.unit});
  const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin});
  const meta=await readProfileMetadata();meta[name]={...(meta[name]||{}),price,rateLimit,validityValue:v.value,validityUnit:v.unit,validityLabel:v.validityLabel,limitBytesTotal:v.limitBytesTotal,updatedAt:new Date().toISOString()};await writeProfileMetadata(meta);
- return res.json({success:true,message:"Hotspot profile created and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin}});
+ const popSync=await syncPopPackagesBestEffort();
+ return res.json({success:true,message:"Hotspot profile created and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin},...popSync});
 }catch(e){return errorResponse(res,e);}}
 async function updateProfile(req,res){try{
  const body=req.body&&typeof req.body==="object"?req.body:{};
@@ -91,7 +106,8 @@ async function updateProfile(req,res){try{
  const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:v.value,validityUnit:v.unit});
  const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin});
  const meta=await readProfileMetadata();meta[name]={...(meta[name]||{}),price,rateLimit,validityValue:v.value,validityUnit:v.unit,validityLabel:v.validityLabel,limitBytesTotal:v.limitBytesTotal,updatedAt:new Date().toISOString()};await writeProfileMetadata(meta);
- return res.json({success:true,message:"Hotspot profile updated and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin}});
+ const popSync=await syncPopPackagesBestEffort();
+ return res.json({success:true,message:"Hotspot profile updated and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin},...popSync});
 }catch(e){return errorResponse(res,e);}}
 async function syncProfiles(req,res){
  try{
@@ -135,9 +151,12 @@ async function syncProfiles(req,res){
   // Keep the established session-expiry and MAC-auth profile maintenance after the panel settings are applied.
   const scriptSync=await syncHotspotProfileScripts();
   const serverAuth=scriptSync.serverAuth||{checked:0,updated:0,skipped:0,failed:0};
-  const sync={panelProfiles:result,...scriptSync,serverAuth};
+  // Heal POP package rows from the same panel metadata, so a manual sync
+  // also repairs price/validity/quota drift and deactivates removed profiles.
+  const popSync=await syncPopPackagesBestEffort();
+  const sync={panelProfiles:result,...scriptSync,serverAuth,...(popSync.popSync?{popSync:popSync.popSync}:{})};
   const success=result.failed===0&&Number(scriptSync.failed||0)===0&&Number(serverAuth.failed||0)===0;
-  return res.status(success?200:502).json({success,message:success?"Panel Hotspot profiles synced to MikroTik.":"Panel profile sync completed with errors; review the per-profile results.",sync});
+  return res.status(success?200:502).json({success,message:success?"Panel Hotspot profiles synced to MikroTik.":"Panel profile sync completed with errors; review the per-profile results.",sync,...(popSync.popSyncWarning?{popSyncWarning:popSync.popSyncWarning}:{})});
  }catch(e){return errorResponse(res,e);}
 }
 async function deleteProfile(req,res){
@@ -151,7 +170,18 @@ async function deleteProfile(req,res){
   // The upsert is awaited, so a PostgreSQL failure cannot be reported as success.
   delete meta[name];
   await writeProfileMetadata(meta);
-  return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik and metadata was updated.",profile:result});
+  // A deleted profile must stop selling immediately: deactivate its POP
+  // package rows. Best-effort — the profile itself is already deleted.
+  let popSyncWarning=null;
+  try{
+    await db.query("UPDATE public.pop_hotspot_packages SET is_active=FALSE, updated_at=NOW() WHERE profile_key=$1",[name]);
+  }catch(error){
+    popSyncWarning="Panel profile deleted, but its POP packages could not be deactivated: "+String(error.message||error).slice(0,200);
+    console.warn("[Hotspot POP package sync]",popSyncWarning);
+  }
+  const popSync=await syncPopPackagesBestEffort();
+  if(popSync.popSyncWarning)popSyncWarning=popSyncWarning?popSyncWarning+"; "+popSync.popSyncWarning:popSync.popSyncWarning;
+  return res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik and metadata was updated.",profile:result,...(popSync.popSync?{popSync:popSync.popSync}:{}),...(popSyncWarning?{popSyncWarning}:{})});
  }catch(e){
   console.error("[Hotspot profile deletion]",{code:e?.code||null,message:e?.message||String(e)});
   const status=Number.isInteger(e?.statusCode)?e.statusCode:503;
@@ -202,7 +232,7 @@ function formatHotspotExpiry(dateValue) {
 async function importFromMikrotik(req,res) {
  try {
   const routerUsers=await mikrotikService.getHotspotUsers();
-  let imported=0,updated=0,skipped=0;
+  let imported=0,skipped=0,skippedExisting=0;
   for(const routerUser of (Array.isArray(routerUsers)?routerUsers:[])) {
    const routerName=clean(routerUser?.username||routerUser?.name,100);
    const mac=normalizeHotspotMac(routerName);
@@ -217,60 +247,76 @@ async function importFromMikrotik(req,res) {
      // Serialize imports of the same MAC without relying on a schema-specific ON CONFLICT target.
      await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",["faz-hotspot-import:"+mac]);
      const match=await client.query(
-      "SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1 FOR UPDATE",
+      "SELECT id,status FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1 FOR UPDATE",
       [mac]
      );
      const existing=match.rows?.[0];
-     if(existing) {
-      await client.query(
-       "UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active',updated_at=NOW() WHERE id=$1",
-       [existing.id,profile,expiry]
-      );
-      return "updated";
-     }
+     // Panel is the master: an existing panel row is never overwritten by
+     // the router, and an expired/deleted/archived row is never resurrected.
+     // Import only discovers router users the panel has never seen.
+     if(existing) return "skippedExisting";
      await client.query(
       "INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,customer_name,server,expires_at,mac_address,first_login_at) VALUES($1,$2,$3,'imported',0,'active',$4,$5,'Imported Subscriber',$6,$7,$8,NOW()) RETURNING id",
       [mac,clean(routerUser?.password,100)||mac,profile,comment,phone,server,expiry,mac]
      );
      return "imported";
     });
-    if(outcome==="updated")updated++;else imported++;
+    if(outcome==="imported")imported++;else skippedExisting++;
    } catch(error) {
     // A concurrent provisioning path may win the unique username/MAC index race.
-    // The failed transaction is rolled back before re-reading; only router-owned fields are updated.
+    // The failed transaction is rolled back before re-reading; the existing
+    // panel row is left untouched — Panel is the master, so the router must
+    // never overwrite it or resurrect a terminal row.
     if(error?.code!=="23505")throw error;
     const raced=await db.query(
-     "SELECT id FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1",
+     "SELECT id,status FROM hotspot_vouchers WHERE LOWER(mac_address)=LOWER($1) OR LOWER(username)=LOWER($1) ORDER BY id DESC LIMIT 1",
      [mac]
     );
     if(!raced.rows?.[0])throw error;
-    await db.query(
-     "UPDATE hotspot_vouchers SET profile=COALESCE(NULLIF($2,''),profile),expires_at=COALESCE($3,expires_at),status='active',updated_at=NOW() WHERE id=$1",
-     [raced.rows[0].id,profile,expiry]
-    );
-    updated++;
+    skippedExisting++;
    }
   }
   hotspotListCache.expiresAt=0;
-  return res.json({success:true,imported,updated,skipped});
+  return res.json({success:true,imported,skipped,skippedExisting});
  } catch(error) { return errorResponse(res,error); }
 }
 async function pushToMikrotik(req,res) {
  try {
-  const result=await db.query("SELECT id,username,profile,validity,status,comment,server,mac_address,expires_at,created_at FROM hotspot_vouchers WHERE status IN ('active','unused') AND mac_address IS NOT NULL AND BTRIM(mac_address)<>'' ORDER BY id ASC");
+  // Panel is the master: only live 'active' vouchers are pushed. Expired,
+  // deleted and archived rows are never sent to the router, and PIN/scratch
+  // vouchers without a bound MAC are pushed by their voucher username.
+  const result=await db.query("SELECT id,username,password,profile,validity,status,comment,server,mac_address,data_limit,time_limit,expires_at,created_at FROM hotspot_vouchers WHERE status='active' ORDER BY id ASC");
+  let meta={};
+  try{meta=await readProfileMetadata();}catch(_){meta={};}
   const vouchers=[];
   let skipped=0;
   for(const row of (result.rows||[])) {
-   const mac=normalizeHotspotMac(row.mac_address);
+   // Defence in depth: the SELECT already excludes them, but a non-active
+   // row must never reach the router even if the query changes.
+   if(String(row.status||"").toLowerCase()!=="active"){skipped++;continue;}
    const profile=clean(row.profile,100);
-   if(!mac||!profile){skipped++;continue;}
+   if(!profile){skipped++;continue;}
+   const mac=normalizeHotspotMac(row.mac_address);
+   const pin=clean(row.username,100);
+   const username=mac||pin;
+   const password=mac||clean(row.password,100);
+   if(!username||!password){skipped++;continue;}
+   // Data-only package: no time expiry; quota from the voucher row, else
+   // from core profile metadata. A data package with no quota is skipped.
+   const quotaBytes=Math.max(0,Math.floor(Number(String(row.data_limit||"").trim())||0))||Math.max(0,Math.floor(Number((meta[profile]||{}).limitBytesTotal||0)));
+   const durationMs=validityMs(row.validity||row.time_limit||"");
+   if(quotaBytes>0&&durationMs<=0){
+    vouchers.push({username,password,macAddress:mac||"",profile,server:clean(row.server,100)||"all",comment:"FAZ|DATA_ONLY",limitBytesTotal:quotaBytes,expired:false,dataOnly:true});
+    continue;
+   }
    const expiry=row.expires_at?new Date(row.expires_at):(parseHotspotExpiry(row.comment)||voucherValidUntil(row.created_at,row.validity));
    if(!expiry||Number.isNaN(expiry.getTime())){skipped++;continue;}
-   vouchers.push({macAddress:mac,profile,server:clean(row.server,100)||"all",comment:formatHotspotExpiry(expiry),expired:expiry.getTime()<=Date.now()});
+   if(expiry.getTime()<=Date.now()){skipped++;continue;}
+   vouchers.push({username,password,macAddress:mac||"",profile,server:clean(row.server,100)||"all",comment:formatHotspotExpiry(expiry),limitBytesTotal:quotaBytes,expired:false});
   }
-  const sync=vouchers.length?await mikrotikService.syncHotspotUsers(vouchers):{provisioned:0,refreshed:0,skipped:0,disconnected:0};
+  const sync=vouchers.length?await mikrotikService.syncHotspotUsers(vouchers):{provisioned:0,refreshed:0,skipped:0,disconnected:0,failed:[]};
   hotspotListCache.expiresAt=0;
-  return res.json({success:true,provisioned:Number(sync.provisioned||0),refreshed:Number(sync.refreshed||0),skipped:skipped+Number(sync.skipped||0),disconnected:Number(sync.disconnected||0)});
+  return res.json({success:true,provisioned:Number(sync.provisioned||0),refreshed:Number(sync.refreshed||0),skipped:skipped+Number(sync.skipped||0),failed:Array.isArray(sync.failed)?sync.failed:[],disconnected:0});
  } catch(error) { return errorResponse(res,error); }
 }
 
@@ -337,6 +383,7 @@ async function generate(req,res){
   const batchId=crypto.randomUUID();
   const generated=await db.withTransaction(client=>hotspotVoucherGenerator.generateVoucherBatch({
    client,profileName,validity:normalizedValidity,price,server,quantity,userPrefix,charLength,batchId,
+   timeLimit:String(profileValidity.validity||"").trim(),dataLimit:quota>0?String(quota):"",
    comment:"Scratch voucher; profile validity applies on first successful login."
   }));
   const created=generated.vouchers;
@@ -451,7 +498,9 @@ async function createUser(req, res) {
       const normalized = normalizeProfileValidity(profileMeta.validityValue, profileMeta.validityUnit);
       validity = String(normalized.validity || "").trim();
       quota = Number(profileMeta.limitBytesTotal || normalized.limitBytesTotal || quota || 0);
-    } else {
+    } else if (quota <= 0) {
+      // A data package (quota > 0, no configured time validity) must never
+      // inherit a time validity from the router's session-timeout (F5).
       const routerTimeout = String(
         profileRow.sessionTimeout || profileRow["session-timeout"] || ""
       ).trim().toLowerCase();

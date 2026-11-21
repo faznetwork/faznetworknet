@@ -118,9 +118,12 @@ test('issuance uses one transaction client for the canonical generator, item map
   const eligibilitySql = mock.statements.find(entry => entry.sql.includes('FROM public.pops p'))?.sql || '';
   assert.match(eligibilitySql, /pkg\.is_active=TRUE/);
   assert.match(eligibilitySql, /pkg\.validity_seconds/);
+  assert.match(eligibilitySql, /pkg\.data_limit_bytes/);
   assert.match(eligibilitySql, /to_jsonb\(b\)->>'status'/);
   assert.match(eligibilitySql, /to_jsonb\(b\)->>'is_active'/);
   assert.doesNotMatch(eligibilitySql, /pkg\.(?:validity|status|time_limit|data_limit)(?![a-z_])/);
+  assert.equal(mock.generated[0].dataLimit, '');
+  assert.equal(mock.generated[0].validity, '2 hours');
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_batches')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('INSERT INTO public.reseller_voucher_issuance_items')));
   assert.ok(mock.statements.some(entry => entry.sql.startsWith('UPDATE public.reseller_billing_accounts')));
@@ -579,4 +582,26 @@ test('schema reconciliation migration is forward-only and preserves append-only 
   assert.match(migration, /trg_reseller_ledger_no_update/);
   assert.doesNotMatch(migration, /\\bDROP\\s+(TABLE|COLUMN)\\b/i);
   assert.doesNotMatch(migration, /\\b(DELETE FROM|TRUNCATE)\\b/i);
+});
+
+test('data package issuance stores the byte quota and no time validity on the vouchers', async t => {
+  const mock = installIssueMocks(t, {
+    eligible: {
+      validity_seconds: 0,
+      data_limit_bytes: 1073741824,
+      profile_key: '1GB',
+      package_name: '1GB',
+      retail_price: '10.00',
+      wholesale_price: '7.00'
+    }
+  });
+  const result = await issuance.issueBatch(validInput);
+
+  assert.equal(result.replayed, false);
+  assert.equal(result.vouchers.length, 1);
+  assert.equal(mock.generated.length, 1);
+  assert.equal(mock.generated[0].profileName, '1GB');
+  assert.equal(mock.generated[0].validity, '');
+  assert.equal(mock.generated[0].timeLimit, '');
+  assert.equal(mock.generated[0].dataLimit, '1073741824');
 });

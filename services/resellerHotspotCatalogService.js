@@ -41,7 +41,7 @@ function packageFromRow(row) {
     validity: formatValiditySeconds(row.validity_seconds),
     validitySeconds: String(row.validity_seconds),
     timeLimit: BigInt(row.validity_seconds || 0) > 0n ? String(row.validity_seconds) + 's' : null,
-    dataLimit: null,
+    dataLimit: row.data_limit_bytes != null ? String(row.data_limit_bytes) : null,
     retailPrice,
     wholesalePrice,
     expectedMargin: moneyFromCents(moneyCents(retailPrice) - moneyCents(wholesalePrice))
@@ -104,7 +104,7 @@ async function getCatalog(resellerIdValue) {
     }
 
     const readPackages = async () => client.query(
-      `SELECT id, pop_id, package_name, profile_key, validity_seconds,
+      `SELECT id, pop_id, package_name, profile_key, validity_seconds, data_limit_bytes,
               retail_price, wholesale_price, is_active
        FROM public.pop_hotspot_packages
        WHERE pop_id = ANY($1::integer[])
@@ -120,7 +120,9 @@ async function getCatalog(resellerIdValue) {
     }
 
     // Core metadata is the sole source for initial POP package materialization.
-    // Existing POP rows (including inactive rows and price overrides) are never overwritten.
+    // Materialization runs only for a POP with no package rows yet; the sync
+    // itself keeps price, validity, quota and active state in sync with the
+    // core profile (see resellerHotspotPackageSyncService).
     for (const pop of pops) {
       if (!pop.bindingConfigured || (packageRowsByPopId.get(String(pop.id)) || []).length) continue;
       const syncResult = await syncPopPackages(client, pop.id);

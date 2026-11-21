@@ -51,10 +51,15 @@ function cleanMetadata(value){try{const parsed=JSON.parse(value||"{}");return pa
 function getPackageDuration(row,metadata,profile){
   let validity=String(row.validity||row.time_limit||"").trim();
   let ms=durationMs(validity);
+  // Quota first: a GB/data package is data-only and its time duration is
+  // always zero. The RouterOS session-timeout fallback below must never run
+  // for a data package — that fallback is what stamped a hidden ~48h expiry
+  // on 1GB vouchers (F5) when a router profile carried a session-timeout.
   let quota=parseQuota(row.data_limit)||Number(metadata.limitBytesTotal)||0;
   if(!ms&&metadata.validityValue&&metadata.validityUnit){
     try{const normalized=normalizeProfileValidity(metadata.validityValue,metadata.validityUnit);validity=String(normalized.validity||"").trim();ms=durationMs(validity);quota=quota||Number(normalized.limitBytesTotal)||0;}catch(_){}
   }
+  if(!ms&&quota>0)return {validity:"",duration:0,quota:Math.max(0,Number(quota)||0)};
   if(!ms&&!validity){
     const timeout=String(profile?.sessionTimeout||profile?.["session-timeout"]||"").trim();
     if(timeout&&timeout.toLowerCase()!=="none"){
@@ -154,18 +159,23 @@ async function activate(req,res){
       const profileMeta=metadata[String(profile.name||"")]||{};
       const packageInfo=getPackageDuration(row,profileMeta,profile);
       if(!packageInfo.duration&&!packageInfo.quota)throw makeError("PROFILE_INVALID",409,"This Hotspot package has no valid time duration or data quota.");
+      // A data-only package has no time expiry, ever — even when the row
+      // still carries a stale saved expires_at from before the F5 fix.
+      const isDataOnly=!packageInfo.duration&&packageInfo.quota>0;
       const now=new Date();
       let firstLoginAt=null,expiresAt=null;
       if(status==="active"){
-        expiresAt=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
-        if(!expiresAt&&row.first_login_at&&packageInfo.duration)expiresAt=new Date(new Date(row.first_login_at).getTime()+packageInfo.duration);
+        if(!isDataOnly){
+          expiresAt=parseSavedExpiry(row.expires_at)||parseCommentExpiry(row.comment);
+          if(!expiresAt&&row.first_login_at&&packageInfo.duration)expiresAt=new Date(new Date(row.first_login_at).getTime()+packageInfo.duration);
+        }
         if(packageInfo.duration&&!expiresAt)throw makeError("EXPIRY_NOT_RECORDED",409,"This existing active account has no reliable saved expiry. Contact support; validity will not be reset automatically.");
         if(expiresAt&&Number.isNaN(expiresAt.getTime()))throw makeError("EXPIRY_NOT_RECORDED",409,"The saved expiry is invalid. Contact support.");
         if(expiresAt&&expiresAt.getTime()<=now.getTime())throw makeError("PACKAGE_EXPIRED",410,"This Hotspot package has expired. Purchase a new package to continue.");
         firstLoginAt=row.first_login_at?new Date(row.first_login_at):(expiresAt&&packageInfo.duration?new Date(expiresAt.getTime()-packageInfo.duration):now);
       }else{
         firstLoginAt=now;
-        expiresAt=packageInfo.duration?new Date(now.getTime()+packageInfo.duration):parseSavedExpiry(row.expires_at);
+        expiresAt=isDataOnly?null:(packageInfo.duration?new Date(now.getTime()+packageInfo.duration):parseSavedExpiry(row.expires_at));
         if(expiresAt&&Number.isNaN(expiresAt.getTime()))throw makeError("EXPIRY_NOT_RECORDED",409,"The saved expiry is invalid. Contact support.");
       }
       if(firstLoginAt&&Number.isNaN(firstLoginAt.getTime()))throw makeError("INVALID_ACTIVATION_TIME",500,"Could not determine the account activation time.");
@@ -270,4 +280,4 @@ async function claimVoucher(req,res){
     return fail(error.statusCode||500,error.code||"VOUCHER_CLAIM_FAILED",error.message||"Unable to claim this voucher.");
   }
 }
-module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac};
+module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac,getPackageDuration};

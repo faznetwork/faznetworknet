@@ -19,13 +19,15 @@ test('catalog automatically materializes core profiles only for an active Hotspo
       if (sql.includes('FROM public.pop_hotspot_packages')) return { rows: packageRows };
       if (sql.includes("key='hotspot_profile_metadata'")) return { rows: [{ value: JSON.stringify({
         '30-Day': { price: 150, validityValue: 30, validityUnit: 'days', validityLabel: '30-Day' },
-        '12-Hour': { price: 40, validityValue: 12, validityUnit: 'hours', validityLabel: '12-Hour' }
+        '12-Hour': { price: 40, validityValue: 12, validityUnit: 'hours', validityLabel: '12-Hour' },
+        '1GB': { price: 10, validityValue: 1, validityUnit: 'gb', validityLabel: '1 GB', limitBytesTotal: 1073741824 }
       }) }] };
+      if (sql.startsWith('UPDATE public.pop_hotspot_packages')) return { rowCount: 0, rows: [] };
       if (sql.includes('INSERT INTO public.pop_hotspot_packages')) {
         const row = {
           id: String(100 + packageRows.length), pop_id: values[0], package_name: values[1],
-          profile_key: values[2], validity_seconds: values[3], retail_price: values[4],
-          wholesale_price: values[4], is_active: true
+          profile_key: values[2], validity_seconds: values[3], data_limit_bytes: values[4],
+          retail_price: values[5], wholesale_price: values[6], is_active: true
         };
         packageRows = [...packageRows, row];
         return { rows: [{ id: row.id }], rowCount: 1 };
@@ -37,17 +39,25 @@ test('catalog automatically materializes core profiles only for an active Hotspo
 
   const result = await catalogService.getCatalog(41);
   assert.equal(result.pops[0].name, 'Kader');
-  assert.equal(result.pops[0].packages.length, 2);
-  assert.deepEqual(result.pops[0].packages.map(pkg => pkg.profileKey), ['30-Day', '12-Hour']);
+  assert.equal(result.pops[0].packages.length, 3);
+  assert.deepEqual(result.pops[0].packages.map(pkg => pkg.profileKey), ['30-Day', '12-Hour', '1GB']);
   assert.equal(result.pops[0].packages[0].validitySeconds, '2592000');
   assert.equal(result.pops[0].packages[0].retailPrice, '150.00');
-  assert.equal(result.pops[0].packages[0].wholesalePrice, '150.00');
+  assert.equal(result.pops[0].packages[0].wholesalePrice, '105.00');
+  assert.equal(result.pops[0].packages[0].dataLimit, '0');
+  assert.equal(result.pops[0].packages[2].validity, 'Data / quota package');
+  assert.equal(result.pops[0].packages[2].validitySeconds, '0');
+  assert.equal(result.pops[0].packages[2].timeLimit, null);
+  assert.equal(result.pops[0].packages[2].dataLimit, '1073741824');
+  assert.equal(result.pops[0].packages[2].retailPrice, '10.00');
   assert.equal(result.pops[0].issuanceReady, false);
   assert.equal(result.pops[0].readinessReason, 'IP_POOL_NOT_CONFIGURED');
   const insertSql = statements.find(entry => entry.sql.includes('INSERT INTO public.pop_hotspot_packages')).sql;
   assert.match(insertSql, /validity_seconds/);
+  assert.match(insertSql, /data_limit_bytes/);
   assert.match(insertSql, /is_active/);
-  assert.match(insertSql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
+  assert.match(insertSql, /ON CONFLICT \(pop_id,profile_key\) DO UPDATE SET/);
+  assert.doesNotMatch(insertSql, /ON CONFLICT \(pop_id,profile_key\) DO NOTHING/);
   assert.equal(statements.filter(entry => entry.sql.includes("key='hotspot_profile_metadata'")).length, 1);
 });
 
