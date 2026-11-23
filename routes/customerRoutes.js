@@ -36,10 +36,5 @@ router.post('/update',requireCustomerOwnership,(req,res)=>{req.params.id=String(
 router.post('/renew',requireCustomerOwnership,controller.renew);
 router.post('/mark-paid',requireCustomerOwnership,controller.markPaid);
 router.post('/delete',requireCustomerOwnership,requireExactDeleteUsername,controller.removeCustomer);
-router.post('/kick',requireCustomerOwnership,async(req,res)=>{
- const username=String(req.body?.username||'').trim();
- if(!username)return res.status(400).json({success:false,message:'Username is required.'});
- try{const result=await require('../services/mikrotikService').kickActiveUser(username);return res.json({success:true,message:result.kicked?'Active session disconnected. Client will re-dial.':'User is not currently online.',...result});}
- catch(error){console.error('[CUSTOMER KICK] Failed:',error.message);return res.status(503).json({success:false,message:error.message||'Unable to disconnect active session.'});}
-});
+router.post('/kick',requireCustomerOwnership,controller.kickActiveUserByUsername);
 module.exports=router;

@@ -1,5 +1,6 @@
 const mikrotikService = require("../services/mikrotikService");
 const db = require("../db");
+const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 
@@ -523,6 +524,12 @@ async function kickUser(req, res) {
     const username = clean(req.body.username, 100);
     if (!username) return res.status(400).json({ success: false, error: "Username is required." });
     const result = await mikrotikService.kickActiveUser(username);
+    if (result.kicked) {
+      const found = await db.query("SELECT id,router_id FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1", [username]);
+      const row = found.rows[0] || null;
+      console.info("[PPPOE KICK] " + username + " kicked by " + getAdminId(req) + " sessions=" + (result.count || 0));
+      await logAuditAction({ customerId: row?.id || null, adminId: getAdminId(req), action: "KICK", details: { message: "Customer PPPoE session force-disconnected from target MikroTik", username, routerId: row?.router_id ? String(row.router_id) : "", sessions: result.count || 0 }, ipAddress: getIpAddress(req) });
+    }
     res.json({ success: true, ...result });
   } catch (error) {
     return errorResponse(res, error);
