@@ -4,7 +4,6 @@ const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 const notificationDispatcher=require("../services/notificationDispatcher");
 const rateLimit=require("../services/hotspotAuthRateLimit");
-const claimOtpService=require("../services/hotspotClaimOtpService");
 const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
 
 function cleanCustomerName(value){
@@ -46,12 +45,11 @@ function dhakaTimestamp(value){
 }
 function makeError(code,statusCode,message){const error=new Error(message);error.code=code;error.statusCode=statusCode;return error;}
 // C1: verify the claim secret for an unbound pending_claim/unused package.
-// Accepts either the payment TrxID (must be THE transaction that staged
-// this voucher) or the OTP sent to the registered phone. Returns
-// {ok:true} or {ok:false, code, message}. No secret -> CLAIM_SECRET_REQUIRED.
+// TrxID-only: accepts only the payment TrxID (must be THE transaction that
+// staged this voucher). Returns {ok:true} or {ok:false, code, message}.
+// No secret -> CLAIM_SECRET_REQUIRED.
 async function verifyClaimSecret({client,row,phone,body}){
   const trxId=String(body?.trxId||body?.trx_id||body?.transaction_id||"").trim().toUpperCase();
-  const otp=String(body?.otp||body?.claim_code||body?.code||"").trim();
   if(trxId){
     try{
       const found=await client.query("SELECT id,status FROM transactions WHERE UPPER(TRIM(trx_id))=$1::text LIMIT 1",[trxId]);
@@ -61,14 +59,7 @@ async function verifyClaimSecret({client,row,phone,body}){
     }catch(_){/* fall through to invalid */}
     return {ok:false,code:"CLAIM_SECRET_INVALID",message:"The TrxID does not match this package's payment."};
   }
-  if(otp){
-    const result=await claimOtpService.verifyClaimOtp({phone:row.phone||phone,voucherId:row.id,code:otp,client});
-    if(result.ok)return {ok:true};
-    if(result.code==="OTP_LOCKED")return {ok:false,code:"OTP_LOCKED",message:"Too many wrong claim codes for this package. Request a new code later."};
-    if(result.code==="OTP_NOT_FOUND_OR_EXPIRED")return {ok:false,code:"OTP_NOT_FOUND_OR_EXPIRED",message:"No valid claim code was found for this package. Request a new code."};
-    return {ok:false,code:"OTP_INVALID",message:"The claim code is incorrect."};
-  }
-  return {ok:false,code:"CLAIM_SECRET_REQUIRED",message:"This package needs its payment TrxID or the claim code sent to the registered phone."};
+  return {ok:false,code:"CLAIM_SECRET_REQUIRED",message:"This package needs its payment TrxID."};
 }
 function cleanMetadata(value){try{const parsed=JSON.parse(value||"{}");return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:{};}catch(_){return {};}}
 function getPackageDuration(row,metadata,profile){
@@ -155,7 +146,7 @@ async function activate(req,res){
     // C2: a returning bound login must come from the device itself — the
     // MAC has to be visible on the network right now. Checked BEFORE any
     // binding or credential is returned. Skipped for the claim path
-    // (TrxID/OTP is the proof there) and for internal PIN claims.
+    // (TrxID is the proof there) and for internal PIN claims.
     if(req._hotspotInternalClaim!==true){
       const boundCheck=await db.query("SELECT mac_address,username,status FROM hotspot_vouchers WHERE (LOWER(COALESCE(mac_address,''))=LOWER($1::text) OR LOWER(username)=LOWER($1::text)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','active','unused') ORDER BY id DESC LIMIT 1",[mac]);
       const boundRow=boundCheck.rows?.[0];
@@ -275,7 +266,7 @@ async function activate(req,res){
     console.error("[Hotspot activation]",{code:error.code||"ACTIVATION_ERROR",message:error.message,mac,phone,routerSucceeded});
     // H6: a wrong claim secret counts toward the per-phone lockout
     // (5 failures -> 15 min lock).
-    if(phone&&["CLAIM_SECRET_INVALID","OTP_INVALID"].includes(error.code))rateLimit.recordFailure("phone:"+phone,{maxFailures:5,lockMs:15*60*1000});
+    if(phone&&error.code==="CLAIM_SECRET_INVALID")rateLimit.recordFailure("phone:"+phone,{maxFailures:5,lockMs:15*60*1000});
     return fail(error.statusCode||503,error.code||"ACTIVATION_ERROR",error.message||"Unable to activate this Hotspot account. Retry from the same device or contact support.");
   }
 }
@@ -357,32 +348,4 @@ async function claimVoucher(req,res){
   }
 }
 
-// POST /api/hotspot-auth/request-claim-otp — send a 6-digit claim code to
-// the registered phone of an unbound pending_claim package (C1). The
-// response is deliberately generic: it never reveals whether a package
-// exists for the number, and the code is never returned. The TrxID claim
-// path remains available when no code can be sent.
-async function requestClaimOtp(req,res){
-  const fail=(status,code,message)=>res.status(status).json({success:false,code,message});
-  const generic={success:true,message:"If a pending package exists for this number, a claim code was sent."};
-  const phone=normalizePhone(req.body?.phone||req.body?.account_phone||"");
-  if(!phone||!/^01\d{9}$/.test(phone))return fail(400,"INVALID_ACCOUNT_PHONE","Enter a valid 11-digit Bangladeshi phone number.");
-  // H6: phone 3/hour + IP 10/hour.
-  const ipLimit=rateLimit.checkLimit({keys:["ip:"+(req.ip||"unknown")],limit:10,windowMs:60*60*1000});
-  if(!ipLimit.allowed)return fail(429,"RATE_LIMITED","Too many code requests. Try again later.");
-  const phoneLimit=rateLimit.checkLimit({keys:["claimotp-phone:"+phone],limit:3,windowMs:60*60*1000});
-  if(!phoneLimit.allowed)return fail(429,"RATE_LIMITED","Too many code requests for this phone number. Try again later.");
-  try{
-    const found=await db.query("SELECT id,phone,mac_address,username FROM hotspot_vouchers WHERE REGEXP_REPLACE(COALESCE(phone,''),'[^0-9]','','g') IN ($1::text,'880'||SUBSTRING($1::text FROM 2)) AND LOWER(COALESCE(status,'')) IN ('pending_claim','unused') ORDER BY id DESC LIMIT 1",[phone]);
-    const row=found.rows?.[0];
-    if(!row)return res.json(generic);
-    if(getKnownMac(row))return res.json(generic); // already bound — no code needed, no oracle
-    const result=await claimOtpService.requestClaimOtp({phone:row.phone||phone,voucherId:row.id});
-    if(!result.sent)console.warn("[Hotspot claim OTP] Could not send claim code for voucher "+row.id+": "+(result.reason||"unknown"));
-    return res.json(generic);
-  }catch(error){
-    console.error("[Hotspot claim OTP] Request failed:",error.message);
-    return res.json(generic);
-  }
-}
-module.exports={activate,claimVoucher,deviceLookup,requestClaimOtp,normalizePhone,normalizeMac,getPackageDuration};
+module.exports={activate,claimVoucher,deviceLookup,normalizePhone,normalizeMac,getPackageDuration};

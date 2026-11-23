@@ -1,102 +1,642 @@
 <!doctype html>
-<% const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{}; const brandName=String(brand.company_name||"FAZ NETWORK"); %>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><%= brandName %> Hotspot</title><% if(brand.favicon_url){ %><link rel="icon" href="<%= brand.favicon_url %>"><% } %><script src="https://cdn.tailwindcss.com"></script><style>body{background:radial-gradient(circle at top,#ecfdf5,#f8fafc 48%,#f1f5f9);font-family:system-ui,sans-serif}.glass{background:rgba(255,255,255,.9);backdrop-filter:blur(12px)}.tab.active{background:#047857;color:#fff}.pkg{transition:.18s}.pkg:hover{transform:translateY(-3px);box-shadow:0 12px 25px rgba(6,95,70,.12)}</style></head>
-<body class="min-h-screen text-slate-800"><main class="max-w-3xl mx-auto px-4 py-6">
-<header class="text-center mb-5"><% if(brand.logo_url){ %><img src="<%= brand.logo_url %>" alt="<%= brandName %>" class="mx-auto mb-2 max-h-16 max-w-48 object-contain"><% } else { %><div class="text-4xl">☪️</div><% } %><h1 class="text-3xl font-black text-emerald-800"><%= brandName %></h1><p class="text-sm text-slate-500">Islamic-themed Hotspot Portal • Fast &amp; Secure Internet</p></header>
-<section class="glass rounded-3xl border border-emerald-100 shadow-xl p-5">
-<div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4"><p class="text-xs font-bold uppercase tracking-widest text-emerald-700 text-center">Personal MFS Send Money Accounts</p><div id="portal-mfs" class="grid grid-cols-2 gap-3 mt-3"><p class="col-span-2 text-center text-sm text-slate-500">Loading payment accounts…</p></div><p class="text-xs text-slate-500 text-center mt-3">Send the exact package amount, then enter your TrxID. Phone number is optional. Device MAC is bound on first Wi-Fi login; username and password will both be that MAC.</p></div>
-<div class="grid grid-cols-2 gap-2 mt-5"><button class="tab active rounded-xl px-4 py-3 font-bold" data-tab="voucher">🎟️ Voucher</button><button class="tab rounded-xl px-4 py-3 font-bold bg-slate-100" data-tab="recharge">💳 Recharge</button></div>
-<section id="voucher" class="mt-5"><div id="portal-packages" class="grid grid-cols-2 sm:grid-cols-3 gap-3"><p class="col-span-full text-center text-sm text-slate-500">Loading Hotspot packages…</p></div><div class="mt-4 rounded-2xl border p-4 space-y-3"><p class="text-sm font-bold">Voucher PIN Login</p><div><label for="voucher-pin" class="text-sm font-bold">Voucher PIN</label><input id="voucher-pin" type="text" autocomplete="off" autocapitalize="characters" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="ভাউচার PIN"></div><div><label for="voucher-password" class="text-sm font-bold">Voucher Password</label><input id="voucher-password" type="password" autocomplete="current-password" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="ভাউচার পাসওয়ার্ড"></div><div><label for="voucher-phone" class="text-sm font-bold">Customer Phone Number (optional)</label><input id="voucher-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="01712345678"></div><div><label for="voucher-name" class="text-sm font-bold">Your Name (optional)</label><input id="voucher-name" type="text" autocomplete="name" maxlength="120" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="আপনার নাম"></div><button type="button" id="voucher-claim-submit" class="w-full rounded-xl bg-emerald-700 text-white py-3 font-black">Claim &amp; Login</button></div></section>
-<section id="recharge" class="hidden mt-5"><form id="verify-form" class="space-y-4"><p class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">পেমেন্ট যাচাই হওয়ার পর Wi-Fi-তে সংযোগ দিয়ে captive login পেজে একই ফোন নম্বর দিন। প্রথম login-এ ডিভাইসের MAC স্বয়ংক্রিয়ভাবে bind হবে।</p><div><label class="text-sm font-bold">Customer Phone Number (optional)</label><input id="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="01712345678"></div><div><label class="text-sm font-bold">Your Name (optional)</label><input id="customer-name" type="text" autocomplete="name" maxlength="120" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="আপনার নাম"></div><div><label class="text-sm font-bold">TrxID / TxnID</label><input id="trx" required class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="e.g. 8A7B6C5D"></div><div><label class="text-sm font-bold">Selected package</label><input id="amount" readonly class="mt-1 w-full rounded-xl border px-4 py-3 bg-slate-50" placeholder="Choose a package first"></div><button class="w-full rounded-xl bg-emerald-700 text-white py-3 font-black">Verify Payment &amp; Save Package</button></form></section>
-<section id="existing-login" class="mt-5"><div class="rounded-2xl border p-4 space-y-3"><p class="text-sm font-bold">Existing Customer Login</p><p class="text-xs text-slate-500">আগের গ্রাহক লগইন</p><div id="existing-login-form" class="space-y-3"><div><label class="text-sm font-bold">Customer Phone Number (optional)</label><input id="existing-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="01712345678"></div><div><label class="text-sm font-bold">Your Name (optional)</label><input id="existing-name" type="text" autocomplete="name" maxlength="120" class="mt-1 w-full rounded-xl border px-4 py-3" placeholder="আপনার নাম"></div><button type="button" id="existing-login-submit" class="w-full rounded-xl bg-emerald-700 text-white py-3 font-black">Login</button></div></div></section>
-<div id="claim-code-box" class="hidden mt-4 rounded-2xl border p-4 space-y-3"><p class="text-sm font-bold">এই প্যাকেজটি claim করতে claim code লাগবে। আপনার রেজিস্টার্ড ফোন নম্বরে কোড পাঠানো যাবে।</p><div class="flex gap-2"><input id="claim-code" type="text" inputmode="numeric" maxlength="6" class="w-full rounded-xl border px-4 py-3" placeholder="6-digit code"><button type="button" id="claim-code-send" class="rounded-xl border px-4 py-3 font-bold whitespace-nowrap">Send code</button></div><button type="button" id="claim-code-submit" class="w-full rounded-xl bg-emerald-700 text-white py-3 font-black">Claim with code</button></div><div id="result" class="hidden mt-4 rounded-2xl p-4"></div>
-</section></main>
+<% const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{}; const brandName=String(brand.company_name||"FAZ NETWORK"); const supportPhone=String(brand.support_phone||"01339932887"); %>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><%= brandName %> Hotspot</title><% if(brand.favicon_url){ %><link rel="icon" href="<%= brand.favicon_url %>"><% } %><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fff;color:#111827;font-size:15px;line-height:1.5}
+.hidden{display:none!important}
+.wrap{max-width:480px;margin:0 auto;overflow:hidden}
+.banner{line-height:0}
+.banner img{display:block;width:100%;height:auto}
+.notice-bar{padding:11px 14px;background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;font-size:13px;text-align:center}
+/* 1. customer-care banner */
+.care{display:flex;min-height:86px}
+.care .left{flex:1;background:#fff8e6;padding:12px;display:flex;align-items:center;gap:10px;min-width:0}
+.care .logo{width:44px;height:44px;border-radius:10px;background:#1d4ed8;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex:none;overflow:hidden}
+.care .logo img{width:100%;height:100%;object-fit:contain;background:#fff;display:block}
+.care .logo:has(img) #brand-logo-fn{display:none}
+.care .left b{font-size:15px;color:#1d4ed8}
+.care .left p{font-size:11px;color:#444;margin-top:2px;line-height:1.4}
+.care .right{background:#1d4ed8;color:#fff;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;flex:none;min-width:132px;text-decoration:none}
+.care .right small{font-size:11px;opacity:.9}
+.care .right b{font-size:16px;letter-spacing:.02em}
+/* 2. ticker */
+.ticker{background:#dc2626;color:#fff;overflow:hidden;white-space:nowrap;padding:6px 0;font-size:13px;font-weight:700}
+.ticker span{display:inline-block;padding-left:100%;animation:tick 14s linear infinite}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+/* 3. hero */
+.hero{background:linear-gradient(135deg,#dbeafe 0%,#bfdbfe 55%,#93c5fd 100%);padding:18px 16px 20px;position:relative;overflow:hidden}
+.hero .sw{position:absolute;right:-70px;top:-40px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.45);pointer-events:none}
+.hero .sw2{position:absolute;right:30px;bottom:-90px;width:220px;height:220px;border-radius:50%;background:rgba(29,78,216,.12);pointer-events:none}
+.status-pill{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(255,255,255,.9);border:1px solid #fff;color:#1e3a8a;position:relative}
+.status-pill::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+.status-pill.ok{background:#dcfce7;border-color:#86efac;color:#065f46}
+.status-pill.ok::before{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.2)}
+.status-pill.warn{background:#fef3c7;border-color:#fde68a;color:#92400e}
+.status-pill.warn::before{background:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.2)}
+.status-pill.bad{background:#fee2e2;border-color:#fecaca;color:#b91c1c}
+.status-pill.bad::before{background:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.2)}
+.hero h2{font-size:24px;line-height:1.25;color:#1e3a8a;font-weight:900;position:relative;margin-top:14px}
+.hero h2 svg{vertical-align:-2px}
+.hero .price{display:inline-block;background:#f97316;color:#fff;font-weight:900;font-size:15px;border-radius:999px;padding:7px 16px;margin-top:12px;position:relative;box-shadow:0 6px 14px rgba(249,115,22,.4)}
+.hero .pay{display:flex;gap:8px;margin-top:12px;align-items:center;position:relative;flex-wrap:wrap}
+.hero .pay small{font-weight:800;color:#1e3a8a;font-size:12px}
+.hero .pay i{font-style:normal;font-weight:900;font-size:12px;border-radius:999px;padding:5px 10px;color:#fff}
+.hero .speed{position:relative;margin-top:14px;background:rgba(255,255,255,.75);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.hero .speed svg{flex:none}
+.hero .speed b{font-size:15px;color:#1e3a8a}
+.hero .speed p{font-size:12px;color:#444;margin-top:2px}
+/* 4. login ribbon */
+.ribbon{background:#1d4ed8;color:#fff;padding:12px 16px;font-size:17px;font-weight:900;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ribbon .tab{background:#f97316;font-size:11px;font-weight:800;border-radius:999px;padding:6px 10px;white-space:nowrap}
+/* 5. login pills */
+.login{padding:16px 16px 6px}
+.pill{display:flex;border-radius:999px;overflow:hidden;background:#eef1f5;margin-bottom:12px}
+.pill input{flex:1;border:0;background:transparent;padding:16px 18px;font-size:16px;font-family:inherit;outline:none;min-width:0}
+.pill input::placeholder{color:#8a94a6}
+.pill .go{border:0;background:#16a34a;color:#fff;font-weight:900;font-size:17px;padding:0 26px;cursor:pointer;font-family:inherit;flex:none}
+.pill .go:disabled{opacity:.6;cursor:wait}
+.pill.single input{text-align:left}
+.qr-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1.5px solid #a7f3d0;background:#f0fdf4;color:#065f46;border-radius:999px;padding:0 16px;min-height:48px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:12px}
+.claim-box{border:1px solid #fde68a;background:#fffbeb;border-radius:18px;padding:16px;margin-top:4px;margin-bottom:12px}
+.claim-box h2{margin:0;font-size:16px;font-weight:800}
+.claim-box .helper{margin:6px 0 0;font-size:13px;color:#64748b}
+.claim-box .field{margin-top:14px}
+.claim-box .field label{display:block;font-size:13px;font-weight:700;margin-bottom:2px}
+.claim-box .field label .opt{color:#64748b;font-weight:400}
+.claim-box .field input{width:100%;font-size:16px;padding:11px 2px;min-height:48px;border:0;border-bottom:2px solid #cbd5e1;border-radius:0;background:transparent;font-family:inherit}
+.claim-box .field input:focus{outline:none;border-bottom-color:#1d4ed8}
+.claim-box .btn{display:block;width:100%;min-height:52px;border:0;border-radius:999px;font-size:16px;font-weight:800;font-family:inherit;cursor:pointer;padding:12px 18px;text-align:center;background:#16a34a;color:#fff;margin-top:16px}
+.claim-box .btn:disabled{opacity:.6;cursor:wait}
+#result{margin-top:4px;margin-bottom:8px;border-radius:14px;padding:12px 14px;font-size:14px}
+#result:empty{display:none}
+.msg-ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.msg-err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.msg-info{background:#f1f5f9;color:#334155;border:1px solid #e2e8f0}
+.msg-warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+/* 6. alternative services */
+.alt{padding:10px 16px 4px}
+.alt h3{font-size:19px;font-weight:900}
+.icons{display:flex;gap:14px;margin:14px 0 6px;overflow-x:auto;padding-bottom:6px}
+.icobtn{flex:none;width:74px;text-align:center;cursor:pointer;background:none;border:0;font-family:inherit;text-decoration:none}
+.icobtn .c{width:64px;height:64px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 16px rgba(29,78,216,.3)}
+.icobtn .c.b{background:linear-gradient(135deg,#3b82f6,#1d4ed8)}
+.icobtn .c.g{background:linear-gradient(135deg,#22c55e,#15803d)}
+.icobtn .c.o{background:linear-gradient(135deg,#fb923c,#ea580c)}
+.icobtn small{display:block;margin-top:6px;font-size:12px;font-weight:800;color:#111827}
+.icobtn.on .c{outline:3px solid #f97316;outline-offset:2px}
+/* 7. promo carousel */
+.promo{margin:12px 16px 0;border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(20,40,80,.18)}
+.promo .slide{display:none;padding:20px 18px;min-height:170px;color:#fff;position:relative;background-size:cover;background-position:center}
+.promo .slide.on{display:block}
+.promo .s1{background-image:linear-gradient(rgba(10,30,90,.62),rgba(10,30,90,.78)),url('/img/portal/photo-gaming-s.jpg')}
+.promo .s2{background:linear-gradient(135deg,#065f46,#10b981)}
+.promo .s3{background:linear-gradient(135deg,#7c2d12,#f97316)}
+.promo .s4{background-image:linear-gradient(rgba(6,60,25,.55),rgba(6,60,25,.75)),url('/img/portal/photo-football-s.jpg')}
+.promo h4{font-size:20px;line-height:1.3;font-weight:900}
+.promo p{font-size:13px;margin-top:8px;opacity:.95;line-height:1.5}
+.promo .tag{display:inline-block;background:rgba(255,255,255,.25);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800;margin-top:10px}
+.promo .foot{background:#1e3a8a;color:#fff;text-align:center;font-size:12px;font-weight:700;padding:8px}
+.dots{text-align:center;padding:8px 0 2px}
+.dots i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#cbd5e1;margin:0 3px}
+.dots i.on{background:#1d4ed8}
+/* 8. packages */
+.pkgs{padding:14px 16px 4px}
+.pkgs h3{font-size:19px;font-weight:900}
+.pkgs .hint{font-size:12px;color:#64748b;margin:4px 0 10px}
+.group-label{display:flex;align-items:center;gap:10px;margin:14px 0 4px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b}
+.group-label::after{content:"";flex:1;height:1px;background:#e2e8f0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{border-radius:14px;padding:14px 12px;color:#fff;cursor:pointer;position:relative;box-shadow:0 6px 14px rgba(20,40,80,.18);border:0;text-align:left;font-family:inherit}
+.tile b{font-size:16px}
+.tile span{display:block;font-size:11px;opacity:.92;margin-top:3px}
+.tile .pr{font-size:20px;font-weight:900;margin-top:8px}
+.tile.t1{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.tile.t2{background:linear-gradient(135deg,#ea580c,#fb923c)}
+.tile.t3{background:linear-gradient(135deg,#15803d,#22c55e)}
+.tile.t4{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
+.tile.selected{outline:3px solid #111827;outline-offset:2px}
+.sel-line{font-size:13px;font-weight:800;color:#1d4ed8;margin:10px 2px 0}
+/* 9. payment */
+.paysec{padding:14px 16px 4px}
+.paysec h3{font-size:19px;font-weight:900}
+.payrow{display:flex;gap:10px;margin-top:12px}
+.paybtn{flex:1;border:0;border-radius:14px;padding:15px 8px;cursor:pointer;font-family:inherit;color:#fff}
+.paybtn .ic{font-size:18px;font-weight:900}
+.paybtn small{display:block;font-size:11px;opacity:.92;margin-top:3px}
+.paybtn.sel{outline:3px solid #111827;outline-offset:2px}
+.paypanel{margin-top:14px;border:2px solid #1d4ed8;border-radius:14px;padding:15px;background:#eff6ff}
+.paypanel .mname{font-size:15px;font-weight:800}
+.paypanel .mname i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.paypanel .num{font-size:23px;font-weight:900;margin:8px 0 2px}
+.paypanel .num .copybtn{vertical-align:middle}
+.copybtn{border:1.5px solid #1d4ed8;background:#fff;color:#1d4ed8;border-radius:999px;padding:6px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.paypanel label{display:block;font-size:12px;font-weight:800;margin:12px 0 6px}
+.paypanel input{width:100%;border:1.5px solid #cbd5e1;border-radius:12px;padding:13px 14px;font-size:16px;font-family:inherit;outline:none;background:#fff}
+.paypanel input:focus{border-color:#1d4ed8}
+.paypanel input[readonly]{border:0;background:transparent;padding:0;font-weight:800;color:#1e3a8a;font-size:15px}
+.paypanel .cta{width:100%;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:900;color:#fff;background:#16a34a;cursor:pointer;margin-top:16px;font-family:inherit}
+.paypanel .cta:disabled{opacity:.6;cursor:wait}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;vertical-align:-3px;margin-right:8px;animation:spin .7s linear infinite}
+.paypanel .cta .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;vertical-align:-3px;margin-right:8px;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#receipt-card{margin-top:16px;border:1.5px dashed #6ee7b7;border-radius:18px;padding:14px 16px;background:#f0fdf4}
+#receipt-card h2{margin:0 0 4px;font-size:15px;font-weight:800}
+.receipt-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #dcfce7;font-size:14px}
+.receipt-row:last-of-type{border-bottom:0}
+.receipt-row span{color:#64748b}
+.receipt-status{margin:10px 0 0;font-size:13px;font-weight:700}
+/* 10. bottom */
+.strip{background:#1d4ed8;color:#fff;text-align:center;font-size:13px;font-weight:700;line-height:1.6;padding:12px 16px;margin-top:18px}
+.ficons{display:flex;justify-content:center;gap:16px;padding:16px 0 22px}
+.ficons a{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none}
+.ficons .wa{background:#25d366}.ficons .ph{background:#1d4ed8}
+.footer{text-align:center;font-size:12px;color:#64748b;margin-top:0;padding:0 16px 22px}
+.qr-modal{position:fixed;inset:0;background:rgba(15,23,42,.75);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.qr-modal-card{background:#fff;border-radius:20px;padding:16px;width:100%;max-width:420px;text-align:center}
+.qr-modal-card video{display:block;width:100%;max-height:52vh;object-fit:cover;border-radius:12px;background:#020617;margin-top:10px}
+.qr-modal-card p{font-size:13px;color:#64748b;margin:10px 0}
+.qr-modal-card .btn{display:block;width:100%;min-height:52px;border:0;border-radius:999px;font-size:16px;font-weight:800;font-family:inherit;cursor:pointer;padding:12px 18px;text-align:center}
+.qr-modal-card .btn-primary{background:#16a34a;color:#fff}
+.qr-modal-card .btn-secondary{background:#fff;color:#065f46;border:1.5px solid #a7f3d0}
+.qr-modal-card .btn:disabled{opacity:.6;cursor:wait}
+</style></head>
+<body><main class="wrap">
+<div id="banner-area" class="banner hidden"><picture><source id="banner-mobile-src" media="(max-width: 767px)"><img id="banner-img" alt=""></picture></div>
+<div id="custom-html-area" class="hidden"></div>
+<div class="care">
+<div class="left"><div class="logo" id="brand-logo-slot"><span id="brand-logo-fn">FN</span><% if(brand.logo_url){ %><img id="brand-logo-img" src="<%= brand.logo_url %>" alt="<%= brandName %>" onerror="this.style.display='none';document.getElementById('brand-logo-fn').style.display='';"><% } %></div><div><b id="brand-title"><%= brandName %></b><p id="brand-subtitle">স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন</p></div></div>
+<a class="right" id="helpline-call" href="tel:<%= supportPhone %>"><small>কাস্টমার কেয়ার</small><b id="helpline-number"><%= supportPhone %></b></a>
+</div>
+<div class="ticker"><span>FAZ NETWORK &nbsp;•&nbsp; স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন &nbsp;•&nbsp; 1GB মাত্র ৳10 — ডেটা কোটা only, মেয়াদ নেই &nbsp;•&nbsp; FAZ NETWORK &nbsp;•&nbsp; স্বয়ংক্রিয় হাই-স্পিড হটস্পট জোন &nbsp;•&nbsp;</span></div>
+<div class="hero">
+<div class="sw"></div><div class="sw2"></div>
+<div id="status-pill" class="status-pill" aria-live="polite">যাচাই হচ্ছে…</div>
+<h2><svg viewBox="0 0 24 24" width="22" height="22" fill="#dc2626" aria-hidden="true"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg> চলে আসুন<br>সব চেয়ে দ্রুত গতির<br>সেরা ইন্টারনেট</h2>
+<div class="price" id="hero-price">৩০ দিন &nbsp;৳১৫০</div>
+<div class="pay hidden" id="hero-pay"><small>পেমেন্ট করুন</small><span id="hero-pay-pills"></span></div>
+<div class="speed">
+<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#dbeafe" stroke-width="7"/><path d="M32 6 A26 26 0 0 1 58 32" fill="none" stroke="#7c3aed" stroke-width="7" stroke-linecap="round"/><text x="32" y="36" text-anchor="middle" font-size="13" font-weight="900" fill="#1e3a8a">100</text><text x="32" y="48" text-anchor="middle" font-size="8" fill="#64748b">Mbps</text></svg>
+<div><b>Wi-Fi 6 · সুপার ফাস্ট</b><p>গেমিং, স্ট্রিমিং, পড়ালেখা — সব বাফার ফ্রি</p></div>
+</div>
+</div>
+<div id="notice-bar" class="notice-bar hidden" role="status"></div>
+<div class="ribbon"><span>আপনার ফোন নাম্বারটি দিন</span><span class="tab">তারপর প্রবেশ বাটনে ক্লিক করুন</span></div>
+<div class="login">
+<div id="existing-login-form">
+<div class="pill single"><input id="existing-name" type="text" autocomplete="name" maxlength="120" required placeholder="আপনার নাম"></div>
+<div class="pill"><input id="existing-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" required placeholder="মোবাইল নাম্বার"><button type="button" id="existing-login-submit" class="go">প্রবেশ</button></div>
+</div>
+<div id="voucher-login-form" class="hidden">
+<div class="pill single"><input id="voucher-pin" type="text" autocomplete="off" autocapitalize="characters" placeholder="ভাউচার PIN"></div>
+<div class="pill single"><input id="voucher-password" type="password" autocomplete="current-password" placeholder="ভাউচার পাসওয়ার্ড"></div>
+<div class="pill single"><input id="voucher-name" type="text" autocomplete="name" maxlength="120" required placeholder="আপনার নাম"></div>
+<div class="pill"><input id="voucher-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" required placeholder="মোবাইল নাম্বার"><button type="button" id="voucher-claim-submit" class="go">প্রবেশ</button></div>
+<button type="button" id="qr-scan-button" class="qr-btn"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3zM5 5v4h4V5zM13 3h8v8h-8zM15 5v4h4V5zM3 13h8v8H3zM5 15v4h4v-4zM13 13h4v4h-4zM19 13h2v2h-2zM13 19h4v2h-4zM19 19h2v2h-2z"/></svg>Scan QR</button>
+</div>
+<div id="claim-code-box" class="hidden"><div class="claim-box"><h2>প্যাকেজ Claim করুন</h2><p class="helper">এই প্যাকেজটি claim করতে পেমেন্টের TrxID দিন। TrxID পাবেন bKash / Nagad পেমেন্টের SMS-এ। TrxID হারিয়ে গেলে হেল্পলাইন 01339932887-এ যোগাযোগ করুন।</p><div class="field"><label for="claim-phone">ফোন নম্বর <span class="opt">(আবশ্যক)</span></label><input id="claim-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" required placeholder="01712345678"></div><div class="field"><label for="claim-name">আপনার নাম <span class="opt">(আবশ্যক)</span></label><input id="claim-name" type="text" autocomplete="name" maxlength="120" required placeholder="আপনার নাম"></div><div class="field"><label for="claim-code">Payment TrxID</label><input id="claim-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="যেমন: 8A7B6C5D"></div><div class="field"><button type="button" id="claim-code-submit" class="btn">Claim &amp; Login</button></div></div></div>
+<div id="result" aria-live="polite"></div>
+</div>
+<div class="alt">
+<h3>বিকল্প সার্ভিস!</h3>
+<div class="icons">
+<button type="button" class="icobtn tab-btn" data-tab="buy"><span class="c b"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span><small>কিনুন</small></button>
+<button type="button" class="icobtn tab-btn on" data-tab="existing"><span class="c b"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><small>ইউজার</small></button>
+<button type="button" class="icobtn tab-btn" data-tab="voucher"><span class="c o"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg></span><small>ভাউচার</small></button>
+<button type="button" class="icobtn tab-btn" data-tab="voucher" data-scan="1"><span class="c g"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3zM5 5v4h4V5zM13 3h8v8h-8zM15 5v4h4V5zM3 13h8v8H3zM5 15v4h4v-4zM13 13h4v4h-4zM19 13h2v2h-2zM13 19h4v2h-4zM19 19h2v2h-2z"/></svg></span><small>SCAN</small></button>
+</div>
+</div>
+<div class="promo">
+<div class="slide s1 on"><h4>সুপার ফাস্ট ইন্টারনেট<br>পাবজি গেমিং — বাফার ফ্রি</h4><p>Wi-Fi 6 · লো পিং · গেমিং-এর জন্য সেরা</p><span class="tag">GAMING</span></div>
+<div class="slide s2"><h4>পড়ালেখা ঘরে<br>এখন আরও স্বাধীন</h4><p>অনলাইন ক্লাস, ভিডিও লেকচার — নিরবিচ্ছিন্ন</p><span class="tag">STUDY</span></div>
+<div class="slide s3"><h4>হাই-স্পিড ইন্টারনেটে<br>নিরবিচ্ছিন্ন স্ট্রিমিং</h4><p>Quality First — Speed Always</p><span class="tag">STREAMING</span></div>
+<div class="slide s4"><h4>লাইভ ফুটবল বিশ্বকাপ দেখুন<br>FAZ NETWORK-এর সাথে</h4><p>পরিবারের সাথে বড় পর্দায় — বাফার ফ্রি লাইভ</p><span class="tag">LIVE</span></div>
+<div class="foot">01339932887 &nbsp;·&nbsp; faznetwork.com</div>
+</div>
+<div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+<div class="pkgs" id="pkgs">
+<h3>প্যাকেজ</h3><p class="hint">প্যাকেজে ট্যাপ করুন — তারপর নিচে পেমেন্ট করুন</p>
+<div id="portal-packages"><p style="text-align:center;font-size:13px;color:#64748b">প্যাকেজ লোড হচ্ছে…</p></div>
+<p class="sel-line" id="selLine">প্যাকেজ বেছে নিন</p>
+</div>
+<div class="paysec" id="portal-mfs">
+<h3>পেমেন্ট</h3>
+<div class="payrow" id="pay-row"><p style="text-align:center;font-size:13px;color:#64748b;width:100%">পেমেন্ট নম্বর লোড হচ্ছে…</p></div>
+<form id="verify-form" novalidate>
+<div class="paypanel" id="payPanel">
+<div class="mname"><i id="payDot" style="background:#e2136e"></i><span id="payName">bKash</span> — <span id="payMethod">Send Money</span></div>
+<div class="num"><span id="payNum">01339932887</span> <button type="button" class="copybtn" id="pay-copy">Copy</button></div>
+<label for="amount">পাঠাতে হবে</label>
+<input id="amount" readonly placeholder="আগে একটি প্যাকেজ বেছে নিন">
+<label for="trx">Payment TrxID *</label><input id="trx" type="text" required autocomplete="off" autocapitalize="characters" placeholder="যেমন: 8A7B6C5D">
+<label for="phone">ফোন নম্বর *</label><input id="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" required placeholder="01712345678">
+<label for="customer-name">আপনার নাম *</label><input id="customer-name" type="text" autocomplete="name" maxlength="120" required placeholder="আপনার নাম">
+<button class="cta" type="submit">Verify Payment</button>
+</div>
+</form>
+<div id="receipt-card" class="hidden" aria-live="polite"><h2>পেমেন্ট রসিদ</h2><div class="receipt-row"><span>প্যাকেজ</span><strong id="receipt-package">—</strong></div><div class="receipt-row"><span>পরিমাণ</span><strong id="receipt-amount">—</strong></div><div class="receipt-row"><span>TrxID</span><strong id="receipt-trxid">—</strong></div><p id="receipt-status" class="receipt-status"></p></div>
+</div>
+<div class="strip">কার্ড সংগ্রহ অথবা ডাউনলোড নিতে<br>উপরের দেওয়া নাম্বারে যোগাযোগ করুন।</div>
+<div class="ficons">
+<a class="wa" id="helpline-whatsapp" href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 3C6.5 3 2 6.9 2 11.7c0 2.7 1.4 5.1 3.7 6.6L4 21l3.5-1.5c1.4.4 2.9.6 4.5.6 5.5 0 10-3.9 10-8.7S17.5 3 12 3zm5.2 12.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-5-4.4-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.4.6-.5.5c-.1.2-.3.4-.1.7.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.1c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.4.1.1.1.5-.1 1.1z"/></svg></a>
+<a class="ph" href="tel:<%= supportPhone %>" aria-label="Call helpline"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9z"/></svg></a>
+</div>
+<p class="footer">FAZ NETWORK • সহায়তা: <span id="footer-helpline"><%= supportPhone %></span></p>
+</main>
 <form id="portal-mikrotik-login" action="$(link-login-only)" method="post" style="display:none"><input type="hidden" name="username" id="portal-mt-user" value="$(mac)"><input type="hidden" name="password" id="portal-mt-pass" value="$(mac)"><input type="hidden" name="dst" value="$(link-orig)"><input type="hidden" name="popup" value="true"></form><input type="hidden" id="portal-router-mac" value="$(mac)">
+<div id="qr-scanner-modal" class="qr-modal hidden" role="dialog" aria-modal="true" aria-label="Voucher QR scanner"><div class="qr-modal-card"><h3 style="margin:0;font-size:16px">ভাউচার QR স্ক্যান</h3><video id="qr-scanner-video" autoplay muted playsinline></video><p id="qr-scanner-status" role="status">ক্যামেরা চালু হচ্ছে…</p><button type="button" id="qr-photo-button" class="btn btn-secondary" style="margin-top:6px">QR কোডের ছবি তুলুন</button><button type="button" id="qr-close-button" class="btn btn-primary" style="margin-top:8px">স্ক্যান বন্ধ করুন</button></div></div>
+<input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display:none">
 <script>
-let selected=0,selectedProfile="";
-function escHtml(value){return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));}
-function normalizePhoneInput(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
-function normalizePortalMac(value){const compact=String(value||"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
-function postMikrotikLogin(mac){document.getElementById("portal-mt-user").value=mac;document.getElementById("portal-mt-pass").value=mac;document.getElementById("portal-mikrotik-login").submit();}
-function showClaimCodeBox(phone,mac,customerName){const claimBox=document.getElementById("claim-code-box");claimBox.classList.remove("hidden");claimBox.dataset.phone=phone||"";claimBox.dataset.mac=mac||"";claimBox.dataset.customerName=customerName||"";const box=document.getElementById("result");box.className="mt-4 rounded-2xl p-4 bg-amber-50 text-amber-800";box.textContent="এই প্যাকেজটি claim করতে payment TrxID বা আপনার ফোনে পাঠানো claim code লাগবে।";}
-async function submitMacLogin(mac,phone,customerName){
-  const normalized=normalizePortalMac(mac||document.getElementById("portal-router-mac").value);
-  const box=document.getElementById("result");
-  if(!normalized){box.className="mt-4 rounded-2xl p-4 bg-amber-50 text-amber-800";box.textContent="RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে FAZ NETWORK Wi-Fi captive login page থেকে চেষ্টা করুন।";return false;}
-  const optionalPhone=/^01[0-9]{9}$/.test(normalizePhoneInput(phone||""))?normalizePhoneInput(phone||""):"";
-  const name=String(customerName||"").trim();
-  box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="লগইন হচ্ছে…";
+var selected=0,selectedProfile="",selectedPackageName="";
+var deviceMac="";
+var scannerStream=null,scannerTimer=null,scannerBusy=false;
+var selectedMfs=null;
+function $(id){return document.getElementById(id);}
+function escHtml(value){return String(value??"").replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];});}
+function toBn(value){return String(value).replace(/[0-9]/g,function(d){return "০১২৩৪৫৬৭৮৯"[Number(d)];});}
+function mfsColor(name){var n=String(name||"").toLowerCase();if(n.indexOf("bkash")!==-1)return"#e2136e";if(n.indexOf("nagad")!==-1)return"#f6921e";if(n.indexOf("rocket")!==-1)return"#8c3494";return"#1d4ed8";}
+function mfsDisplayName(item){return String(item.name||"MFS").replace(/\s*\([^)]*\)\s*$/,"");}
+function normalizePhoneInput(value){var bangla="০১২৩৪৫৬৭৮৯";var digits=String(value||"").replace(/[০-৯]/g,function(ch){return String(bangla.indexOf(ch));}).replace(/\D/g,"");if(digits.indexOf("880")===0&&digits.length===13)digits="0"+digits.slice(3);return digits;}
+function normalizePortalMac(value){var compact=String(value||"").trim().replace(/[:-]/g,"");return /^[0-9a-fA-F]{12}$/.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
+function validPhone(value){return /^01[0-9]{9}$/.test(normalizePhoneInput(value||""));}
+function showResult(kind,message){var box=$("result");box.className=kind==="ok"?"msg-ok":kind==="err"?"msg-err":kind==="warn"?"msg-warn":"msg-info";box.textContent=message;try{box.scrollIntoView({behavior:"smooth",block:"nearest"});}catch(e){}}
+function setBusy(button,busy,label){if(!button)return;if(busy){button.dataset.label=button.textContent;button.disabled=true;button.innerHTML='<span class="spinner"></span>'+escHtml(label||button.dataset.label||"অপেক্ষা করুন…");}else{button.disabled=false;button.textContent=button.dataset.label||button.textContent;}}
+var FRIENDLY_ERRORS={
+MAC_MISMATCH:"এই ফোনটি অন্য ডিভাইসে বাঁধা আছে। ডিভাইস পরিবর্তন করতে সাপোর্টে যোগাযোগ করুন।",
+MAC_ALREADY_BOUND:"এই ফোনটি অন্য ডিভাইসে বাঁধা আছে। ডিভাইস পরিবর্তন করতে সাপোর্টে যোগাযোগ করুন।",
+ACCOUNT_MAC_CONFLICT:"এই ফোনে একাধিক ডিভাইস বাঁধা আছে। সাপোর্টে যোগাযোগ করুন।",
+VOUCHER_MAC_LOCKED:"এই ভাউচারটি অন্য ডিভাইসে বাঁধা আছে। সাপোর্টে যোগাযোগ করুন।",
+ROUTER_MAC_LOCK_MISMATCH:"রাউটারে এই অ্যাকাউন্টের ডিভাইস তথ্য মিলছে না। সাপোর্টে যোগাযোগ করুন।",
+MAC_LOCKED:"এই অ্যাকাউন্টের ডিভাইস লক করা আছে। ডিভাইস পরিবর্তন করতে সাপোর্টে যোগাযোগ করুন।",
+CLAIM_SECRET_INVALID:"TrxIDটি এই প্যাকেজের সঙ্গে মিলছে না। যাচাই করে আবার চেষ্টা করুন।",
+PHONE_LOCKED:"অনেকবার ভুল চেষ্টা হয়েছে। ১৫ মিনিট পর আবার চেষ্টা করুন।",
+PIN_LOCKED:"অনেকবার ভুল চেষ্টা হয়েছে। ১৫ মিনিট পর আবার চেষ্টা করুন।",
+RATE_LIMITED:"অনেকবার চেষ্টা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।",
+MAC_NOT_ON_NETWORK:"FAZ NETWORK Wi-Fi-তে যুক্ত হয়ে একই ডিভাইস থেকে আবার চেষ্টা করুন।",
+NETWORK_CHECK_FAILED:"FAZ NETWORK Wi-Fi-তে যুক্ত হয়ে একই ডিভাইস থেকে আবার চেষ্টা করুন।",
+VOUCHER_INVALID:"ভাউচার PIN বা পাসওয়ার্ড ভুল হয়েছে।",
+INVALID_VOUCHER_PIN:"ভাউচার PIN সঠিকভাবে লিখুন।",
+INVALID_VOUCHER_PASSWORD:"ভাউচার পাসওয়ার্ড সঠিকভাবে লিখুন।",
+VOUCHER_ALREADY_USED:"এই ভাউচারটি ইতিমধ্যে ব্যবহার করা হয়েছে বা মেয়াদ শেষ।",
+PACKAGE_EXPIRED:"এই প্যাকেজের মেয়াদ শেষ। নতুন প্যাকেজ কিনে চালিয়ে যান।",
+NO_ELIGIBLE_PACKAGE:"এই ফোন বা ডিভাইসের জন্য কোনো প্যাকেজ পাওয়া যায়নি। আগে প্যাকেজ কিনুন।",
+MULTIPLE_LIVE_PACKAGES:"এই ফোনে একাধিক সক্রিয় প্যাকেজ আছে। সাপোর্টে যোগাযোগ করুন।",
+AMOUNT_MISMATCH:"পেমেন্টের পরিমাণ নির্বাচিত প্যাকেজের দামের সঙ্গে মিলছে না।",
+NOT_FOUND_OR_DELAYED:"পেমেন্টের SMS এখনো সার্ভারে আসেনি। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
+ALREADY_CLAIMED:"এই TrxID ইতিমধ্যে ব্যবহার করা হয়েছে।",
+TRANSACTION_IN_PROCESS:"এই TrxID অন্য একটি অনুরোধে যাচাই হচ্ছে।",
+PROFILE_NOT_FOUND_OR_AMBIGUOUS:"প্যাকেজটি সঠিকভাবে শনাক্ত করা যায়নি। অন্য প্যাকেজ নির্বাচন করুন।",
+PROFILE_NOT_FOUND:"প্যাকেজটি রাউটারে পাওয়া যাচ্ছে না। সাপোর্টে যোগাযোগ করুন।",
+INVALID_ACCOUNT_PHONE:"সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।",
+INVALID_MAC:"রাউটার থেকে ডিভাইস MAC পাওয়া যায়নি। FAZ NETWORK Wi-Fi-র captive login পেজ থেকে খুলুন।",
+ACTIVE_DATA_ACCOUNT_MISSING:"ডেটা প্যাকেজের অ্যাকাউন্ট রাউটারে পাওয়া যাচ্ছে না। সাপোর্টে যোগাযোগ করুন।"
+};
+function friendlyError(code,fallback){return FRIENDLY_ERRORS[code]||fallback||"কিছু একটা ভুল হয়েছে। আবার চেষ্টা করুন।";}
+function resolveDeviceMac(){
+  var params=new URLSearchParams(window.location.search);
+  var fromQuery=normalizePortalMac(params.get("mac")||"");
+  var hidden=$("portal-router-mac");
+  var fromHidden=normalizePortalMac(hidden?hidden.value:"");
+  deviceMac=fromQuery||fromHidden||"";
+  if(hidden&&deviceMac)hidden.value=deviceMac;
+  return deviceMac;
+}
+function postMikrotikLogin(mac){$("portal-mt-user").value=mac;$("portal-mt-pass").value=mac;$("portal-mikrotik-login").submit();}
+function switchTab(name){
+  if(name==="buy"){var pkgs=$("pkgs");if(pkgs)pkgs.scrollIntoView({behavior:"smooth"});return;}
+  document.querySelectorAll(".tab-btn").forEach(function(btn){btn.classList.toggle("on",btn.dataset.tab===name&&!btn.dataset.scan);});
+  var ex=$("existing-login-form"),vo=$("voucher-login-form");
+  if(name==="existing"){if(ex)ex.classList.remove("hidden");if(vo)vo.classList.add("hidden");}
+  else if(name==="voucher"){if(vo)vo.classList.remove("hidden");if(ex)ex.classList.add("hidden");}
+}
+document.querySelectorAll(".tab-btn").forEach(function(btn){btn.addEventListener("click",function(){
+  var tab=btn.dataset.tab;
+  if(tab==="buy"){switchTab("buy");return;}
+  if(btn.dataset.scan==="1"){switchTab("voucher");openQrScanner();return;}
+  switchTab(tab);
+});});
+var promoSlides=document.querySelectorAll(".promo .slide"),promoDots=document.querySelectorAll(".dots i"),promoCur=0;
+function showSlide(i){promoCur=i;promoSlides.forEach(function(s,k){s.classList.toggle("on",k===i);});promoDots.forEach(function(d,k){d.classList.toggle("on",k===i);});}
+setInterval(function(){if(promoSlides.length)showSlide((promoCur+1)%promoSlides.length);},3000);
+function setPill(kind,text){var pill=$("status-pill");pill.className="status-pill"+(kind?" "+kind:"");pill.textContent=text;}
+async function runDeviceLookup(){
+  if(!deviceMac){setPill("","সংযুক্ত নয় — FAZ NETWORK Wi-Fi-তে যুক্ত হয়ে এই পেজটি খুলুন");return;}
   try{
-    const response=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone:optionalPhone,mac:normalized,customer_name:name})});
-    const data=await response.json();
+    var response=await fetch("/api/hotspot-auth/device-lookup",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({mac:deviceMac})});
+    var data=await response.json();
+    if(!response.ok||!data.success){setPill("","স্ট্যাটাস জানা যাচ্ছে না — নিচে লগইন করতে পারবেন");return;}
+    if(!data.found){setPill("","সংযুক্ত নয় — FAZ NETWORK Wi-Fi-তে যুক্ত হয়ে এই পেজটি খুলুন");return;}
+    if(data.requires_claim_secret){setPill("warn","প্যাকেজ কেনা আছে — claim করা বাকি");switchTab("existing");showClaimCodeBox("");return;}
+    if(data.status==="expired"||data.can_recharge){setPill("warn","প্যাকেজের মেয়াদ শেষ — নতুন প্যাকেজ কিনুন");var buyBtn=document.querySelector('[data-tab="buy"]');if(buyBtn&&!buyBtn.classList.contains("hidden"))switchTab("buy");return;}
+    setPill("ok","সংযুক্ত — প্যাকেজ সক্রিয় আছে");switchTab("existing");
+  }catch(error){setPill("","স্ট্যাটাস জানা যাচ্ছে না — নিচে লগইন করতে পারবেন");}
+}
+function showClaimCodeBox(phone,mac,customerName,prefill){
+  var claimBox=$("claim-code-box");
+  claimBox.classList.remove("hidden");
+  if(phone!==undefined)claimBox.dataset.phone=phone||"";
+  if(mac)claimBox.dataset.mac=mac;
+  if(customerName!==undefined)claimBox.dataset.customerName=customerName||"";
+  var phoneInput=$("claim-phone");
+  if(phoneInput&&phone)phoneInput.value=phone;
+  var nameInput=$("claim-name");
+  if(nameInput&&customerName)nameInput.value=customerName;
+  if(prefill!==undefined&&prefill!==null&&prefill!=="")$("claim-code").value=prefill;
+  switchTab("existing");
+  showResult("warn","এই প্যাকেজটি claim করতে পেমেন্টের TrxID লাগবে।");
+}
+async function submitMacLogin(mac,phone,customerName){
+  var normalized=normalizePortalMac(mac||deviceMac||$("portal-router-mac").value);
+  var button=$("existing-login-submit");
+  if(!normalized){showResult("warn","RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে FAZ NETWORK Wi-Fi captive login page থেকে চেষ্টা করুন।");return false;}
+  var phoneInput=normalizePhoneInput(phone||"");
+  if(!phoneInput){showResult("err","ফোন নম্বর দিন — রিচার্জ ও SMS নোটিফিকেশনের জন্য লাগবে।");return false;}
+  if(!/^01[0-9]{9}$/.test(phoneInput)){showResult("err","সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।");return false;}
+  var name=String(customerName||"").trim();
+  if(!name){showResult("err","আপনার নাম দিন।");return false;}
+  setBusy(button,true,"লগইন হচ্ছে…");
+  try{
+    var response=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone:phoneInput,mac:normalized,customer_name:name})});
+    var data=await response.json();
     if(!response.ok||!data.success){
-      if(data.code==="CLAIM_SECRET_REQUIRED"||data.code==="OTP_NOT_FOUND_OR_EXPIRED"){showClaimCodeBox(optionalPhone,normalized,name);return false;}
-      throw Error(data.message||data.error||"Login failed.");
+      if(data.code==="CLAIM_SECRET_REQUIRED"){showClaimCodeBox(phoneInput,normalized,name);return false;}
+      showResult("err",friendlyError(data.code,data.message||data.error));return false;
     }
-    box.className="mt-4 rounded-2xl p-4 bg-emerald-50 text-emerald-800";box.textContent="লগইন সফল। ইন্টারনেট চালু হচ্ছে…";
-    setTimeout(()=>postMikrotikLogin(data.username||normalized),350);return true;
-  }catch(error){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent=error.message;return false;}
+    showResult("ok","লগইন সফল। ইন্টারনেট চালু হচ্ছে…");
+    setTimeout(function(){postMikrotikLogin(data.username||normalized);},350);return true;
+  }catch(error){showResult("err","সংযোগ ব্যর্থ হয়েছে। Wi-Fi চেক করে আবার চেষ্টা করুন।");return false;}
+  finally{setBusy(button,false);}
 }
 async function submitVoucherClaim(){
-  const normalized=normalizePortalMac(document.getElementById("portal-router-mac").value);
-  const box=document.getElementById("result");
-  if(!normalized){box.className="mt-4 rounded-2xl p-4 bg-amber-50 text-amber-800";box.textContent="RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে FAZ NETWORK Wi-Fi captive login page থেকে চেষ্টা করুন।";return false;}
-  const pin=document.getElementById("voucher-pin").value.trim().toUpperCase();
-  const password=document.getElementById("voucher-password").value;
-  if(!pin||!password){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="Voucher PIN এবং password — দুটিই লিখুন।";return false;}
-  const phoneInput=normalizePhoneInput(document.getElementById("voucher-phone").value);
-  const optionalPhone=/^01[0-9]{9}$/.test(phoneInput)?phoneInput:"";
-  if(phoneInput&&!optionalPhone){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।";return false;}
-  const name=document.getElementById("voucher-name").value.trim();
-  box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="ভাউচার যাচাই হচ্ছে…";
+  var normalized=normalizePortalMac(deviceMac||$("portal-router-mac").value);
+  var button=$("voucher-claim-submit");
+  if(!normalized){showResult("warn","RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে FAZ NETWORK Wi-Fi captive login page থেকে চেষ্টা করুন।");return false;}
+  var pin=$("voucher-pin").value.trim().toUpperCase();
+  var password=$("voucher-password").value;
+  if(!pin||!password){showResult("err","Voucher PIN এবং password — দুটিই লিখুন।");return false;}
+  var phoneInput=normalizePhoneInput($("voucher-phone").value);
+  if(!phoneInput){showResult("err","ফোন নম্বর দিন — রিচার্জ ও SMS নোটিফিকেশনের জন্য লাগবে।");return false;}
+  if(!/^01[0-9]{9}$/.test(phoneInput)){showResult("err","সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।");return false;}
+  var name=$("voucher-name").value.trim();
+  if(!name){showResult("err","আপনার নাম দিন।");return false;}
+  setBusy(button,true,"ভাউচার যাচাই হচ্ছে…");
   try{
-    const response=await fetch("/api/hotspot-auth/claim-voucher",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({pin,password,mac:normalized,phone:optionalPhone,customer_name:name})});
-    const data=await response.json();
-    if(!response.ok||!data.success)throw Error(data.message||data.error||"Voucher claim failed.");
-    box.className="mt-4 rounded-2xl p-4 bg-emerald-50 text-emerald-800";box.textContent="ভাউচার যাচাই সফল। ইন্টারনেট চালু হচ্ছে…";
-    setTimeout(()=>postMikrotikLogin(data.username||normalized),350);return true;
-  }catch(error){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent=error.message;return false;}
+    var response=await fetch("/api/hotspot-auth/claim-voucher",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({pin:pin,password:password,mac:normalized,phone:phoneInput,customer_name:name})});
+    var data=await response.json();
+    if(!response.ok||!data.success){showResult("err",friendlyError(data.code,data.message||data.error));return false;}
+    showResult("ok","ভাউচার যাচাই সফল। ইন্টারনেট চালু হচ্ছে…");
+    setTimeout(function(){postMikrotikLogin(data.username||normalized);},350);return true;
+  }catch(error){showResult("err","সংযোগ ব্যর্থ হয়েছে। Wi-Fi চেক করে আবার চেষ্টা করুন।");return false;}
+  finally{setBusy(button,false);}
+}
+function showReceipt(pkg,amount,trxId,statusText){
+  var card=$("receipt-card");
+  $("receipt-package").textContent=pkg||"—";
+  $("receipt-amount").textContent=amount?"৳"+Number(amount).toLocaleString("en-BD"):"—";
+  $("receipt-trxid").textContent=trxId||"—";
+  $("receipt-status").textContent=statusText||"";
+  card.classList.remove("hidden");
+}
+function selectPay(item){
+  selectedMfs=item;
+  var name=mfsDisplayName(item),number=String(item.number||"").trim(),method=String(item.method||"Send Money");
+  $("payName").textContent=name;
+  $("payMethod").textContent=method;
+  $("payDot").style.background=mfsColor(name);
+  $("payNum").textContent=number||"—";
+  document.querySelectorAll("#pay-row .paybtn").forEach(function(b){b.classList.toggle("sel",b.dataset.mfs===name);});
+}
+function renderMfs(mfs){
+  var payRow=$("pay-row");
+  var heroPills=$("hero-pay-pills");
+  if(!mfs.length){
+    payRow.innerHTML='<p style="text-align:center;font-size:13px;color:#64748b;width:100%">পেমেন্ট নম্বর এখনো দেওয়া হয়নি।</p>';
+    $("hero-pay").classList.add("hidden");
+    return;
+  }
+  payRow.innerHTML=mfs.map(function(item){
+    var name=mfsDisplayName(item),method=String(item.method||"Send Money");
+    return '<button type="button" class="paybtn" data-mfs="'+escHtml(name)+'" style="background:'+mfsColor(name)+'"><span class="ic">'+escHtml(name)+'</span><small>'+escHtml(method)+'</small></button>';
+  }).join("");
+  payRow.querySelectorAll(".paybtn").forEach(function(button){
+    button.addEventListener("click",function(){
+      var found=mfs.find(function(item){return mfsDisplayName(item)===(button.dataset.mfs||"");});
+      if(found)selectPay(found);
+    });
+  });
+  heroPills.innerHTML=mfs.map(function(item){return '<i style="background:'+mfsColor(item.name)+'">'+escHtml(mfsDisplayName(item))+'</i>';}).join("");
+  $("hero-pay").classList.remove("hidden");
+  selectPay(mfs[0]);
 }
 function renderPortalConfig(config){
-  const labels={bkash:"bKash",nagad:"Nagad",rocket:"Rocket",upay:"Upay"},accounts={bkash:"",nagad:"",rocket:"",upay:""};
-  (Array.isArray(config.mfs)?config.mfs:[]).forEach(item=>{const key=String(item.name||"").trim().toLowerCase().replace(/[^a-z]/g,"");if(item.enabled===true&&Object.prototype.hasOwnProperty.call(accounts,key))accounts[key]=String(item.number||"").trim();});
-  const mfs=document.getElementById("portal-mfs");mfs.innerHTML=Object.keys(labels).map(key=>{const number=accounts[key];return `<div class="rounded-xl border border-emerald-100 bg-white p-3 text-center"><p class="text-xs font-bold text-slate-500">${labels[key]}</p><p class="text-lg font-black mt-1 break-all">${escHtml(number||"Not configured")}</p>${number?`<button type="button" class="copy-mfs-number mt-1 text-xs font-bold text-emerald-700" data-number="${escHtml(number)}">Copy number</button>`:""}</div>`;}).join("");
-  mfs.querySelectorAll(".copy-mfs-number").forEach(button=>button.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(button.dataset.number||"");const old=button.textContent;button.textContent="Copied";setTimeout(()=>button.textContent=old,1200);}catch(_){}}));
-  const packages=(Array.isArray(config.packages)?config.packages:[]).filter(pkg=>String(pkg.profileId||pkg.name||"").trim()&&!/(expired|ex-|disabled|block|default|vpn)/i.test(String(pkg.profileId||pkg.name||""))&&Number(pkg.price)>0);
-  const container=document.getElementById("portal-packages");container.innerHTML=packages.length?packages.map(pkg=>{const name=String(pkg.name||pkg.profileId),profile=String(pkg.profileId||pkg.profile||name),price=Number(pkg.price),validity=String(pkg.validity||"Internet access");return `<button type="button" class="pkg rounded-2xl border border-slate-200 bg-white p-4 text-left" data-price="${price}" data-profile-id="${escHtml(profile)}"><span class="text-xs text-emerald-700 font-bold">${escHtml(validity)}</span><strong class="block text-2xl mt-1">৳${price.toLocaleString("en-BD")}</strong><span class="text-xs text-slate-400">${escHtml(name)} · Select package</span></button>`;}).join(""):`<p class="col-span-full rounded-xl bg-amber-50 p-4 text-center text-sm text-amber-800">কোনো সক্রিয় Hotspot package পাওয়া যায়নি।</p>`;
-  container.querySelectorAll(".pkg").forEach(button=>button.addEventListener("click",()=>{selected=Number(button.dataset.price);selectedProfile=String(button.dataset.profileId||"");document.getElementById("amount").value="৳"+selected+" package";document.querySelector('[data-tab="recharge"]').click();document.getElementById("trx").focus();}));
+  var features=config.features||{};
+  var online=features.online_payment!==false&&features.enable_online_purchase!==false;
+  var voucher=features.voucher_pin!==false&&features.enable_voucher_login!==false;
+  var qr=features.qr_scan!==false&&features.enable_qr_scanner!==false;
+  var buyBtn=document.querySelector('[data-tab="buy"]');
+  if(!online){
+    if(buyBtn)buyBtn.classList.add("hidden");
+    var pkgsSec=$("pkgs");if(pkgsSec)pkgsSec.classList.add("hidden");
+    var mfsSec=$("portal-mfs");if(mfsSec)mfsSec.classList.add("hidden");
+  }
+  if(!voucher){document.querySelectorAll('[data-tab="voucher"]').forEach(function(b){b.classList.add("hidden");});}
+  if(!qr){var scanBtn=document.querySelector('[data-scan="1"]');if(scanBtn)scanBtn.classList.add("hidden");}
+  var qrBtn=$("qr-scan-button");
+  if(!qr&&qrBtn)qrBtn.classList.add("hidden");
+  if(!online)switchTab("existing");
+  var title=config.brand_title||config.portalTitle||"FAZ NETWORK";
+  var subtitle=config.brand_subtitle||"";
+  var helpline=String(config.helpline||config.helpline_number||"01339932887").trim();
+  document.title=title+" Hotspot";
+  var brandTitle=$("brand-title");if(brandTitle)brandTitle.textContent=title;
+  if(subtitle)$("brand-subtitle").textContent=subtitle;
+  var callLink=$("helpline-call");callLink.href="tel:"+helpline.replace(/\s/g,"");
+  $("helpline-number").textContent=helpline;
+  $("footer-helpline").textContent=helpline;
+  var waDigits=normalizePhoneInput(helpline);
+  var waNumber=waDigits.indexOf("0")===0?"880"+waDigits.slice(1):waDigits;
+  $("helpline-whatsapp").href="https://wa.me/"+waNumber;
+  var notice=String(config.notice_text||"").trim();
+  var noticeBar=$("notice-bar");
+  if(notice){noticeBar.textContent=notice;noticeBar.classList.remove("hidden");}
+  var mode=String(config.display_mode||"default");
+  var bannerArea=$("banner-area"),customArea=$("custom-html-area");
+  if(mode==="custom_code"&&config.custom_html){customArea.innerHTML=String(config.custom_html);customArea.classList.remove("hidden");}
+  else if(mode==="banner"){
+    var desktop=config.bannerUrl||config.banner_url||"";
+    var mobile=config.mobileBannerUrl||config.mobile_banner_url||"";
+    if(desktop||mobile){
+      var img=$("banner-img");
+      img.src=desktop||mobile;
+      var mobileSrc=$("banner-mobile-src");
+      if(mobile)mobileSrc.srcset=mobile;else mobileSrc.removeAttribute("srcset");
+      img.onerror=function(){bannerArea.classList.add("hidden");document.body.classList.remove("has-banner");};
+      bannerArea.classList.remove("hidden");document.body.classList.add("has-banner");
+    }
+  }
+  var logo=config.portal_logo_url||config.logoUrl||config.global_logo_url||"";
+  var logoSlot=$("brand-logo-slot"),logoImg=$("brand-logo-img"),logoFn=$("brand-logo-fn");
+  if(logo){
+    if(!logoImg){logoImg=document.createElement("img");logoImg.id="brand-logo-img";logoImg.alt=title;logoSlot.appendChild(logoImg);}
+    logoImg.src=logo;logoImg.style.display="";
+    if(logoFn)logoFn.style.display="none";
+    logoImg.onerror=function(){logoImg.style.display="none";if(logoFn)logoFn.style.display="";};
+  }else{
+    if(logoImg)logoImg.style.display="none";
+    if(logoFn)logoFn.style.display="";
+  }
+  var mfs=Array.isArray(config.mfs)?config.mfs:[];
+  renderMfs(mfs);
+  var packages=(Array.isArray(config.packages)?config.packages:[]).filter(function(pkg){return String(pkg.profileId||pkg.name||"").trim()&&!/(expired|ex-|disabled|block|default|vpn)/i.test(String(pkg.profileId||pkg.name||""))&&Number(pkg.price)>0;});
+  var container=$("portal-packages");
+  if(!packages.length){container.innerHTML='<p style="border-radius:12px;background:#fffbeb;padding:12px;text-align:center;font-size:13px;color:#92400e">কোনো সক্রিয় Hotspot package পাওয়া যায়নি।</p>';return;}
+  var timePkgs=packages.filter(function(pkg){return Number(pkg.limitBytesTotal||0)===0;});
+  var dataPkgs=packages.filter(function(pkg){return Number(pkg.limitBytesTotal||0)>0;});
+  var monthPkg=packages.find(function(pkg){return String(pkg.name||"")==="30-Day";})||timePkgs[0];
+  if(monthPkg){var days=String(monthPkg.validity||"30 Days").replace(/[^0-9]/g,"")||"30";$("hero-price").textContent=toBn(days)+" দিন \u00a0৳"+toBn(Number(monthPkg.price));}
+  function tileHtml(pkg,index){
+    var name=String(pkg.name||pkg.profileId),profile=String(pkg.profileId||pkg.profile||name),price=Number(pkg.price),validity=String(pkg.validity||"Internet access"),isData=Number(pkg.limitBytesTotal||0)>0;
+    var colorClass="t"+((index%4)+1);
+    var sub=isData?escHtml(validity)+" · শুধু ডেটা কোটা — মেয়াদ নেই":escHtml(validity);
+    return '<button type="button" class="tile '+colorClass+'" data-price="'+price+'" data-profile-id="'+escHtml(profile)+'" data-name="'+escHtml(name)+'"><b>'+escHtml(name)+'</b><span>'+sub+'</span><div class="pr">৳'+price.toLocaleString("en-BD")+'</div></button>';
+  }
+  var html="";
+  if(timePkgs.length)html+='<p class="group-label">টাইম প্যাকেজ</p><div class="grid">'+timePkgs.map(function(p,i){return tileHtml(p,i);}).join("")+'</div>';
+  if(dataPkgs.length)html+='<p class="group-label">ডেটা প্যাকেজ</p><div class="grid">'+dataPkgs.map(function(p,i){return tileHtml(p,timePkgs.length+i);}).join("")+'</div>';
+  container.innerHTML=html;
+  container.querySelectorAll(".tile").forEach(function(button){button.addEventListener("click",function(){
+    selected=Number(button.dataset.price);selectedProfile=String(button.dataset.profileId||"");selectedPackageName=String(button.dataset.name||"");
+    container.querySelectorAll(".tile").forEach(function(node){node.classList.toggle("selected",node===button);});
+    $("amount").value="৳"+selected+" · "+selectedProfile;
+    $("selLine").textContent="বেছে নেওয়া: "+selectedPackageName+" — ৳"+selected;
+    $("trx").focus();
+  });});
 }
-const tabs=document.querySelectorAll(".tab");tabs.forEach(button=>button.onclick=()=>{tabs.forEach(item=>item.classList.remove("active"));button.classList.add("active");document.getElementById("voucher").classList.toggle("hidden",button.dataset.tab!=="voucher");document.getElementById("recharge").classList.toggle("hidden",button.dataset.tab!=="recharge");});
-document.getElementById("existing-login-submit").addEventListener("click",()=>{submitMacLogin(null,document.getElementById("existing-phone").value,document.getElementById("existing-name").value);});
-document.getElementById("voucher-claim-submit").addEventListener("click",()=>{submitVoucherClaim();});
-document.getElementById("claim-code-send").addEventListener("click",async()=>{
-  const claimBox=document.getElementById("claim-code-box"),box=document.getElementById("result"),phone=claimBox.dataset.phone||"";
-  if(!/^01[0-9]{9}$/.test(phone)){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="Claim code পেতে সঠিক ফোন নম্বর দিন।";return;}
-  box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="Claim code পাঠানো হচ্ছে…";
-  try{const response=await fetch("/api/hotspot-auth/request-claim-otp",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone})});const data=await response.json();if(!response.ok||!data.success)throw Error(data.message||"Claim code পাঠানো যায়নি।");box.className="mt-4 rounded-2xl p-4 bg-emerald-50 text-emerald-800";box.textContent="Claim code পাঠানো হয়েছে। আপনার ফোনে আসা ৬ ডিজিটের কোডটি দিন।";document.getElementById("claim-code").focus();}
-  catch(error){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent=error.message;}
-});
-document.getElementById("claim-code-submit").addEventListener("click",async()=>{
-  const claimBox=document.getElementById("claim-code-box"),box=document.getElementById("result"),code=document.getElementById("claim-code").value.trim();
-  if(!/^\d{6}$/.test(code)){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="সঠিক ৬ ডিজিটের claim code দিন।";return;}
-  box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="Claim code যাচাই হচ্ছে…";
+$("existing-login-submit").addEventListener("click",function(){submitMacLogin(null,$("existing-phone").value,$("existing-name").value);});
+$("voucher-claim-submit").addEventListener("click",function(){submitVoucherClaim();});
+$("pay-copy").addEventListener("click",async function(){var num=$("payNum").textContent;try{await navigator.clipboard.writeText(num);}catch(e){}var btn=$("pay-copy");var old=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.textContent=old;},1200);});
+$("claim-code-submit").addEventListener("click",async function(){
+  var claimBox=$("claim-code-box"),value=$("claim-code").value.trim();
+  var phone=normalizePhoneInput($("claim-phone").value||claimBox.dataset.phone||"");
+  var name=String($("claim-name").value||claimBox.dataset.customerName||"").trim();
+  if(!phone){showResult("err","ফোন নম্বর দিন — রিচার্জ ও SMS নোটিফিকেশনের জন্য লাগবে।");return;}
+  if(!/^01[0-9]{9}$/.test(phone)){showResult("err","সঠিক ১১ ডিজিটের ফোন নম্বর দিন অথবা খালি রাখুন।");return;}
+  if(!name){showResult("err","আপনার নাম দিন।");return;}
+  if(!value){showResult("err","Payment TrxID দিন।");return;}
+  var body={phone:phone,mac:claimBox.dataset.mac||deviceMac||"",customer_name:name,trxId:value.toUpperCase()};
+  var button=$("claim-code-submit");
+  setBusy(button,true,"যাচাই হচ্ছে…");
   try{
-    const response=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone:claimBox.dataset.phone||"",mac:claimBox.dataset.mac||"",otp:code,customer_name:claimBox.dataset.customerName||""})});
-    const data=await response.json();if(!response.ok||!data.success)throw Error(data.message||data.error||"Claim code যাচাই করা যায়নি।");
-    claimBox.classList.add("hidden");box.className="mt-4 rounded-2xl p-4 bg-emerald-50 text-emerald-800";box.textContent="প্যাকেজ claim সফল। ইন্টারনেট চালু হচ্ছে…";setTimeout(()=>postMikrotikLogin(data.username||claimBox.dataset.mac),350);
-  }catch(error){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent=error.message;}
+    var response=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body)});
+    var data=await response.json();
+    if(!response.ok||!data.success){
+      if(data.code==="CLAIM_SECRET_REQUIRED"){showResult("err","TrxIDটি এই প্যাকেজের সঙ্গে মিলছে না। যাচাই করে আবার চেষ্টা করুন।");return;}
+      showResult("err",friendlyError(data.code,data.message||data.error));return;
+    }
+    claimBox.classList.add("hidden");
+    showResult("ok","প্যাকেজ claim সফল। ইন্টারনেট চালু হচ্ছে…");
+    setTimeout(function(){postMikrotikLogin(data.username||claimBox.dataset.mac||deviceMac);},350);
+  }catch(error){showResult("err","সংযোগ ব্যর্থ হয়েছে। Wi-Fi চেক করে আবার চেষ্টা করুন।");}
+  finally{setBusy(button,false);}
 });
-fetch("/api/public/portal-config",{headers:{Accept:"application/json"},cache:"no-store"}).then(async response=>{const config=await response.json();if(!response.ok||!config.success)throw new Error(config.error||"Portal configuration unavailable");renderPortalConfig(config);}).catch(error=>{document.getElementById("portal-packages").innerHTML=`<p class="col-span-full rounded-xl bg-red-50 p-4 text-center text-sm text-red-700">${escHtml(error.message||"Hotspot packages could not be loaded.")}</p>`;document.getElementById("portal-mfs").innerHTML="<p class=\"col-span-2 text-center text-sm text-slate-500\">Payment settings unavailable.</p>";});
-document.getElementById("verify-form").onsubmit=async event=>{
-  event.preventDefault();const phone=normalizePhoneInput(document.getElementById("phone").value),trxId=document.getElementById("trx").value.trim(),customerName=document.getElementById("customer-name").value.trim(),box=document.getElementById("result"),deviceMac=normalizePortalMac(document.getElementById("portal-router-mac").value);
-  if(!deviceMac){box.className="mt-4 rounded-2xl p-4 bg-amber-50 text-amber-800";box.textContent="RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে captive login page থেকে পেমেন্ট যাচাই করুন।";return;}
-  const optionalPhone=/^01[0-9]{9}$/.test(phone)?phone:"";if(!selected||!selectedProfile){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent="আগে একটি প্যাকেজ নির্বাচন করুন।";return;}
-  document.getElementById("phone").value=phone;box.className="mt-4 rounded-2xl p-4 bg-slate-100";box.textContent="পেমেন্ট যাচাই হচ্ছে…";
+$("verify-form").addEventListener("submit",async function(event){
+  event.preventDefault();
+  var phone=normalizePhoneInput($("phone").value),trxId=$("trx").value.trim(),customerName=$("customer-name").value.trim(),deviceMacNow=normalizePortalMac(deviceMac||$("portal-router-mac").value);
+  var button=this.querySelector('button[type="submit"]');
+  if(!deviceMacNow){showResult("warn","RouterOS device MAC পাওয়া যায়নি। অনুগ্রহ করে captive login page থেকে পেমেন্ট যাচাই করুন।");return;}
+  if(!phone){showResult("err","ফোন নম্বর দিন — রিচার্জ ও SMS নোটিফিকেশনের জন্য লাগবে।");return;}
+  if(!/^01[0-9]{9}$/.test(phone)){showResult("err","সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।");return;}
+  if(!customerName){showResult("err","আপনার নাম দিন।");return;}
+  if(!selected||!selectedProfile){showResult("err","আগে একটি প্যাকেজ নির্বাচন করুন।");return;}
+  if(!trxId){showResult("err","TrxID লিখুন।");return;}
+  $("phone").value=phone;
+  setBusy(button,true,"পেমেন্ট যাচাই হচ্ছে…");
   try{
-    const response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({service_type:"hotspot",phone:optionalPhone,account_phone:optionalPhone,customer_name:customerName,trxId,amount:selected,package_id:selectedProfile,profile_id:selectedProfile,mac:deviceMac})});const data=await response.json();
-    if(!response.ok||!data.success){const messages={NOT_FOUND_OR_DELAYED:"SMS এখনো সার্ভারে আসেনি। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",ALREADY_CLAIMED:"এই TrxID ইতিমধ্যে ব্যবহার করা হয়েছে।",TRANSACTION_IN_PROCESS:"এই TrxID অন্য একটি অনুরোধে যাচাই হচ্ছে।",AMOUNT_MISMATCH:"পেমেন্টের পরিমাণ নির্বাচিত প্যাকেজের দামের সঙ্গে মিলছে না।",INVALID_ACCOUNT_PHONE:"সঠিক ১১ ডিজিটের বাংলাদেশি মোবাইল নম্বর দিন।",PROFILE_NOT_FOUND_OR_AMBIGUOUS:"প্যাকেজটি সঠিকভাবে শনাক্ত করা যায়নি। অন্য প্যাকেজ নির্বাচন করুন।",MULTIPLE_LIVE_PACKAGES:"এই নম্বরে একাধিক সক্রিয় প্যাকেজ আছে। Support-এর সঙ্গে যোগাযোগ করুন."};throw Error(messages[data.code]||data.message||data.error||"পেমেন্ট যাচাই করা যায়নি।");}
-    const activation=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone:optionalPhone,mac:deviceMac,customer_name:customerName,trxId:data.claim_trx_id||trxId})});const activated=await activation.json();if(!activation.ok||!activated.success){if(activated.code==="CLAIM_SECRET_REQUIRED"||activated.code==="OTP_NOT_FOUND_OR_EXPIRED"){showClaimCodeBox(optionalPhone,deviceMac,customerName);return;}throw Error(activated.message||activated.error||"Hotspot activation failed.");}
-    box.className="mt-4 rounded-2xl p-4 bg-emerald-50 text-emerald-800";box.textContent="পেমেন্ট যাচাই ও ডিভাইস অ্যাক্টিভেশন সফল। ইন্টারনেট চালু হচ্ছে…";document.getElementById("portal-mt-user").value=activated.username||deviceMac;document.getElementById("portal-mt-pass").value=activated.password||deviceMac;setTimeout(()=>document.getElementById("portal-mikrotik-login").submit(),350);
-  }catch(error){box.className="mt-4 rounded-2xl p-4 bg-red-50 text-red-700";box.textContent=error.message;}
-};
-</script><script>(async()=>{try{const r=await fetch('/api/hotspot/public-branding',{cache:'no-store'});if(!r.ok)return;const b=await r.json();const logo=document.querySelector('header img');if(logo&&b.logoUrl)logo.src=b.logoUrl;const desktop=b.bannerUrl||b.banner_url;if(desktop&&b.display_mode==='banner'){const picture=document.getElementById('hotspot-promo'),img=document.getElementById('hotspot-promo-desktop'),mobile=document.getElementById('hotspot-promo-mobile');img.src=desktop;if(b.mobileBannerUrl||b.mobile_banner_url)mobile.srcset=b.mobileBannerUrl||b.mobile_banner_url;picture.hidden=false;}}catch(e){console.warn('[Hotspot portal branding]',e.message||e);}})();</script></body></html>
+    var response=await fetch("/api/verify-trx",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({service_type:"hotspot",phone:phone,account_phone:phone,customer_name:customerName,trxId:trxId,amount:selected,package_id:selectedProfile,profile_id:selectedProfile,mac:deviceMacNow})});
+    var data=await response.json();
+    if(!response.ok||!data.success){
+      if(data.activation_pending){showReceipt(selectedPackageName||selectedProfile,selected,data.claim_trx_id||trxId,"পেমেন্ট যাচাই হয়েছে — অ্যাক্টিভেশন অপেক্ষমাণ। আবার সংযোগ করুন, অথবা এই TrxID দিয়ে পরে claim করুন।");showResult("warn","পেমেন্ট যাচাই হয়েছে, অ্যাক্টিভেশন অপেক্ষমাণ। রসিদে দেওয়া TrxID সংরক্ষণ করুন।");return;}
+      showResult("err",friendlyError(data.code,data.message||data.error));return;
+    }
+    var activation=await fetch("/api/hotspot-auth/activate",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({phone:phone,mac:deviceMacNow,customer_name:customerName,trxId:data.claim_trx_id||trxId})});
+    var activated=await activation.json();
+    if(!activation.ok||!activated.success){
+      if(activated.code==="CLAIM_SECRET_REQUIRED"){showClaimCodeBox(phone,deviceMacNow,customerName,data.claim_trx_id||trxId);return;}
+      showResult("err",friendlyError(activated.code,activated.message||activated.error));return;
+    }
+    showReceipt(activated.profile||selectedPackageName||selectedProfile,selected,data.claim_trx_id||trxId,"পেমেন্ট যাচাই ও ডিভাইস অ্যাক্টিভেশন সফল। ইন্টারনেট চালু হচ্ছে…");
+    showResult("ok","পেমেন্ট যাচাই ও ডিভাইস অ্যাক্টিভেশন সফল। ইন্টারনেট চালু হচ্ছে…");
+    setTimeout(function(){postMikrotikLogin(activated.username||deviceMacNow);},350);
+  }catch(error){showResult("err","সংযোগ ব্যর্থ হয়েছে। Wi-Fi চেক করে আবার চেষ্টা করুন।");}
+  finally{setBusy(button,false);}
+});
+function parseQrCredentials(raw){
+  var value=String(raw||"").trim();if(!value)return null;
+  try{var parsed=JSON.parse(value);if(parsed&&typeof parsed==="object"){var username=String(parsed.username||parsed.user||parsed.pin||parsed.voucher_code||"").trim(),password=String(parsed.password||parsed.pass||parsed.voucher_password||"").trim();if(username)return{username:username,password:password};}}catch(e){}
+  try{var url=new URL(value);var u=url.searchParams.get("username")||url.searchParams.get("user")||url.searchParams.get("pin"),p=url.searchParams.get("password")||url.searchParams.get("pass");if(u)return{username:u,password:p||""};}catch(e){}
+  var match=value.match(/^([^:|\s]+)\s*[:|]\s*(.+)$/);if(match)return{username:match[1].trim(),password:match[2].trim()};
+  return{username:value,password:""};
+}
+function applyScannedCredentials(raw){
+  var credentials=parseQrCredentials(raw);
+  if(!credentials||!credentials.username){showResult("err","QR কোডে ভাউচার ইউজারনেম পাওয়া যায়নি।");return;}
+  $("voucher-pin").value=credentials.username.toUpperCase();
+  if(credentials.password)$("voucher-password").value=credentials.password;
+  showResult("ok",credentials.password?"QR থেকে ভাউচার তথ্য পড়া হয়েছে।":"QR থেকে ইউজারনেম পড়া হয়েছে; পাসওয়ার্ড লিখুন।");
+}
+function stopQrScanner(){
+  if(scannerTimer){clearInterval(scannerTimer);scannerTimer=null;}
+  if(scannerStream){scannerStream.getTracks().forEach(function(track){track.stop();});scannerStream=null;}
+  var video=$("qr-scanner-video");
+  if(video){video.pause();video.srcObject=null;}
+  scannerBusy=false;
+  $("qr-scanner-modal").classList.add("hidden");
+  var button=$("qr-scan-button");if(button)button.disabled=false;
+}
+function triggerNativeCameraCapture(){$("qr-file-input").click();}
+async function handleQrImageFile(file){
+  showResult("info","QR কোড ছবি থেকে পড়া হচ্ছে…");
+  try{
+    if(!("BarcodeDetector" in window))throw new Error("unsupported");
+    var bitmap=await createImageBitmap(file);
+    var detector=new BarcodeDetector({formats:["qr_code"]});
+    var codes=await detector.detect(bitmap);
+    if(codes.length&&codes[0].rawValue){applyScannedCredentials(codes[0].rawValue);return;}
+    showResult("err","QR কোডটি স্পষ্ট নয়। কোডটি PIN ঘরে সরাসরি লিখুন।");
+  }catch(error){showResult("err","ক্যামেরা ছবি থেকে QR পড়া যায়নি। অনুগ্রহ করে পিনটি টাইপ করুন।");}
+}
+async function openQrScanner(){
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){triggerNativeCameraCapture();return;}
+  var button=$("qr-scan-button");
+  button.disabled=true;
+  $("qr-scanner-modal").classList.remove("hidden");
+  $("qr-scanner-status").textContent="ক্যামেরা চালু হচ্ছে…";
+  try{
+    scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+    var video=$("qr-scanner-video");
+    video.srcObject=scannerStream;
+    await video.play();
+    if("BarcodeDetector" in window){
+      var detector=new BarcodeDetector({formats:["qr_code"]});
+      $("qr-scanner-status").textContent="ভাউচার QR কোড ক্যামেরার সামনে ধরুন।";
+      scannerTimer=setInterval(async function(){
+        if(scannerBusy||!scannerStream||video.readyState<video.HAVE_ENOUGH_DATA)return;
+        scannerBusy=true;
+        try{
+          var codes=await detector.detect(video);
+          if(codes.length&&codes[0].rawValue){var raw=codes[0].rawValue;stopQrScanner();applyScannedCredentials(raw);}
+        }catch(e){}
+        finally{scannerBusy=false;}
+      },250);
+    }else{
+      $("qr-scanner-status").textContent="এই ব্রাউজারে লাইভ স্ক্যান হচ্ছে না — নিচের বাটনে চাপ দিয়ে QR কোডের ছবি তুলুন।";
+    }
+  }catch(error){stopQrScanner();triggerNativeCameraCapture();}
+}
+$("qr-scan-button").addEventListener("click",function(){openQrScanner();});
+$("qr-close-button").addEventListener("click",function(){stopQrScanner();});
+$("qr-photo-button").addEventListener("click",function(){triggerNativeCameraCapture();});
+$("qr-file-input").addEventListener("change",function(e){if(e.target.files&&e.target.files[0])handleQrImageFile(e.target.files[0]);e.target.value="";});
+resolveDeviceMac();
+fetch("/api/public/portal-config",{headers:{Accept:"application/json"},cache:"no-store"}).then(async function(response){var config=await response.json();if(!response.ok||!config.success)throw new Error(config.error||"Portal configuration unavailable");renderPortalConfig(config);}).catch(function(error){$("portal-packages").innerHTML='<p style="border-radius:12px;background:#fef2f2;padding:12px;text-align:center;font-size:13px;color:#b91c1c">'+escHtml(error.message||"Hotspot packages could not be loaded.")+'</p>';$("pay-row").innerHTML='<p style="text-align:center;font-size:13px;color:#64748b;width:100%">Payment settings unavailable.</p>';}).finally(function(){runDeviceLookup();});
+</script></body></html>

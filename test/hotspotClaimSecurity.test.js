@@ -5,16 +5,12 @@
 // (user decision 2026-11-21 23:20) — no password-scheme assertions here.
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const crypto=require("node:crypto");
 const controller=require("../controllers/hotspotAuthController");
 const paymentController=require("../controllers/paymentController");
 const db=require("../db");
 const mikrotik=require("../services/mikrotikService");
 const notificationDispatcher=require("../services/notificationDispatcher");
-const claimOtpService=require("../services/hotspotClaimOtpService");
 const rateLimit=require("../services/hotspotAuthRateLimit");
-const smsService=require("../services/smsService");
-const whatsappService=require("../services/whatsappService");
 const {buildHotspotOnLoginScript}=require("../services/hotspotProfileConfig");
 const fs=require("node:fs");
 const path=require("node:path");
@@ -28,32 +24,6 @@ const METADATA={"30-Day":{price:150,validityValue:30,validityUnit:"days",validit
 function response(){return {statusCode:200,body:null,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};}
 function resetLimits(){rateLimit.__resetForTests();}
 function knownMac(row){const compact=String(row?.mac_address||row?.username||"").trim().replace(/[:-]/g,"");return /^[0-9a-f]{12}$/i.test(compact)?compact.match(/.{2}/g).join(":").toUpperCase():"";}
-
-// ---- shared in-memory hotspot_claim_otps store (fake NOW() = otpNow) ----
-let otpNow=new Date("2026-11-21T23:30:00+06:00");
-let otpRows=[];
-function otpQuery(sql,params){
-  if(sql.includes("SET attempts=attempts+1")){
-    const row=otpRows.find(x=>x.id===params[0]); if(row)row.attempts+=1; return {rows:[],rowCount:row?1:0};
-  }
-  if(sql.includes("UPDATE hotspot_claim_otps SET used_at=NOW() WHERE voucher_id=")){
-    for(const row of otpRows)if(row.voucher_id===params[0]&&!row.used_at)row.used_at=new Date(otpNow);
-    return {rows:[],rowCount:0};
-  }
-  if(sql.includes("SET used_at=NOW() WHERE id=")){
-    const row=otpRows.find(x=>x.id===params[0]); if(row)row.used_at=new Date(otpNow); return {rows:[],rowCount:row?1:0};
-  }
-  if(sql.startsWith("INSERT INTO hotspot_claim_otps")){
-    otpRows.push({id:"otp-"+(otpRows.length+1),phone:params[0],voucher_id:params[1],code_hash:params[2],expires_at:new Date(otpNow.getTime()+10*60*1000),attempts:0,used_at:null,created_at:new Date(otpNow)});
-    return {rows:[],rowCount:1};
-  }
-  if(sql.includes("FROM hotspot_claim_otps WHERE voucher_id=")){
-    const found=otpRows.filter(r=>r.voucher_id===params[0]&&!r.used_at&&r.expires_at>otpNow).sort((a,b)=>b.created_at-a.created_at)[0];
-    return {rows:found?[{...found}]:[]};
-  }
-  return null;
-}
-function resetOtpStore(){otpNow=new Date("2026-11-21T23:30:00+06:00");otpRows=[];}
 
 // ---- activate() fakes ----
 function pendingClaimRow(overrides={}){
@@ -80,7 +50,6 @@ function installActivateFakes({row,txRow,onNetwork}){
   mikrotik.updateHotspotUser=async()=>{routerCalls.push({method:"updateHotspotUser"});return {username:MAC};};
   db.query=async(sql,params=[])=>{
     queries.push({sql,params,scope:"pool"});
-    const otp=otpQuery(sql,params); if(otp)return otp;
     if(sql.includes("FROM app_settings"))return {rows:[{value:JSON.stringify(METADATA)}]};
     if(sql.startsWith("SELECT mac_address,username,status FROM hotspot_vouchers")){
       const callerMac=String(params[0]||"").toUpperCase();
@@ -91,7 +60,6 @@ function installActivateFakes({row,txRow,onNetwork}){
   };
   db.withTransaction=async(callback)=>callback({query:async(sql,params=[])=>{
     queries.push({sql,params,scope:"transaction"});
-    const otp=otpQuery(sql,params); if(otp)return otp;
     if(sql.startsWith("SELECT pg_advisory_xact_lock"))return {rows:[]};
     if(sql.startsWith("SELECT * FROM hotspot_vouchers"))return {rows:row?[row]:[]};
     if(sql.startsWith("SELECT id,status FROM transactions"))return {rows:txRow?[txRow]:[]};
@@ -111,7 +79,7 @@ function installActivateFakes({row,txRow,onNetwork}){
 }
 
 test("C1: pending_claim + phone + attacker MAC + no secret -> 403, no bind, no router call",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:pendingClaimRow(),txRow:{id:9001,status:"processed"}});
   try{
     const res=response();
@@ -124,7 +92,7 @@ test("C1: pending_claim + phone + attacker MAC + no secret -> 403, no bind, no r
 });
 
 test("C1: pending_claim + correct TrxID activates and binds the MAC (and stores customer_name only when empty)",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:pendingClaimRow(),txRow:{id:9001,status:"processed"}});
   try{
     const res=response();
@@ -144,7 +112,7 @@ test("C1: pending_claim + correct TrxID activates and binds the MAC (and stores 
 });
 
 test("C1: pending_claim + wrong TrxID -> 403, and 5 wrong secrets lock the phone for 15 minutes",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:pendingClaimRow(),txRow:{id:9999,status:"processed"}});
   try{
     for(let i=0;i<5;i++){
@@ -161,82 +129,41 @@ test("C1: pending_claim + wrong TrxID -> 403, and 5 wrong secrets lock the phone
   }finally{fakes.restore();}
 });
 
-test("C1: OTP request stores only the hash, the code activates, reuse fails, an expired code fails",async()=>{
-  resetLimits();resetOtpStore();
-  const sentSms=[],sentWa=[];
-  const originalSms=smsService.sendSms,originalWa=whatsappService.sendMessage;
-  smsService.sendSms=async(payload)=>{sentSms.push(payload);return {success:true,skipped:false};};
-  whatsappService.sendMessage=async(payload)=>{sentWa.push(payload);return {success:true};};
-  const fakes=installActivateFakes({row:pendingClaimRow(),txRow:{id:9001,status:"processed"}});
+test("C1 (TrxID-only): a 6-digit value is not a claim secret — otp/claim_code/code fields are ignored",async()=>{
+  resetLimits();
+  const fakes=installActivateFakes({row:pendingClaimRow(),txRow:{id:9999,status:"processed"}});
   try{
-    // request-claim-otp: generic response, no oracle
-    const otpRes=response();
-    const originalQuery=db.query;
-    db.query=async(sql,params=[])=>{
-      if(sql.includes("FROM hotspot_vouchers WHERE REGEXP_REPLACE"))return {rows:[pendingClaimRow()]};
-      const otp=otpQuery(sql,params); if(otp)return otp;
-      return originalQuery(sql,params);
-    };
-    try{await controller.requestClaimOtp({ip:"10.0.0.14",body:{phone:PHONE}},otpRes);}finally{db.query=originalQuery;}
-    assert.equal(otpRes.statusCode,200);
-    assert.equal(otpRes.body.success,true);
-    assert.equal(sentSms.length,1,"SMS is tried first");
-    assert.equal(sentWa.length,0,"WhatsApp is only a fallback");
-    const code=String(sentSms[0].message||"").match(/(\d{6})/)?.[1];
-    assert.ok(code,"the SMS must carry a 6-digit code");
-    assert.equal(otpRows.length,1);
-    assert.notEqual(otpRows[0].code_hash,code,"only the hash is stored, never the code");
-    assert.equal(otpRows[0].code_hash,crypto.createHash("sha256").update(code).digest("hex"));
-    // correct code activates
-    const ok=response();
-    await controller.activate({ip:"10.0.0.15",body:{phone:PHONE,mac:OTHER_MAC,otp:code}},ok);
-    assert.equal(ok.statusCode,200);
-    assert.equal(ok.body.success,true);
-    // reuse of the same code fails
-    const reuse=response();
-    await controller.activate({ip:"10.0.0.16",body:{phone:PHONE,mac:OTHER_MAC,otp:code}},reuse);
-    assert.equal(reuse.statusCode,403);
-    assert.equal(reuse.body.code,"OTP_NOT_FOUND_OR_EXPIRED");
-    // an expired code fails
-    resetLimits();
-    const otpRes2=response();
-    const originalQuery2=db.query;
-    db.query=async(sql,params=[])=>{
-      if(sql.includes("FROM hotspot_vouchers WHERE REGEXP_REPLACE"))return {rows:[pendingClaimRow()]};
-      const otp=otpQuery(sql,params); if(otp)return otp;
-      return originalQuery2(sql,params);
-    };
-    try{await controller.requestClaimOtp({ip:"10.0.0.17",body:{phone:PHONE}},otpRes2);}finally{db.query=originalQuery2;}
-    const code2=String(sentSms[1].message||"").match(/(\d{6})/)?.[1];
-    otpNow=new Date(otpNow.getTime()+11*60*1000); // past the 10-minute TTL
-    const expired=response();
-    await controller.activate({ip:"10.0.0.18",body:{phone:PHONE,mac:OTHER_MAC,otp:code2}},expired);
-    assert.equal(expired.statusCode,403);
-    assert.equal(expired.body.code,"OTP_NOT_FOUND_OR_EXPIRED");
-  }finally{smsService.sendSms=originalSms;whatsappService.sendMessage=originalWa;fakes.restore();}
+    // An otp field alone carries no secret any more.
+    const noSecret=response();
+    await controller.activate({ip:"10.0.0.14",body:{phone:PHONE,mac:OTHER_MAC,otp:"123456"}},noSecret);
+    assert.equal(noSecret.statusCode,403);
+    assert.equal(noSecret.body.code,"CLAIM_SECRET_REQUIRED");
+    // A 6-digit value sent as the TrxID is checked as a TrxID — and fails.
+    const sixDigit=response();
+    await controller.activate({ip:"10.0.0.15",body:{phone:PHONE,mac:OTHER_MAC,trxId:"123456"}},sixDigit);
+    assert.equal(sixDigit.statusCode,403);
+    assert.equal(sixDigit.body.code,"CLAIM_SECRET_INVALID");
+    // Legacy code fields are ignored the same way.
+    for(const field of ["claim_code","code"]){
+      const res=response();
+      await controller.activate({ip:"10.0.0.16",body:{phone:PHONE,mac:OTHER_MAC,[field]:"123456"}},res);
+      assert.equal(res.statusCode,403);
+      assert.equal(res.body.code,"CLAIM_SECRET_REQUIRED");
+    }
+    assert.equal(fakes.queries.some(q=>q.sql.startsWith("UPDATE hotspot_vouchers SET mac_address=$1")),false,"no OTP-shaped value may bind");
+  }finally{fakes.restore();}
 });
 
-test("C1/OTP service: 5 wrong codes lock the OTP; SMS skipped falls back to WhatsApp",async()=>{
-  resetOtpStore();
-  const sentSms=[],sentWa=[];
-  const fakeDb={query:async(sql,params=[])=>{const otp=otpQuery(sql,params);if(otp)return otp;throw new Error("Unexpected OTP query: "+sql);}};
-  const svc=claimOtpService.createHotspotClaimOtpService({db:fakeDb,smsService:{sendSms:async(payload)=>{sentSms.push(payload);return {success:true,skipped:true};}},whatsappService:{sendMessage:async(payload)=>{sentWa.push(payload);return {success:true};}}});
-  const requested=await svc.requestClaimOtp({phone:PHONE,voucherId:101});
-  assert.equal(requested.sent,true);
-  assert.deepEqual(requested.channels,["whatsapp"]);
-  const code=String(sentWa[0].message||"").match(/(\d{6})/)?.[1];
-  for(let i=0;i<5;i++){
-    const wrong=await svc.verifyClaimOtp({phone:PHONE,voucherId:101,code:"000000"});
-    assert.equal(wrong.ok,false);
-    assert.equal(wrong.code,"OTP_INVALID");
-  }
-  const locked=await svc.verifyClaimOtp({phone:PHONE,voucherId:101,code});
-  assert.equal(locked.ok,false);
-  assert.equal(locked.code,"OTP_LOCKED");
+test("C1 (TrxID-only): requestClaimOtp is gone — export, route and service file all removed",()=>{
+  assert.equal(controller.requestClaimOtp,undefined,"the controller must no longer export requestClaimOtp");
+  const routes=fs.readFileSync(path.join(__dirname,"..","routes","hotspotAuthRoutes.js"),"utf8");
+  assert.equal(routes.includes("request-claim-otp"),false,"the /request-claim-otp route must be gone");
+  assert.equal(routes.includes("requestClaimOtp"),false,"no requestClaimOtp handler reference may remain");
+  assert.throws(()=>require("../services/hotspotClaimOtpService"),/Cannot find module/,"the OTP service file must be deleted");
 });
 
 test("C2: bound active account + correct MAC + no secret activates (no claim secret needed)",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:activeBoundRow(),txRow:{id:9001,status:"processed"},onNetwork:true});
   try{
     const res=response();
@@ -248,7 +175,7 @@ test("C2: bound active account + correct MAC + no secret activates (no claim sec
 });
 
 test("C2: bound active account + different MAC -> MAC_MISMATCH; off-network bound login -> MAC_NOT_ON_NETWORK",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:activeBoundRow(),txRow:{id:9001,status:"processed"},onNetwork:true});
   try{
     const mismatch=response();
@@ -268,7 +195,7 @@ test("C2: bound active account + different MAC -> MAC_MISMATCH; off-network boun
 });
 
 test("C2/mac_lock: a locked account refuses a MAC change even with a valid claim secret",async()=>{
-  resetLimits();resetOtpStore();
+  resetLimits();
   const fakes=installActivateFakes({row:pendingClaimRow({mac_lock:true}),txRow:{id:9001,status:"processed"}});
   try{
     const res=response();
@@ -395,12 +322,21 @@ test("Portal: recharge + existing-login forms send phone/name, claim-code UI exi
   assert.ok(portal.includes('id="existing-name"'),"existing login needs an optional Name field");
   assert.ok(portal.includes('id="existing-login-form"'),"existing login must be an expanding form");
   assert.ok(portal.includes("customer_name"),"the portal must send customer_name");
-  assert.ok(portal.includes("/api/hotspot-auth/request-claim-otp"),"the portal must offer the claim-code fallback");
+  assert.equal(portal.includes("/api/hotspot-auth/request-claim-otp"),false,"the OTP endpoint must be gone from the portal");
+  assert.equal(portal.includes('id="claim-code-send"'),false,"the Send WhatsApp OTP button must be gone");
   assert.ok(portal.includes('id="claim-code"'),"the portal must have a claim-code input");
+  assert.equal(portal.includes("body.otp"),false,"the claim submit must never send otp");
   const nameInput=portal.match(/<input id="customer-name"[^>]*>/)[0];
-  assert.doesNotMatch(nameInput,/required/,"the Name field must stay optional");
+  assert.match(nameInput,/required/,"the Buy-tab Name field is required now");
   const phoneInput=portal.match(/<input id="existing-phone"[^>]*>/)[0];
-  assert.doesNotMatch(phoneInput,/required/,"the existing-login Phone field must stay optional");
+  assert.match(phoneInput,/required/,"the existing-login Phone field is required now");
+  const existingNameInput=portal.match(/<input id="existing-name"[^>]*>/)[0];
+  assert.match(existingNameInput,/required/,"the existing-login Name field is required now");
+  const voucherPhoneInput=portal.match(/<input id="voucher-phone"[^>]*>/)[0];
+  assert.match(voucherPhoneInput,/required/,"the voucher Phone field is required now");
+  const voucherNameInput=portal.match(/<input id="voucher-name"[^>]*>/)[0];
+  assert.match(voucherNameInput,/required/,"the voucher Name field is required now");
+  assert.equal(portal.includes("(ঐচ্ছিক)"),false,"no customer field may be labelled optional any more");
   assert.ok(portal.includes("trxId:data.claim_trx_id||trxId"),"activate must carry the TrxID from the verify response");
 });
 

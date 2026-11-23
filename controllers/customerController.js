@@ -656,8 +656,8 @@ async function listCustomers(req,res){
     let sessionReport={liveSync:"unavailable",routerCount:0,reachableRouterCount:0,failedRouterCount:0,failedRouters:[]};
     try{
       // Each router's live PPPoE poll has its own bounded socket, handshake and retry logic.
-      // Do not let one outer timeout discard sessions already returned by healthy routers.
-      sessionReport=await mikrotikService.getAllActiveSessionsWithStatus();
+      // Outer 5s budget: worst case is 2 attempts x (3s handshake + 8s operation) per router, which alone can exceed the page's 20s fetch timeout and hide the DB rows entirely. On timeout the DB rows still render (all Offline); the next load retries live.
+      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),5000);
       if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
       if(sessionReport.liveSync==="ok"||sessionReport.liveSync==="partial")sessions=sessionReport.sessions;
     }catch(error){
