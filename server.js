@@ -30,11 +30,14 @@ const androidGateway=require("./services/androidGateway");
 const appSettingsService=require("./services/appSettings");
 const settingsController=require("./controllers/settingsController");
 const isProduction=String(process.env.NODE_ENV||"").toLowerCase()==="production";
-// WhatsApp socket runs on ONE instance only: this PC. Render sets RENDER=true
+// WhatsApp socket runs on ONE instance only: Render. Render sets RENDER=true
 // automatically, and it shares the same PostgreSQL auth state — a second
-// socket there fights this one and WhatsApp unlinks the device. Explicit
-// WHATSAPP_ENABLED=true forces it on; =false turns it off everywhere.
-const WHATSAPP_AUTOSTART = process.env.WHATSAPP_ENABLED ? process.env.WHATSAPP_ENABLED === "true" : process.env.RENDER !== "true";
+// socket fights it and WhatsApp unlinks the device. The PC never autostarts
+// the socket: it used to grab the lease on every boot, so Render could never
+// be the stable owner. Explicit WHATSAPP_ENABLED=true forces autostart on
+// (for a manual test instance). Manual Connect / Reconnect still works on
+// any instance — this only gates the boot-time autostart.
+const WHATSAPP_AUTOSTART = require("./services/whatsappAutostart").resolveWhatsappAutostart();
 const configuredSessionSecret=String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"").trim();
 if(isProduction&&!configuredSessionSecret)throw new Error("ADMIN_SESSION_SECRET or SESSION_SECRET is required in production.");
 const sessionSecret=configuredSessionSecret||(isProduction?"":require("crypto").randomBytes(48).toString("hex"));
@@ -213,7 +216,7 @@ initializeDatabase().then(initResult=>{if(initResult?.skipped)console.warn("[Ema
   startHotspotRetentionCleanup();
   // WhatsApp restore has its own bounded PostgreSQL retry policy and should
   // still be attempted after transient schema/database startup failures.
-  // (Skipped on Render: only the PC owns the WhatsApp socket.)
+  // (Skipped on the PC: only Render autostarts the WhatsApp socket.)
   if(WHATSAPP_AUTOSTART)require("./services/whatsappService").restoreSession().catch(error=>console.warn("[WhatsApp] Startup restore skipped:",error.message));
 });
 module.exports=app;

@@ -408,3 +408,38 @@ test("resetRegisteredAuthRows purges dead creds, Signal keys and metadata", asyn
   assert.equal(database.rows.has("key:session:abc"), false);
   assert.equal(database.rows.has("metadata"), false);
 });
+
+/* Permanent-fix guard: a transient close (408 timeout, 500 restart, or any
+ * non-401 failure) must NEVER wipe the saved login. Only a confirmed
+ * WhatsApp-reported loggedOut (401) or an explicit Unlink may delete auth
+ * rows. The Nov 26 wipe happened while the socket was connected and no
+ * loggedOut was ever logged, so the wipe paths must stay narrow. */
+
+test("transient closes (408 timeout, 500 restart) never wipe saved auth rows", async () => {
+  const { _handleConnectionClose } = require("../services/whatsappService");
+  const database = fakeDatabase();
+  database.rows.set("creds", { registered: true, token: "keep-me" });
+  database.rows.set("key:session:abc", { key: "keep-me-too" });
+  database.rows.set("metadata", { phone: "+8801712345678" });
+  const before = [...database.rows];
+  try {
+    for (const code of [408, 500]) {
+      const status = await _handleConnectionClose(
+        { lastDisconnect: { error: { output: { statusCode: code } } } },
+        { DisconnectReason: { loggedOut: 401, connectionReplaced: 440 } },
+        { end() {} }
+      );
+      assert.equal(status.connection, "disconnected", `close ${code} must schedule a reconnect, not demand a re-link`);
+      assert.deepEqual([...database.rows], before, `close ${code} must preserve every auth row`);
+      assert.equal(
+        database.queries.some(sql => sql.includes("DELETE FROM whatsapp_sessions")),
+        false,
+        `close ${code} must not issue any auth-row delete`
+      );
+    }
+  } finally {
+    // A transient close schedules a reconnect timer; cancel it so the suite
+    // does not keep retrying against the real database afterwards.
+    await whatsappService._shutdown();
+  }
+});
