@@ -5,6 +5,56 @@ const clean=(v,m=255)=>String(v??"").trim().slice(0,m);
 const isSystemProfile=(value)=>{const name=String(value??"").trim().toLowerCase();return !name||name.includes("default")||name==="vpn"||/^(?:template|internal|system)(?:[-_\\s].*)?$/.test(name);};
 const routerError=(e)=>String(e?.message||e||"Package operation failed.");
 
+// --- remote-address resolution (plan sync) ---
+// A /ppp profile remote-address is either an /ip pool name or a static IPv4
+// address. The panel used to send whatever the packages row held, so a pool
+// that was renamed or deleted on the router (e.g. "PPPoE_Pool", "150 Mbps")
+// made every sync fail with RouterOS "input does not match any value of
+// pool". These helpers validate the value against the router's LIVE pool list
+// before anything is sent.
+function isValidIpv4(value){
+  const parts=String(value||"").trim().split(".");
+  if(parts.length!==4)return false;
+  return parts.every(part=>/^\d{1,3}$/.test(part)&&Number(part)>=0&&Number(part)<=255);
+}
+function isValidPoolRanges(value){
+  const ranges=String(value||"").trim();
+  if(!ranges)return false;
+  return ranges.split(",").every(part=>{
+    const item=part.trim();
+    if(/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(item)){
+      const [ip,prefix]=item.split("/");
+      return isValidIpv4(ip)&&Number(prefix)>=0&&Number(prefix)<=32;
+    }
+    const match=item.match(/^(\d{1,3}(?:\.\d{1,3}){3})-(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if(!match)return false;
+    if(!isValidIpv4(match[1])||!isValidIpv4(match[2]))return false;
+    const toNum=ip=>ip.split(".").reduce((total,octet)=>total*256+Number(octet),0);
+    return toNum(match[1])<=toNum(match[2]);
+  });
+}
+function resolveRemoteAddress(value,livePools){
+  const raw=String(value??"").trim();
+  if(!raw)return{kind:"empty",name:""};
+  const pools=Array.isArray(livePools)?livePools:[];
+  const match=pools.find(x=>String(x.name||"").toLowerCase()===raw.toLowerCase());
+  if(match)return{kind:"pool",name:String(match.name)};
+  if(isValidIpv4(raw))return{kind:"ip",name:raw};
+  return{kind:"missing",name:raw};
+}
+// Every pool in this deployment is a /24 "<base>.2-<base>.254" range behind a
+// "<base>.1" local address (200 Mbps, 400_Hotspot, Expire_Pool). Derive the
+// same range for a missing pool from the plan's own local address; null when
+// no /24 can be derived, so the caller fails loudly instead of guessing.
+function derivePoolRangeFromLocalAddress(localAddress){
+  const ip=String(localAddress||"").trim();
+  if(!isValidIpv4(ip))return null;
+  const octets=ip.split(".");
+  if(Number(octets[3])<1||Number(octets[3])>254)return null;
+  const base=octets.slice(0,3).join(".");
+  return base+".2-"+base+".254";
+}
+
 function errorResponse(res,e,status=503){
   console.error("[PACKAGE API]",e);
   return res.status(status).json({success:false,message:routerError(e)});
@@ -62,6 +112,10 @@ async function normalize(body){
     const pools=await mikrotikService.getIpPools();
     const pool=pools.find(x=>String(x.name).toLowerCase()===value.remoteAddress.toLowerCase());
     if(pool)value.remoteAddress=pool.name;
+    // A pool name the router does not have (renamed/deleted) used to be saved
+    // silently and then fail every later sync with a cryptic RouterOS error.
+    // A static IPv4 address is still a valid remote-address, so allow it.
+    else if(!isValidIpv4(value.remoteAddress))return{error:`IP pool "${value.remoteAddress}" does not exist on the router. Create it in IP Pools first, or pick an existing pool.`};
   }
   return{value};
 }
@@ -71,25 +125,68 @@ async function findProfileByName(name){
   return profiles.find(x=>String(x.name).toLowerCase()===String(name||"").toLowerCase())||null;
 }
 
-async function syncMikrotikProfile(value,previousProfileName=""){
-  const target=await findProfileByName(value.planName);
+// Push one panel plan to the router as a /ppp profile. `context` lets the
+// bulk sync pass the live pool list, the panel's saved ip_pools and the
+// already-found profile so the router is not re-queried per plan; the
+// single-plan save path omits it and the lookups happen here.
+// Remote-address handling for a pool name the router no longer has:
+//  - profile already exists -> keep the router's current remote-address
+//    (the working value) instead of failing the whole sync, and warn;
+//  - profile is new -> create the missing pool first (from the panel's saved
+//    ip_pools record when one exists, else a /24 range derived from the
+//    plan's local address), then create the profile.
+// Returns the service result plus a `warning` string when one applies.
+async function syncMikrotikProfile(value,previousProfileName="",context={}){
+  const target=context.target||await findProfileByName(value.planName);
   const oldName=clean(previousProfileName,120);
   const previous=(target||(!target&&oldName&&oldName.toLowerCase()!==value.planName.toLowerCase()?await findProfileByName(oldName):null));
+  const livePools=context.livePools||await mikrotikService.getIpPools();
+  const resolved=resolveRemoteAddress(value.remoteAddress,livePools);
+  let remoteAddress=value.remoteAddress;
+  let warning=null;
+  if(resolved.kind==="pool"||resolved.kind==="ip"){
+    remoteAddress=resolved.name;
+  }else if(resolved.kind==="empty"){
+    remoteAddress="";
+  }else{
+    const current=target||previous;
+    if(current){
+      const currentRemote=String(current.remoteAddress||current.raw?.["remote-address"]||"").trim();
+      remoteAddress=currentRemote;
+      warning=`IP pool "${resolved.name}" does not exist on the router; kept the router's current remote-address "${currentRemote||"(none)"}". Correct the plan's pool in the panel.`;
+    }else{
+      const panelPools=Array.isArray(context.panelPools)?context.panelPools:[];
+      const panelPool=panelPools.find(x=>String(x.name||"").toLowerCase()===resolved.name.toLowerCase());
+      if(panelPool&&isValidPoolRanges(panelPool.ranges)){
+        await mikrotikService.createIpPool({name:String(panelPool.name).trim(),ranges:String(panelPool.ranges).trim(),nextPool:String(panelPool.next_pool||"none").trim()||"none"});
+        remoteAddress=String(panelPool.name).trim();
+        warning=`IP pool "${remoteAddress}" was missing on the router; created it from the panel's saved IP pool (${String(panelPool.ranges).trim()}).`;
+      }else{
+        const derived=derivePoolRangeFromLocalAddress(value.localAddress);
+        if(!derived)throw new Error(`IP pool "${resolved.name}" does not exist on the router and no range can be derived from local address "${String(value.localAddress||"").trim()}". Create the pool in IP Pools first, or correct the plan's pool.`);
+        await mikrotikService.createIpPool({name:resolved.name,ranges:derived,nextPool:"none"});
+        remoteAddress=resolved.name;
+        warning=`IP pool "${resolved.name}" was missing on the router; created it with range ${derived} (derived from local address ${String(value.localAddress||"").trim()}). Check the range in IP Pools if it should differ.`;
+      }
+    }
+  }
   const data={
     name:value.planName,
     localAddress:value.localAddress,
-    remoteAddress:value.remoteAddress,
+    remoteAddress,
     dnsServer:value.dnsServer,
     changeTcpMss:value.changeTcpMss,
     rateLimit:value.rateLimit
   };
+  let result;
   if(target){
-    return mikrotikService.updateProfile(target.id,data);
+    result=await mikrotikService.updateProfile(target.id,data);
+  }else if(previous){
+    result=await mikrotikService.updateProfile(previous.id,data);
+  }else{
+    result=await mikrotikService.createProfile(data);
   }
-  if(previous){
-    return mikrotikService.updateProfile(previous.id,data);
-  }
-  return mikrotikService.createProfile(data);
+  return{...(result||{}),warning};
 }
 
 function normalizePlanId(rawId){
@@ -197,27 +294,38 @@ async function syncPanelToMikrotik(req,res){
   panelSyncInFlight=true;
   try{
     const result=await db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name");
+    // Live pools + panel pool records are fetched once so every plan resolves
+    // its remote-address against the same snapshot (and a missing pool can be
+    // recreated from the panel's saved ranges). Panel pool metadata is
+    // best-effort: a missing ip_pools table must not break the sync.
+    const livePools=await mikrotikService.getIpPools();
+    let panelPools=[];
+    try{
+      const panelResult=await db.query("SELECT name,ranges,next_pool FROM ip_pools");
+      panelPools=panelResult.rows||[];
+    }catch(_panelPoolError){panelPools=[];}
     const outcomes=[];
     for(const row of result.rows||[]){
       const name=clean(row.profile_name||row.plan_name,120);
       try{
         if(isSystemProfile(name))throw new Error("System/internal profiles are protected.");
         const existing=await findProfileByName(name);
-        await syncMikrotikProfile({
+        const synced=await syncMikrotikProfile({
           planName:name,
           localAddress:clean(row.local_address,255),
           remoteAddress:clean(row.remote_address||row.pool_name,255),
           dnsServer:clean(row.dns_server,255),
           changeTcpMss:clean(row.change_tcp_mss||"default",20).toLowerCase(),
           rateLimit:clean(row.rate_limit,100)
-        },row.profile_name||row.plan_name);
-        outcomes.push({name,status:existing?"updated":"created"});
+        },row.profile_name||row.plan_name,{livePools,panelPools,target:existing});
+        outcomes.push({name,status:existing?"updated":"created",...(synced&&synced.warning?{warning:synced.warning}:{})});
       }catch(error){outcomes.push({name,status:"failed",message:routerError(error)});}
     }
     const created=outcomes.filter(x=>x.status==="created").length;
     const updated=outcomes.filter(x=>x.status==="updated").length;
     const failed=outcomes.filter(x=>x.status==="failed").length;
-    return res.json({success:true,total:outcomes.length,created,updated,failed,results:outcomes,message:"Panel-to-MikroTik sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."});
+    const notes=outcomes.filter(x=>x.warning).map(x=>x.name+": "+x.warning);
+    return res.json({success:true,total:outcomes.length,created,updated,failed,results:outcomes,message:"Panel-to-MikroTik sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."+(notes.length?"\n\nNotes:\n"+notes.join("\n"):"")});
   }catch(error){return errorResponse(res,error);}
   finally{panelSyncInFlight=false;}
 }
@@ -337,4 +445,4 @@ async function sync(req,res){
   }
 }
 
-module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync,syncPanelToMikrotik};
+module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync,syncPanelToMikrotik,syncMikrotikProfile,isValidIpv4,isValidPoolRanges,resolveRemoteAddress,derivePoolRangeFromLocalAddress};
