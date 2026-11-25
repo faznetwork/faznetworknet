@@ -184,7 +184,8 @@
         testResult.className = "text-sm text-slate-500";
       }
       try {
-        const data = await apiJson("/api/router/test");
+        const data = await apiJson("/api/router/test?live=1");
+        if (!data || data.success !== true) throw new Error((data && (data.error || data.message)) || "MikroTik connection test failed.");
         if (testResult) {
           testResult.textContent = "Connected to " + data.routerName + " (RouterOS " + data.version + ")";
           testResult.className = "text-sm font-semibold text-emerald-600";

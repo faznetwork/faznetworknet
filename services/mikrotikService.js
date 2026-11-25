@@ -33,6 +33,20 @@ if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyRe
 const CONNECTION_TIMEOUT_MS = 10000;
 const OPERATION_TIMEOUT_MS = 10000;
 const DEFAULT_PORT = 8728;
+const MAX_ROUTER_TIMEOUT_MS = 60000;
+// Optional per-call RouterOS timeouts (e.g. the background router-status
+// prober, which must survive a slow datacenter-to-router path). Callers
+// that pass nothing keep the 10 s defaults, so existing behaviour is
+// unchanged.
+function resolveProbeTimeouts(options) {
+  const operationTimeoutMs = Number.isFinite(Number(options?.operationTimeoutMs))
+    ? Math.max(250, Math.min(Number(options.operationTimeoutMs), MAX_ROUTER_TIMEOUT_MS))
+    : OPERATION_TIMEOUT_MS;
+  const handshakeTimeoutMs = Number.isFinite(Number(options?.handshakeTimeoutMs))
+    ? Math.max(250, Math.min(Number(options.handshakeTimeoutMs), MAX_ROUTER_TIMEOUT_MS))
+    : CONNECTION_TIMEOUT_MS;
+  return { operationTimeoutMs, handshakeTimeoutMs };
+}
 
 // IPv4 pool matching helpers: RouterOS ranges, CIDR and single IPs.
 function ipv4ToInt(value){const p=String(value||'').trim().split('.');if(p.length!==4)return null;let n=0;for(const part of p){if(!/^\d{1,3}$/.test(part))return null;const x=Number(part);if(x<0||x>255)return null;n=n*256+x;}return n>>>0;}
@@ -260,7 +274,7 @@ class MikroTikService {
       try {
         const connect = connection.connect();
         this._disableSocketInactivityTimeout(connection, 'initial connect');
-        await this._executeWithTimeout(connect, Math.min(Number(handshakeTimeoutMs) || CONNECTION_TIMEOUT_MS, CONNECTION_TIMEOUT_MS), 'MikroTik connection handshake');
+        await this._executeWithTimeout(connect, Math.min(Number(handshakeTimeoutMs) || CONNECTION_TIMEOUT_MS, MAX_ROUTER_TIMEOUT_MS), 'MikroTik connection handshake');
         this._disableSocketInactivityTimeout(connection, 'after handshake');
         this._startHeartbeat(connection);
         console.log('[MikroTik Connection] persistent session established', {
@@ -378,13 +392,20 @@ class MikroTikService {
   }
   _writeParams(values) { return Object.entries(values).filter(([, value]) => value !== undefined && value !== null && String(value) !== "").map(([key, value]) => "=" + key + "=" + value); }
 
-  async testConnection(configOverride) {
+  async testConnection(configOverride, timeoutOptions) {
     const requestedTimeout=Number(configOverride?.timeout);
     const timeoutMs=configOverride&&Number.isFinite(requestedTimeout)
       ? Math.max(500,Math.min(requestedTimeout,5000))
       : OPERATION_TIMEOUT_MS;
-    const handshakeTimeoutMs=configOverride?Math.max(250,Math.floor(timeoutMs*0.6)):CONNECTION_TIMEOUT_MS;
-    const operationTimeoutMs=configOverride?Math.max(250,timeoutMs-handshakeTimeoutMs):OPERATION_TIMEOUT_MS;
+    // An explicit timeoutOptions override (background prober) may ask for a
+    // longer handshake/operation than the 10 s defaults; anything else keeps
+    // the historical split (60% handshake / 40% operation of timeoutMs).
+    const handshakeTimeoutMs=Number.isFinite(Number(timeoutOptions?.handshakeTimeoutMs))
+      ? Math.max(250,Math.min(Number(timeoutOptions.handshakeTimeoutMs),MAX_ROUTER_TIMEOUT_MS))
+      : configOverride?Math.max(250,Math.floor(timeoutMs*0.6)):CONNECTION_TIMEOUT_MS;
+    const operationTimeoutMs=Number.isFinite(Number(timeoutOptions?.operationTimeoutMs))
+      ? Math.max(250,Math.min(Number(timeoutOptions.operationTimeoutMs),MAX_ROUTER_TIMEOUT_MS))
+      : configOverride?Math.max(250,timeoutMs-handshakeTimeoutMs):OPERATION_TIMEOUT_MS;
     return this._withConnection("connection test", async (connection) => {
       const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query");
       const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query");
@@ -397,8 +418,9 @@ class MikroTikService {
       };
     }, configOverride, operationTimeoutMs, handshakeTimeoutMs);
   }
-  async getSystemResources() { return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); const totalHddBytes = this._number(resource["total-hdd-space"]); const freeHddBytes = this._number(resource["free-hdd-space"]); return { cpuLoad: this._number(resource["cpu-load"]), cpuCount: this._number(resource["cpu-count"]), cpuFrequencyMHz: this._number(resource["cpu-frequency"]), cpu: this._str(resource.cpu) || "Unknown", architectureName: this._str(resource["architecture-name"]) || "Unknown", boardName: this._str(resource["board-name"]) || "Unknown", platform: this._str(resource.platform) || "Unknown", version: this._str(resource.version) || "Unknown", buildTime: this._str(resource["build-time"]) || "Unknown", factorySoftware: this._str(resource["factory-software"]) || "Unknown", freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number((Math.max(0, totalMemoryBytes - freeMemoryBytes) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, freeHddMb: Number((freeHddBytes / 1024 / 1024).toFixed(2)), totalHddMb: Number((totalHddBytes / 1024 / 1024).toFixed(2)), hddUsagePercent: totalHddBytes > 0 ? Number((((totalHddBytes - freeHddBytes) / totalHddBytes) * 100).toFixed(1)) : 0, writeSectsSinceReboot: this._number(resource["write-sect-since-reboot"]), writeSectsTotal: this._number(resource["write-sect-total"]), badBlocks: this._str(resource["bad-blocks"]) || "0%", uptime: this._str(resource.uptime) || "unknown" }; }); }
-  async getInterfaces() {
+  async getSystemResources(options) { const timeouts=resolveProbeTimeouts(options); return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); const totalHddBytes = this._number(resource["total-hdd-space"]); const freeHddBytes = this._number(resource["free-hdd-space"]); return { cpuLoad: this._number(resource["cpu-load"]), cpuCount: this._number(resource["cpu-count"]), cpuFrequencyMHz: this._number(resource["cpu-frequency"]), cpu: this._str(resource.cpu) || "Unknown", architectureName: this._str(resource["architecture-name"]) || "Unknown", boardName: this._str(resource["board-name"]) || "Unknown", platform: this._str(resource.platform) || "Unknown", version: this._str(resource.version) || "Unknown", buildTime: this._str(resource["build-time"]) || "Unknown", factorySoftware: this._str(resource["factory-software"]) || "Unknown", freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number((Math.max(0, totalMemoryBytes - freeMemoryBytes) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, freeHddMb: Number((freeHddBytes / 1024 / 1024).toFixed(2)), totalHddMb: Number((totalHddBytes / 1024 / 1024).toFixed(2)), hddUsagePercent: totalHddBytes > 0 ? Number((((totalHddBytes - freeHddBytes) / totalHddBytes) * 100).toFixed(1)) : 0, writeSectsSinceReboot: this._number(resource["write-sect-since-reboot"]), writeSectsTotal: this._number(resource["write-sect-total"]), badBlocks: this._str(resource["bad-blocks"]) || "0%", uptime: this._str(resource.uptime) || "unknown" }; }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs); }
+  async getInterfaces(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("interface query", async (connection) => {
       const rows = await connection.write("/interface/print");
       return (Array.isArray(rows) ? rows : [])
@@ -410,7 +432,7 @@ class MikroTikService {
           comment: this._str(item.comment)
         }))
         .filter((item) => item.name);
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async getBridgeHosts() {
@@ -466,12 +488,13 @@ class MikroTikService {
     return false;
   }
 
-  async getInterfaceTraffic(interfaceName) {
+  async getInterfaceTraffic(interfaceName, options) {
     const name = String(interfaceName || "").trim();
     if (!name || name.length > 100 || /[\r\n\0]/.test(name)) {
       throw new Error("MikroTik traffic query failed: a valid interface name is required.");
     }
 
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("traffic query for " + name, async (connection) => {
       const rows = await connection.write("/interface/monitor-traffic", [
         "=interface=" + name,
@@ -521,7 +544,7 @@ class MikroTikService {
         txKbps: Number((txBitsPerSecond / 1000).toFixed(1)),
         timestamp: new Date().toISOString()
       };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
   async getPppoeLiveTraffic(username) {
     const name=String(username||"").trim();
@@ -811,11 +834,12 @@ class MikroTikService {
         .filter((item) => item.name && ["pppoe", "any"].includes(item.service.trim().toLowerCase()));
     });
   }
-  async getActiveSessions() {
+  async getActiveSessions(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("active PPPoE session query", async (connection) => {
       const rows = await connection.write("/ppp/active/print");
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), bytesIn: this._str(item["bytes-in"]), bytesOut: this._str(item["bytes-out"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async getActiveSessionsSafe(configOverride = null, options = {}) {

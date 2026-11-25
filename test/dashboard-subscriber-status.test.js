@@ -7,7 +7,7 @@ const path=require("node:path");
 function response(){
   return{statusCode:200,headers:{},body:null,set(name,value){this.headers[name]=value;return this;},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
 }
-function load({customers,sessions,failMonthQuery=false,failCustomerQuery=false,failSessions=false}={}){
+function load({customers,sessions,failMonthQuery=false,failCustomerQuery=false,failSessions=false,proberState="online"}={}){
   const file=path.resolve(__dirname,"../controllers/dashboardController.js");
   const original=Module._load;
   const db={
@@ -31,10 +31,24 @@ function load({customers,sessions,failMonthQuery=false,failCustomerQuery=false,f
       throw new Error("Unexpected RouterOS method: "+String(method));
     };
   }});
+  const prober={
+    getRouterStatusSnapshot(){
+      if(proberState==="checking")return{state:"checking",online:null,lastSeenAt:null,lastAttemptAt:null,lastError:null,ageMs:null,consecutiveFailures:0,data:null};
+      if(proberState==="offline")return{state:"offline",online:false,lastSeenAt:null,lastAttemptAt:null,lastError:"Router unreachable",ageMs:null,consecutiveFailures:1,data:null};
+      return{state:"online",online:true,lastSeenAt:new Date().toISOString(),lastAttemptAt:new Date().toISOString(),lastError:null,ageMs:0,consecutiveFailures:0,data:{
+        resources:{boardName:"RB4011",cpuLoad:5,memoryUsagePercent:25,uptime:"1d"},
+        interfaces:[],
+        sessions:failSessions?null:sessions||[],
+        identity:{model:"RB4011"},
+        trafficByInterface:{}
+      }};
+    }
+  };
   delete require.cache[file];
   Module._load=function(request,parent,isMain){
     if(parent&&parent.filename===file&&request==="../db")return db;
     if(parent&&parent.filename===file&&request==="../services/mikrotikService")return mikrotik;
+    if(parent&&parent.filename===file&&request==="../services/routerStatusProber")return prober;
     return original.call(this,request,parent,isMain);
   };
   try{return require(file);}finally{Module._load=original;}
@@ -84,4 +98,39 @@ test("dashboard controller no longer queries retired OLT telemetry",async()=>{
  const res=response();
  await controller.stats({query:{interface:"aggregate"}},res);
  assert.equal(res.statusCode,200);
+});
+
+test("stats reports router.online true from the prober cache",async()=>{
+  const{customers,sessions}=fixture();
+  const controller=load({customers,sessions});
+  const res=response();
+  await controller.stats({query:{interface:"aggregate"}},res);
+  assert.equal(res.statusCode,200);
+  assert.equal(res.body.router.online,true);
+  assert.equal(res.body.routerStatus.state,"online");
+  assert.equal(res.body.router.model,"RB4011");
+  assert.equal(res.body.subscribers.online,18);
+  assert.equal(res.body.subscribers.available,true);
+});
+
+test("stats reports Checking (router.online null) before any probe succeeds",async()=>{
+  const{customers,sessions}=fixture();
+  const controller=load({customers,sessions,proberState:"checking"});
+  const res=response();
+  await controller.stats({query:{interface:"aggregate"}},res);
+  assert.equal(res.statusCode,200);
+  assert.equal(res.body.router.online,null);
+  assert.equal(res.body.routerStatus.state,"checking");
+  assert.equal(res.body.subscribers.available,false);
+});
+
+test("stats reports Offline (router.online false) when the prober reports a failed probe",async()=>{
+  const{customers,sessions}=fixture();
+  const controller=load({customers,sessions,proberState:"offline"});
+  const res=response();
+  await controller.stats({query:{interface:"aggregate"}},res);
+  assert.equal(res.statusCode,200);
+  assert.equal(res.body.router.online,false);
+  assert.equal(res.body.routerStatus.state,"offline");
+  assert.equal(res.body.subscribers.available,false);
 });

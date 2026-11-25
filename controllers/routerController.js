@@ -1,4 +1,5 @@
 const mikrotikService = require("../services/mikrotikService");
+const prober = require("../services/routerStatusProber");
 
 const sendFallback = (res, label, error, data) => {
   const message = error && error.message ? error.message : "Unknown MikroTik service error";
@@ -12,12 +13,35 @@ const sendFallback = (res, label, error, data) => {
 };
 
 exports.test = async (req, res) => {
-  try {
-    const result = await mikrotikService.testConnection();
-    res.json({ success: true, routerName: result.routerName, version: result.version });
-  } catch (error) {
-    sendFallback(res, "connection test", error, { routerName: "MikroTik", version: "N/A" });
+  // Manual live diagnostic (Router Settings "Test Connection" button):
+  // bypasses the cache and probes the router right now.
+  if (req.query.live === "1" || req.query.live === "true") {
+    try {
+      const result = await mikrotikService.testConnection();
+      res.json({ success: true, routerName: result.routerName, version: result.version });
+    } catch (error) {
+      sendFallback(res, "connection test", error, { routerName: "MikroTik", version: "N/A" });
+    }
+    return;
   }
+  // Dashboard gateway check: answer from the background prober's in-memory
+  // cache. A slow path must never read as a dead router.
+  const snapshot = prober.getRouterStatusSnapshot();
+  if (snapshot.state === "online") {
+    const identity = snapshot.data ? snapshot.data.identity : null;
+    const resources = snapshot.data ? snapshot.data.resources : null;
+    return res.json({
+      success: true,
+      routerName: (identity && identity.routerName) || (resources && resources.boardName) || "MikroTik",
+      version: (identity && identity.version) || (resources && resources.version) || "N/A",
+      cached: true,
+      lastSeenAt: snapshot.lastSeenAt
+    });
+  }
+  if (snapshot.state === "checking") {
+    return res.json({ success: false, degraded: false, checking: true, routerName: "MikroTik", version: "N/A", message: "Router status check in progress." });
+  }
+  return res.json({ success: false, degraded: true, error: snapshot.lastError || "Router unreachable", routerName: "MikroTik", version: "N/A", lastSeenAt: snapshot.lastSeenAt });
 };
 
 exports.resources = async (req, res) => {

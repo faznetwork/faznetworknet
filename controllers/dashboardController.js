@@ -1,5 +1,5 @@
-const db=require("../db"),mikrotik=require("../services/mikrotikService");let cache=null,cacheAt=0,inflight=null;const safe=(f,d)=>Promise.resolve().then(f).catch(e=>{console.warn("[Dashboard Stats]",e.message||e);return d;}),n=v=>Number.isFinite(Number(v))?Number(v):0;
-async function collect(iface){
+const db=require("../db"),mikrotik=require("../services/mikrotikService"),prober=require("../services/routerStatusProber");let cache=null,cacheAt=0,composing=null;const safe=(f,d)=>Promise.resolve().then(f).catch(e=>{console.warn("[Dashboard Stats]",e.message||e);return d;}),n=v=>Number.isFinite(Number(v))?Number(v):0;
+async function collectDbPart(){
   const querySafe=(label,sql,params,fallback)=>safe(async()=>{
     try{return await db.query(sql,params);}
     catch(error){throw new Error(label+": "+(error?.message||error));}
@@ -7,12 +7,6 @@ async function collect(iface){
 
   // Isolate each source so an unrelated/retired telemetry query cannot zero
   // otherwise healthy subscriber or billing metrics.
-  const [resources,interfaces,activeSessionResult,identity]=await Promise.all([
-    safe(()=>mikrotik.getSystemResources(),null),
-    safe(()=>mikrotik.getInterfaces(),[]),
-    safe(()=>mikrotik.getActiveSessions(),null),
-    safe(()=>mikrotik.testConnection(),null)
-  ]);
   const [customerResult,todayResult,mtdResult,expiringResult,recentResult]=await Promise.all([
     querySafe("Customer count query","SELECT username FROM customers WHERE status NOT IN ('left','inactive')",[],null),
     querySafe("Today's payment totals query","SELECT COALESCE(SUM(amount),0) AS amount,COUNT(*)::int AS count FROM transactions WHERE created_at >= ((NOW() AT TIME ZONE 'Asia/Dhaka')::date::timestamp AT TIME ZONE 'Asia/Dhaka') AND created_at < (((NOW() AT TIME ZONE 'Asia/Dhaka')::date+1)::timestamp AT TIME ZONE 'Asia/Dhaka') AND (LOWER(status) IN ('processed','paid','success') OR used=TRUE)",[],{rows:[{amount:0,count:0}]}),
@@ -20,6 +14,20 @@ async function collect(iface){
     querySafe("Expiring customer query","SELECT c.id,c.full_name,c.username,c.phone,c.package_name,c.monthly_bill,c.expiration_date,GREATEST(0,EXTRACT(EPOCH FROM (((c.expiration_date+1)::timestamp AT TIME ZONE 'Asia/Dhaka')-clock.now_at))/3600) AS hours_remaining FROM customers c CROSS JOIN (SELECT NOW() AS now_at) clock WHERE c.status NOT IN ('left','inactive') AND ((c.expiration_date+1)::timestamp AT TIME ZONE 'Asia/Dhaka')>clock.now_at AND ((c.expiration_date+1)::timestamp AT TIME ZONE 'Asia/Dhaka')<=clock.now_at+INTERVAL '48 hours' ORDER BY c.expiration_date,c.full_name LIMIT 50",[],{rows:[]}),
     querySafe("Recent payment query","SELECT trx_id,channel,amount,status,created_at FROM transactions ORDER BY created_at DESC LIMIT 5",[],{rows:[]})
   ]);
+  return {customerResult,todayResult,mtdResult,expiringResult,recentResult};
+}
+
+function buildStatsPayload(snapshot,dbPart,iface){
+  const {customerResult,todayResult,mtdResult,expiringResult,recentResult}=dbPart;
+  // Router data only counts while the background prober says the router is
+  // online. A stale last-known-good snapshot is never presented as live:
+  // while Checking or Offline the router fields stay empty and the
+  // subscriber list is reported unavailable, never "0 online".
+  const routerData=snapshot&&snapshot.state==="online"?snapshot.data:null;
+  const resources=routerData?routerData.resources:null;
+  const identity=routerData?routerData.identity:null;
+  const interfaces=Array.isArray(routerData?routerData.interfaces:null)?routerData.interfaces:[];
+  const activeSessionResult=Array.isArray(routerData?routerData.sessions:null)?routerData.sessions:null;
 
   const customerRows=Array.isArray(customerResult?.rows)?customerResult.rows:null;
   const sessions=Array.isArray(activeSessionResult)?activeSessionResult:[];
@@ -36,15 +44,16 @@ async function collect(iface){
     ?ifs.filter(x=>x.running&&!x.disabled&&/^(ether|sfp|sfp-sfpplus|sfpplus|lte)/i.test(x.name)&&!/pppoe|loopback/i.test(x.name)).slice(0,8).map(x=>x.name)
     :[iface];
   let rx=0,tx=0,available=false;
-  await Promise.all(names.map(async name=>{
-    const traffic=await safe(()=>mikrotik.getInterfaceTraffic(name),null);
+  for(const name of names){
+    const traffic=routerData&&routerData.trafficByInterface?routerData.trafficByInterface[name]:null;
     if(traffic){rx+=n(traffic.rxBitsPerSecond);tx+=n(traffic.txBitsPerSecond);available=true;}
-  }));
+  }
 
   const res=resources;
   return{
     success:true,
     generatedAt:new Date().toISOString(),
+    routerStatus:{state:snapshot?snapshot.state:"checking",lastSeenAt:snapshot?snapshot.lastSeenAt:null,ageMs:snapshot?snapshot.ageMs:null},
     subscribers:{
       total,
       online,
@@ -53,7 +62,7 @@ async function collect(iface){
       available:subscribersAvailable
     },
     traffic:{interface:iface,rxMbps:Number((rx/1e6).toFixed(3)),txMbps:Number((tx/1e6).toFixed(3)),available,transferredTodayLabel:"Router byte counters unavailable"},
-    router:{online:Boolean(res),model:res?.boardName||res?.platform||identity?.model||"RouterOS device",uptime:res?.uptime||"unavailable",cpuLoad:res?n(res.cpuLoad):null,memoryUsagePercent:res?n(res.memoryUsagePercent):null},
+    router:{online:snapshot?snapshot.online:null,model:res?.boardName||res?.platform||identity?.model||"RouterOS device",uptime:res?.uptime||"unavailable",cpuLoad:res?n(res.cpuLoad):null,memoryUsagePercent:res?n(res.memoryUsagePercent):null},
     billing:{todayAmount:n(todayResult?.rows?.[0]?.amount),todayTransactions:n(todayResult?.rows?.[0]?.count),mtdAmount:n(mtdResult?.rows?.[0]?.amount)},
     // OLT/ONU telemetry was retired; preserve the response shape for existing UI consumers.
     fiber:{total:0,online:0,warnings:0,lowSignalCount:0,activePonPorts:0,totalPonPorts:4,oltOnline:false,lastSeen:null,oltId:null,oltName:"V-SOL V1600D4",oltAddress:null,urgent:[]},
@@ -61,7 +70,46 @@ async function collect(iface){
     recentPayments:recentResult?.rows||[]
   };
 }
-exports.stats=async(req,res)=>{res.set("Cache-Control","private, max-age=2, stale-while-revalidate=5");const iface=String(req.query.interface||"aggregate").trim().slice(0,100)||"aggregate";if(cache&&Date.now()-cacheAt<5000&&cache.iface===iface)return res.json(cache.payload);if(!inflight){inflight=collect(iface).then(x=>{cache={iface,payload:x};cacheAt=Date.now();return x;}).catch(e=>{console.error("[Dashboard Stats]",e.message||e);return cache?.payload||{success:false,message:"Dashboard metrics unavailable"};}).finally(()=>{inflight=null;});}const fallback=cache?.payload||{success:true,generatedAt:new Date().toISOString(),subscribers:{total:0,online:0,availability:0},traffic:{interface:iface,rxMbps:0,txMbps:0,available:false},router:{online:false},billing:{todayAmount:0,todayTransactions:0,mtdAmount:0},fiber:{total:0,online:0,warnings:0,urgent:[],activePonPorts:0,totalPonPorts:4},expiring:[],recentPayments:[]};return res.json(await Promise.race([inflight,new Promise(resolve=>setTimeout(()=>resolve(fallback),1500))]));};
+
+function fallbackPayload(snapshot,iface){
+  return{
+    success:true,
+    generatedAt:new Date().toISOString(),
+    routerStatus:{state:snapshot?snapshot.state:"checking",lastSeenAt:snapshot?snapshot.lastSeenAt:null,ageMs:snapshot?snapshot.ageMs:null},
+    subscribers:{total:0,online:0,offline:0,availability:0,available:false},
+    traffic:{interface:iface,rxMbps:0,txMbps:0,available:false,transferredTodayLabel:"Router byte counters unavailable"},
+    router:{online:snapshot?snapshot.online:null,model:"RouterOS device",uptime:"unavailable",cpuLoad:null,memoryUsagePercent:null},
+    billing:{todayAmount:0,todayTransactions:0,mtdAmount:0},
+    fiber:{total:0,online:0,warnings:0,lowSignalCount:0,activePonPorts:0,totalPonPorts:4,oltOnline:false,lastSeen:null,oltId:null,oltName:"V-SOL V1600D4",oltAddress:null,urgent:[]},
+    expiring:[],recentPayments:[]
+  };
+}
+
+// The router portion of this response comes from the background prober's
+// in-memory cache (services/routerStatusProber.js), never from a fresh
+// probe: a slow datacenter-to-router path must never make a healthy
+// router look Offline. The database portion is still read fresh on every
+// uncached poll, and the composed payload is cached for 5 s like before.
+exports.stats=async(req,res)=>{
+  res.set("Cache-Control","private, max-age=2, stale-while-revalidate=5");
+  const iface=String(req.query.interface||"aggregate").trim().slice(0,100)||"aggregate";
+  if(cache&&Date.now()-cacheAt<5000&&cache.iface===iface)return res.json(cache.payload);
+  if(!composing){
+    composing=(async()=>{
+      try{
+        const snapshot=prober.getRouterStatusSnapshot();
+        const dbPart=await collectDbPart();
+        const payload=buildStatsPayload(snapshot,dbPart,iface);
+        cache={iface,payload};cacheAt=Date.now();
+        return payload;
+      }catch(error){
+        console.error("[Dashboard Stats]",error.message||error);
+        return fallbackPayload(prober.getRouterStatusSnapshot(),iface);
+      }finally{composing=null;}
+    })();
+  }
+  return res.json(await composing);
+};
 
 exports.businessOverview=async(_req,res)=>{
   res.set("Cache-Control","private, max-age=30, stale-while-revalidate=60");

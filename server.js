@@ -204,10 +204,11 @@ async function shutdown(signal){
 }
 process.on("SIGTERM",()=>{shutdown("SIGTERM").catch(error=>console.error("[Shutdown] Unexpected SIGTERM handler error:",error.message));});
 process.on("SIGINT",()=>{shutdown("SIGINT").catch(error=>console.error("[Shutdown] Unexpected SIGINT handler error:",error.message));});
-initializeDatabase().then(initResult=>{if(initResult?.skipped)console.warn("[EmailWorker] Not started because database schema initialization was skipped.");else require("./services/emailWorker").startEmailWorker();require("./controllers/broadcastController").resumePendingBroadcasts();startBillingCron();startUsageCollector();startNetworkDiscovery();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotAutoHeal();startHotspotExpirationCleanup();startHotspotRetentionCleanup();require("./jobs/hotspotRenewalReconciliation").start();require("./jobs/notificationHistoryCleanup").startNotificationHistoryCleanup();if(WHATSAPP_AUTOSTART)require("./services/whatsappService").restoreSession().catch(e=>console.warn("[WhatsApp] Startup restore skipped:",e.message));}).catch(e=>{
+initializeDatabase().then(initResult=>{if(initResult?.skipped)console.warn("[EmailWorker] Not started because database schema initialization was skipped.");else require("./services/emailWorker").startEmailWorker();require("./controllers/broadcastController").resumePendingBroadcasts();startBillingCron();startUsageCollector();startNetworkDiscovery();require("./services/routerStatusProber").startRouterStatusProber();syncHotspotProfileScripts().catch(e=>console.warn("[HOTSPOT PROFILE SYNC] Startup sync failed; retry after the next deployment:",e.message));startHotspotAutoHeal();startHotspotExpirationCleanup();startHotspotRetentionCleanup();require("./jobs/hotspotRenewalReconciliation").start();require("./jobs/notificationHistoryCleanup").startNotificationHistoryCleanup();if(WHATSAPP_AUTOSTART)require("./services/whatsappService").restoreSession().catch(e=>console.warn("[WhatsApp] Startup restore skipped:",e.message));}).catch(e=>{
   console.error("[Database] Startup initialization failed:",e.message);
   startBillingCron();
   startUsageCollector();
+  require("./services/routerStatusProber").startRouterStatusProber();
   startHotspotExpirationCleanup();
   startHotspotRetentionCleanup();
   // WhatsApp restore has its own bounded PostgreSQL retry policy and should

@@ -15,13 +15,11 @@ let reconnectAttempt = 0;
 let authConfigured = false;
 let reconnectAllowed = true;
 let accountMetadata = null;
-let socketLockClient = null;
 let socketOwner = false;
 let socketOwnerToken = null;
 let socketHeartbeatTimer = null;
 let freshQrResetPending = false;
-let startupOwnershipResetAttempted = false;
-const SOCKET_ADVISORY_LOCK_KEY = 20261017;
+const SOCKET_LEASE_KEY = 20261017;
 const SOCKET_LOCK_STALE_MS = 90_000;
 const SOCKET_HEARTBEAT_MS = 20_000;
 const RESTORE_RETRY_DELAYS = [500, 1500];
@@ -290,144 +288,112 @@ async function resetRegisteredAuthRows(database = db) {
   return { reset: true, reason: "registered_revoked" };
 }
 
-async function ensureSocketLeaseTable(client) {
-  await client.query(`
+async function ensureSocketLeaseTable(database = db) {
+  await database.query(`
     CREATE TABLE IF NOT EXISTS whatsapp_socket_lease (
       lock_key BIGINT PRIMARY KEY,
       owner_pid INTEGER NOT NULL,
       heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  // owner_token identifies one acquire across Supavisor transaction pooling,
-  // where pg_backend_pid() can differ per query and must never be used to
-  // match the heartbeat or the release to this owner.
-  await client.query("ALTER TABLE whatsapp_socket_lease ADD COLUMN IF NOT EXISTS owner_token TEXT");
+  // owner_token identifies one acquire. It is the ONLY ownership identity:
+  // never use pg_backend_pid() to match a heartbeat or a release, because
+  // under Supavisor transaction pooling the backend behind a query can
+  // differ per query.
+  await database.query("ALTER TABLE whatsapp_socket_lease ADD COLUMN IF NOT EXISTS owner_token TEXT");
 }
 
-async function heartbeatSocketLease(client) {
+// Heartbeat runs on the ordinary pool: a failed heartbeat (DB blip, DNS
+// outage) only logs a warning and never ends the socket — the socket stays
+// connected to WhatsApp and the lease simply goes stale after 90s, letting
+// the other instance take over cleanly. But a heartbeat that matches zero
+// rows means the lease was taken by another owner: stop this socket instead
+// of connecting again and getting kicked (connectionReplaced) in a loop.
+async function heartbeatSocketLease(database = db) {
   try {
     if (!socketOwnerToken) return;
-    await client.query(
+    const result = await database.query(
       "UPDATE whatsapp_socket_lease SET heartbeat_at=NOW() WHERE lock_key=$1 AND owner_token=$2",
-      [SOCKET_ADVISORY_LOCK_KEY, socketOwnerToken]
+      [SOCKET_LEASE_KEY, socketOwnerToken]
     );
+    if (result && result.rowCount === 0) {
+      console.warn("[WhatsApp] Socket lease lost to another instance; stopping this socket.");
+      socketOwner = false;
+      socketOwnerToken = null;
+      if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
+      const activeSocket = socket;
+      socket = null;
+      if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
+      connection = "disconnected";
+      lastError = "WhatsApp socket ownership moved to another instance; reconnecting only when the lease is free.";
+      scheduleReconnect();
+    }
   } catch (error) {
     console.warn("[WhatsApp] Ownership heartbeat failed:", error.message);
   }
 }
 
-// Startup cleanup for stale lease rows only. Never terminate another backend
-// here, and never delete a live owner's row: a fresh heartbeat is the only
-// proof an owner is alive, and deleting it would let a later acquire mistake
-// a healthy owner for an orphaned lock. Genuinely stale owners are handled by
-// the lease-age check in acquireSocketOwnership.
-async function forceClearLegacySocketLock(client) {
-  if (startupOwnershipResetAttempted) return;
-  startupOwnershipResetAttempted = true;
-  await ensureSocketLeaseTable(client);
-  // A lease row alone is not a lock. Clear only lease metadata whose heartbeat
-  // is already stale; preserve whatsapp_sessions and all saved Baileys credentials.
-  await client.query(
-    "DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND heartbeat_at < NOW() - INTERVAL '90 seconds'",
-    [SOCKET_ADVISORY_LOCK_KEY]
-  );
-}
-
-async function acquireSocketOwnership(poolOverride) {
-  if (socketLockClient && socketOwner) return;
-  const pool = poolOverride || (typeof db.getPool === "function" ? db.getPool() : null);
-  if (!pool || typeof pool.connect !== "function") return;
-  const client = await pool.connect();
-  client.on("error", error => {
-    if (socketLockClient !== client) return;
-    socketLockClient = null;
+async function acquireSocketOwnership(databaseOverride) {
+  // Single-owner gate for the WhatsApp socket. The exclusion primitive is ONE
+  // atomic lease-row statement — never a session-level advisory lock, and
+  // never an in-memory flag on its own. Why: this app connects through the
+  // Supabase pooler (Supavisor, transaction mode), where the backend behind
+  // a client can be recycled silently. A session-level advisory lock then
+  // vanishes without any error, while this process still believes it owns
+  // the socket — and the other instance (Render) believes the same. Both
+  // connect with the same PostgreSQL-backed creds, WhatsApp allows only one
+  // live session, so each side is kicked with connectionReplaced (440) and
+  // reconnects ~4 seconds later: thousands of reconnects, panel showing
+  // "unlinked" again and again. The lease row is a plain table row, so it
+  // survives pooling, and the INSERT ... ON CONFLICT ... WHERE stale below
+  // is atomic: exactly one instance can hold a fresh lease at a time.
+  const database = databaseOverride || db;
+  // Re-validate on every call: a fresh lease row carrying our own token is
+  // the only proof we still own the socket.
+  if (socketOwner && socketOwnerToken) {
+    const held = await database.query(
+      "SELECT owner_token, (EXTRACT(EPOCH FROM (NOW()-heartbeat_at))*1000)::bigint AS age_ms FROM whatsapp_socket_lease WHERE lock_key=$1",
+      [SOCKET_LEASE_KEY]
+    );
+    const row = held.rows?.[0];
+    if (row && row.owner_token === socketOwnerToken && Number(row.age_ms) <= SOCKET_LOCK_STALE_MS) return;
+    // Our lease is gone or stale: fall through and re-acquire cleanly instead
+    // of connecting on a stale belief of ownership.
     socketOwner = false;
     socketOwnerToken = null;
     if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
-    lastError = "WhatsApp database ownership lock was lost; reconnecting safely.";
-    const activeSocket = socket;
-    socket = null;
-    if (activeSocket) { try { activeSocket.end(undefined); } catch (_) {} }
-    connection = "error";
-    console.warn("[WhatsApp] Socket ownership lock lost:", error.message);
-    try { client.release(true); } catch (_) {}
-    // pg can emit a second socket error while a heartbeat query is settling
-    // after release. Keep that late event from becoming an unhandled process error.
-    client.on("error", () => {});
-    scheduleReconnect();
-  });
-  try {
-    await forceClearLegacySocketLock(client);
-    let result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
-    if (!result.rows?.[0]?.locked) {
-      const lease = await client.query(
-        "SELECT owner_pid, (EXTRACT(EPOCH FROM (NOW()-heartbeat_at))*1000)::bigint AS age_ms FROM whatsapp_socket_lease WHERE lock_key=$1",
-        [SOCKET_ADVISORY_LOCK_KEY]
-      );
-      const owner = lease.rows?.[0];
-      const ownerStale = !owner || Number(owner.age_ms) > SOCKET_LOCK_STALE_MS;
-      if (ownerStale) {
-        // No live owner, yet the advisory lock is held: the lock is orphaned.
-        // Supavisor transaction pooling can strand a session-level lock when
-        // its backend is recycled, or an unlock lands on a different backend
-        // than the lock. A live owner always has a fresh lease row, so this
-        // never fires while another instance is healthy. Terminate the holder
-        // backend and retry the lock once instead of failing forever.
-        const holders = await client.query(
-          "SELECT pid FROM pg_locks WHERE locktype='advisory' AND objid=$1 AND granted",
-          [SOCKET_ADVISORY_LOCK_KEY]
-        );
-        for (const holder of holders.rows || []) {
-          console.warn("[WhatsApp] Orphaned socket lock detected; terminating abandoned lock backend.", { ownerPid: Number(holder.pid) });
-          await client.query("SELECT pg_terminate_backend($1) WHERE $1 <> pg_backend_pid()", [Number(holder.pid)]);
-        }
-        if (owner) {
-          await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1", [SOCKET_ADVISORY_LOCK_KEY]);
-        }
-        result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [SOCKET_ADVISORY_LOCK_KEY]);
-      }
-      if (!result.rows?.[0]?.locked) {
-        const error = new Error("WhatsApp socket is owned by another application instance.");
-        error.code = "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
-        throw error;
-      }
-    }
-    socketLockClient = client;
-    socketOwner = true;
-    socketOwnerToken = crypto.randomUUID();
-    const pidResult = await client.query("SELECT pg_backend_pid() AS pid");
-    await client.query(
-      `INSERT INTO whatsapp_socket_lease(lock_key, owner_pid, owner_token, heartbeat_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT(lock_key) DO UPDATE SET owner_pid=EXCLUDED.owner_pid, owner_token=EXCLUDED.owner_token, heartbeat_at=NOW()`,
-      [SOCKET_ADVISORY_LOCK_KEY, Number(pidResult.rows[0].pid), socketOwnerToken]
-    );
-    if (socketHeartbeatTimer) clearInterval(socketHeartbeatTimer);
-    socketHeartbeatTimer = setInterval(() => { heartbeatSocketLease(client); }, SOCKET_HEARTBEAT_MS);
-    if (typeof socketHeartbeatTimer.unref === "function") socketHeartbeatTimer.unref();
-  } catch (error) {
-    if (socketLockClient !== client) {
-      try { client.release(); } catch (_) {}
-      client.on("error", () => {});
-    }
+  }
+  await ensureSocketLeaseTable(database);
+  const token = crypto.randomUUID();
+  const claimed = await database.query(
+    `INSERT INTO whatsapp_socket_lease(lock_key, owner_pid, owner_token, heartbeat_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT(lock_key) DO UPDATE SET owner_pid=EXCLUDED.owner_pid, owner_token=EXCLUDED.owner_token, heartbeat_at=NOW()
+     WHERE whatsapp_socket_lease.heartbeat_at < NOW() - INTERVAL '90 seconds'
+     RETURNING owner_token`,
+    [SOCKET_LEASE_KEY, process.pid, token]
+  );
+  if (claimed.rows?.[0]?.owner_token !== token) {
+    const error = new Error("WhatsApp socket is owned by another application instance.");
+    error.code = "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
     throw error;
   }
+  socketOwner = true;
+  socketOwnerToken = token;
+  if (socketHeartbeatTimer) clearInterval(socketHeartbeatTimer);
+  socketHeartbeatTimer = setInterval(() => { heartbeatSocketLease(database); }, SOCKET_HEARTBEAT_MS);
+  if (typeof socketHeartbeatTimer.unref === "function") socketHeartbeatTimer.unref();
 }
 
-async function releaseSocketOwnership() {
-  const client = socketLockClient;
+async function releaseSocketOwnership(database = db) {
   const token = socketOwnerToken;
-  socketLockClient = null;
   socketOwner = false;
   socketOwnerToken = null;
   if (socketHeartbeatTimer) { clearInterval(socketHeartbeatTimer); socketHeartbeatTimer = null; }
-  if (!client) return;
+  if (!token) return;
   try {
-    if (token) await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_token=$2", [SOCKET_ADVISORY_LOCK_KEY, token]);
-    else await client.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_pid=pg_backend_pid()", [SOCKET_ADVISORY_LOCK_KEY]);
+    await database.query("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_token=$2", [SOCKET_LEASE_KEY, token]);
   } catch (_) {}
-  try { await client.query("SELECT pg_advisory_unlock($1)", [SOCKET_ADVISORY_LOCK_KEY]); } catch (_) {}
-  try { client.release(); } catch (_) {}
 }
 
 async function shutdown() {
@@ -444,6 +410,14 @@ async function shutdown() {
 async function handleConnectionClose(update, baileys, closedSocket) {
   if (socket === closedSocket) socket = null;
   const code = update?.lastDisconnect?.error?.output?.statusCode;
+  // Log EVERY close with its reason. The old code logged nothing for
+  // non-loggedOut closes, so a connectionReplaced (440) storm — another
+  // instance connecting with the same creds — was invisible in the logs
+  // and looked like the session "unlinking itself" over and over.
+  const reasonEntries = Object.entries(baileys.DisconnectReason || {});
+  const reasonNames = reasonEntries.filter(([, value]) => value === code).map(([name]) => name);
+  const reason = reasonNames.length > 0 ? reasonNames.join("/") : `unknown(${code ?? "n/a"})`;
+  console.warn(`[WhatsApp] Connection closed: ${reason} (statusCode ${code ?? "n/a"}).`);
   if (code === baileys.DisconnectReason?.loggedOut && reconnectAllowed) {
     connection = "reconnect_required";
     lastError = "WhatsApp session was logged out remotely. PostgreSQL auth rows were preserved; reconnect or explicitly unlink from Notification Hub.";
@@ -534,7 +508,9 @@ async function connect(options = {}) {
 
     // A previous QR attempt can leave an open-but-unregistered socket behind.
     // Replace that socket before creating a fresh QR; never create parallel sockets
-    // against the same PostgreSQL auth state.
+    // against the same PostgreSQL auth state. Do NOT release the lease here:
+    // acquireSocketOwnership re-validates it, and deleting our fresh lease
+    // row would hand the socket to the other instance mid-reconnect.
     if (socket && connection !== "connected") {
       const staleSocket = socket;
       socket = null;
@@ -542,7 +518,6 @@ async function connect(options = {}) {
       qrDataUrl = null;
       qrText = null;
       connection = "disconnected";
-      await releaseSocketOwnership();
     }
 
     if (options.freshQr === true) {
@@ -696,9 +671,9 @@ async function connect(options = {}) {
     const ownershipConflict = error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE";
     connection = ownershipConflict ? "owned_elsewhere" : "error";
     if (!socket) await releaseSocketOwnership();
-    // PostgreSQL releases a session-level advisory lock when its owning
-    // connection dies. Retry after a conflict, but never terminate an unknown
-    // backend or erase auth rows: the current owner may still be healthy.
+    // The lease row is the only exclusion primitive now: if another instance
+    // holds a fresh lease, retry after a conflict — but never terminate an
+    // unknown backend or erase auth rows. The current owner may still be healthy.
     if (ownershipConflict) scheduleReconnect();
     throw error;
   }).finally(() => {
@@ -850,8 +825,8 @@ async function unlink(options = {}) {
   return getStatus();
 }
 
-// Render sends SIGTERM during deploys. Close the socket and release the PostgreSQL
-// advisory lock/lease before exiting so the replacement instance can connect promptly.
+// Render sends SIGTERM during deploys. Close the socket and release the
+// lease row before exiting so the replacement instance can connect promptly.
 let shutdownSignalHandled = false;
 async function handleShutdownSignal(signal) {
   if (shutdownSignalHandled) return;
@@ -883,5 +858,6 @@ module.exports = {
   _isSocketReady: isSocketReady,
   _acquireSocketOwnership: acquireSocketOwnership,
   _releaseSocketOwnership: releaseSocketOwnership,
+  _heartbeatSocketLease: heartbeatSocketLease,
   _shutdown: shutdown
 };

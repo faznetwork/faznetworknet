@@ -235,128 +235,163 @@ test("fresh QR reset never purges a registered PostgreSQL session", async () => 
 });
 
 
-test("socket ownership conflict releases the candidate DB client without touching saved auth", async () => {
-  const db = require("../db");
-  const whatsappService = require("../services/whatsappService");
-  const originalGetPool = db.getPool;
-  let released = false;
-  let lockQuery = false;
-  const client = {
-    async query(sql) {
-      if (sql.includes("pg_try_advisory_lock")) lockQuery = true;
-      if (sql.includes("CREATE TABLE IF NOT EXISTS whatsapp_socket_lease")) return { rows: [] };
-      if (sql.includes("SELECT owner_pid")) return { rows: [] };
-      return { rows: [{ locked: false }] };
-    },
-    release() { released = true; },
-    on() {}
-  };
-  db.getPool = () => ({ connect: async () => client });
-  try {
-    await assert.rejects(
-      whatsappService._acquireSocketOwnership(),
-      error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
-    );
-    assert.equal(lockQuery, true);
-    assert.equal(released, true, "a non-owner client must be returned to the pool");
-  } finally {
-    db.getPool = originalGetPool;
-    await whatsappService._releaseSocketOwnership();
-  }
-});
+/* Socket-ownership tests: the lease row (owner_token + heartbeat) is the
+ * ONLY exclusion primitive. Session-level advisory locks are meaningless
+ * under the Supabase transaction pooler — the backend behind a client can
+ * be recycled silently, dropping the lock while the process still believes
+ * it owns the socket — so both instances connected with the same creds and
+ * WhatsApp kicked each one in turn (connectionReplaced, every ~4s). The
+ * atomic INSERT ... ON CONFLICT ... WHERE heartbeat-stale below is what
+ * actually serializes the PC and Render instances. */
 
-/* Socket-ownership tests: the advisory lock is held through the Supabase
- * transaction pooler, where pg_backend_pid() can differ per query, so the
- * lease row (owner_token + heartbeat) is the source of truth for liveness. */
-
-function fakeLockClient(script = {}) {
+function fakeLeaseDb(script = {}) {
   const queries = [];
-  let tryLockCalls = 0;
-  const client = {
+  let row = script.row ? { ...script.row } : null; // { owner_token, age_ms }
+  const database = {
     queries,
-    processID: script.backendPid || 1111,
-    released: false,
-    handlers: {},
-    on(event, fn) { this.handlers[event] = fn; },
-    release() { this.released = true; },
+    get leaseRow() { return row; },
+    setLeaseRow(next) { row = next ? { ...next } : null; },
     async query(sql, params = []) {
       const flat = sql.trim().replace(/\s+/g, " ");
       queries.push({ sql: flat, params });
       if (flat.startsWith("CREATE TABLE IF NOT EXISTS whatsapp_socket_lease")) return { rows: [] };
       if (flat.startsWith("ALTER TABLE whatsapp_socket_lease")) return { rows: [] };
-      if (flat.startsWith("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND heartbeat_at")) return { rows: [] };
-      if (flat.startsWith("SELECT pg_try_advisory_lock")) {
-        const locked = script.tryLock ? (script.tryLock[tryLockCalls++] ?? false) : true;
-        return { rows: [{ locked }] };
+      if (flat.startsWith("SELECT owner_token,")) {
+        return { rows: row ? [{ owner_token: row.owner_token, age_ms: row.age_ms }] : [] };
       }
-      if (flat.includes("FROM whatsapp_socket_lease WHERE lock_key=$1")) {
-        return { rows: script.leaseRows || [] };
+      if (flat.startsWith("INSERT INTO whatsapp_socket_lease")) {
+        const token = params[2];
+        const stale = !row || row.age_ms > 90000;
+        if (!stale) return { rows: [] };
+        row = { owner_token: token, age_ms: 0 };
+        return { rows: [{ owner_token: token }], rowCount: 1 };
       }
-      if (flat.includes("FROM pg_locks WHERE locktype")) {
-        return { rows: script.holders || [] };
+      if (flat.startsWith("UPDATE whatsapp_socket_lease SET heartbeat_at")) {
+        if (row && row.owner_token === params[1]) { row.age_ms = 0; return { rowCount: 1, rows: [] }; }
+        return { rowCount: 0, rows: [] };
       }
-      if (flat.startsWith("SELECT pg_terminate_backend")) return { rows: [{ terminated: true }] };
-      if (flat.startsWith("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1")) return { rows: [] };
-      if (flat.startsWith("SELECT pg_backend_pid")) return { rows: [{ pid: script.backendPid || 1111 }] };
-      if (flat.startsWith("INSERT INTO whatsapp_socket_lease")) return { rows: [] };
-      if (flat.startsWith("SELECT pg_advisory_unlock")) return { rows: [] };
-      throw new Error("Unexpected lock query: " + flat);
+      if (flat.startsWith("DELETE FROM whatsapp_socket_lease WHERE lock_key=$1 AND owner_token=$2")) {
+        if (row && row.owner_token === params[1]) row = null;
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error("Unexpected lease query: " + flat);
     }
   };
-  return client;
+  return database;
 }
 
-function fakeLockPool(client) {
-  return { async connect() { return client; } };
+function leaseQueryTexts(database, prefix) {
+  return database.queries.filter(q => q.sql.startsWith(prefix)).map(q => q.sql);
 }
 
-function lockQueryTexts(client, prefix) {
-  return client.queries.filter(q => q.sql.startsWith(prefix)).map(q => q.sql);
-}
-
-test("socket ownership: free lock writes a token-based lease row and never terminates", async () => {
-  const client = fakeLockClient({ tryLock: [true] });
-  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
-  const inserts = client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease"));
+test("socket ownership: free lease is claimed with a token-based lease row and never terminates a backend", async () => {
+  const database = fakeLeaseDb();
+  await whatsappService._acquireSocketOwnership(database);
+  const inserts = database.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease"));
   assert.equal(inserts.length, 1);
   assert.equal(inserts[0].params.length, 3);
   assert.match(inserts[0].params[2], /^[0-9a-f-]{36}$/);
-  assert.equal(lockQueryTexts(client, "SELECT pg_terminate_backend").length, 0);
-  await whatsappService._releaseSocketOwnership();
-  assert.equal(client.released, true);
+  assert.equal(database.leaseRow.owner_token, inserts[0].params[2]);
+  assert.equal(leaseQueryTexts(database, "SELECT pg_terminate_backend").length, 0);
+  assert.equal(leaseQueryTexts(database, "pg_try_advisory_lock").length, 0);
+  assert.equal(leaseQueryTexts(database, "pg_advisory_unlock").length, 0);
+  await whatsappService._releaseSocketOwnership(database);
+  assert.equal(database.leaseRow, null);
 });
 
-test("socket ownership: orphaned lock with no lease row is terminated and retried", async () => {
-  const client = fakeLockClient({ tryLock: [false, true], leaseRows: [], holders: [{ pid: 9999 }] });
-  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
-  const terminates = client.queries.filter(q => q.sql.startsWith("SELECT pg_terminate_backend"));
-  assert.equal(terminates.length, 1);
-  assert.equal(terminates[0].params[0], 9999);
-  assert.equal(client.queries.filter(q => q.sql.startsWith("SELECT pg_try_advisory_lock")).length, 2);
-  assert.equal(client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 1);
-  await whatsappService._releaseSocketOwnership();
-});
-
-test("socket ownership: live owner with a fresh lease row is never terminated", async () => {
-  const client = fakeLockClient({ tryLock: [false], leaseRows: [{ owner_pid: 5555, age_ms: 5000 }], holders: [{ pid: 5555 }] });
+test("socket ownership conflict never touches saved auth rows and never terminates", async () => {
+  const database = fakeLeaseDb({ row: { owner_token: "other-instance", age_ms: 5000 } });
   await assert.rejects(
-    () => whatsappService._acquireSocketOwnership(fakeLockPool(client)),
+    () => whatsappService._acquireSocketOwnership(database),
     error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
   );
-  assert.equal(lockQueryTexts(client, "SELECT pg_terminate_backend").length, 0);
-  await whatsappService._releaseSocketOwnership();
+  assert.equal(database.leaseRow.owner_token, "other-instance", "a live owner's lease row must be untouched");
+  assert.equal(leaseQueryTexts(database, "SELECT pg_terminate_backend").length, 0);
+  await whatsappService._releaseSocketOwnership(database);
 });
 
-test("socket ownership: stale lease row owner is terminated and the lock is retried", async () => {
-  const client = fakeLockClient({ tryLock: [false, true], leaseRows: [{ owner_pid: 5555, age_ms: 120000 }], holders: [{ pid: 5555 }] });
-  await whatsappService._acquireSocketOwnership(fakeLockPool(client));
-  const terminates = client.queries.filter(q => q.sql.startsWith("SELECT pg_terminate_backend"));
-  assert.equal(terminates.length, 1);
-  assert.equal(terminates[0].params[0], 5555);
-  assert.equal(client.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 1);
-  await whatsappService._releaseSocketOwnership();
+test("socket ownership: stale lease row is taken over atomically", async () => {
+  const database = fakeLeaseDb({ row: { owner_token: "dead-instance", age_ms: 120000 } });
+  await whatsappService._acquireSocketOwnership(database);
+  const inserts = database.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease"));
+  assert.equal(inserts.length, 1);
+  assert.match(inserts[0].sql, /WHERE whatsapp_socket_lease\.heartbeat_at < NOW\(\) - INTERVAL '90 seconds'/);
+  assert.equal(database.leaseRow.owner_token, inserts[0].params[2]);
+  assert.equal(leaseQueryTexts(database, "SELECT pg_terminate_backend").length, 0);
+  await whatsappService._releaseSocketOwnership(database);
+  assert.equal(database.leaseRow, null);
 });
 
+test("socket ownership: a second acquire re-validates instead of trusting memory", async () => {
+  const database = fakeLeaseDb();
+  await whatsappService._acquireSocketOwnership(database);
+  await whatsappService._acquireSocketOwnership(database);
+  assert.equal(
+    database.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 1,
+    "re-validation must early-return while our lease row is still fresh"
+  );
+  // The lease is stolen out from under us (the other instance took it over):
+  // the next acquire must notice and refuse instead of connecting anyway.
+  database.setLeaseRow({ owner_token: "stolen-by-render", age_ms: 1000 });
+  await assert.rejects(
+    () => whatsappService._acquireSocketOwnership(database),
+    error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
+  );
+  assert.equal(
+    database.queries.filter(q => q.sql.startsWith("INSERT INTO whatsapp_socket_lease")).length, 2,
+    "a lost lease must trigger a fresh claim attempt, not a blind early return"
+  );
+  await whatsappService._releaseSocketOwnership(database);
+});
+
+test("socket ownership: heartbeat that matches zero rows drops ownership", async () => {
+  const database = fakeLeaseDb();
+  try {
+    await whatsappService._acquireSocketOwnership(database);
+    const ownToken = database.leaseRow.owner_token;
+    database.setLeaseRow({ owner_token: "stolen-by-render", age_ms: 1000 });
+    await whatsappService._heartbeatSocketLease(database);
+    assert.equal(
+      database.queries.filter(q => q.sql.startsWith("UPDATE whatsapp_socket_lease SET heartbeat_at")).length, 1
+    );
+    // Ownership is gone: the next acquire must attempt a fresh claim instead
+    // of trusting the in-memory flag.
+    await assert.rejects(
+      () => whatsappService._acquireSocketOwnership(database),
+      error => error.code === "WHATSAPP_SOCKET_OWNED_ELSEWHERE"
+    );
+    assert.notEqual(database.leaseRow.owner_token, ownToken);
+  } finally {
+    // The lost-lease path schedules a reconnect timer; cancel it so the
+    // suite does not keep retrying against the real database afterwards.
+    await whatsappService._shutdown();
+  }
+  await whatsappService._releaseSocketOwnership(database);
+});
+
+test("connectionReplaced close is logged with its reason and never wipes auth rows", async () => {
+  const { _handleConnectionClose } = require("../services/whatsappService");
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => { warnings.push(args.map(String).join(" ")); };
+  try {
+    const status = await _handleConnectionClose(
+      { lastDisconnect: { error: { output: { statusCode: 440 } } } },
+      { DisconnectReason: { loggedOut: 401, connectionReplaced: 440 } },
+      { end() {} }
+    );
+    assert.equal(status.connection, "disconnected");
+    assert.ok(
+      warnings.some(line => line.includes("connectionReplaced") && line.includes("440")),
+      "every close must log its Baileys reason; got: " + warnings.join(" | ")
+    );
+  } finally {
+    console.warn = originalWarn;
+    // A non-loggedOut close schedules a reconnect timer; cancel it so the
+    // suite does not keep retrying against the real database afterwards.
+    await whatsappService._shutdown();
+  }
+});
 test("resetRegisteredAuthRows purges dead creds, Signal keys and metadata", async () => {
   const database = fakeDatabase();
   const baileys = fakeBaileys();
