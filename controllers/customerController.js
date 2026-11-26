@@ -4,6 +4,7 @@ const mikrotikService = require("../services/mikrotikService");
 const resellerFinanceService = require("../services/resellerFinanceService");
 const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
+const {normalizeMacAddress}=require("../utils/macAddress");
 
 async function safePasswordMatch(password, plainPassword, passwordHash) {
   const input = String(password ?? "");
@@ -751,14 +752,28 @@ async function profile(req,res){
     // never a collector snapshot: a stale snapshot can incorrectly keep a customer
     // Online during a power cut. If the router/API cannot be reached, report Offline.
     mtSecret=pppoeRow?{name:pppoeRow.username,profile:pppoeRow.profile,password:pppoeRow.password,disabled:pppoeRow.disabled,remoteAddress:pppoeRow.remote_address,callerId:pppoeRow.caller_id,service:pppoeRow.service,comment:pppoeRow.comment}:null;
+    // The MAC lock is the RouterOS secret's caller-id. Read the live secret
+    // alongside the session list so the 360 shows the enforced lock, not just
+    // the panel's stored value; when the router cannot be reached the stored
+    // panel value is the fallback. Either lookup may fail independently.
+    let routerSecret=null;
     try{
-      const activeSessions=await withTimeout(()=>mikrotikService.getActiveSessions(),2000);
-      if(!Array.isArray(activeSessions))throw new Error("MikroTik returned an invalid active-session list.");
-      const normalizedUsername=String(username||"").trim().toLowerCase();
-      session=findActiveSession(activeSessions,normalizedUsername);
+      const [sessionSettled,secretSettled]=await Promise.allSettled([
+        withTimeout(()=>mikrotikService.getActiveSessions(),2000),
+        withTimeout(()=>mikrotikService.getPppoeSecret(username),2000)
+      ]);
+      if(sessionSettled.status==="fulfilled"&&Array.isArray(sessionSettled.value)){
+        const normalizedUsername=String(username||"").trim().toLowerCase();
+        session=findActiveSession(sessionSettled.value,normalizedUsername);
+      }else{
+        session=null;
+        if(sessionSettled.status==="rejected")console.warn("[Customer 360] Live MikroTik active-session lookup failed; showing Offline:",sessionSettled.reason?.message||sessionSettled.reason);
+      }
+      if(secretSettled.status==="fulfilled")routerSecret=secretSettled.value||null;
     }catch(error){
-      console.warn("[Customer 360] Live MikroTik active-session lookup failed; showing Offline:",error.message);
+      console.warn("[Customer 360] Live MikroTik lookup failed; showing Offline:",error.message);
       session=null;
+      routerSecret=null;
     }
     if(!dbUser&&!pppoeRow)return res.status(404).json({success:false,message:`Customer "${username}" not found in database`});
     let networkDetails=null;
@@ -786,6 +801,13 @@ async function profile(req,res){
     let plans=[],payments=[];
     try{const q=await db.query("SELECT id,plan_name,profile_name,price,duration_months,rate_limit,remote_address FROM packages ORDER BY price ASC,plan_name ASC");plans=q.rows.map(x=>({id:x.id,name:clean(x.plan_name,120),profileName:clean(x.profile_name,120),price:Number(x.price||0),durationMonths:Number(x.duration_months||1),rateLimit:clean(x.rate_limit,100),remoteAddress:clean(x.remote_address,100)}));}catch(error){console.warn("[Customer plans warning]:",error.message);}
     try{const q=await db.query(`SELECT trx_id,amount,channel AS gateway,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 3`,[username,clean(dbUser?.phone,40)]);payments=q.rows.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),gateway:clean(x.gateway,30),date:x.created_at,status:clean(x.status,30)}));}catch(error){console.warn("[Customer payments warning]:",error.message);}
+    const storedMac=clean(pppoeRow?.caller_id||dbUser?.router_mac||"",100);
+    // Locked MAC = the enforced caller-id on the RouterOS secret when it can
+    // be read, otherwise the panel's stored MAC. Live MAC = the MAC of the
+    // current session only ("" while offline) — never a stored value, so the
+    // admin can see a changed router instead of the old locked MAC.
+    const lockedMac=clean(routerSecret?.callerId||storedMac,100);
+    const macLock={locked:Boolean(lockedMac),lockedMac,liveMac:clean(session?.callerId||"",100),storedMac};
     const customer={
       id:dbUser?.id||null,username:clean(mtSecret?.name||dbUser?.username||username,100),
       full_name:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||username,200),
@@ -801,7 +823,7 @@ async function profile(req,res){
       vlan_id:networkDetails?.vlan_id??null,mikrotik_ip_pool:clean(networkDetails?.mikrotik_ip_pool,100),
       commission_type:clean(networkDetails?.commission_type,20),commission_rate:networkDetails?.commission_rate==null?null:Number(networkDetails.commission_rate)
     };
-    return res.json({success:true,customer,live:{online:Boolean(session),ip:session?.address||customer.remote_address||"",mac:session?.callerId||customer.caller_id||"",uptime:session?.uptime||"",bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||""},plans,payments,source:dbUser&&mtSecret?"database+mikrotik":mtSecret?"mikrotik":"database"});
+    return res.json({success:true,customer,live:{online:Boolean(session),ip:session?.address||customer.remote_address||"",mac:session?.callerId||customer.caller_id||"",uptime:session?.uptime||"",bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||""},macLock,plans,payments,source:dbUser&&mtSecret?"database+mikrotik":mtSecret?"mikrotik":"database"});
   }catch(error){return errorResponse(res,error);}
 }
 
@@ -1312,13 +1334,20 @@ async function resolveCustomer360(idValue,tenantScope){
   const payments=paymentResult.rows||[];
   const storedMac=clean(callerIdResult.rows?.[0]?.caller_id,100);
   let routerStatus="unreachable";
+  let routerSecret=null;
   try {
     const routerService=await getCustomerRouterService(customer);
     // Customer 360 must answer inside the browser's 7s timeout even when the
     // router path stalls: one attempt, short router budget, and a hard 3s
     // cap on the whole live lookup. On timeout the customer is shown Offline
     // (same as today's failure behavior) — the page itself never hangs.
-    const liveResult=await withTimeout(()=>routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
+    // The live secret is read in the same window so the 360 shows the
+    // enforced MAC lock; a secret failure never breaks the session lookup.
+    const [liveResult,secretResult]=await withTimeout(()=>Promise.all([
+      routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),
+      routerService.getPppoeSecret(username).catch(()=>null)
+    ]),3000);
+    routerSecret=secretResult||null;
     if (
       liveResult &&
       !["timeout", "unavailable"].includes(liveResult.live_sync) &&
@@ -1332,12 +1361,18 @@ async function resolveCustomer360(idValue,tenantScope){
     }
   } catch(routerError) {
     session=null;
+    routerSecret=null;
     console.warn("[Customer 360] Target router live status unavailable:", {
       routerId:resolveCustomerRouterId(customer),
       username,
       message:routerError?.message||String(routerError)
     });
   }
+  // Locked MAC = the enforced caller-id on the RouterOS secret when it can
+  // be read, otherwise the panel's stored MAC. Live MAC = the MAC of the
+  // current session only ("" while offline).
+  const lockedMac=clean(routerSecret?.callerId||storedMac,100);
+  const macLock={locked:Boolean(lockedMac),lockedMac,liveMac:clean(session?.callerId||"",100),storedMac};
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
   const billing=evaluateCustomerBillingStatus({expiration_date:expiration});
@@ -1351,6 +1386,7 @@ async function resolveCustomer360(idValue,tenantScope){
   return {
     customer:{id:customer.id,router_id:resolveCustomerRouterId(customer),routerStatus,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),email:clean(customer.email,254),whatsapp_phone:clean(customer.whatsapp_phone,40),telegram_link:clean(customer.telegram_link,255),facebook_link:clean(customer.facebook_link,500),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),routerMac:clean(customer.router_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
     live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),router_status:routerStatus,ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),routerMac:clean(session?.callerId||storedMac||customer.router_mac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
+    macLock,
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
     payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
@@ -1456,6 +1492,87 @@ async function kickActiveUserByUsername(req,res){
   }
 }
 async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
+// MAC lock = the PPPoE secret's RouterOS caller-id. Locking binds the line to
+// one router MAC; unlocking clears it so a changed router can dial in.
+// The panel is the source of truth for the lock: both handlers write the
+// router secret AND the stored MAC (customers.router_mac + pppoe_users
+// .caller_id) together. A manual unlock that left the stored MAC in place
+// would be undone by the next bulk sync / customer update, which re-apply
+// router_mac || stored_caller_id as the secret's caller-id. The router
+// write is verified before the panel record is changed, so the two can
+// never disagree silently.
+async function lockCustomerMac(req,res){
+  try{
+    const payload=await resolveCustomer360(req.params.id,req.tenantScope);
+    if(!payload)return res.status(404).json({success:false,message:"Customer not found."});
+    const username=clean(payload.customer.username,100);
+    const suppliedMac=normalizeMacAddress(req.body?.mac);
+    if(req.body?.mac!==undefined&&req.body?.mac!==null&&String(req.body.mac).trim()!==""&&!suppliedMac)
+      return res.status(400).json({success:false,message:"Invalid MAC address. Use AA:BB:CC:DD:EE:FF."});
+    // The MAC to lock must be the live session's caller-id (the router the
+    // customer is actually dialing from now), never a stored value: after a
+    // router change the stored MAC is the OLD router.
+    let sessionMac="";
+    try{
+      const liveResult=await withTimeout(()=>mikrotikService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
+      if(liveResult&&!["timeout","unavailable"].includes(liveResult.live_sync)&&Array.isArray(liveResult.sessions)){
+        const session=findActiveSession(liveResult.sessions,username);
+        sessionMac=normalizeMacAddress(session?.callerId)||"";
+      }
+    }catch(liveError){console.warn("[CUSTOMER MAC LOCK] Live session lookup failed:",liveError.message);}
+    const targetMac=suppliedMac||sessionMac;
+    if(!targetMac)return res.status(400).json({success:false,message:"Customer is offline and no MAC address was provided. Connect the new router first, or provide the MAC address to lock (AA:BB:CC:DD:EE:FF)."});
+    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    if(!secret)return res.status(404).json({success:false,message:'PPPoE secret "'+username+'" was not found on MikroTik.'});
+    const previousMac=normalizeMacAddress(secret.callerId)||"";
+    if(previousMac===targetMac)return res.json({success:true,locked:true,lockedMac:targetMac,liveMac:sessionMac,alreadyLocked:true,message:"MAC is already locked to "+targetMac+"."});
+    await mikrotikService.setSecretCallerId(username,targetMac);
+    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    if(normalizeMacAddress(verified?.callerId)!==targetMac)return res.status(502).json({success:false,message:"MikroTik did not confirm the MAC lock. No panel record was changed."});
+    // If the line is online from a different MAC, drop that session so the
+    // new router re-dials and binds to the locked MAC. A failed kick never
+    // fails the lock itself: new dials are already bound.
+    let sessionDisconnected=false;
+    if(sessionMac&&sessionMac!==targetMac){
+      try{const kick=await mikrotikService.kickActiveUser(username);sessionDisconnected=Boolean(kick?.kicked);}catch(kickError){console.warn("[CUSTOMER MAC LOCK] Session disconnect warning:",kickError.message);}
+    }
+    try{
+      await db.query("UPDATE customers SET router_mac=$1,updated_at=NOW() WHERE id=$2",[targetMac,payload.customer.id]);
+      await db.query("UPDATE pppoe_users SET caller_id=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[targetMac,username]);
+    }catch(dbError){
+      console.error("[CUSTOMER MAC LOCK] Panel record save failed after RouterOS lock:",dbError.message);
+      return res.status(503).json({success:false,locked:true,lockedMac:targetMac,message:"MikroTik is locked to "+targetMac+", but the panel record could not be saved. Retry — the next panel sync may restore the previous MAC."});
+    }
+    console.info("[CUSTOMER MAC LOCK] "+username+" locked to "+targetMac+" by "+getAdminId(req));
+    await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"MAC_LOCK",details:{message:"MAC locked to "+targetMac+(previousMac?" (was "+previousMac+")":""),username,previousMac:previousMac||null,mac:targetMac,routerId:resolveCustomerRouterId(payload.customer),sessionDisconnected},ipAddress:getIpAddress(req)});
+    return res.json({success:true,locked:true,lockedMac:targetMac,liveMac:sessionMac,previousMac:previousMac||null,sessionDisconnected,message:"MAC locked to "+targetMac+". Only this router can connect now."});
+  }catch(error){return errorResponse(res,error);}
+}
+async function unlockCustomerMac(req,res){
+  try{
+    const payload=await resolveCustomer360(req.params.id,req.tenantScope);
+    if(!payload)return res.status(404).json({success:false,message:"Customer not found."});
+    const username=clean(payload.customer.username,100);
+    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    if(!secret)return res.status(404).json({success:false,message:'PPPoE secret "'+username+'" was not found on MikroTik.'});
+    const previousMac=normalizeMacAddress(secret.callerId)||"";
+    const storedMac=normalizeMacAddress(payload.macLock?.storedMac)||"";
+    if(!previousMac&&!storedMac)return res.json({success:true,locked:false,lockedMac:"",alreadyUnlocked:true,message:"MAC lock is already removed."});
+    await mikrotikService.setSecretCallerId(username,"");
+    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    if(normalizeMacAddress(verified?.callerId))return res.status(502).json({success:false,message:"MikroTik did not confirm the MAC unlock. No panel record was changed."});
+    try{
+      await db.query("UPDATE customers SET router_mac=NULL,updated_at=NOW() WHERE id=$1",[payload.customer.id]);
+      await db.query("UPDATE pppoe_users SET caller_id=NULL,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[username]);
+    }catch(dbError){
+      console.error("[CUSTOMER MAC UNLOCK] Panel record save failed after RouterOS unlock:",dbError.message);
+      return res.status(503).json({success:false,locked:false,lockedMac:"",message:"MikroTik MAC lock is removed, but the panel record could not be cleared. Retry — the next panel sync may re-apply the previous MAC."});
+    }
+    console.info("[CUSTOMER MAC UNLOCK] "+username+" unlocked by "+getAdminId(req)+(previousMac?" (was "+previousMac+")":""));
+    await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"MAC_UNLOCK",details:{message:"MAC lock removed"+(previousMac?" (was "+previousMac+")":"")+". The customer can now connect from a new router.",username,previousMac:previousMac||null,routerId:resolveCustomerRouterId(payload.customer)},ipAddress:getIpAddress(req)});
+    return res.json({success:true,locked:false,lockedMac:"",previousMac:previousMac||null,message:"MAC lock removed. The customer can now connect from a new router — lock it again once the new router is online."});
+  }catch(error){return errorResponse(res,error);}
+}
 async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED-PROFILE",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?`Account suspended. Moved to ${targetProfile} profile in MikroTik`:`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
 async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
     // Always restore the configured package profile, never EXPIRED.
@@ -1547,4 +1664,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, kickActiveUserByUsername, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik, nextBillingExpiryDate, buildExpirationComment, effectiveProfile, getCustomerRouterService };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, kickActiveUserByUsername, lockCustomerMac, unlockCustomerMac, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik, nextBillingExpiryDate, buildExpirationComment, effectiveProfile, getCustomerRouterService };

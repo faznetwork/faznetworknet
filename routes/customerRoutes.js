@@ -27,6 +27,8 @@ router.post('/:id/sync-mikrotik',requireCustomerOwnership,controller.syncSingleC
 router.put('/:id',requireCustomerOwnership,controller.updateCustomer);
 router.delete('/:id',requireCustomerOwnership,requireExactDeleteUsername,controller.removeCustomer);
 router.post('/:id/kick',requireCustomerOwnership,controller.kickCustomerById);
+router.post('/:id/mac-lock',requireCustomerOwnership,controller.lockCustomerMac);
+router.post('/:id/mac-unlock',requireCustomerOwnership,controller.unlockCustomerMac);
 router.post('/:id/toggle-status',requireCustomerOwnership,controller.toggleCustomerStatus);
 router.post('/:id/renew',requireCustomerOwnership,controller.renewCustomerById);
 router.put('/:id/change-package',requireCustomerOwnership,controller.changeCustomerPackage);

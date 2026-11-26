@@ -2,6 +2,7 @@ const RouterOS = require("node-routeros");
 const { RouterOSAPI } = RouterOS;
 const deviceCredentials = require("./deviceCredentials");
 const net = require("node:net");
+const { normalizeMacAddress } = require("../utils/macAddress");
 const HOTSPOT_SERVER_PROFILE_PROPERTIES = new Set([
   "name", "hotspot-address", "dns-name", "html-directory", "html-directory-override",
   "http-proxy", "smtp-server", "login-by", "mac-auth-password", "http-cookie-lifetime",
@@ -1965,6 +1966,26 @@ class MikroTikService {
     });
   }
 
+  // Set (or clear) only the PPPoE secret's caller-id — the MAC lock.
+  // _writeParams drops empty values, so clearing the lock must push the
+  // empty param manually (same pattern as limit-bytes-total in the hotspot
+  // user sync). An empty callerId clears the lock; a MAC locks to it.
+  // Nothing else on the secret (password, profile, disabled, comment) is
+  // touched here, so lock/unlock never disturbs renew, quarantine or kick.
+  async setSecretCallerId(username, callerId) {
+    const name = this._str(username).trim();
+    if (!name) throw new Error("PPPoE username is required.");
+    const supplied = callerId === undefined || callerId === null ? "" : String(callerId).trim();
+    const normalized = normalizeMacAddress(callerId);
+    if (supplied !== "" && !normalized) throw new Error("Invalid MAC address. Use AA:BB:CC:DD:EE:FF.");
+    return this._withConnection("PPPoE caller-id update", async (connection) => {
+      const secret = await this._findSecret(connection, name);
+      const params = ["=.id=" + secret[".id"], normalized ? "=caller-id=" + normalized : "=caller-id="];
+      await connection.write("/ppp/secret/set", params);
+      return { username: name, callerId: normalized || "" };
+    });
+  }
+
   async ensureExpiredProfile(){
     const name="EXPIRED-PROFILE";
     const existing=await this.fetchExistingProfiles();
@@ -2157,10 +2178,21 @@ const mikrotikService = new Proxy(canonicalRuntime, {
     if (property === 'testConnection') {
       return (...args) => {
         if (args[0] && typeof args[0] === 'object' && Object.keys(args[0]).length) return value.apply(target, args);
-        return getMikroTikService().then(runtime => runtime.testConnection());
+        return getMikroTikService().then(runtime => {
+          if (runtime === mikrotikService) throw new Error('MikroTik runtime resolved to the service proxy; refusing recursive testConnection call.');
+          return runtime.testConnection();
+        });
       };
     }
-    return (...args) => getMikroTikService().then(runtime => runtime[property](...args));
+    return (...args) => getMikroTikService().then(runtime => {
+      // A test stub (or misconfiguration) can make runtimePool.getRuntime
+      // return the service proxy itself. Calling a method on it would
+      // re-enter this trap forever and explode the process with unbounded
+      // promises ("Map maximum size exceeded"). Fail fast instead: callers
+      // treat a rejected secret/session read as "router unreadable".
+      if (runtime === mikrotikService) throw new Error('MikroTik runtime resolved to the service proxy; refusing recursive ' + property + ' call.');
+      return runtime[property](...args);
+    });
   }
 });
 module.exports = mikrotikService;
