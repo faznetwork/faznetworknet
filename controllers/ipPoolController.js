@@ -12,6 +12,11 @@ function ipv4ToNumber(value) {
   if(parts.length!==4||parts.some(part=>!/^\d{1,3}$/.test(part)||Number(part)>255))return null;
   return parts.reduce((total,part)=>total*256+Number(part),0);
 }
+function ipv4Text(value) {
+  const n=Number(value);
+  if(!Number.isInteger(n)||n<0||n>4294967295)return "";
+  return [24,16,8,0].map(shift=>(n>>>shift)&255).join(".");
+}
 function validRangePart(value) {
   const part=clean(value,100);
   if(/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(part)){const [ip,prefix]=part.split("/");return ipv4ToNumber(ip)!==null&&Number(prefix)>=0&&Number(prefix)<=32;}
@@ -64,6 +69,39 @@ function findPoolWithSameRanges(ranges,livePools){
   }
   return null;
 }
+// Derive the subnet (CIDR) + gateway from a pool's ranges when no saved
+// panel record matches it. Only for a single range that exactly fills the
+// usable space of one CIDR block (start = network+2, end = broadcast-1 —
+// the gateway .1 is excluded) or a single CIDR with a usable gateway
+// (prefix <= 30). A bare single IP (e.g. "10.10.0.2") has no meaningful
+// gateway, so it returns null and the fields stay honestly empty instead
+// of showing an invented address.
+function deriveSubnetAndGateway(ranges){
+  const parts=String(ranges||"").split(",").map(part=>part.trim()).filter(Boolean);
+  if(parts.length!==1)return null;
+  const part=parts[0];
+  const cidr=part.match(/^(\d{1,3}(?:\.\d{1,3}){3})\s*\/\s*(\d{1,2})$/);
+  if(cidr){
+    const ip=ipv4ToNumber(cidr[1]),prefix=Number(cidr[2]);
+    if(ip===null||prefix>30)return null;
+    const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;
+    const network=(ip&mask)>>>0;
+    return {subnet:ipv4Text(network)+"/"+prefix,localAddress:ipv4Text(network+1)};
+  }
+  const range=part.match(/^(\d{1,3}(?:\.\d{1,3}){3})\s*-\s*(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if(!range)return null;
+  const start=ipv4ToNumber(range[1]),end=ipv4ToNumber(range[2]);
+  if(start===null||end===null||end<start)return null;
+  for(let prefix=32;prefix>=0;prefix--){
+    const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;
+    const network=(start&mask)>>>0;
+    const broadcast=network+(prefix===32?0:(Math.pow(2,32-prefix)-1));
+    if(start===network+2&&end===broadcast-1){
+      return {subnet:ipv4Text(network)+"/"+prefix,localAddress:ipv4Text(network+1)};
+    }
+  }
+  return null;
+}
 function normalizePayload(body){
   const name=clean(body?.name,100),ranges=clean(body?.ranges,1000),nextPool=clean(body?.nextPool||body?.["next-pool"],100);
   if(!name)throw new Error("IP pool name is required.");
@@ -78,11 +116,35 @@ async function list(req,res){
     let metadata=[];
     try{const result=await db.query("SELECT name,ranges,local_address,subnet,device_name,next_pool FROM ip_pools ORDER BY name ASC");metadata=result.rows||[];}catch(dbError){console.warn("[IP POOL metadata warning]:",dbError.message);}
     const byName=new Map(metadata.map(row=>[String(row.name||"").toLowerCase(),row]));
+    // A router pool renamed outside the panel (e.g. "200 Mbps" renamed to
+    // "PPPoE_Pool") no longer matches its saved record by name; match it
+    // by its ranges instead so the Edit modal still shows the real subnet
+    // and gateway. Name wins when both match.
+    const byRanges=new Map();
+    for(const row of metadata){
+      const key=normalizePoolRanges(row.ranges);
+      if(key&&!byRanges.has(key))byRanges.set(key,row);
+    }
     const usageByPool=new Map();
     for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
     const pools=rows.filter(pool=>!/^default(?:[-_].*)?$/i.test(String(pool.name||"").trim())).map(pool=>{
-      const meta=byName.get(String(pool.name||"").toLowerCase())||{};
-      return {id:pool.id,name:pool.name,ranges:pool.ranges,nextPool:pool.nextPool||"",localAddress:meta.local_address||"",subnet:meta.subnet||"",deviceName:meta.device_name||"",allocations:usageByPool.get(String(pool.name||"").toLowerCase())||[]};
+      const byNameRow=byName.get(String(pool.name||"").toLowerCase());
+      const byRangesRow=byNameRow?null:byRanges.get(normalizePoolRanges(pool.ranges));
+      const meta=byNameRow||byRangesRow||{};
+      // No saved record at all: derive the subnet/gateway from the ranges
+      // (only when the range exactly fills one CIDR block's usable space).
+      // A bare single IP has no meaningful gateway, so it stays empty.
+      let localAddress=meta.local_address||"",subnet=meta.subnet||"";
+      let metaSource=byNameRow?"name":(byRangesRow?"ranges":"none");
+      if(!localAddress||!subnet){
+        const derived=deriveSubnetAndGateway(pool.ranges);
+        if(derived){
+          if(!subnet)subnet=derived.subnet;
+          if(!localAddress)localAddress=derived.localAddress;
+          if(!byNameRow&&!byRangesRow)metaSource="derived";
+        }
+      }
+      return {id:pool.id,name:pool.name,ranges:pool.ranges,nextPool:pool.nextPool||"",localAddress,subnet,deviceName:meta.device_name||"",metaSource,allocations:usageByPool.get(String(pool.name||"").toLowerCase())||[]};
     });
     return res.json(pools);
   }catch(error){return errorResponse(res,error);}
@@ -159,4 +221,4 @@ async function syncPanelToMikrotik(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,normalizePoolRanges,findPoolWithSameRanges};
+module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,normalizePoolRanges,findPoolWithSameRanges,deriveSubnetAndGateway};
