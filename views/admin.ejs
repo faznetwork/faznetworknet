@@ -8399,7 +8399,7 @@ document.getElementById('systemBrandForm')?.addEventListener('submit',async e=>{
                 const failedItems=(Array.isArray(data.results)?data.results:[]).filter(item=>item.status==='failed');
                 const failureDetails=failedItems.slice(0,10).map(item=>(item.username||'Unknown user')+': '+(item.reason||item.message||'Unknown failure')).join('\\n');
                 const remaining=failedItems.length>10?'\\n...and '+(failedItems.length-10)+' more.':'';
-                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Created: '+(data.created??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0)+(failureDetails?'\\n\\nFailure details:\\n'+failureDetails+remaining:''));
+                alert((data.message||'Customer sync finished.')+'\nUpdated: '+(data.updated??0)+' | Created: '+(data.created??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0)+(failureDetails?'\n\nFailure details:\n'+failureDetails+remaining:''));
                 await fetchCustomers();await refreshDashboard();
             }catch(error){alert('Sync to MikroTik failed: '+(error.message||'Unknown error'));}
             finally{button.disabled=false;button.innerHTML=original;}
