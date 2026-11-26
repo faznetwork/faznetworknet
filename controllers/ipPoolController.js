@@ -20,6 +20,50 @@ function validRangePart(value) {
   const start=ipv4ToNumber(match[1]),end=ipv4ToNumber(match[2]);
   return start!==null&&end!==null&&start<=end;
 }
+// Two pools with identical ranges hand out the same addresses: creating the
+// second one only duplicates the first. A stale saved record (e.g. the Oct
+// 2026 "Expire_Pool", whose ranges exactly duplicate the live
+// "EXPIRED-PROFILE" pool) must never be resurrected by a sync — it is
+// skipped with a warning instead. Ranges are compared after normalizing
+// each IP (leading zeros, spacing) so "100.065.096.002-..." still matches.
+function normalizeIp(value){
+  const parts=String(value||"").trim().split(".");
+  if(parts.length!==4||parts.some(part=>!/^\d{1,3}$/.test(part)||Number(part)>255))return null;
+  return parts.map(part=>String(Number(part))).join(".");
+}
+function normalizePoolRanges(ranges){
+  const parts=String(ranges||"").split(",").map(part=>part.trim()).filter(Boolean);
+  if(!parts.length)return null;
+  const normalized=[];
+  for(const part of parts){
+    const cidr=part.match(/^(\d{1,3}(?:\.\d{1,3}){3})\s*\/\s*(\d{1,2})$/);
+    if(cidr){
+      const ip=normalizeIp(cidr[1]);
+      if(!ip||Number(cidr[2])>32)return null;
+      normalized.push(ip+"/"+String(Number(cidr[2])));
+      continue;
+    }
+    const range=part.match(/^(\d{1,3}(?:\.\d{1,3}){3})\s*-\s*(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if(range){
+      const start=normalizeIp(range[1]),end=normalizeIp(range[2]);
+      if(!start||!end||ipv4ToNumber(start)>ipv4ToNumber(end))return null;
+      normalized.push(start+"-"+end);
+      continue;
+    }
+    const single=normalizeIp(part);
+    if(!single)return null;
+    normalized.push(single);
+  }
+  return normalized.sort().join(",");
+}
+function findPoolWithSameRanges(ranges,livePools){
+  const wanted=normalizePoolRanges(ranges);
+  if(!wanted)return null;
+  for(const pool of Array.isArray(livePools)?livePools:[]){
+    if(normalizePoolRanges(pool?.ranges)===wanted)return pool;
+  }
+  return null;
+}
 function normalizePayload(body){
   const name=clean(body?.name,100),ranges=clean(body?.ranges,1000),nextPool=clean(body?.nextPool||body?.["next-pool"],100);
   if(!name)throw new Error("IP pool name is required.");
@@ -70,8 +114,21 @@ async function saveOrUpdateIpPool(req,res){
 async function create(req,res){return saveOrUpdateIpPool(req,res);}
 async function update(req,res){return saveOrUpdateIpPool(req,res);}
 async function remove(req,res){
-  try{const identifier=clean(req.params.id,100);if(!identifier||/^default(?:[-_].*)?$/i.test(identifier))return res.status(400).json({success:false,message:"The default system IP pool cannot be deleted."});const result=await mikrotikService.deleteIpPool(identifier);return res.json({success:true,message:"IP pool removed successfully from MikroTik.",pool:result});}
-  catch(error){return errorResponse(res,error);}
+  try{
+    const identifier=clean(req.params.id,100);
+    if(!identifier||/^default(?:[-_].*)?$/i.test(identifier))return res.status(400).json({success:false,message:"The default system IP pool cannot be deleted."});
+    const result=await mikrotikService.deleteIpPool(identifier);
+    // The panel record is what the panel-to-MikroTik sync reads: leaving it
+    // behind resurrects the pool on the next sync, so a panel delete must
+    // remove it too (the rename path in saveOrUpdateIpPool already does
+    // this for the old name). Best-effort: the router delete already
+    // succeeded, so a DB failure only warns.
+    try{
+      const device=await mikrotikService.getRouterIdentity();
+      await db.query("DELETE FROM ip_pools WHERE lower(device_name)=lower($1) AND lower(name)=lower($2)",[device,identifier]);
+    }catch(dbErr){console.warn("[DB ip_pools warning]:",dbErr.message);}
+    return res.json({success:true,message:"IP pool removed successfully from MikroTik.",pool:result});
+  }catch(error){return errorResponse(res,error);}
 }
 
 async function syncPanelToMikrotik(req,res){
@@ -88,14 +145,18 @@ async function syncPanelToMikrotik(req,res){
         if(!name||/^default(?:[-_].*)?$/i.test(name))throw new Error("Default/system pool names cannot be synced.");
         if(!ranges||ranges.split(",").some(part=>!validRangePart(part)))throw new Error("Invalid saved IPv4 range.");
         const existing=liveByName.get(name.toLowerCase());
-        if(existing)await mikrotikService.updateIpPool(existing.id||existing.name,{name,ranges,nextPool});
-        else await mikrotikService.createIpPool({name,ranges,nextPool});
-        results.push({name,status:existing?"updated":"created"});
+        if(existing){await mikrotikService.updateIpPool(existing.id||existing.name,{name,ranges,nextPool});results.push({name,status:"updated"});}
+        else{
+          const duplicate=findPoolWithSameRanges(ranges,live);
+          if(duplicate){results.push({name,status:"skipped",message:`Pool "${name}" was not created: its ranges ${ranges} already exist on pool "${duplicate.name}". Delete the stale saved record for "${name}" or correct its ranges.`});}
+          else{await mikrotikService.createIpPool({name,ranges,nextPool});results.push({name,status:"created"});}
+        }
       }catch(error){results.push({name,status:"failed",message:error?.message||"IP pool sync failed."});}
     }
-    const created=results.filter(x=>x.status==="created").length,updated=results.filter(x=>x.status==="updated").length,failed=results.filter(x=>x.status==="failed").length;
-    return res.json({success:true,total:results.length,created,updated,failed,results,message:"Panel-to-MikroTik IP pool sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."});
+    const created=results.filter(x=>x.status==="created").length,updated=results.filter(x=>x.status==="updated").length,failed=results.filter(x=>x.status==="failed").length,skipped=results.filter(x=>x.status==="skipped").length;
+    const notes=results.filter(x=>x.status==="skipped"||x.status==="failed").map(x=>x.name+": "+(x.message||x.status));
+    return res.json({success:true,total:results.length,created,updated,failed,skipped,results,message:"Panel-to-MikroTik IP pool sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."+(skipped?" "+skipped+" skipped.":"")+(notes.length?"\n\nNotes:\n"+notes.join("\n"):"")});
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik};
+module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,normalizePoolRanges,findPoolWithSameRanges};
