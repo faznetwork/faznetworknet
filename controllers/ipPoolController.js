@@ -1,6 +1,14 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// take ~3.5s and has been seen to exceed the service's 10s defaults, so a
+// pool save/sync fails even though the router is healthy. Pool saves and
+// syncs use a 30s handshake + 30s operation budget (inside the service's
+// 60s MAX). Display paths never pass this — the list stays DB-only and
+// fast, and its live allocation enrichment keeps the 10s defaults.
+const SLOW_ROUTER_TIMEOUTS = Object.freeze({ operationTimeoutMs: 30000, handshakeTimeoutMs: 30000 });
+
 function clean(value, max = 255) { return String(value ?? "").trim().slice(0, max); }
 function errorResponse(res, error) {
   console.error("[IP POOL API]", error);
@@ -157,12 +165,12 @@ async function saveOrUpdateIpPool(req,res){
     if(!name||!ranges)return res.status(400).json({success:false,message:"Pool Name and Valid IP Ranges are required"});
     if(/^default(?:[-_].*)?$/i.test(name))return res.status(400).json({success:false,message:"Default system IP pool names cannot be managed here."});
     if(ranges.split(",").some(part=>!validRangePart(part)))return res.status(400).json({success:false,message:"Enter valid IPv4 subnet/range values, separated by commas."});
-    const pools=await mikrotikService.getIpPools();
+    const pools=await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
     const existing=originalName?pools.find(x=>String(x.name).toLowerCase()===originalName.toLowerCase()):null;
     const targetNext=nextPool&&!/^none$/i.test(nextPool)?nextPool:"none";
-    const result=existing?await mikrotikService.updateIpPool(existing.id,{name,ranges,nextPool:targetNext}):await mikrotikService.createIpPool({name,ranges,nextPool:targetNext});
+    const result=existing?await mikrotikService.updateIpPool(existing.id,{name,ranges,nextPool:targetNext},SLOW_ROUTER_TIMEOUTS):await mikrotikService.createIpPool({name,ranges,nextPool:targetNext},SLOW_ROUTER_TIMEOUTS);
     try{
-      const device=await mikrotikService.getRouterIdentity();
+      const device=await mikrotikService.getRouterIdentity(SLOW_ROUTER_TIMEOUTS);
       await db.query("INSERT INTO ip_pools(name,ranges,local_address,subnet,device_name,next_pool,updated_at) VALUES($1,$2,$3,$4,$5,$6,NOW()) ON CONFLICT(device_name,name) DO UPDATE SET ranges=EXCLUDED.ranges,local_address=EXCLUDED.local_address,subnet=EXCLUDED.subnet,next_pool=EXCLUDED.next_pool,updated_at=NOW()",[name,ranges,localAddress||null,subnet||null,device,targetNext]);
       if(existing&&existing.name.toLowerCase()!==name.toLowerCase())await db.query("DELETE FROM ip_pools WHERE device_name=$1 AND name=$2",[device,existing.name]);
     }catch(dbErr){console.warn("[DB ip_pools warning]:",dbErr.message);}
@@ -175,14 +183,14 @@ async function remove(req,res){
   try{
     const identifier=clean(req.params.id,100);
     if(!identifier||/^default(?:[-_].*)?$/i.test(identifier))return res.status(400).json({success:false,message:"The default system IP pool cannot be deleted."});
-    const result=await mikrotikService.deleteIpPool(identifier);
+    const result=await mikrotikService.deleteIpPool(identifier,SLOW_ROUTER_TIMEOUTS);
     // The panel record is what the panel-to-MikroTik sync reads: leaving it
     // behind resurrects the pool on the next sync, so a panel delete must
     // remove it too (the rename path in saveOrUpdateIpPool already does
     // this for the old name). Best-effort: the router delete already
     // succeeded, so a DB failure only warns.
     try{
-      const device=await mikrotikService.getRouterIdentity();
+      const device=await mikrotikService.getRouterIdentity(SLOW_ROUTER_TIMEOUTS);
       await db.query("DELETE FROM ip_pools WHERE lower(device_name)=lower($1) AND lower(name)=lower($2)",[device,identifier]);
     }catch(dbErr){console.warn("[DB ip_pools warning]:",dbErr.message);}
     return res.json({success:true,message:"IP pool removed successfully from MikroTik.",pool:result});
@@ -191,10 +199,10 @@ async function remove(req,res){
 
 async function syncPanelToMikrotik(req,res){
   try{
-    const device=await mikrotikService.getRouterIdentity();
+    const device=await mikrotikService.getRouterIdentity(SLOW_ROUTER_TIMEOUTS);
     const saved=await db.query("SELECT name,ranges,next_pool FROM ip_pools WHERE lower(COALESCE(device_name,''))=lower($1) ORDER BY name ASC",[device]);
     if(!saved.rows?.length)return res.status(409).json({success:false,message:"No IP pools saved in the panel for this MikroTik. Save each pool from the panel first, then sync again."});
-    const live=await mikrotikService.getIpPools();
+    const live=await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
     const liveByName=new Map((live||[]).map(item=>[String(item.name||"").toLowerCase(),item]));
     const results=[];
     for(const row of saved.rows){
@@ -203,11 +211,11 @@ async function syncPanelToMikrotik(req,res){
         if(!name||/^default(?:[-_].*)?$/i.test(name))throw new Error("Default/system pool names cannot be synced.");
         if(!ranges||ranges.split(",").some(part=>!validRangePart(part)))throw new Error("Invalid saved IPv4 range.");
         const existing=liveByName.get(name.toLowerCase());
-        if(existing){await mikrotikService.updateIpPool(existing.id||existing.name,{name,ranges,nextPool});results.push({name,status:"updated"});}
+        if(existing){await mikrotikService.updateIpPool(existing.id||existing.name,{name,ranges,nextPool},SLOW_ROUTER_TIMEOUTS);results.push({name,status:"updated"});}
         else{
           const duplicate=findPoolWithSameRanges(ranges,live);
           if(duplicate){results.push({name,status:"skipped",message:`Pool "${name}" was not created: its ranges ${ranges} already exist on pool "${duplicate.name}". Delete the stale saved record for "${name}" or correct its ranges.`});}
-          else{await mikrotikService.createIpPool({name,ranges,nextPool});results.push({name,status:"created"});}
+          else{await mikrotikService.createIpPool({name,ranges,nextPool},SLOW_ROUTER_TIMEOUTS);results.push({name,status:"created"});}
         }
       }catch(error){results.push({name,status:"failed",message:error?.message||"IP pool sync failed."});}
     }
@@ -241,8 +249,8 @@ async function savePoolRow({name,ranges,localAddress,subnet,device,nextPool,rena
 // are never deleted here.
 async function syncFromMikrotik(req,res){
   try{
-    const live=await mikrotikService.getIpPools();
-    const device=await mikrotikService.getRouterIdentity();
+    const live=await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
+    const device=await mikrotikService.getRouterIdentity(SLOW_ROUTER_TIMEOUTS);
     const saved=await db.query("SELECT name,ranges,local_address,subnet,device_name,next_pool FROM ip_pools ORDER BY name ASC");
     const rows=saved.rows||[];
     const byName=new Map(rows.map(row=>[String(row.name||"").toLowerCase(),row]));

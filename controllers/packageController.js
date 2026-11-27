@@ -1,6 +1,12 @@
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 
+// Same slow-tunnel budget as the IP pool controller: the RouterOS handshake
+// alone can exceed the service's 10s defaults, so plan saves/syncs use a
+// 30s handshake + 30s operation budget. Display paths (list, pools
+// dropdown) never pass this and keep the 10s defaults.
+const SLOW_ROUTER_TIMEOUTS = Object.freeze({ operationTimeoutMs: 30000, handshakeTimeoutMs: 30000 });
+
 const clean=(v,m=255)=>String(v??"").trim().slice(0,m);
 const isSystemProfile=(value)=>{const name=String(value??"").trim().toLowerCase();return !name||name.includes("default")||name==="vpn"||/^(?:template|internal|system)(?:[-_\\s].*)?$/.test(name);};
 const routerError=(e)=>String(e?.message||e||"Package operation failed.");
@@ -114,7 +120,7 @@ async function normalize(body){
   if(!Number.isInteger(value.durationMonths)||value.durationMonths<1)return{error:"Duration must be at least 1 month."};
   if(!["yes","no","default"].includes(value.changeTcpMss))return{error:"Change TCP MSS must be yes, no, or default."};
   if(value.remoteAddress){
-    const pools=await mikrotikService.getIpPools();
+    const pools=await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
     const pool=pools.find(x=>String(x.name).toLowerCase()===value.remoteAddress.toLowerCase());
     if(pool)value.remoteAddress=pool.name;
     // A pool name the router does not have (renamed/deleted) used to be saved
@@ -126,7 +132,7 @@ async function normalize(body){
 }
 
 async function findProfileByName(name){
-  const profiles=await mikrotikService.fetchExistingProfiles();
+  const profiles=await mikrotikService.fetchExistingProfiles(SLOW_ROUTER_TIMEOUTS);
   return profiles.find(x=>String(x.name).toLowerCase()===String(name||"").toLowerCase())||null;
 }
 
@@ -145,7 +151,7 @@ async function syncMikrotikProfile(value,previousProfileName="",context={}){
   const target=context.target||await findProfileByName(value.planName);
   const oldName=clean(previousProfileName,120);
   const previous=(target||(!target&&oldName&&oldName.toLowerCase()!==value.planName.toLowerCase()?await findProfileByName(oldName):null));
-  const livePools=context.livePools||await mikrotikService.getIpPools();
+  const livePools=context.livePools||await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
   const resolved=resolveRemoteAddress(value.remoteAddress,livePools);
   let remoteAddress=value.remoteAddress;
   let warning=null;
@@ -163,13 +169,13 @@ async function syncMikrotikProfile(value,previousProfileName="",context={}){
       const panelPools=Array.isArray(context.panelPools)?context.panelPools:[];
       const panelPool=panelPools.find(x=>String(x.name||"").toLowerCase()===resolved.name.toLowerCase());
       if(panelPool&&isValidPoolRanges(panelPool.ranges)){
-        await mikrotikService.createIpPool({name:String(panelPool.name).trim(),ranges:String(panelPool.ranges).trim(),nextPool:String(panelPool.next_pool||"none").trim()||"none"});
+        await mikrotikService.createIpPool({name:String(panelPool.name).trim(),ranges:String(panelPool.ranges).trim(),nextPool:String(panelPool.next_pool||"none").trim()||"none"},SLOW_ROUTER_TIMEOUTS);
         remoteAddress=String(panelPool.name).trim();
         warning=`IP pool "${remoteAddress}" was missing on the router; created it from the panel's saved IP pool (${String(panelPool.ranges).trim()}).`;
       }else{
         const derived=derivePoolRangeFromLocalAddress(value.localAddress);
         if(!derived)throw new Error(`IP pool "${resolved.name}" does not exist on the router and no range can be derived from local address "${String(value.localAddress||"").trim()}". Create the pool in IP Pools first, or correct the plan's pool.`);
-        await mikrotikService.createIpPool({name:resolved.name,ranges:derived,nextPool:"none"});
+        await mikrotikService.createIpPool({name:resolved.name,ranges:derived,nextPool:"none"},SLOW_ROUTER_TIMEOUTS);
         remoteAddress=resolved.name;
         warning=`IP pool "${resolved.name}" was missing on the router; created it with range ${derived} (derived from local address ${String(value.localAddress||"").trim()}). Check the range in IP Pools if it should differ.`;
       }
@@ -185,11 +191,11 @@ async function syncMikrotikProfile(value,previousProfileName="",context={}){
   };
   let result;
   if(target){
-    result=await mikrotikService.updateProfile(target.id,data);
+    result=await mikrotikService.updateProfile(target.id,data,SLOW_ROUTER_TIMEOUTS);
   }else if(previous){
-    result=await mikrotikService.updateProfile(previous.id,data);
+    result=await mikrotikService.updateProfile(previous.id,data,SLOW_ROUTER_TIMEOUTS);
   }else{
-    result=await mikrotikService.createProfile(data);
+    result=await mikrotikService.createProfile(data,SLOW_ROUTER_TIMEOUTS);
   }
   return{...(result||{}),warning};
 }
@@ -283,9 +289,9 @@ async function remove(req,res){
     if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
     const pkg=existing.rows[0],targetName=clean(pkg.profile_name||pkg.plan_name,120);
     if(isSystemProfile(targetName))return errorResponse(res,new Error("System/internal MikroTik profiles are protected and cannot be deleted."),400);
-    if(await mikrotikService.isProfileInUse(targetName))return errorResponse(res,new Error("Cannot delete: Profile is currently assigned to one or more PPPoE users."),409);
+    if(await mikrotikService.isProfileInUse(targetName,SLOW_ROUTER_TIMEOUTS))return errorResponse(res,new Error("Cannot delete: Profile is currently assigned to one or more PPPoE users."),409);
     const profile=await findProfileByName(targetName);
-    if(profile)await mikrotikService.removeProfile(profile.id);
+    if(profile)await mikrotikService.removeProfile(profile.id,SLOW_ROUTER_TIMEOUTS);
     const deleted=await db.query("DELETE FROM packages WHERE id=$1::bigint RETURNING *",[pkg.id]);
     return res.json({success:true,message:'Plan "'+targetName+'" deleted successfully',package:deleted.rows[0]});
   }catch(e){return errorResponse(res,e);}
@@ -303,7 +309,7 @@ async function syncPanelToMikrotik(req,res){
     // its remote-address against the same snapshot (and a missing pool can be
     // recreated from the panel's saved ranges). Panel pool metadata is
     // best-effort: a missing ip_pools table must not break the sync.
-    const livePools=await mikrotikService.getIpPools();
+    const livePools=await mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS);
     let panelPools=[];
     try{
       const panelResult=await db.query("SELECT name,ranges,next_pool FROM ip_pools");
@@ -350,8 +356,8 @@ async function sync(req,res){
     // MikroTik access is centrally managed by mikrotikService:
     // connections and commands have hard timeouts and are closed in finally.
     const [profiles,pools]=await Promise.all([
-      mikrotikService.fetchExistingProfiles(),
-      mikrotikService.getIpPools()
+      mikrotikService.fetchExistingProfiles(SLOW_ROUTER_TIMEOUTS),
+      mikrotikService.getIpPools(SLOW_ROUTER_TIMEOUTS)
     ]);
 
     if(!Array.isArray(profiles)){

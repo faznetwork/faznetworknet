@@ -573,7 +573,8 @@ class MikroTikService {
     });
   }
 
-  async fetchExistingProfiles() {
+  async fetchExistingProfiles(options) {
+    const timeouts = resolveProbeTimeouts(options);
     return this._withConnection("PPPoE profile sync", async (connection) => {
       const rows = await connection.write("/ppp/profile/print");
       return (Array.isArray(rows) ? rows : []).map((item) => {
@@ -602,7 +603,7 @@ class MikroTikService {
           raw:item
         };
       }).filter((item) => item.name && !this._isSystemProfileName(item.name));
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
   async getPppoeSecret(username) {
     const name=this._str(username).trim();
@@ -1680,20 +1681,22 @@ class MikroTikService {
     });
   }
 
-  async getRouterIdentity() {
+  async getRouterIdentity(options) {
+    const timeouts = resolveProbeTimeouts(options);
     try {
       return await this._withConnection("MikroTik identity query", async (connection) => {
         const rows = await connection.write("/system/identity/print");
         const name = this._str(Array.isArray(rows) ? rows[0]?.name : rows?.name).trim();
         return name || "MikroTik";
-      });
+      }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
     } catch (error) {
       console.warn("[MikroTik] Router identity unavailable; using fallback:", error?.message || error);
       return "MikroTik";
     }
   }
 
-  async getIpPools() {
+  async getIpPools(options) {
+    const timeouts = resolveProbeTimeouts(options);
     return this._withConnection("IP pool query", async (connection) => {
       const rows = await connection.write("/ip/pool/print");
       return (Array.isArray(rows) ? rows : []).map((item) => ({
@@ -1703,7 +1706,7 @@ class MikroTikService {
         nextPool: this._str(item["next-pool"]) || "none",
         raw: item
       })).filter((item) => item.name && item.id);
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async getPoolNameForIp(ip){if(ipv4ToInt(ip)===null)return null;const now=Date.now();if(!this._ipPoolCache||now-this._ipPoolCache.loadedAt>=60000){const pools=await this.getIpPools();this._ipPoolCache={loadedAt:now,pools};}return resolvePoolFromRanges(ip,this._ipPoolCache.pools);}
@@ -1721,13 +1724,14 @@ class MikroTikService {
     });
   }
 
-  async createIpPool(data) {
+  async createIpPool(data, options) {
+    const timeouts = resolveProbeTimeouts(options);
     const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim() || "none";
     if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
     return this._withConnection("IP pool creation",async(connection)=>{
       await connection.write("/ip/pool/add",this._writeParams({name,ranges,"next-pool":nextPool}));
       return {name,ranges,nextPool};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   _extractRouterError(error) {
@@ -1746,7 +1750,8 @@ class MikroTikService {
     if(/^default(?:[-_].*)?$/i.test(this._str(match.name))) throw new Error("The default system IP pool cannot be modified.");
     return match;
   }
-  async updateIpPool(originalName,data) {
+  async updateIpPool(originalName,data, options) {
+     const timeouts = resolveProbeTimeouts(options);
      const key=this._str(originalName).trim();
      const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim();
      const nextPool=this._str(data.nextPool).trim();
@@ -1765,9 +1770,10 @@ class MikroTikService {
        ];
        await connection.write("/ip/pool/set",params);
        return {id:targetId,name,ranges,nextPool:targetNextPool};
-     });
+     }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
    }
-   async deleteIpPool(originalName) {
+   async deleteIpPool(originalName, options) {
+     const timeouts = resolveProbeTimeouts(options);
      const key=this._str(originalName).trim();
      if(!key) throw new Error("Pool identifier is required");
      return this._withConnection("IP pool deletion",async(connection)=>{
@@ -1776,9 +1782,10 @@ class MikroTikService {
        const targetId=this._str(item[".id"]).trim();
        await connection.write("/ip/pool/remove",["=.id="+targetId]);
        return {id:targetId,name:this._str(item.name).trim()};
-     });
+     }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
    }
-  async createProfile(data) {
+  async createProfile(data, options) {
+    const timeouts = resolveProbeTimeouts(options);
     const name=this._str(data.name).trim();
     if(!name)throw new Error("Profile name is required.");
     if(this._isSystemProfileName(name))throw new Error("System/internal profile names are reserved.");
@@ -1793,10 +1800,11 @@ class MikroTikService {
       });
       await connection.write("/ppp/profile/add",params);
       return {name};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async updateProfile(identifier,data){
+  async updateProfile(identifier,data, options){
+    const timeouts = resolveProbeTimeouts(options);
     const key=this._str(identifier).trim();
     if(this._isSystemProfileName(data?.name)||this._isSystemProfileName(key)) throw new Error("System/internal MikroTik PPP profiles are protected and cannot be edited.");
     return this._withConnection("PPPoE profile update",async(connection)=>{
@@ -1816,19 +1824,21 @@ class MikroTikService {
       ];
       await connection.write("/ppp/profile/set",params);
       return {id:this._str(item[".id"]),name:this._str(data.name).trim()};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async isProfileInUse(profileName){
+  async isProfileInUse(profileName, options){
+    const timeouts = resolveProbeTimeouts(options);
     const name=this._str(profileName).trim();
     if(!name)return false;
     return this._withConnection("PPPoE profile usage check",async(connection)=>{
       const rows=await connection.write("/ppp/secret/print");
       return (Array.isArray(rows)?rows:[]).some(item=>this._str(item.profile).trim().toLowerCase()===name.toLowerCase());
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async removeProfile(identifier){
+  async removeProfile(identifier, options){
+    const timeouts = resolveProbeTimeouts(options);
     const key=this._str(identifier).trim();
     if(this._isSystemProfileName(key)) throw new Error("System/internal MikroTik PPP profiles are protected and cannot be deleted.");
     return this._withConnection("PPPoE profile removal",async(connection)=>{
@@ -1846,7 +1856,7 @@ class MikroTikService {
         throw error;
       }
       return {id:this._str(item[".id"]),name:profileName,removed:true};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async createSecret(data) {
