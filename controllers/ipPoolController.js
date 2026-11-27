@@ -112,39 +112,35 @@ function normalizePayload(body){
 }
 async function list(req,res){
   try{
-    const [rows,usedRows]=await Promise.all([mikrotikService.getIpPools(),mikrotikService.getUsedIpPools()]);
+    // The list is the panel's saved ip_pools rows ONLY. The router is never
+    // the source of the list: a slow/offline router must never hide the
+    // saved pools. (One-way sync: the panel is the source of truth; the
+    // router is only written to when a pool is saved or synced.)
     let metadata=[];
     try{const result=await db.query("SELECT name,ranges,local_address,subnet,device_name,next_pool FROM ip_pools ORDER BY name ASC");metadata=result.rows||[];}catch(dbError){console.warn("[IP POOL metadata warning]:",dbError.message);}
-    const byName=new Map(metadata.map(row=>[String(row.name||"").toLowerCase(),row]));
-    // A router pool renamed outside the panel (e.g. "200 Mbps" renamed to
-    // "PPPoE_Pool") no longer matches its saved record by name; match it
-    // by its ranges instead so the Edit modal still shows the real subnet
-    // and gateway. Name wins when both match.
-    const byRanges=new Map();
-    for(const row of metadata){
-      const key=normalizePoolRanges(row.ranges);
-      if(key&&!byRanges.has(key))byRanges.set(key,row);
-    }
+    // Live router data is best-effort enrichment only (allocations). Its
+    // failure can never fail this response: on failure the saved rows are
+    // returned with empty allocations.
     const usageByPool=new Map();
-    for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
-    const pools=rows.filter(pool=>!/^default(?:[-_].*)?$/i.test(String(pool.name||"").trim())).map(pool=>{
-      const byNameRow=byName.get(String(pool.name||"").toLowerCase());
-      const byRangesRow=byNameRow?null:byRanges.get(normalizePoolRanges(pool.ranges));
-      const meta=byNameRow||byRangesRow||{};
-      // No saved record at all: derive the subnet/gateway from the ranges
-      // (only when the range exactly fills one CIDR block's usable space).
-      // A bare single IP has no meaningful gateway, so it stays empty.
-      let localAddress=meta.local_address||"",subnet=meta.subnet||"";
-      let metaSource=byNameRow?"name":(byRangesRow?"ranges":"none");
+    try{
+      const usedRows=await mikrotikService.getUsedIpPools();
+      for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
+    }catch(routerError){
+      console.warn("[IP POOL list warning]: live allocation data unavailable, showing saved pools:",routerError.message||routerError);
+    }
+    const pools=metadata.filter(row=>!/^default(?:[-_].*)?$/i.test(String(row.name||"").trim())).map(row=>{
+      // Derive the subnet/gateway from the ranges when the saved row lacks
+      // them (only when the range exactly fills one CIDR block's usable
+      // space). A bare single IP has no meaningful gateway, so it stays empty.
+      let localAddress=row.local_address||"",subnet=row.subnet||"";
       if(!localAddress||!subnet){
-        const derived=deriveSubnetAndGateway(pool.ranges);
+        const derived=deriveSubnetAndGateway(row.ranges);
         if(derived){
           if(!subnet)subnet=derived.subnet;
           if(!localAddress)localAddress=derived.localAddress;
-          if(!byNameRow&&!byRangesRow)metaSource="derived";
         }
       }
-      return {id:pool.id,name:pool.name,ranges:pool.ranges,nextPool:pool.nextPool||"",localAddress,subnet,deviceName:meta.device_name||"",metaSource,allocations:usageByPool.get(String(pool.name||"").toLowerCase())||[]};
+      return {id:String(row.name||""),name:row.name,ranges:row.ranges,nextPool:row.next_pool||"",localAddress,subnet,deviceName:row.device_name||"",metaSource:"name",allocations:usageByPool.get(String(row.name||"").toLowerCase())||[]};
     });
     return res.json(pools);
   }catch(error){return errorResponse(res,error);}

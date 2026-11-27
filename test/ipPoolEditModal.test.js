@@ -71,43 +71,47 @@ test("deriveSubnetAndGateway never invents an address it cannot know",()=>{
   assert.equal(controller.deriveSubnetAndGateway(null),null);
 });
 
-test("list() merges a renamed router pool with its saved record by ranges",async()=>{
+// One-way sync (2026-11-27): the list is the panel's saved ip_pools rows
+// ONLY. A pool renamed on the router (here "200 Mbps" -> "PPPoE_Pool")
+// no longer changes the list: the saved row shows under its saved name
+// with its saved subnet/gateway, and the live name never appears.
+test("list() shows the saved pool under its saved name even when the router renamed it",async()=>{
   const {controller}=loadController({livePools:LIVE_POOLS,savedPools:SAVED_POOLS,usedRows:usedRows()});
   const res=recorder();
   await controller.list({},res);
   assert.equal(res.statusCode,200);
   const byName=new Map(res.body.map(p=>[p.name,p]));
-  const pppoe=byName.get("PPPoE_Pool");
-  assert.ok(pppoe);
-  assert.equal(pppoe.subnet,"10.20.0.0/24");
-  assert.equal(pppoe.localAddress,"10.20.0.1");
-  assert.equal(pppoe.metaSource,"ranges");
-  assert.equal(pppoe.ranges,"10.20.0.2-10.20.0.254");
-  assert.equal(pppoe.allocations.length,21);
-  const expired=byName.get("EXPIRED-PROFILE");
+  const saved=byName.get("200 Mbps");
+  assert.ok(saved);
+  assert.equal(saved.subnet,"10.20.0.0/24");
+  assert.equal(saved.localAddress,"10.20.0.1");
+  assert.equal(saved.metaSource,"name");
+  assert.equal(saved.ranges,"10.20.0.2-10.20.0.254");
+  assert.equal(saved.allocations.length,0,"usage is keyed by the saved name; the renamed live pool's usage does not attach");
+  assert.ok(!byName.has("PPPoE_Pool"),"the live renamed pool must not appear; the list is panel data only");
+  const expired=byName.get("Expire_Pool");
+  assert.ok(expired);
   assert.equal(expired.subnet,"100.65.96.1/20");
   assert.equal(expired.localAddress,"100.65.96.1");
-  assert.equal(expired.metaSource,"ranges");
+  assert.equal(expired.metaSource,"name");
 });
 
-test("list() prefers the name match and derives when there is no saved record",async()=>{
+// One-way sync (2026-11-27): the list is exactly the saved rows. Live-only
+// pools (no panel row) never appear, even when the router answers.
+test("list() returns exactly the saved pools; live-only pools never appear",async()=>{
   const {controller}=loadController({livePools:LIVE_POOLS,savedPools:SAVED_POOLS,usedRows:usedRows()});
   const res=recorder();
   await controller.list({},res);
   const byName=new Map(res.body.map(p=>[p.name,p]));
+  assert.equal(res.body.length,SAVED_POOLS.length);
   const hotspot=byName.get("400_Hotspot");
   assert.equal(hotspot.subnet,"10.71.0.1/24");
   assert.equal(hotspot.localAddress,"10.71.0.1");
   assert.equal(hotspot.metaSource,"name");
-  const plan150=byName.get("150 Mbps");
-  assert.equal(plan150.subnet,"10.82.0.0/24");
-  assert.equal(plan150.localAddress,"10.82.0.1");
-  assert.equal(plan150.metaSource,"derived");
-  const pc=byName.get("PC_Pool");
-  assert.equal(pc.subnet,"");
-  assert.equal(pc.localAddress,"");
-  assert.equal(pc.metaSource,"none");
-  assert.equal(pc.allocations.length,1);
+  assert.equal(hotspot.allocations.length,10);
+  for(const liveOnly of ["PPPoE_Pool","150 Mbps","PC_Pool","EXPIRED-PROFILE"]){
+    assert.ok(!byName.has(liveOnly),liveOnly+" has no saved row and must not appear");
+  }
 });
 
 test("list() never returns the stale 10.81 placeholder values",async()=>{
@@ -117,7 +121,7 @@ test("list() never returns the stale 10.81 placeholder values",async()=>{
   for(const pool of res.body){
     assert.ok(!String(pool.subnet||"").includes("10.81"),pool.name+" subnet must not be 10.81");
     assert.ok(!String(pool.localAddress||"").includes("10.81"),pool.name+" localAddress must not be 10.81");
-    assert.ok(LIVE_POOLS.some(live=>live.name===pool.name),pool.name+" must be a real live pool");
+    assert.ok(SAVED_POOLS.some(saved=>saved.name===pool.name),pool.name+" must be a real saved pool");
   }
 });
 

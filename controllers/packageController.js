@@ -85,8 +85,13 @@ function decorate(row,poolMap){
 
 async function list(req,res){
   try{
-    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name"),mikrotikService.getIpPools()]);
-    const poolMap=new Map(routerPools.map(x=>[String(x.name).toLowerCase(),x]));
+    // Panel data only: plans are saved database rows. The router is never
+    // consulted for the list — pool ranges come from the panel's ip_pools
+    // table, so a slow/offline router can never hide the saved plans.
+    // (One-way sync: the panel is the source of truth; the router is only
+    // written to when a plan is saved.)
+    const [result,poolRows]=await Promise.all([db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name"),db.query("SELECT name, ranges FROM ip_pools").catch(()=>({rows:[]}))]);
+    const poolMap=new Map((poolRows.rows||[]).map(x=>[String(x.name).toLowerCase(),x]));
     res.json({success:true,packages:result.rows.map(row=>decorate(row,poolMap))});
   }catch(e){errorResponse(res,e);}
 }

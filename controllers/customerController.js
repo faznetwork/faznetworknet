@@ -1,6 +1,7 @@
 const db = require("../db");
 const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const mikrotikService = require("../services/mikrotikService");
+const routerStatusProber = require("../services/routerStatusProber");
 const resellerFinanceService = require("../services/resellerFinanceService");
 const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
@@ -656,14 +657,19 @@ async function listCustomers(req,res){
 
     let sessions=[];
     let sessionReport={liveSync:"unavailable",routerCount:0,reachableRouterCount:0,failedRouterCount:0,failedRouters:[]};
-    try{
-      // Each router's live PPPoE poll has its own bounded socket, handshake and retry logic.
-      // Outer 5s budget: worst case is 2 attempts x (3s handshake + 8s operation) per router, which alone can exceed the page's 20s fetch timeout and hide the DB rows entirely. On timeout the DB rows still render (all Offline); the next load retries live.
-      sessionReport=await withTimeout(()=>mikrotikService.getAllActiveSessionsWithStatus(),5000);
-      if(!sessionReport||!Array.isArray(sessionReport.sessions))throw new Error("MikroTik returned an invalid active-session response.");
-      if(sessionReport.liveSync==="ok"||sessionReport.liveSync==="partial")sessions=sessionReport.sessions;
-    }catch(error){
-      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable; customers will be shown Offline:",error.message||error);
+    // Online status comes only from the background prober's cached live
+    // sessions (refreshed every 30s, the same source the dashboard uses).
+    // No per-request router call here: a slow/offline router must never
+    // hide the saved panel rows, and the list shows the same live status
+    // the dashboard shows. The snapshot is trusted only while the prober
+    // says the router is online (state === "online"); a stale snapshot is
+    // never presented as live. When it has no sessions the customers render
+    // Offline (live status unknown). Customer 360 keeps its own live lookup.
+    const snapshot=routerStatusProber.getRouterStatusSnapshot();
+    const snapshotSessions=snapshot&&snapshot.state==="online"&&snapshot.data&&Array.isArray(snapshot.data.sessions)?snapshot.data.sessions:null;
+    if(snapshotSessions){
+      sessionReport={liveSync:"ok",sessions:snapshotSessions,routerCount:1,reachableRouterCount:1,failedRouterCount:0,failedRouters:[],lastSyncAt:snapshot.lastSeenAt||null,latencyMs:null,activeCount:snapshotSessions.length};
+      sessions=snapshotSessions;
     }
     const sessionMap=createActiveSessionMap(sessions);
 
