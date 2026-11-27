@@ -4735,14 +4735,14 @@ window.editHotspotUser=function(username,event){
 
         async function syncIpPoolsFromMikrotik(){
             const button=document.getElementById('syncIpPoolBtn'); if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
-            try{const result=await jsonFetch('/api/ip-pools/sync',{method:'POST'});if(result&&result.message)alert(result.message);await loadIpPools();}
+            try{const result=await jsonFetch('/api/ip-pools/sync',{method:'POST',timeout:120000});if(result&&result.message)alert(result.message);await loadIpPools();}
             catch(error){alert(error.message);}
             finally{if(button){button.disabled=false;button.innerHTML='<i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik';}}
         }
 
         async function syncIpPoolsToMikrotik(){
             const button=document.getElementById('pushIpPoolBtn');if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
-            try{const result=await jsonFetch('/api/ip-pools/sync-to-mikrotik',{method:'POST'});alert(result.message||'IP pools synchronized from panel to MikroTik.');await loadIpPools();}
+            try{const result=await jsonFetch('/api/ip-pools/sync-to-mikrotik',{method:'POST',timeout:120000});alert(result.message||'IP pools synchronized from panel to MikroTik.');await loadIpPools();}
             catch(error){alert(error.message||'Failed to sync IP pools from panel to MikroTik.');}
             finally{if(button){button.disabled=false;button.innerHTML='<i class="bi bi-cloud-upload me-1"></i> Sync from Panel';}}
         }
@@ -5278,7 +5278,7 @@ async function deletePlan(id,name){
             const button=document.getElementById('syncPlansToMikrotikBtn');
             if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Syncing...';}
             try{
-                const data=await window.jsonFetch('/api/packages/sync-to-mikrotik',{method:'POST'});
+                const data=await window.jsonFetch('/api/packages/sync-to-mikrotik',{method:'POST',timeout:120000});
                 if(!data.success)throw new Error(data.message||'Sync failed');
                 const failed=(data.results||[]).filter(item=>item.status==='failed');
                 const details=failed.slice(0,8).map(item=>item.name+': '+item.message).join('\\n');
@@ -5297,7 +5297,7 @@ async function deletePlan(id,name){
             }
 
             try {
-                const data = await window.jsonFetch('/api/packages/sync', { method: 'POST' });
+                const data = await window.jsonFetch('/api/packages/sync', { method: 'POST', timeout: 120000 });
                 if (!data.success) {
                     throw new Error(data.message || 'Sync failed');
                 }
