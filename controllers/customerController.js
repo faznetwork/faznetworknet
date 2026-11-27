@@ -36,6 +36,68 @@ async function withTimeout(task, timeoutMs = 2500) {
   }
 }
 
+// Live sessions for the 360 display come from the background prober's
+// cached MikroTik sessions (refreshed every 30s, the same source the
+// dashboard and the customer list use). No per-request router call: from
+// Render the router handshake alone outlasts the old 2-3s caps, so the
+// lookup always timed out and every customer showed Offline. The snapshot
+// is trusted only while the prober says the router is online
+// (state === "online"); a stale snapshot never keeps a customer Online
+// after the router dies. When the snapshot carries no session data at
+// all, sessions is null and the caller falls back to the fresh DB session
+// candidate (or Offline).
+function proberLiveSessions(){
+  const snapshot=routerStatusProber.getRouterStatusSnapshot();
+  const online=snapshot&&snapshot.state==="online";
+  const sessions=online&&snapshot.data&&Array.isArray(snapshot.data.sessions)?snapshot.data.sessions:null;
+  return {online:!!online,sessions,routerStatus:online?"reachable":"unreachable"};
+}
+
+// IPv4 helpers for resolving a live IP to its panel IP pool without a
+// router call (the live pool lookup used to read the router's pool list).
+function ipv4ToInt(value){
+  const p=String(value||"").trim().split(".");
+  if(p.length!==4)return null;
+  let n=0;
+  for(const part of p){
+    if(!/^\d{1,3}$/.test(part))return null;
+    const x=Number(part);
+    if(x<0||x>255)return null;
+    n=n*256+x;
+  }
+  return n>>>0;
+}
+function ipInPoolRange(ip,range){
+  const target=ipv4ToInt(ip);
+  if(target===null)return false;
+  const value=String(range||"").trim(),dash=value.indexOf("-");
+  if(dash>=0){
+    const a=ipv4ToInt(value.slice(0,dash).trim()),b=ipv4ToInt(value.slice(dash+1).trim());
+    return a!==null&&b!==null&&a<=b&&target>=a&&target<=b;
+  }
+  const slash=value.indexOf("/");
+  if(slash>=0){
+    const base=ipv4ToInt(value.slice(0,slash).trim()),text=value.slice(slash+1).trim();
+    if(base===null||!/^\d{1,2}$/.test(text))return false;
+    const prefix=Number(text);
+    if(prefix<0||prefix>32)return false;
+    const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;
+    return (target&mask)===(base&mask);
+  }
+  const single=ipv4ToInt(value);
+  return single!==null&&single===target;
+}
+// First saved panel pool whose ranges contain the IP (ranges may be
+// comma-separated "a-b", CIDR, or single IPs). Null when no pool matches.
+function resolvePoolNameForIp(ip,pools){
+  if(ipv4ToInt(ip)===null||!Array.isArray(pools))return null;
+  for(const pool of pools){
+    const ranges=String(pool?.ranges||"").split(",").map(x=>x.trim()).filter(Boolean);
+    if(ranges.some(r=>ipInPoolRange(ip,r)))return pool.name||null;
+  }
+  return null;
+}
+
 function tenantPopIds(req) { return req.tenantScope?.global ? null : (req.tenantScope?.popIds || []); }
 
 function parseRequestedPopId(value) {
@@ -754,33 +816,16 @@ async function profile(req,res){
       try{const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);pppoeRow=q.rows[0]||null;}
       catch(fallbackError){console.error("[Customer 360] PPPoE lookup failed:",fallbackError.message);}
     }
-    // Customer 360 presence must reflect RouterOS's current PPPoE active list,
-    // never a collector snapshot: a stale snapshot can incorrectly keep a customer
-    // Online during a power cut. If the router/API cannot be reached, report Offline.
+    // Live session comes from the background prober's cached MikroTik
+    // sessions (same source as the dashboard and the customer list). No
+    // per-request router call: from Render the handshake alone outlasts
+    // the old 2s cap, so the lookup always failed and the modal showed
+    // Offline. The snapshot is trusted only while state === "online";
+    // a stale snapshot never keeps a customer Online after the router
+    // dies (the prober flips to offline 120s after the last success).
     mtSecret=pppoeRow?{name:pppoeRow.username,profile:pppoeRow.profile,password:pppoeRow.password,disabled:pppoeRow.disabled,remoteAddress:pppoeRow.remote_address,callerId:pppoeRow.caller_id,service:pppoeRow.service,comment:pppoeRow.comment}:null;
-    // The MAC lock is the RouterOS secret's caller-id. Read the live secret
-    // alongside the session list so the 360 shows the enforced lock, not just
-    // the panel's stored value; when the router cannot be reached the stored
-    // panel value is the fallback. Either lookup may fail independently.
-    let routerSecret=null;
-    try{
-      const [sessionSettled,secretSettled]=await Promise.allSettled([
-        withTimeout(()=>mikrotikService.getActiveSessions(),2000),
-        withTimeout(()=>mikrotikService.getPppoeSecret(username),2000)
-      ]);
-      if(sessionSettled.status==="fulfilled"&&Array.isArray(sessionSettled.value)){
-        const normalizedUsername=String(username||"").trim().toLowerCase();
-        session=findActiveSession(sessionSettled.value,normalizedUsername);
-      }else{
-        session=null;
-        if(sessionSettled.status==="rejected")console.warn("[Customer 360] Live MikroTik active-session lookup failed; showing Offline:",sessionSettled.reason?.message||sessionSettled.reason);
-      }
-      if(secretSettled.status==="fulfilled")routerSecret=secretSettled.value||null;
-    }catch(error){
-      console.warn("[Customer 360] Live MikroTik lookup failed; showing Offline:",error.message);
-      session=null;
-      routerSecret=null;
-    }
+    const proberResult=proberLiveSessions();
+    session=proberResult.sessions?findActiveSession(proberResult.sessions,String(username||"").trim().toLowerCase()):null;
     if(!dbUser&&!pppoeRow)return res.status(404).json({success:false,message:`Customer "${username}" not found in database`});
     let networkDetails=null;
     if(dbUser?.pop_id!=null){
@@ -808,11 +853,12 @@ async function profile(req,res){
     try{const q=await db.query("SELECT id,plan_name,profile_name,price,duration_months,rate_limit,remote_address FROM packages ORDER BY price ASC,plan_name ASC");plans=q.rows.map(x=>({id:x.id,name:clean(x.plan_name,120),profileName:clean(x.profile_name,120),price:Number(x.price||0),durationMonths:Number(x.duration_months||1),rateLimit:clean(x.rate_limit,100),remoteAddress:clean(x.remote_address,100)}));}catch(error){console.warn("[Customer plans warning]:",error.message);}
     try{const q=await db.query(`SELECT trx_id,amount,channel AS gateway,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 3`,[username,clean(dbUser?.phone,40)]);payments=q.rows.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),gateway:clean(x.gateway,30),date:x.created_at,status:clean(x.status,30)}));}catch(error){console.warn("[Customer payments warning]:",error.message);}
     const storedMac=clean(pppoeRow?.caller_id||dbUser?.router_mac||"",100);
-    // Locked MAC = the enforced caller-id on the RouterOS secret when it can
-    // be read, otherwise the panel's stored MAC. Live MAC = the MAC of the
-    // current session only ("" while offline) — never a stored value, so the
-    // admin can see a changed router instead of the old locked MAC.
-    const lockedMac=clean(routerSecret?.callerId||storedMac,100);
+    // Locked MAC = the panel's stored MAC (pppoe_users.caller_id). The live
+    // secret is not read here: a slow secret read must never discard a live
+    // session. Live MAC = the MAC of the current session only ("" while
+    // offline) — never a stored value, so the admin can see a changed
+    // router instead of the old locked MAC.
+    const lockedMac=clean(storedMac,100);
     const macLock={locked:Boolean(lockedMac),lockedMac,liveMac:clean(session?.callerId||"",100),storedMac};
     const customer={
       id:dbUser?.id||null,username:clean(mtSecret?.name||dbUser?.username||username,100),
@@ -1336,48 +1382,30 @@ async function resolveCustomer360(idValue,tenantScope){
   const candidateSession=sessionResult.rows?.[0]||null;
   const receivedAtMs=candidateSession?.receivedAt?new Date(candidateSession.receivedAt).getTime():NaN;
   let session=candidateSession&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000?candidateSession:null;
-  const plans=packageResult.rows||[];
+  // PostgreSQL folds unquoted column aliases to lowercase, so the plans rows
+  // arrive with lowercase keys (profilename, poolname, ...) — reading the
+  // camelCase aliases returns undefined and the 360 showed "Pool not
+  // resolved" even though the package row holds the pool. Normalise to the
+  // camelCase shape the rest of this file (and the frontend) expects.
+  const plans=(packageResult.rows||[]).map(x=>({id:x.id,name:clean(x.name||x.plan_name,120),profileName:clean(x.profilename||x.profile_name,100),poolName:clean(x.poolname||x.pool_name,100),price:Number(x.price||0),durationMonths:Math.max(1,Number(x.durationmonths||x.duration_months||1)),rateLimit:clean(x.ratelimit||x.rate_limit,100),remoteAddress:clean(x.remoteaddress||x.remote_address,100)}));
   const payments=paymentResult.rows||[];
   const storedMac=clean(callerIdResult.rows?.[0]?.caller_id,100);
-  let routerStatus="unreachable";
-  let routerSecret=null;
-  try {
-    const routerService=await getCustomerRouterService(customer);
-    // Customer 360 must answer inside the browser's 7s timeout even when the
-    // router path stalls: one attempt, short router budget, and a hard 3s
-    // cap on the whole live lookup. On timeout the customer is shown Offline
-    // (same as today's failure behavior) — the page itself never hangs.
-    // The live secret is read in the same window so the 360 shows the
-    // enforced MAC lock; a secret failure never breaks the session lookup.
-    const [liveResult,secretResult]=await withTimeout(()=>Promise.all([
-      routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),
-      routerService.getPppoeSecret(username).catch(()=>null)
-    ]),3000);
-    routerSecret=secretResult||null;
-    if (
-      liveResult &&
-      !["timeout", "unavailable"].includes(liveResult.live_sync) &&
-      Array.isArray(liveResult.sessions)
-    ) {
-      routerStatus = "reachable";
-      session = findActiveSession(liveResult.sessions, username);
-    } else {
-      routerStatus = "unreachable";
-      session = null;
-    }
-  } catch(routerError) {
-    session=null;
-    routerSecret=null;
-    console.warn("[Customer 360] Target router live status unavailable:", {
-      routerId:resolveCustomerRouterId(customer),
-      username,
-      message:routerError?.message||String(routerError)
-    });
+  // Live session comes from the background prober's cached MikroTik sessions
+  // (same source as the dashboard and the customer list). No per-request
+  // router call: from Render the handshake alone outlasts the old 3s cap,
+  // so the lookup always timed out and every customer showed Offline.
+  // The snapshot is trusted only while state === "online". When it carries
+  // no session data at all, the fresh DB session candidate (<=3 min, from
+  // the router push) is the fallback; otherwise the customer is Offline.
+  const proberResult=proberLiveSessions();
+  const routerStatus=proberResult.routerStatus;
+  if(proberResult.sessions){
+    session=findActiveSession(proberResult.sessions,username);
   }
-  // Locked MAC = the enforced caller-id on the RouterOS secret when it can
-  // be read, otherwise the panel's stored MAC. Live MAC = the MAC of the
-  // current session only ("" while offline).
-  const lockedMac=clean(routerSecret?.callerId||storedMac,100);
+  // Locked MAC = the panel's stored MAC (pppoe_users.caller_id). The live
+  // secret is not read here: a slow secret read must never discard a live
+  // session. Live MAC = the MAC of the current session only ("" while offline).
+  const lockedMac=clean(storedMac,100);
   const macLock={locked:Boolean(lockedMac),lockedMac,liveMac:clean(session?.callerId||"",100),storedMac};
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
@@ -1413,25 +1441,46 @@ async function getCustomerLiveSession(req,res){
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const q=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
     const storedMac=clean(q.rows?.[0]?.caller_id,100);
-    try {
-      const routerService=await getCustomerRouterService(customer);
-      // Same tight budget as the 360 profile: the live-status check must never
-      // outlive the browser timeout when the router path stalls.
-      const liveResult=await withTimeout(()=>routerService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
-      if(liveResult?.live_sync==="timeout"||liveResult?.live_sync==="unavailable"||!Array.isArray(liveResult?.sessions)){
-        return res.json({success:true,live:offlineLive(storedMac,"Target router live status is temporarily unavailable.",liveResult?.live_sync||"unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
+    // Live session from the background prober's cached MikroTik sessions
+    // (same source as the dashboard, the customer list, and the 360
+    // profile). No per-request router call: from Render the handshake
+    // alone outlasts the old 3s cap, so the lookup always timed out and
+    // the page showed Offline. The snapshot is trusted only while
+    // state === "online". When it carries no session data at all, the
+    // fresh DB session candidate (<=3 min, from the router push) is the
+    // fallback; otherwise the customer is Offline.
+    const proberResult=proberLiveSessions();
+    let session=null,fromCache=false;
+    if(proberResult.sessions){
+      session=findActiveSession(proberResult.sessions,String(customer.username||"").trim().toLowerCase());
+    }else{
+      try{
+        const cand=await db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",caller_id AS "callerId",received_at AS "receivedAt" FROM pppoe_live_sessions WHERE LOWER(username)=LOWER($1) ORDER BY received_at DESC LIMIT 1`,[customer.username]);
+        const row=cand.rows?.[0]||null;
+        const ms=row?.receivedAt?new Date(row.receivedAt).getTime():NaN;
+        if(row&&Number.isFinite(ms)&&Date.now()-ms>=0&&Date.now()-ms<=3*60*1000){session=row;fromCache=true;}
+      }catch(candidateError){
+        session=null;
       }
-      const session=findActiveSession(liveResult.sessions,String(customer.username||"").trim().toLowerCase());
-      if(!session)return res.json({success:true,live:{...offlineLive(storedMac,"","offline","reachable"),live_sync:liveResult.live_sync},liveStatusAvailable:true,statusSource:"target-router-active-list"});
-      const liveIp=clean(session.address,100);
-      let livePoolName=null;
-      try{livePoolName=await routerService.getPoolNameForIp(liveIp);}catch(poolError){console.warn("[Customer 360] Live IP pool resolution failed:",poolError.message);}
-      const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
-      return res.json({success:true,live:{status:"online",isLive:true,online:true,router_status:"reachable",ip:liveIp,mac:clean(session.callerId||session.caller_id||storedMac,100),poolName:livePoolName,uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:new Date().toISOString(),checkedAt:liveResult.checkedAt||new Date().toISOString(),stale:liveResult.live_sync==="cached",live_sync:liveResult.live_sync,source:"target-router-active-list"},liveStatusAvailable:true,statusSource:"target-router-active-list"});
-    } catch(routerError) {
-      console.warn("[Customer 360 live status] Target router unavailable:",{routerId:resolveCustomerRouterId(customer),username:customer.username,message:routerError?.message||String(routerError)});
-      return res.json({success:true,live:offlineLive(storedMac,"Target router is unreachable.","unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
     }
+    if(!session){
+      if(!proberResult.sessions){
+        return res.json({success:true,live:offlineLive(storedMac,"Target router live status is temporarily unavailable.","unavailable"),liveStatusAvailable:false,statusSource:"target-router-unavailable"});
+      }
+      return res.json({success:true,live:{...offlineLive(storedMac,"","offline","reachable"),live_sync:"ok"},liveStatusAvailable:true,statusSource:"target-router-active-list"});
+    }
+    const liveIp=clean(session.address,100);
+    // Pool of the live IP from the panel's saved IP pools (no router call):
+    // the pool whose saved ranges contain the live IP.
+    let livePoolName=null;
+    try{
+      const pools=await db.query("SELECT name,ranges FROM ip_pools");
+      livePoolName=resolvePoolNameForIp(liveIp,pools.rows||[]);
+    }catch(poolError){
+      livePoolName=null;
+    }
+    const bytesIn=String(session.bytesIn??session.bytes_in??0),bytesOut=String(session.bytesOut??session.bytes_out??0);
+    return res.json({success:true,live:{status:"online",isLive:true,online:true,router_status:proberResult.routerStatus,ip:liveIp,mac:clean(session.callerId||session.caller_id||storedMac,100),poolName:livePoolName,uptime:clean(session.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(session.service,50),receivedAt:session.receivedAt||new Date().toISOString(),checkedAt:new Date().toISOString(),stale:fromCache,live_sync:fromCache?"cached":"ok",source:"target-router-active-list"},liveStatusAvailable:true,statusSource:"target-router-active-list"});
   }catch(error){
     console.error("[Customer 360 live status] Database/handler error:",error.message);
     return res.status(500).json({success:false,message:"Unable to determine live customer status.",code:"CUSTOMER_LIVE_STATUS_DATABASE_ERROR"});
@@ -1670,4 +1719,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, kickActiveUserByUsername, lockCustomerMac, unlockCustomerMac, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik, nextBillingExpiryDate, buildExpirationComment, effectiveProfile, getCustomerRouterService };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, kickActiveUserByUsername, lockCustomerMac, unlockCustomerMac, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik, nextBillingExpiryDate, buildExpirationComment, effectiveProfile, getCustomerRouterService, resolvePoolNameForIp };

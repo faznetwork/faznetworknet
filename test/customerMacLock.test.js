@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
 const mikrotik = require("../services/mikrotikService");
+const routerStatusProber = require("../services/routerStatusProber");
 const deviceCredentials = require("../services/deviceCredentials");
 const customerController = require("../controllers/customerController");
 const { normalizeMacAddress } = require("../utils/macAddress");
@@ -67,6 +68,15 @@ function installProxyStub(name, fn) {
   const original = mikrotik[name];
   mikrotik[name] = fn;
   return () => { if (hadOwn) mikrotik[name] = original; else delete mikrotik[name]; };
+}
+
+// Stub the background prober snapshot the 360 display paths read live
+// sessions from (resolveCustomer360 / profile() / getCustomerLiveSession
+// never call the router directly any more). Restores by reassignment.
+function installProberStub(snapshot) {
+  const original = routerStatusProber.getRouterStatusSnapshot;
+  routerStatusProber.getRouterStatusSnapshot = () => snapshot;
+  return () => { routerStatusProber.getRouterStatusSnapshot = original; };
 }
 
 function handlerReq(id, body = {}) {
@@ -289,16 +299,9 @@ test("unlockCustomerMac: already unlocked is a no-op", async () => {
 test("profile(): macLock shows the enforced lock, the live session MAC, and the stored MAC separately", async () => {
   const calls = [];
   const restoreDb = installDbStub(calls, { routerRows: [FAKE_ROUTER] });
-  const restoreRuntime = installRuntimeStub({
-    sessions: [{ username: "10019", address: "10.20.0.9", callerId: "11:22:33:44:55:66", service: "pppoe", uptime: "1h", bytesIn: "10", bytesOut: "20" }],
-    secret: { name: "10019", callerId: "AA:BB:CC:DD:EE:FF" }
-  });
-  const restoreGetSecret = installProxyStub("getPppoeSecret", async () => ({ name: "10019", callerId: "AA:BB:CC:DD:EE:FF" }));
-  // profile() reads live sessions through getActiveSessions (proxy trap
-  // always returns the real getAllActiveSessions), which decrypts the
-  // router credential before polling: stub decrypt for the fake row.
-  const originalDecrypt = deviceCredentials.decrypt;
-  deviceCredentials.decrypt = () => "fake-password";
+  // profile() reads the live session from the background prober snapshot,
+  // never from a per-request router call.
+  const restoreProber = installProberStub({ state: "online", online: true, lastSeenAt: new Date().toISOString(), data: { sessions: [{ username: "10019", address: "10.20.0.9", callerId: "11:22:33:44:55:66", service: "pppoe", uptime: "1h", bytesIn: "10", bytesOut: "20" }] } });
   try {
     const res = responseRecorder();
     await customerController.profile({ query: { username: "10019" }, tenantScope: { global: true } }, res);
@@ -311,14 +314,16 @@ test("profile(): macLock shows the enforced lock, the live session MAC, and the 
       storedMac: "AA:BB:CC:DD:EE:FF"
     });
   } finally {
-    restoreDb(); restoreRuntime(); restoreGetSecret(); deviceCredentials.decrypt = originalDecrypt;
+    restoreDb(); restoreProber();
   }
 });
 
 test("profile(): router unreachable falls back to the stored MAC for the lock", async () => {
   const calls = [];
   const restoreDb = installDbStub(calls, { routerRows: [] });
-  const restoreGetSecret = installProxyStub("getPppoeSecret", async () => { throw new Error("router down"); });
+  // "Router unreachable" is an offline prober snapshot now: profile()
+  // never calls the router directly, so no router stub is needed.
+  const restoreProber = installProberStub({ state: "offline", online: false, lastSeenAt: new Date(Date.now() - 600000).toISOString(), data: { sessions: [{ username: "10019", address: "10.20.0.9", callerId: "11:22:33:44:55:66", service: "pppoe" }] } });
   try {
     const res = responseRecorder();
     await customerController.profile({ query: { username: "10019" }, tenantScope: { global: true } }, res);
@@ -328,7 +333,7 @@ test("profile(): router unreachable falls back to the stored MAC for the lock", 
     assert.equal(res.body.macLock.liveMac, "");
     assert.equal(res.body.live.online, false);
   } finally {
-    restoreDb(); restoreGetSecret();
+    restoreDb(); restoreProber();
   }
 });
 
