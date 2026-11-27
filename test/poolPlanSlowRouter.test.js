@@ -177,12 +177,14 @@ test("display paths do not pass the slow budget",async()=>{
   assert.equal(Array.isArray(listRes.body),true);
   assert.equal(poolCtl.calls.getUsedIpPools.length,1);
   assert.equal(poolCtl.calls.getUsedIpPools[0],undefined);
-  const pkgCtl=load("controllers/packageController.js",{livePools:LIVE_POOLS,delayMs:0});
+  // The plan modal's pool dropdown reads the panel's saved pools, not the
+  // router's live pools: it must make no router call at all.
+  const pkgCtl=load("controllers/packageController.js",{livePools:LIVE_POOLS,savedPools:SAVED_POOLS,delayMs:0});
   const poolsRes=recorder();
   await pkgCtl.controller.pools({},poolsRes);
   assert.equal(poolsRes.body.success,true);
-  assert.equal(pkgCtl.calls.getIpPools.length,1);
-  assert.equal(pkgCtl.calls.getIpPools[0],undefined);
+  assert.deepEqual(poolsRes.body.pools,[{name:"100 Mbps",ranges:"10.20.0.2-10.20.0.254"}]);
+  assert.equal(pkgCtl.calls.getIpPools.length,0);
 });
 
 test("fast router still works for pool and plan saves",async()=>{

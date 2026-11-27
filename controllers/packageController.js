@@ -68,8 +68,14 @@ function errorResponse(res,e,status=503){
 
 async function pools(req,res){
   try{
-    const rows=await mikrotikService.getIpPools();
-    res.json({success:true,pools:rows.filter(x=>!/^default(?:[-_].*)?$/i.test(x.name))});
+    // The plan modal's pool dropdown offers the panel's saved pools, not
+    // the router's live pools: the panel is the source of truth, and a
+    // slow/offline router must never leave the dropdown empty. (Plan saves
+    // still validate the chosen pool against the live router list in
+    // normalize(), so this does not weaken the save check.)
+    const result=await db.query("SELECT name, ranges FROM ip_pools ORDER BY name ASC");
+    const rows=(result.rows||[]).filter(x=>!/^default(?:[-_].*)?$/i.test(String(x.name||"").trim()));
+    res.json({success:true,pools:rows.map(x=>({name:x.name,ranges:x.ranges}))});
   }catch(e){errorResponse(res,e);}
 }
 

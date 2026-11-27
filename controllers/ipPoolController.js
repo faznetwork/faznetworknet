@@ -10,6 +10,16 @@ const mikrotikService = require("../services/mikrotikService");
 const SLOW_ROUTER_TIMEOUTS = Object.freeze({ operationTimeoutMs: 30000, handshakeTimeoutMs: 30000 });
 
 function clean(value, max = 255) { return String(value ?? "").trim().slice(0, max); }
+// The RouterOS pool lookup throws 'MikroTik IP pool "X" was not found.' when
+// the pool is not on the router (renamed/deleted there), and RouterOS itself
+// reports "no such item" when a remove finds nothing. Either one means the
+// router side is already gone. A timeout/connection failure is different:
+// its message never matches this, so an unreachable router is never
+// mistaken for a missing pool. (The "router was not found" config error is
+// deliberately NOT matched here.)
+function isPoolNotFoundError(error){
+  return /MikroTik IP pool .* was not found|no such item/i.test(String(error?.message||""));
+}
 function errorResponse(res, error) {
   console.error("[IP POOL API]", error);
   const message = error?.message || "IP pool operation failed.";
@@ -131,8 +141,16 @@ async function list(req,res){
     // returned with empty allocations.
     const usageByPool=new Map();
     try{
-      const usedRows=await mikrotikService.getUsedIpPools();
-      for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
+      // Live allocation counts are enrichment only: the router is slow, so
+      // they are capped at 2s and the saved rows render with empty
+      // allocations when the router does not answer in time. The list
+      // itself never waits on the router.
+      const usagePromise=mikrotikService.getUsedIpPools();
+      usagePromise.catch(()=>{});
+      const usedRows=await Promise.race([usagePromise,new Promise(resolve=>setTimeout(()=>resolve(null),2000))]);
+      if(Array.isArray(usedRows)){
+        for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
+      }
     }catch(routerError){
       console.warn("[IP POOL list warning]: live allocation data unavailable, showing saved pools:",routerError.message||routerError);
     }
@@ -183,17 +201,40 @@ async function remove(req,res){
   try{
     const identifier=clean(req.params.id,100);
     if(!identifier||/^default(?:[-_].*)?$/i.test(identifier))return res.status(400).json({success:false,message:"The default system IP pool cannot be deleted."});
-    const result=await mikrotikService.deleteIpPool(identifier,SLOW_ROUTER_TIMEOUTS);
+    // A pool the router reports as "not found" (renamed/deleted there) is a
+    // stale panel record: the router side is already gone, so the panel row
+    // must still be deleted instead of erroring out and leaving it behind.
+    // A timeout/connection failure is different — the router state is
+    // unknown, so the DB row must stay and the delete errors.
+    let routerResult=null,routerMissing=false;
+    try{
+      routerResult=await mikrotikService.deleteIpPool(identifier,SLOW_ROUTER_TIMEOUTS);
+    }catch(routerError){
+      if(isPoolNotFoundError(routerError)){routerMissing=true;}
+      else throw routerError;
+    }
     // The panel record is what the panel-to-MikroTik sync reads: leaving it
     // behind resurrects the pool on the next sync, so a panel delete must
     // remove it too (the rename path in saveOrUpdateIpPool already does
-    // this for the old name). Best-effort: the router delete already
-    // succeeded, so a DB failure only warns.
+    // this for the old name). Delete by (device, name) first; if that
+    // removes nothing (or the identity lookup fails), fall back to a
+    // name-only delete so a stale row can never survive.
+    let deletedRows=0;
     try{
       const device=await mikrotikService.getRouterIdentity(SLOW_ROUTER_TIMEOUTS);
-      await db.query("DELETE FROM ip_pools WHERE lower(device_name)=lower($1) AND lower(name)=lower($2)",[device,identifier]);
+      const deleted=await db.query("DELETE FROM ip_pools WHERE lower(device_name)=lower($1) AND lower(name)=lower($2)",[device,identifier]);
+      deletedRows=deleted.rowCount||0;
     }catch(dbErr){console.warn("[DB ip_pools warning]:",dbErr.message);}
-    return res.json({success:true,message:"IP pool removed successfully from MikroTik.",pool:result});
+    if(deletedRows===0){
+      try{
+        const deleted=await db.query("DELETE FROM ip_pools WHERE lower(name)=lower($1)",[identifier]);
+        deletedRows=deleted.rowCount||0;
+      }catch(dbErr){console.warn("[DB ip_pools warning]:",dbErr.message);}
+    }
+    if(routerMissing){
+      return res.json({success:true,deletedFrom:"database",message:'IP pool "'+identifier+'" was not on MikroTik, so it was deleted from the panel database only.',pool:{name:identifier}});
+    }
+    return res.json({success:true,deletedFrom:"both",message:"IP pool removed successfully from MikroTik.",pool:routerResult});
   }catch(error){return errorResponse(res,error);}
 }
 
@@ -314,4 +355,4 @@ async function syncFromMikrotik(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,syncFromMikrotik,normalizePoolRanges,findPoolWithSameRanges,deriveSubnetAndGateway};
+module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,syncFromMikrotik,normalizePoolRanges,findPoolWithSameRanges,deriveSubnetAndGateway,isPoolNotFoundError};
