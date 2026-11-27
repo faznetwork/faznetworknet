@@ -4735,7 +4735,7 @@ window.editHotspotUser=function(username,event){
 
         async function syncIpPoolsFromMikrotik(){
             const button=document.getElementById('syncIpPoolBtn'); if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
-            try{await jsonFetch('/api/ip-pools/sync',{method:'POST'});await loadIpPools();}
+            try{const result=await jsonFetch('/api/ip-pools/sync',{method:'POST'});if(result&&result.message)alert(result.message);await loadIpPools();}
             catch(error){alert(error.message);}
             finally{if(button){button.disabled=false;button.innerHTML='<i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik';}}
         }

@@ -3,6 +3,7 @@ const controller=require("../controllers/ipPoolController");
 const router=express.Router();
 router.get("/",controller.list);
 router.post("/sync-to-mikrotik",controller.syncPanelToMikrotik);
+router.post("/sync",controller.syncFromMikrotik);
 router.post("/",controller.create);
 router.put("/:id",controller.update);
 router.post("/save",controller.saveOrUpdateIpPool);

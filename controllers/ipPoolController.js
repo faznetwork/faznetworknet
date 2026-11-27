@@ -217,4 +217,93 @@ async function syncPanelToMikrotik(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,normalizePoolRanges,findPoolWithSameRanges,deriveSubnetAndGateway};
+// Update the saved row with this name (any device), inserting it when the
+// row vanished between the read and the write. UPDATE-by-name (not the
+// (device_name,name) upsert) so a row saved under another device_name can
+// never become a second row with the same name. renameFrom renames a saved
+// row whose ranges match the live pool instead (the live name flip-flops
+// between "100 Mbps" and "PPPoE_Pool" for the same ranges).
+async function savePoolRow({name,ranges,localAddress,subnet,device,nextPool,renameFrom}){
+  let updated;
+  if(renameFrom){
+    updated=await db.query("UPDATE ip_pools SET name=$1,ranges=$2,local_address=$3,subnet=$4,device_name=$5,next_pool=$6,updated_at=NOW() WHERE lower(name)=lower($7)",[name,ranges,localAddress,subnet,device,nextPool,renameFrom]);
+  }else{
+    updated=await db.query("UPDATE ip_pools SET ranges=$1,local_address=$2,subnet=$3,device_name=$4,next_pool=$5,updated_at=NOW() WHERE lower(name)=lower($6)",[ranges,localAddress,subnet,device,nextPool,name]);
+  }
+  if(updated&&updated.rowCount>0)return;
+  await db.query("INSERT INTO ip_pools(name,ranges,local_address,subnet,device_name,next_pool,updated_at) VALUES($1,$2,$3,$4,$5,$6,NOW()) ON CONFLICT(device_name,name) DO UPDATE SET ranges=EXCLUDED.ranges,local_address=EXCLUDED.local_address,subnet=EXCLUDED.subnet,next_pool=EXCLUDED.next_pool,updated_at=NOW()",[name,ranges,localAddress,subnet,device,nextPool]);
+}
+// One-way import, run only when the admin clicks "Sync from MikroTik".
+// This is the deliberate, user-initiated direction (router -> panel) that
+// fills the panel database with pools created on the router. It does NOT
+// change the ongoing one-way rule: saves and panel->router syncs still
+// push from the panel to the router. Panel rows that are not on the router
+// are never deleted here.
+async function syncFromMikrotik(req,res){
+  try{
+    const live=await mikrotikService.getIpPools();
+    const device=await mikrotikService.getRouterIdentity();
+    const saved=await db.query("SELECT name,ranges,local_address,subnet,device_name,next_pool FROM ip_pools ORDER BY name ASC");
+    const rows=saved.rows||[];
+    const byName=new Map(rows.map(row=>[String(row.name||"").toLowerCase(),row]));
+    const byRanges=new Map();
+    for(const row of rows){
+      const key=normalizePoolRanges(row.ranges);
+      if(key&&!byRanges.has(key))byRanges.set(key,row);
+    }
+    const results=[];
+    const handled=new Set();
+    for(const pool of live||[]){
+      const name=clean(pool.name,100),ranges=clean(pool.ranges,1000);
+      const nextPool=clean(pool.nextPool||"none",100)||"none";
+      try{
+        if(!name||/^default(?:[-_].*)?$/i.test(name)){results.push({name,status:"skipped",message:`Default/system pool "${name}" is not imported.`});continue;}
+        // Live ranges come from the router: accept CIDR, a-b ranges and a
+        // bare single IP (normalizePoolRanges accepts all three).
+        if(!ranges||normalizePoolRanges(ranges)===null)throw new Error("Invalid IPv4 range.");
+        const derived=deriveSubnetAndGateway(ranges);
+        const existing=byName.get(name.toLowerCase());
+        if(existing){
+          // Same name already saved: refresh its ranges/subnet/gateway.
+          const localAddress=existing.local_address||(derived?derived.localAddress:"")||null;
+          const subnet=existing.subnet||(derived?derived.subnet:"")||null;
+          await savePoolRow({name,ranges,localAddress,subnet,device,nextPool});
+          handled.add(name.toLowerCase());
+          results.push({name,status:"updated"});
+          continue;
+        }
+        // No saved row with this name: the live pool may be a renamed saved
+        // pool. Rename the saved row instead of inserting a second pool
+        // that hands out the same addresses.
+        const sameRanges=byRanges.get(normalizePoolRanges(ranges));
+        if(sameRanges){
+          const oldName=String(sameRanges.name||"");
+          if(handled.has(oldName.toLowerCase())){
+            results.push({name,status:"skipped",message:`Pool "${name}" was not imported: its ranges ${ranges} already exist on saved pool "${oldName}".`});
+            continue;
+          }
+          const localAddress=sameRanges.local_address||(derived?derived.localAddress:"")||null;
+          const subnet=sameRanges.subnet||(derived?derived.subnet:"")||null;
+          await savePoolRow({name,ranges,localAddress,subnet,device,nextPool,renameFrom:oldName});
+          handled.add(oldName.toLowerCase());
+          handled.add(name.toLowerCase());
+          results.push({name,status:"updated",message:`Renamed saved pool "${oldName}" to "${name}" (same ranges).`});
+          continue;
+        }
+        // Genuinely new pool: insert it.
+        const localAddress=derived?derived.localAddress:null;
+        const subnet=derived?derived.subnet:null;
+        await savePoolRow({name,ranges,localAddress,subnet,device,nextPool});
+        handled.add(name.toLowerCase());
+        results.push({name,status:"created"});
+      }catch(error){
+        results.push({name,status:"failed",message:error?.message||"IP pool import failed."});
+      }
+    }
+    const created=results.filter(x=>x.status==="created").length,updated=results.filter(x=>x.status==="updated").length,failed=results.filter(x=>x.status==="failed").length,skipped=results.filter(x=>x.status==="skipped").length;
+    const notes=results.filter(x=>x.status==="skipped"||x.status==="failed").map(x=>x.name+": "+(x.message||x.status));
+    return res.json({success:true,total:results.length,created,updated,failed,skipped,results,message:"MikroTik-to-panel IP pool sync finished: "+created+" created, "+updated+" updated, "+failed+" failed."+(skipped?" "+skipped+" skipped.":"")+(notes.length?"\n\nNotes:\n"+notes.join("\n"):"")});
+  }catch(error){return errorResponse(res,error);}
+}
+
+module.exports={list,create,update,saveOrUpdateIpPool,remove,syncPanelToMikrotik,syncFromMikrotik,normalizePoolRanges,findPoolWithSameRanges,deriveSubnetAndGateway};
