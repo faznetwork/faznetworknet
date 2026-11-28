@@ -90,7 +90,7 @@ test("All Payments renders the Force Provision action and admin-only route is wi
  assert.doesNotMatch(admin,/id="forceProvisionMac"/);
  assert.match(admin,/\/api\/payments\/force-provision/);
  assert.match(routes,/router\.post\("\/payments\/force-provision",requireAdmin,requireRole\(\["super_admin","admin"\]\),controller\.forceProvisionHotspot\)/);
- assert.match(service,/async forceProvisionHotspotUser\(data\)/);
+ assert.match(service,/async forceProvisionHotspotUser\(data, options\)/);
 });
 
 

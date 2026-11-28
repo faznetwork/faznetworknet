@@ -24,7 +24,8 @@ async function deleteHotspotSubscriber({
   identifier,
   database = db,
   router = mikrotikService,
-  logger = console
+  logger = console,
+  options
 } = {}) {
   const requested = String(identifier ?? "").trim().slice(0, 160);
   if (!requested) throw deletionError("HOTSPOT_IDENTIFIER_REQUIRED", 400, "A voucher ID, username, or MAC address is required.");
@@ -47,7 +48,7 @@ async function deleteHotspotSubscriber({
 
   let purge;
   try {
-    purge = await router.cleanupExpiredHotspotUser(username, macAddress);
+    purge = await router.cleanupExpiredHotspotUser(username, macAddress, options);
     if (!purge?.verified) {
       throw deletionError("HOTSPOT_PURGE_NOT_VERIFIED", 502, "RouterOS purge was not fully verified. The subscriber record and MAC binding were retained; retry cleanup.");
     }

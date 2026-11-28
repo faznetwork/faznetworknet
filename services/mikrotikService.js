@@ -605,7 +605,8 @@ class MikroTikService {
       }).filter((item) => item.name && !this._isSystemProfileName(item.name));
     }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async getPppoeSecret(username) {
+  async getPppoeSecret(username, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(username).trim();
     if(!name) return null;
     return this._withConnection("PPPoE secret lookup",async(connection)=>{
@@ -625,10 +626,11 @@ class MikroTikService {
         remoteAddress:this._str(match["remote-address"]),
         raw:match
       };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async syncPanelCustomerSecrets(customers) {
+  async syncPanelCustomerSecrets(customers, options) {
+    const timeouts=resolveProbeTimeouts(options);
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
 
     // Snapshot RouterOS state first. Each write below uses the service queue
@@ -640,8 +642,8 @@ class MikroTikService {
         connection.write("/ppp/profile/print")
       ]),
       undefined,
-      20000,
-      10000
+      Math.max(20000, timeouts.operationTimeoutMs),
+      timeouts.handshakeTimeoutMs
     );
     const allSecrets = new Map((Array.isArray(rows) ? rows : [])
       .map(item => [this._str(item.name).trim().toLowerCase(), item]));
@@ -661,8 +663,8 @@ class MikroTikService {
       operationName,
       connection => connection.write(command),
       undefined,
-      OPERATION_TIMEOUT_MS,
-      CONNECTION_TIMEOUT_MS
+      timeouts.operationTimeoutMs,
+      timeouts.handshakeTimeoutMs
     );
     const isPppoeSecret = item => ["pppoe", "any"].includes(
       this._str(item?.service).trim().toLowerCase() || "any"
@@ -787,7 +789,8 @@ class MikroTikService {
     }
     return {total:customers.length,updated,created,skipped,failed,results};
   }
-  async syncPppoeExpiryComments(customers) {
+  async syncPppoeExpiryComments(customers, options) {
+    const timeouts=resolveProbeTimeouts(options);
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
     return this._withConnection("bulk PPPoE expiry comment sync", async (connection) => {
       const rows = await connection.write("/ppp/secret/print");
@@ -812,7 +815,7 @@ class MikroTikService {
         }
       }
       return {total:customers.length,updated,skipped,failed,results};
-    }, undefined, 90000);
+    }, undefined, Math.max(90000, timeouts.operationTimeoutMs), timeouts.handshakeTimeoutMs);
   }
   async fetchExistingSecrets() {
     return this._withConnection("PPPoE secret sync", async (connection) => {
@@ -995,7 +998,8 @@ class MikroTikService {
     });
   }
 
-  async getHotspotUsers() {
+  async getHotspotUsers(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("Hotspot user query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/print");
       return (Array.isArray(rows) ? rows : []).map((item) => ({
@@ -1005,11 +1009,12 @@ class MikroTikService {
         limitUptime: this._str(item["limit-uptime"]), limitBytesTotal: this._number(item["limit-bytes-total"]),
         bytesIn: this._number(item["bytes-in"]), bytesOut: this._number(item["bytes-out"]), raw: item
       })).filter((item) => item.username);
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
 
-  async syncHotspotUsers(vouchers) {
+  async syncHotspotUsers(vouchers, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const candidates = Array.isArray(vouchers) ? vouchers : [];
     return this._withConnection("Hotspot two-way push sync", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/print");
@@ -1070,10 +1075,11 @@ class MikroTikService {
         }
       }
       return { provisioned, refreshed, skipped, disconnected: 0, failed };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async getHotspotExpirationSnapshot() {
+  async getHotspotExpirationSnapshot(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("Hotspot expiry snapshot", async (connection) => {
       const userRows = await connection.write("/ip/hotspot/user/print");
       const schedulerRows = await connection.write("/system/scheduler/print");
@@ -1093,10 +1099,11 @@ class MikroTikService {
         .map((item) => this._str(item.name))
         .filter(Boolean);
       return { users, schedulerNames };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async cleanupHotspotExpirationSchedulers() {
+  async cleanupHotspotExpirationSchedulers(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("legacy Hotspot expiry scheduler cleanup", async (connection) => {
       const rows = await connection.write("/system/scheduler/print");
       const matches = (Array.isArray(rows) ? rows : []).filter(item => {
@@ -1118,7 +1125,7 @@ class MikroTikService {
         }
       }
       return { checked: (Array.isArray(rows) ? rows : []).length, removed, failed };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async disableExpiredDirectHotspotUser(usernameValue, macAddressValue) {
@@ -1143,7 +1150,8 @@ class MikroTikService {
       return {username,macAddress:mac,directSubscriber:true,usersRemoved,sessionsRemoved,cookiesRemoved,hostsRemoved,userPreserved:false};
     });
   }
-  async cleanupExpiredHotspotUser(usernameValue, macAddressValue) {
+  async cleanupExpiredHotspotUser(usernameValue, macAddressValue, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const username = this._str(usernameValue).trim();
     if (!username || username.length > 100) throw new Error("A valid Hotspot username is required for expiration cleanup.");
     let mac = this._str(macAddressValue).trim().toUpperCase();
@@ -1224,7 +1232,7 @@ class MikroTikService {
         schedulersRemoved, usersRemoved, userPreserved: false,
         alreadyAbsent: userMatches.length === 0, verified: true, remaining: remainingCounts
       };
-    }, undefined, 10000);
+    }, undefined, Math.max(10000, timeouts.operationTimeoutMs), timeouts.handshakeTimeoutMs);
   }
   async setHotspotUserComment(usernameValue, commentValue) {
     const username = this._str(usernameValue).trim();
@@ -1274,11 +1282,12 @@ class MikroTikService {
       return {username:this._str(item.user),address:this._str(item.address),uptime:this._str(item.uptime),bytesIn:this._number(item["bytes-in"]),bytesOut:this._number(item["bytes-out"]),mac:this._str(item["mac-address"])};
     });
   }
-  async getHotspotServers() {
+  async getHotspotServers(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("Hotspot server query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/print");
       return (Array.isArray(rows) ? rows : []).map(item => ({id:this._str(item[".id"]),name:this._str(item.name),interface:this._str(item.interface),profile:this._str(item.profile),disabled:this._bool(item.disabled),raw:item})).filter(item=>item.name&&!item.disabled);
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
   async getHotspotServerProfiles() {
     return this._withConnection("Hotspot server profile query", async (connection) => {
@@ -1438,7 +1447,8 @@ class MikroTikService {
     });
   }
 
-  async ensureHotspotUserProfileMacCookie(nameValue) {
+  async ensureHotspotUserProfileMacCookie(nameValue, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name = this._str(nameValue).trim();
     if (!name) throw new Error("HotSpot user profile name is required.");
     return this._withConnection("HotSpot user profile MAC-cookie sync", async (connection) => {
@@ -1463,10 +1473,11 @@ class MikroTikService {
         throw new Error("RouterOS did not retain add-mac-cookie=yes and mac-cookie-timeout=1d for HotSpot user profile \"" + name + "\".");
       }
       return { name, updated: needsUpdate, addMacCookie: true, macCookieTimeout: "1d" };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async ensureHotspotServerProfileAuth(nameValue, modeValue = "seamless") {
+  async ensureHotspotServerProfileAuth(nameValue, modeValue = "seamless", options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name = this._str(nameValue).trim();
     if (!name) throw new Error("Hotspot server profile name is required.");
     // RouterOS has no mac-as-username boolean on a HotSpot Server Profile.
@@ -1490,25 +1501,28 @@ class MikroTikService {
       const verified = (Array.isArray(verifiedRows) ? verifiedRows : []).find(row => this._str(row.name) === name);
       if (!verified || normalizeLoginBy(verified["login-by"]) !== expected) throw new Error("RouterOS did not retain the requested login-by mode for HotSpot server profile \"" + name + "\".");
       return { name, mode, updated, loginBy: this._str(verified["login-by"]) };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async getHotspotProfiles() {
+  async getHotspotProfiles(options) {
+    const timeouts=resolveProbeTimeouts(options);
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
       return (Array.isArray(rows) ? rows : []).map((item) => ({ id:this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name && !this._isSystemProfileName(item.name));
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async createHotspotProfile(data) {
+  async createHotspotProfile(data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
     if(this._isSystemProfileName(name)) throw new Error("System/internal profile names are reserved.");
     return this._withConnection("Hotspot profile creation",async(connection)=>{
       const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.clearSessionTimeout?undefined:data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
       await connection.write("/ip/hotspot/user/profile/add",params); return {name};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async updateHotspotProfile(data) {
+  async updateHotspotProfile(data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
     if(this._isSystemProfileName(name)) throw new Error("System/internal MikroTik profiles are protected and cannot be edited.");
@@ -1521,9 +1535,10 @@ class MikroTikService {
       if(data.rateLimit !== undefined && (data.rateLimit === null || String(data.rateLimit).trim() === "")) params.push("=rate-limit=");
       if(data.clearSessionTimeout)params.push("=session-timeout=");
       await connection.write("/ip/hotspot/user/profile/set",params); return {name,id:this._str(item[".id"])};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async deleteHotspotProfile(nameValue) {
+  async deleteHotspotProfile(nameValue, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(nameValue).trim();
     if(!name) { const error=new Error("Hotspot profile name is required."); error.code="HOTSPOT_PROFILE_NAME_REQUIRED"; error.statusCode=400; throw error; }
     if(name.toLowerCase()==="default" || this._isSystemProfileName(name)) {
@@ -1548,7 +1563,7 @@ class MikroTikService {
         error.code=inUse?"HOTSPOT_PROFILE_IN_USE":"HOTSPOT_PROFILE_DELETE_FAILED"; error.statusCode=inUse?409:502; error.cause=cause; throw error;
       }
       return {name,id:this._str(item[".id"])};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   _hotspotExpiryComment(data) {
@@ -1595,7 +1610,8 @@ class MikroTikService {
     });
   }
 
-  async forceProvisionHotspotUser(data) {
+  async forceProvisionHotspotUser(data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim(),comment=this._hotspotExpiryComment(data),serverName=this._str(data.server||"all").trim()||"all";
     if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Force provisioning requires a valid MAC, profile, and time validity or a data quota.");
     return this._withConnection("Admin force Hotspot provisioning",async connection=>{
@@ -1637,10 +1653,11 @@ class MikroTikService {
         clearedCookies++;
       }
       return {username:macAddress,password:macAddress,macAddress,profile,validity,limitBytesTotal,created:!user,resetCounters:Boolean(user&&data.resetCounters===true),credentials:"mac",clearedActiveSessions,clearedCookies,macAuthEnabled};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async rechargeHotspotUser(data) {
+  async rechargeHotspotUser(data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const macAddress=normalizeHotspotMac(data.macAddress||data.mac_address||data.username),username=macAddress,password=macAddress,profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0),previousUsername=this._str(data.previousUsername).trim();
     if(!macAddress||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires a valid device MAC, profile, and time validity or a data quota.");
     const limits={"limit-uptime":undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal)),"mac-address":macAddress};
@@ -1661,7 +1678,7 @@ class MikroTikService {
       if(password==="")params.push("=password=");
       await connection.write("/ip/hotspot/user/add",params);
       return {username,password,macAddress,profile,validity,limitBytesTotal,created:true,credentials:"mac"};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async removeHotspotUser(username) {
@@ -1859,10 +1876,11 @@ class MikroTikService {
     }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
-  async createSecret(data) {
+  async createSecret(data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name = this._str(data.username).trim(); const password = this._str(data.password); const profile = this._str(data.profile).trim();
     if (!name || !password || !profile) throw new Error("Username, password, and profile are required.");
-    return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "remote-address": data.allowStaticRemoteAddress ? this._validStaticRemoteAddress(data.remoteAddress) : undefined, "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; });
+    return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "remote-address": data.allowStaticRemoteAddress ? this._validStaticRemoteAddress(data.remoteAddress) : undefined, "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
   async renewSecret(username, data) {
     const name = this._str(username).trim();
@@ -1928,7 +1946,8 @@ class MikroTikService {
     });
   }
   async _findSecret(connection, username) { const rows = await connection.write("/ppp/secret/print"); const match = (Array.isArray(rows) ? rows : []).find((item) => this._str(item.name) === username); if (!match || !match[".id"]) throw new Error("PPPoE user \"" + username + "\" was not found on MikroTik."); return match; }
-  async updateSecretIdentity(username, data) {
+  async updateSecretIdentity(username, data, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const oldName = this._str(username).trim();
     const newName = this._str(data?.username).trim();
     if (!oldName || !newName) throw new Error("Current and new PPPoE username are required.");
@@ -1948,7 +1967,7 @@ class MikroTikService {
       const cmdArray=["/ppp/secret/set",...params];
       await connection.write(cmdArray);
       return { username: newName, previousUsername: oldName, id: this._str(secret[".id"]) };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   _validStaticRemoteAddress(value){
@@ -1958,7 +1977,8 @@ class MikroTikService {
     return ip;
   }
 
-  async updateSecret(username,data){
+  async updateSecret(username,data,options){
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(username).trim();
     return this._withConnection("PPPoE user update",async(connection)=>{
       const secret=await this._findSecret(connection,name);
@@ -1973,7 +1993,7 @@ class MikroTikService {
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],...params];
       await connection.write(cmdArray);
       return {username:name};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   // Set (or clear) only the PPPoE secret's caller-id — the MAC lock.
@@ -1982,7 +2002,8 @@ class MikroTikService {
   // user sync). An empty callerId clears the lock; a MAC locks to it.
   // Nothing else on the secret (password, profile, disabled, comment) is
   // touched here, so lock/unlock never disturbs renew, quarantine or kick.
-  async setSecretCallerId(username, callerId) {
+  async setSecretCallerId(username, callerId, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name = this._str(username).trim();
     if (!name) throw new Error("PPPoE username is required.");
     const supplied = callerId === undefined || callerId === null ? "" : String(callerId).trim();
@@ -1993,7 +2014,7 @@ class MikroTikService {
       const params = ["=.id=" + secret[".id"], normalized ? "=caller-id=" + normalized : "=caller-id="];
       await connection.write("/ppp/secret/set", params);
       return { username: name, callerId: normalized || "" };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
 
   async ensureExpiredProfile(){
@@ -2011,7 +2032,8 @@ class MikroTikService {
   }
 
 
-  async changeSecretProfile(username,profileName){
+  async changeSecretProfile(username,profileName,options){
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(username).trim();
     const profile=this._str(profileName).trim();
     if(!name||!profile)throw new Error("PPPoE username and profile are required.");
@@ -2020,18 +2042,20 @@ class MikroTikService {
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=profile="+profile];
       await connection.write(cmdArray);
       return {username:name,profile};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async toggleSecret(username, disabled) {
+  async toggleSecret(username, disabled, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name=this._str(username).trim();
     return this._withConnection("PPPoE user toggle",async(connection)=>{
       const secret=await this._findSecret(connection,name);
       const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=disabled="+(disabled?"yes":"no")];
       await connection.write(cmdArray);
       return {username:name,disabled:Boolean(disabled)};
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
-  async kickActiveUser(username) {
+  async kickActiveUser(username, options) {
+    const timeouts=resolveProbeTimeouts(options);
     const name = this._str(username).trim();
     if (!name) throw new Error("PPPoE username is required to disconnect a session.");
     return this._withConnection("active PPPoE user kick", async (connection) => {
@@ -2044,7 +2068,7 @@ class MikroTikService {
       if (!matches.length) return { username: name, kicked: false, count: 0, message: "Customer is already offline; no active PPPoE session was found." };
       for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
       return { username: name, kicked: true, count: matches.length, message: "Active PPPoE session disconnected. The customer device can reconnect automatically." };
-    });
+    }, undefined, timeouts.operationTimeoutMs, timeouts.handshakeTimeoutMs);
   }
   async close() {
     await this._operationQueue;

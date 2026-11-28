@@ -4,6 +4,11 @@ const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 const { deleteHotspotSubscriber } = require("../services/hotspotDeletionService");
 
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// exceed the service's 10s defaults. Router-touching ACTIONS pass this 30s
+// handshake + 30s operation budget; display/list paths never pass it.
+const SLOW_ROUTER_TIMEOUTS = Object.freeze({ operationTimeoutMs: 30000, handshakeTimeoutMs: 30000 });
+
 const clean = (value, max = 255) => String(value ?? "").trim().slice(0, max);
 const lower = value => clean(value, 255).toLowerCase();
 function normalizeMac(value) {
@@ -214,7 +219,7 @@ function renew(req, res) {
 async function archive(req, res) {
   const identifier = clean(req.params.id, 160);
   try {
-    const result = await deleteHotspotSubscriber({ identifier });
+    const result = await deleteHotspotSubscriber({ identifier, options: SLOW_ROUTER_TIMEOUTS });
     return res.json({
       success: true,
       message: "Network access purged and subscriber soft-deleted. Voucher sales, payment ledger, transactions, and MAC audit history were retained.",

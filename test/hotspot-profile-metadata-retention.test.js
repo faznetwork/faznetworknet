@@ -61,7 +61,7 @@ test("successful RouterOS deletion always awaits PostgreSQL metadata persistence
     "async function deleteProfile(req,res)",
     "let hotspotListCache="
   );
-  const routerDelete = body.indexOf("await mikrotikService.deleteHotspotProfile(name)");
+  const routerDelete = body.indexOf("await mikrotikService.deleteHotspotProfile(name,SLOW_ROUTER_TIMEOUTS)");
   const metadataRead = body.indexOf("await readProfileMetadata()");
   const keyDelete = body.indexOf("delete meta[name]");
   const metadataWrite = body.indexOf("await writeProfileMetadata(meta)");

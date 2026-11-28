@@ -6,6 +6,11 @@ const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 const {parseSms}=require("../services/paymentWebhookParser");
 const renewalService=require("../services/renewalService");
 
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// exceed the service's 10s defaults. Router-touching ACTIONS pass this 30s
+// handshake + 30s operation budget; display/list paths never pass it.
+const SLOW_ROUTER_TIMEOUTS=Object.freeze({operationTimeoutMs:30000,handshakeTimeoutMs:30000});
+
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
 async function flagStalePaymentClaims(){
@@ -290,7 +295,7 @@ async function manualMatchHotspot(req,res,tx,trxId){
   const metaResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   let metadataMap={};try{metadataMap=JSON.parse(metaResult.rows[0]?.value||"{}");}catch(_){}
   if(!metadataMap||typeof metadataMap!=="object"||Array.isArray(metadataMap))metadataMap={};
-  let routerProfiles=[];try{routerProfiles=await mikrotikService.getHotspotProfiles();}catch(_){}
+  let routerProfiles=[];try{routerProfiles=await mikrotikService.getHotspotProfiles(SLOW_ROUTER_TIMEOUTS);}catch(_){}
   const profiles=routerProfiles.length?routerProfiles:Object.keys(metadataMap).map(name=>({name,sharedUsers:"1",sessionTimeout:"",raw:{}}));
   const matches=profiles.filter(item=>item.name&&String(item.name).toLowerCase()!=="default"&&profileIdentifierMatches(String(item.name),metadataMap[String(item.name)]||{},requestedProfile));
   if(matches.length!==1)return res.status(400).json({success:false,error:"The selected Hotspot package is not available or maps to multiple profiles."});
@@ -560,7 +565,7 @@ samePayment=Boolean(target&&Number(target.transaction_id)===Number(tx.id))||Bool
    stagedVoucherId=voucher.id;
    await client.query("INSERT INTO hotspot_voucher_payments(transaction_id,voucher_id,phone,amount,profile,sale_type) VALUES($1::bigint,$2::bigint,COALESCE(NULLIF($3::text,''),'Unlinked'),$4::numeric,$5::text,'online_mfs') ON CONFLICT(transaction_id) DO UPDATE SET voucher_id=EXCLUDED.voucher_id,phone=EXCLUDED.phone,amount=EXCLUDED.amount,profile=EXCLUDED.profile,sale_type=EXCLUDED.sale_type",[tx.id,voucher.id,phone,amount,profile.name]);
   });
-  const routerResult=await mikrotikService.forceProvisionHotspotUser({username:mac,password:mac,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment,server:voucher?.server||"all",previousUsername,resetCounters});
+  const routerResult=await mikrotikService.forceProvisionHotspotUser({username:mac,password:mac,macAddress:mac,profile:profile.name,validity,limitBytesTotal:quota,comment,server:voucher?.server||"all",previousUsername,resetCounters},SLOW_ROUTER_TIMEOUTS);
   routerSucceeded=true;
   const finalizedVoucher=await db.query("UPDATE hotspot_vouchers SET username=$1,password=$1,mac_address=$1,status='active',profile=$2,comment=$3,first_login_at=COALESCE(first_login_at,NOW()),expires_at=$4::timestamptz,expired_at=NULL,cleanup_status='not_required',cleanup_error=NULL,router_removed_at=NULL,updated_at=NOW() WHERE id=$5::bigint RETURNING id,username,profile,profile_id,status,phone,mac_address,expires_at,transaction_id",[mac,profile.name,comment,expiresAt,stagedVoucherId]);
   if(!finalizedVoucher.rows?.length)throw new Error("RouterOS provisioning succeeded but the voucher could not be finalized in PostgreSQL.");

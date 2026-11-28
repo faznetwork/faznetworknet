@@ -38,8 +38,8 @@ test("embedded MD5 and RouterOS CHAP byte decoding match known vectors",()=>{
 
 test("Force Provision checks the applicable RouterOS login-by profile and clears only matching sessions/cookies",()=>{
   const service=fs.readFileSync(path.join(__dirname,"../services/mikrotikService.js"),"utf8");
-  const start=service.indexOf("async forceProvisionHotspotUser(data)");
-  const end=service.indexOf("async rechargeHotspotUser(data)",start);
+  const start=service.indexOf("async forceProvisionHotspotUser(data, options)");
+  const end=service.indexOf("async rechargeHotspotUser(data, options)",start);
   assert.ok(start>=0&&end>start,"force provision method must exist");
   const source=service.slice(start,end);
   assert.match(source,/\/ip\/hotspot\/active\/print/);

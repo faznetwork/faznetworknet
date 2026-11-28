@@ -7,6 +7,11 @@ const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 const {normalizeMacAddress}=require("../utils/macAddress");
 
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// exceed the service's 10s defaults. Router-touching ACTIONS pass this 30s
+// handshake + 30s operation budget; display/list/360 paths never pass it.
+const SLOW_ROUTER_TIMEOUTS=Object.freeze({operationTimeoutMs:30000,handshakeTimeoutMs:30000});
+
 async function safePasswordMatch(password, plainPassword, passwordHash) {
   const input = String(password ?? "");
   const plain = String(plainPassword ?? "");
@@ -524,7 +529,7 @@ async function syncPanelCustomersToMikroTik(req,res){
         expirationDate:expiry,finalStatus
       };
     });
-    const sync=await mikrotikService.syncPanelCustomerSecrets(customers);
+    const sync=await mikrotikService.syncPanelCustomerSecrets(customers,SLOW_ROUTER_TIMEOUTS);
     const syncResults=Array.isArray(sync.results)?sync.results:[];
     const successfulResults=syncResults.filter(item=>["updated","created"].includes(item.status));
     const sourceByUsername=new Map(customers.map(customer=>[customer.username.toLowerCase(),customer]));
@@ -580,7 +585,7 @@ async function syncSingleCustomerToMikroTik(req,res){
     // installations use EXPIRED-PROFILE rather than EXPIRED; never create or
     // modify a RouterOS profile as a side effect of this customer sync.
     if(expired&&!preservePastDue&&String(profile).toLowerCase()==="expired"){
-      const availableProfiles=await routerService.fetchExistingProfiles();
+      const availableProfiles=await routerService.fetchExistingProfiles(SLOW_ROUTER_TIMEOUTS);
       const names=new Set((Array.isArray(availableProfiles)?availableProfiles:[]).map(item=>String(item.name||"").trim().toLowerCase()).filter(Boolean));
       if(!names.has("expired")){
         if(names.has("expired-profile"))profile="EXPIRED-PROFILE";
@@ -598,7 +603,7 @@ async function syncSingleCustomerToMikroTik(req,res){
         : Boolean(row.router_disabled||["inactive","suspended"].includes(customerState));
     const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
     const callerId=clean(row.router_mac||row.stored_caller_id,100);
-    const sync=await routerService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
+    const sync=await routerService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}],SLOW_ROUTER_TIMEOUTS);
     const result=(sync.results||[]).find(item=>String(item.username||"").toLowerCase()===username.toLowerCase());
     if(!result||!["updated","created"].includes(result.status))return res.status(502).json({success:false,message:result?.reason||"MikroTik did not confirm the PPPoE secret update.",result});
     const routerId=resolveCustomerRouterId(row);
@@ -620,7 +625,7 @@ async function syncExpiryDatesToMikroTik(req,res){
       comment:buildExpirationComment(row.full_name,row.phone,row.expiration_date)
     }));
     const eligible=customers.filter(row=>row.username&&row.expiryDate);
-    const sync=await mikrotikService.syncPppoeExpiryComments(eligible);
+    const sync=await mikrotikService.syncPppoeExpiryComments(eligible,SLOW_ROUTER_TIMEOUTS);
     const successful=(sync.results||[]).filter(item=>item.status==='updated').map(item=>item.username.toLowerCase());
     for(const row of eligible.filter(item=>successful.includes(item.username.toLowerCase()))){
       await db.query("UPDATE pppoe_users SET comment=$1,expiry_date=$2::date,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[row.comment,row.expiryDate,row.username]);
@@ -1040,8 +1045,8 @@ async function markPaid(req,res){
     const activeProfile=clean(packageResult.rows[0]?.profile_name||customer?.profile||routerUser?.profile||"",100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED"||activeProfile.toUpperCase()==="EXPIRED-PROFILE")throw new Error("Customer package profile is missing or invalid.");
     const comment=buildExpirationComment(customer?.full_name||"",customer?.phone||routerUser?.phone||"",paidUntil,clean(customer?.remarks||routerUser?.comment||"",1000));
-    await mikrotikService.updateSecret(username,{password:customer?.password||routerUser?.password||"",profile:activeProfile,comment,disabled:false});
-    await mikrotikService.kickActiveUser(username);
+    await mikrotikService.updateSecret(username,{password:customer?.password||routerUser?.password||"",profile:activeProfile,comment,disabled:false},SLOW_ROUTER_TIMEOUTS);
+    await mikrotikService.kickActiveUser(username,SLOW_ROUTER_TIMEOUTS);
     await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[paidUntil,username]);
     await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,paidUntil,comment,username]);
     const paidCustomer=customer||{id:null,package_name:routerUser?.profile||activeProfile};
@@ -1067,8 +1072,8 @@ async function renew(req,res){
       : {rows:[]};
     const activeProfile=clean(packageProfileResult.rows[0]?.profile_name||customer?.profile||routerUser?.profile||"",100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED"||activeProfile.toUpperCase()==="EXPIRED-PROFILE")throw new Error("Customer package profile is missing or invalid.");
-    await mikrotikService.updateSecret(username,{password:customer?.password||routerUser?.password||"",profile:activeProfile,comment,disabled:false});
-    await mikrotikService.kickActiveUser(username);
+    await mikrotikService.updateSecret(username,{password:customer?.password||routerUser?.password||"",profile:activeProfile,comment,disabled:false},SLOW_ROUTER_TIMEOUTS);
+    await mikrotikService.kickActiveUser(username,SLOW_ROUTER_TIMEOUTS);
     await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[newExpDate,username]);
     await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,newExpDate,comment,username]);
     const paidAmount=Number(customer?.monthly_bill||routerUser?.price||0);
@@ -1233,7 +1238,7 @@ async function updateCustomer(req,res){
       }
 
       let secret=null;
-      try{secret=await mikrotikService.getPppoeSecret(username);}catch(error){return res.status(404).json({success:false,message:"This customer is not in Billing Panel and MikroTik could not be read: "+(error.message||"router lookup failed")});}
+      try{secret=await mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS);}catch(error){return res.status(404).json({success:false,message:"This customer is not in Billing Panel and MikroTik could not be read: "+(error.message||"router lookup failed")});}
       if(!secret)return res.status(404).json({success:false,message:"Customer not found in Billing Panel or MikroTik."});
       const fullName=clean(body.fullName||body.name||"",200),phone=clean(body.phone,40);
       const connectionDate=normalizeDate(body.activationDate||body.activation_date||body.connectionDate||body.connection_date)||bangladeshToday();
@@ -1323,19 +1328,19 @@ async function updateCustomer(req,res){
     const preservePastDueConnection=manualBillingOverride&&billingExpiryOverride;
     const effectiveDisabled=preservePastDueConnection?disabled:(expired||disabled);
     const routerProfile=preservePastDueConnection?profileName:effectiveProfile(profileName,expirationDate);
-    if(await mikrotikService.testConnection()){
+    if(await mikrotikService.testConnection(undefined,SLOW_ROUTER_TIMEOUTS)){
       if(usernameChanged){
-        const oldSecret=await mikrotikService.getPppoeSecret(previousUsername);
-        const newSecret=await mikrotikService.getPppoeSecret(username);
-        if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled,remoteAddress,allowStaticRemoteAddress:true});
-        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
+        const oldSecret=await mikrotikService.getPppoeSecret(previousUsername,SLOW_ROUTER_TIMEOUTS);
+        const newSecret=await mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS);
+        if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled,remoteAddress,allowStaticRemoteAddress:true},SLOW_ROUTER_TIMEOUTS);
+        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true},SLOW_ROUTER_TIMEOUTS);
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true},SLOW_ROUTER_TIMEOUTS);
       }else{
-        const secret=await mikrotikService.getPppoeSecret(username);
-        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
-        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true});
+        const secret=await mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS);
+        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true},SLOW_ROUTER_TIMEOUTS);
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:routerMac||undefined,remoteAddress,allowStaticRemoteAddress:true},SLOW_ROUTER_TIMEOUTS);
       }
-      if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
+      if(packageChanged){try{await mikrotikService.kickActiveUser(username,SLOW_ROUTER_TIMEOUTS);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const nextStatus=expired?"expired":effectiveDisabled?(requestedAccountStatus==="suspended"?"suspended":"inactive"):"active";
     const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13::date,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19::text='paid' THEN $13::date ELSE NULL::date END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date),email=$26,whatsapp_phone=$27,telegram_link=$28,facebook_link=$29,remote_address=$30,pop_id=$31 WHERE id=$24 AND ($32::boolean=FALSE OR EXISTS (SELECT 1 FROM pops WHERE id=$31 AND status='active')) RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,null,remarks,expirationDate,alternativePhone,null,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null,emailRaw||null,whatsappPhone,telegramLink,facebookLink,remoteAddress||null,nextPopId,hasPopAssignment]);
@@ -1533,7 +1538,7 @@ async function kickActiveUserByUsername(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:'Username is required.'});
   try{
-    const result=await mikrotikService.kickActiveUser(username);
+    const result=await mikrotikService.kickActiveUser(username,SLOW_ROUTER_TIMEOUTS);
     if(result.kicked){
       const found=await db.query("SELECT id,router_id FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
       const row=found.rows[0]||null;
@@ -1546,7 +1551,7 @@ async function kickActiveUserByUsername(req,res){
     return res.status(503).json({success:false,message:error.message||'Unable to disconnect active session.'});
   }
 }
-async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
+async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const routerService=await getCustomerRouterService(payload.customer);const result=await routerService.kickActiveUser(payload.customer.username,SLOW_ROUTER_TIMEOUTS);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from target MikroTik",username:payload.customer.username,routerId:resolveCustomerRouterId(payload.customer),sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
 // MAC lock = the PPPoE secret's RouterOS caller-id. Locking binds the line to
 // one router MAC; unlocking clears it so a changed router can dial in.
 // The panel is the source of truth for the lock: both handlers write the
@@ -1569,7 +1574,7 @@ async function lockCustomerMac(req,res){
     // router change the stored MAC is the OLD router.
     let sessionMac="";
     try{
-      const liveResult=await withTimeout(()=>mikrotikService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:2500,handshakeTimeoutMs:1500,preflightTimeoutMs:500}),3000);
+      const liveResult=await withTimeout(()=>mikrotikService.getActiveSessionsSafe(undefined,{maxAttempts:1,operationTimeoutMs:30000,handshakeTimeoutMs:30000,preflightTimeoutMs:30000}),30000);
       if(liveResult&&!["timeout","unavailable"].includes(liveResult.live_sync)&&Array.isArray(liveResult.sessions)){
         const session=findActiveSession(liveResult.sessions,username);
         sessionMac=normalizeMacAddress(session?.callerId)||"";
@@ -1577,19 +1582,19 @@ async function lockCustomerMac(req,res){
     }catch(liveError){console.warn("[CUSTOMER MAC LOCK] Live session lookup failed:",liveError.message);}
     const targetMac=suppliedMac||sessionMac;
     if(!targetMac)return res.status(400).json({success:false,message:"Customer is offline and no MAC address was provided. Connect the new router first, or provide the MAC address to lock (AA:BB:CC:DD:EE:FF)."});
-    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS),30000);
     if(!secret)return res.status(404).json({success:false,message:'PPPoE secret "'+username+'" was not found on MikroTik.'});
     const previousMac=normalizeMacAddress(secret.callerId)||"";
     if(previousMac===targetMac)return res.json({success:true,locked:true,lockedMac:targetMac,liveMac:sessionMac,alreadyLocked:true,message:"MAC is already locked to "+targetMac+"."});
-    await mikrotikService.setSecretCallerId(username,targetMac);
-    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    await mikrotikService.setSecretCallerId(username,targetMac,SLOW_ROUTER_TIMEOUTS);
+    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS),30000);
     if(normalizeMacAddress(verified?.callerId)!==targetMac)return res.status(502).json({success:false,message:"MikroTik did not confirm the MAC lock. No panel record was changed."});
     // If the line is online from a different MAC, drop that session so the
     // new router re-dials and binds to the locked MAC. A failed kick never
     // fails the lock itself: new dials are already bound.
     let sessionDisconnected=false;
     if(sessionMac&&sessionMac!==targetMac){
-      try{const kick=await mikrotikService.kickActiveUser(username);sessionDisconnected=Boolean(kick?.kicked);}catch(kickError){console.warn("[CUSTOMER MAC LOCK] Session disconnect warning:",kickError.message);}
+      try{const kick=await mikrotikService.kickActiveUser(username,SLOW_ROUTER_TIMEOUTS);sessionDisconnected=Boolean(kick?.kicked);}catch(kickError){console.warn("[CUSTOMER MAC LOCK] Session disconnect warning:",kickError.message);}
     }
     try{
       await db.query("UPDATE customers SET router_mac=$1,updated_at=NOW() WHERE id=$2",[targetMac,payload.customer.id]);
@@ -1608,13 +1613,13 @@ async function unlockCustomerMac(req,res){
     const payload=await resolveCustomer360(req.params.id,req.tenantScope);
     if(!payload)return res.status(404).json({success:false,message:"Customer not found."});
     const username=clean(payload.customer.username,100);
-    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    const secret=await withTimeout(()=>mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS),30000);
     if(!secret)return res.status(404).json({success:false,message:'PPPoE secret "'+username+'" was not found on MikroTik.'});
     const previousMac=normalizeMacAddress(secret.callerId)||"";
     const storedMac=normalizeMacAddress(payload.macLock?.storedMac)||"";
     if(!previousMac&&!storedMac)return res.json({success:true,locked:false,lockedMac:"",alreadyUnlocked:true,message:"MAC lock is already removed."});
-    await mikrotikService.setSecretCallerId(username,"");
-    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username),3000);
+    await mikrotikService.setSecretCallerId(username,"",SLOW_ROUTER_TIMEOUTS);
+    const verified=await withTimeout(()=>mikrotikService.getPppoeSecret(username,SLOW_ROUTER_TIMEOUTS),30000);
     if(normalizeMacAddress(verified?.callerId))return res.status(502).json({success:false,message:"MikroTik did not confirm the MAC unlock. No panel record was changed."});
     try{
       await db.query("UPDATE customers SET router_mac=NULL,updated_at=NOW() WHERE id=$1",[payload.customer.id]);
@@ -1628,15 +1633,15 @@ async function unlockCustomerMac(req,res){
     return res.json({success:true,locked:false,lockedMac:"",previousMac:previousMac||null,message:"MAC lock removed. The customer can now connect from a new router — lock it again once the new router is online."});
   }catch(error){return errorResponse(res,error);}
 }
-async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED-PROFILE",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?`Account suspended. Moved to ${targetProfile} profile in MikroTik`:`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
+async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED-PROFILE",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);const routerService=await getCustomerRouterService(row);await routerService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend},SLOW_ROUTER_TIMEOUTS);await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await routerService.kickActiveUser(row.username,SLOW_ROUTER_TIMEOUTS);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?`Account suspended. Moved to ${targetProfile} profile in MikroTik`:`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});if(suspend&&String(row.status||"").toLowerCase()!=="suspended")require("../services/notificationDispatcher").dispatchNotification({userType:"pppoe",event:"suspension",customer:row,username:row.username,to:row.whatsapp_phone||row.whatsapp||row.phone||row.mobile||row.account_phone||row.mobile_number||row.contact_no,message:"আপনার FAZ NETWORK ইন্টারনেট সংযোগ অ্যাডমিন কর্তৃক সাময়িকভাবে স্থগিত করা হয়েছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",variables:{name:row.full_name||row.username,username:row.username,expiry_date:normalizeDate(row.expiration_date)||"",package:row.package_name||row.profile||""}});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
 async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id,req.tenantScope);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
     // Always restore the configured package profile, never EXPIRED.
     const activeProfile=clean(payload.package?.profileName||payload.customer.profile,100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED"||activeProfile.toUpperCase()==="EXPIRED-PROFILE")throw new Error("Customer package profile is missing or invalid.");
     const comment=buildExpirationComment(payload.customer.name,payload.customer.phone,newExpDate,"Renewed via "+method);
     const routerService=await getCustomerRouterService(payload.customer);
-    await routerService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:activeProfile,comment,disabled:false});
-    await routerService.kickActiveUser(payload.customer.username);await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'PAID',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${amount.toFixed(2)} via ${method} (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount,method,trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
+    await routerService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:activeProfile,comment,disabled:false},SLOW_ROUTER_TIMEOUTS);
+    await routerService.kickActiveUser(payload.customer.username,SLOW_ROUTER_TIMEOUTS);await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET profile=$1,expiry_date=$2,status='active',disabled=FALSE,comment=$3,billing_status='paid',last_paid_at=NOW(),paid_until=$2,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[activeProfile,newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'PAID',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"RENEW",details:{message:`Received ৳${amount.toFixed(2)} via ${method} (TrxID: ${trxId}). Extended validity to ${newExpDate}`,amount,method,trxId,newExpiration:newExpDate},ipAddress:getIpAddress(req)});
     const notificationName=payload.customer.name||payload.customer.fullName||payload.customer.username;
     const packageName=payload.package?.name||payload.package?.planName||payload.customer.packageName||payload.customer.profile||"";
     const notificationDispatch=require("../services/notificationDispatcher").dispatchNotification({
@@ -1665,12 +1670,12 @@ async function changeCustomerPackage(req,res){
     // Standard package changes MUST update only the PPP profile.
     // MikroTik assigns the IP from the selected /ppp/profile pool.
     // Never send remote-address from this endpoint.
-    await mikrotikService.changeSecretProfile(payload.customer.username,effective);
+    await mikrotikService.changeSecretProfile(payload.customer.username,effective,SLOW_ROUTER_TIMEOUTS);
 
     // Force an immediate PPPoE reconnect so the new profile/pool takes effect.
     let disconnected=false;
     try{
-      const kickResult=await mikrotikService.kickActiveUser(payload.customer.username);
+      const kickResult=await mikrotikService.kickActiveUser(payload.customer.username,SLOW_ROUTER_TIMEOUTS);
       disconnected=Boolean(kickResult?.kicked);
     }catch(kickError){
       console.warn("[CUSTOMER PACKAGE] Active session disconnect warning:",kickError.message);

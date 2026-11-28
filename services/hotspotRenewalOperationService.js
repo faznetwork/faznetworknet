@@ -10,7 +10,7 @@ function routerExpiryFields(payload) {
   return { expiryDate: timestamp.slice(0, 10), comment: "Exp: " + timestamp };
 }
 
-async function applyRouterRenewal(payload, router = mikrotikService) {
+async function applyRouterRenewal(payload, router = mikrotikService, options) {
   const expiryFields = routerExpiryFields(payload);
   return router.rechargeHotspotUser({
     username: payload.mac,
@@ -23,7 +23,7 @@ async function applyRouterRenewal(payload, router = mikrotikService) {
     macAddress: payload.mac,
     previousUsername: payload.previousUsername,
     server: payload.server
-  });
+  }, options);
 }
 
 async function cleanupStaleRenewals(database, olderThanSeconds = 1800) {

@@ -64,9 +64,10 @@ async function syncHotspotProfileScripts(deps = {}) {
   const database = deps.db || db;
   const router = deps.mikrotikService || mikrotikService;
   const logger = deps.logger || console;
+  const timeouts = deps.timeouts;
   const settings = await database.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   const metadata = parseMetadata(settings.rows?.[0]?.value);
-  const profiles = await router.getHotspotProfiles();
+  const profiles = await router.getHotspotProfiles(timeouts);
   let checked = 0, updated = 0, skipped = 0, unchanged = 0, ineligible = 0, failed = 0;
 
   for (const profile of profiles || []) {
@@ -74,7 +75,7 @@ async function syncHotspotProfileScripts(deps = {}) {
     if (!name) { skipped++; ineligible++; continue; }
     const oldLogin = String(profile?.raw?.["on-login"] || "");
     if (typeof router.ensureHotspotUserProfileMacCookie === "function") {
-      try { await router.ensureHotspotUserProfileMacCookie(name); }
+      try { await router.ensureHotspotUserProfileMacCookie(name, timeouts); }
       catch (error) { failed++; logger.warn("[HOTSPOT USER PROFILE COOKIE SYNC] Could not normalize " + name + ": " + (error?.message || error)); }
     }
     const configured = metadata[name] && typeof metadata[name] === "object";
@@ -100,7 +101,7 @@ async function syncHotspotProfileScripts(deps = {}) {
         ? '; :local fazCustomHookMarker "' + CUSTOM_HOOK_MARKER + '"; ' + customHook
         : "");
       if (nextScript === oldLogin) { skipped++; unchanged++; continue; }
-      await router.updateHotspotProfile({ name, onLogin: nextScript });
+      await router.updateHotspotProfile({ name, onLogin: nextScript }, timeouts);
       updated++;
     } catch (error) {
       failed++;
@@ -112,7 +113,7 @@ async function syncHotspotProfileScripts(deps = {}) {
   const schedulerCleanup = { checked: 0, removed: 0, failed: 0 };
   if (typeof router.cleanupHotspotExpirationSchedulers === "function") {
     try {
-      const cleanup = await router.cleanupHotspotExpirationSchedulers();
+      const cleanup = await router.cleanupHotspotExpirationSchedulers(timeouts);
       schedulerCleanup.checked = Number(cleanup?.checked) || 0;
       schedulerCleanup.removed = Number(cleanup?.removed) || 0;
       schedulerCleanup.failed = Number(cleanup?.failed) || 0;
@@ -130,12 +131,12 @@ async function syncHotspotProfileScripts(deps = {}) {
   if (typeof router.getHotspotServers === "function" &&
       typeof router.ensureHotspotServerProfileAuth === "function") {
     try {
-      const servers = await router.getHotspotServers();
+      const servers = await router.getHotspotServers(timeouts);
       const profileNames = [...new Set((servers || []).map(server => String(server?.profile || "").trim()).filter(Boolean))];
       for (const profileName of profileNames) {
         authResult.checked++;
         try {
-          const outcome = await router.ensureHotspotServerProfileAuth(profileName);
+          const outcome = await router.ensureHotspotServerProfileAuth(profileName, undefined, timeouts);
           if (outcome?.updated) authResult.updated++;
           else authResult.skipped++;
         } catch (error) {

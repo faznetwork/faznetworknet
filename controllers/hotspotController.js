@@ -4,6 +4,10 @@ const hotspotRenewalOperations=require("../services/hotspotRenewalOperationServi
 const hotspotVoucherGenerator=require("../services/hotspotVoucherGenerator");
 const {deleteHotspotSubscriber}=require("../services/hotspotDeletionService");
 const {normalizeSalesCategory,transactionCategorySql}=require("../services/hotspotSalesCategory");
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// exceed the service's 10s defaults. Router-touching ACTIONS pass this 30s
+// handshake + 30s operation budget; display/list paths never pass it.
+const SLOW_ROUTER_TIMEOUTS=Object.freeze({operationTimeoutMs:30000,handshakeTimeoutMs:30000});
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function booleanValue(value){return value===true||value===1||["true","yes","1"].includes(String(value??"").trim().toLowerCase())}
 function normalizeHotspotPhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value??"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
@@ -91,7 +95,7 @@ async function createProfile(req,res){try{
  if(!Number.isFinite(price)||price<0)return res.status(400).json({success:false,message:"Price must be zero or greater."});
  if(!Number.isSafeInteger(sharedUsers)||sharedUsers<1)return res.status(400).json({success:false,message:"Shared users must be a positive whole number."});
  const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:v.value,validityUnit:v.unit});
- const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin});
+ const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin},SLOW_ROUTER_TIMEOUTS);
  const meta=await readProfileMetadata();meta[name]={...(meta[name]||{}),price,rateLimit,validityValue:v.value,validityUnit:v.unit,validityLabel:v.validityLabel,limitBytesTotal:v.limitBytesTotal,updatedAt:new Date().toISOString()};await writeProfileMetadata(meta);
  const popSync=await syncPopPackagesBestEffort();
  return res.json({success:true,message:"Hotspot profile created and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin},...popSync});
@@ -104,14 +108,14 @@ async function updateProfile(req,res){try{
  if(!Number.isFinite(price)||price<0)return res.status(400).json({success:false,message:"Price must be zero or greater."});
  if(!Number.isSafeInteger(sharedUsers)||sharedUsers<1)return res.status(400).json({success:false,message:"Shared users must be a positive whole number."});
  const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:v.value,validityUnit:v.unit});
- const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin});
+ const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:v.validity,clearSessionTimeout:v.unit==="gb",keepaliveTimeout:"",onLogin},SLOW_ROUTER_TIMEOUTS);
  const meta=await readProfileMetadata();meta[name]={...(meta[name]||{}),price,rateLimit,validityValue:v.value,validityUnit:v.unit,validityLabel:v.validityLabel,limitBytesTotal:v.limitBytesTotal,updatedAt:new Date().toISOString()};await writeProfileMetadata(meta);
  const popSync=await syncPopPackagesBestEffort();
  return res.json({success:true,message:"Hotspot profile updated and metadata saved.",profile:{...result,rateLimit,sharedUsers,price,...v,onLogin},...popSync});
 }catch(e){return errorResponse(res,e);}}
 async function syncProfiles(req,res){
  try{
-  const [routerProfiles,metadata]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
+  const [routerProfiles,metadata]=await Promise.all([mikrotikService.getHotspotProfiles(SLOW_ROUTER_TIMEOUTS),readProfileMetadata()]);
   if(!Array.isArray(routerProfiles))throw new Error("MikroTik returned an invalid Hotspot profile list.");
   const routerByName=new Map(routerProfiles.map(profile=>[String(profile.name||"").trim(),profile]).filter(([name])=>name));
   const panelProfiles=Object.entries(metadata||{}).filter(([name,value])=>name&&name.trim().toLowerCase()!=="default"&&value&&typeof value==="object"&&!Array.isArray(value));
@@ -140,8 +144,8 @@ async function syncProfiles(req,res){
     const onLogin=buildHotspotOnLoginScript({name,sharedUsers,validityValue:validity.value,validityUnit:validity.unit});
     const customScript=existingLogin.trim()&&!existingLogin.includes("FAZ|PROFILE=")?" ; "+existingLogin.trim():"";
     const profileData={name,rateLimit,sharedUsers,sessionTimeout:validity.validity,clearSessionTimeout:validity.unit==="gb",keepaliveTimeout:current?.keepaliveTimeout||"",onLogin:onLogin+customScript};
-    if(current){await mikrotikService.updateHotspotProfile(profileData);result.updated++;}
-    else{await mikrotikService.createHotspotProfile(profileData);result.created++;}
+    if(current){await mikrotikService.updateHotspotProfile(profileData,SLOW_ROUTER_TIMEOUTS);result.updated++;}
+    else{await mikrotikService.createHotspotProfile(profileData,SLOW_ROUTER_TIMEOUTS);result.created++;}
     result.results.push({name,status:current?"updated":"created"});
    }catch(error){
     result.failed++;
@@ -149,7 +153,7 @@ async function syncProfiles(req,res){
    }
   }
   // Keep the established session-expiry and MAC-auth profile maintenance after the panel settings are applied.
-  const scriptSync=await syncHotspotProfileScripts();
+  const scriptSync=await syncHotspotProfileScripts({timeouts:SLOW_ROUTER_TIMEOUTS});
   const serverAuth=scriptSync.serverAuth||{checked:0,updated:0,skipped:0,failed:0};
   // Heal POP package rows from the same panel metadata, so a manual sync
   // also repairs price/validity/quota drift and deactivates removed profiles.
@@ -164,7 +168,7 @@ async function deleteProfile(req,res){
   const name=clean(req.body?.name,100);
   if(!name)return res.status(400).json({success:false,code:"HOTSPOT_PROFILE_NAME_REQUIRED",message:"Hotspot profile name is required."});
   if(name.toLowerCase()==="default")return res.status(400).json({success:false,code:"HOTSPOT_PROFILE_PROTECTED",message:"The built-in default Hotspot profile cannot be deleted."});
-  const result=await mikrotikService.deleteHotspotProfile(name);
+  const result=await mikrotikService.deleteHotspotProfile(name,SLOW_ROUTER_TIMEOUTS);
   const meta=await readProfileMetadata();
   // Always persist the canonical metadata object after RouterOS confirms deletion.
   // The upsert is awaited, so a PostgreSQL failure cannot be reported as success.
@@ -231,7 +235,7 @@ function formatHotspotExpiry(dateValue) {
 }
 async function importFromMikrotik(req,res) {
  try {
-  const routerUsers=await mikrotikService.getHotspotUsers();
+  const routerUsers=await mikrotikService.getHotspotUsers(SLOW_ROUTER_TIMEOUTS);
   let imported=0,skipped=0,skippedExisting=0;
   for(const routerUser of (Array.isArray(routerUsers)?routerUsers:[])) {
    const routerName=clean(routerUser?.username||routerUser?.name,100);
@@ -314,7 +318,7 @@ async function pushToMikrotik(req,res) {
    if(expiry.getTime()<=Date.now()){skipped++;continue;}
    vouchers.push({username,password,macAddress:mac||"",profile,server:clean(row.server,100)||"all",comment:formatHotspotExpiry(expiry),limitBytesTotal:quotaBytes,expired:false});
   }
-  const sync=vouchers.length?await mikrotikService.syncHotspotUsers(vouchers):{provisioned:0,refreshed:0,skipped:0,disconnected:0,failed:[]};
+  const sync=vouchers.length?await mikrotikService.syncHotspotUsers(vouchers,SLOW_ROUTER_TIMEOUTS):{provisioned:0,refreshed:0,skipped:0,disconnected:0,failed:[]};
   hotspotListCache.expiresAt=0;
   return res.json({success:true,provisioned:Number(sync.provisioned||0),refreshed:Number(sync.refreshed||0),skipped:skipped+Number(sync.skipped||0),failed:Array.isArray(sync.failed)?sync.failed:[],disconnected:0});
  } catch(error) { return errorResponse(res,error); }
@@ -362,7 +366,7 @@ async function generate(req,res){
  if(!Number.isFinite(price)||price<0||price>1000000)return res.status(400).json({success:false,code:"INVALID_PRICE",error:"Enter a valid non-negative price."});
  if(!Number.isSafeInteger(charLength)||charLength<4||charLength>16)return res.status(400).json({success:false,code:"INVALID_PIN_LENGTH",error:"Voucher PIN length must be between 4 and 16 characters."});
  try{
-  const routerProfiles=await mikrotikService.getHotspotProfiles();
+  const routerProfiles=await mikrotikService.getHotspotProfiles(SLOW_ROUTER_TIMEOUTS);
   const meta=await readProfileMetadata();
   const available=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(p=>p&&p.name&&String(p.name).toLowerCase()!=="default");
   const profile=available.find(p=>String(p.name)===requestedProfile||String(meta[p.name]?.id||meta[p.name]?.profileId||meta[p.name]?.profile_id||"")===requestedProfile);
@@ -460,7 +464,7 @@ async function createUser(req, res) {
     }
 
     const [routerProfiles, metadata] = await Promise.all([
-      mikrotikService.getHotspotProfiles(),
+      mikrotikService.getHotspotProfiles(SLOW_ROUTER_TIMEOUTS),
       readProfileMetadata()
     ]);
     if (!Array.isArray(routerProfiles)) {
@@ -913,7 +917,7 @@ async function manualRenew(req,res){
    // with a 5-minute first retry — before they were ever due.)
    const pending=await client.query("SELECT id FROM hotspot_renewal_operations WHERE voucher_id=$1 AND status='pending' LIMIT 1",[voucher.id]);
    if(pending.rows?.length)throw hotspotError("HOTSPOT_RENEWAL_PENDING",409,"A previous Hotspot renewal is still being synchronized. Wait for reconciliation before retrying.");
-   const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(),readProfileMetadata()]);
+   const [routerProfiles,meta]=await Promise.all([mikrotikService.getHotspotProfiles(SLOW_ROUTER_TIMEOUTS),readProfileMetadata()]);
    let candidates=(Array.isArray(routerProfiles)?routerProfiles:[]).filter(item=>profileIdentifierMatches(item.name,meta[String(item.name||"")]||{},requestedProfile));
    if(!candidates.length)candidates=Object.entries(meta).filter(([name,details])=>profileIdentifierMatches(name,details,requestedProfile)).map(([name,details])=>({name,sessionTimeout:details?.validityValue&&details?.validityUnit?normalizeProfileValidity(details.validityValue,details.validityUnit).validity:"",sharedUsers:1,raw:{}}));
    if(candidates.length!==1)throw hotspotError("HOTSPOT_PROFILE_INVALID",400,"Selected package could not be mapped to exactly one RouterOS profile.");
@@ -924,7 +928,7 @@ async function manualRenew(req,res){
    const phoneCandidate=normalizeHotspotPhone(voucher.phone||voucher.password||""),phone=/^01\d{9}$/.test(phoneCandidate)?phoneCandidate:"",mac=normalizeHotspotMac(voucher.mac_address)||normalizeHotspotMac(voucher.username)||"";if(!mac)throw hotspotError("HOTSPOT_MAC_REQUIRED",409,"MAC-based Hotspot renewal requires a bound device MAC. Bind the device before renewing.");
    let stackedQuota=Math.max(0,Math.floor(Number(quota)||0));
    if(stackedQuota>0){
-    const snapshot=await mikrotikService.getHotspotExpirationSnapshot(),deviceNames=new Set([mac,voucher.username].map(value=>String(value||"").trim().toUpperCase()).filter(Boolean)),routerUser=(snapshot.users||[]).find(item=>deviceNames.has(String(item.username||"").trim().toUpperCase()));
+    const snapshot=await mikrotikService.getHotspotExpirationSnapshot(SLOW_ROUTER_TIMEOUTS),deviceNames=new Set([mac,voucher.username].map(value=>String(value||"").trim().toUpperCase()).filter(Boolean)),routerUser=(snapshot.users||[]).find(item=>deviceNames.has(String(item.username||"").trim().toUpperCase()));
     if(routerUser){const currentLimit=Math.max(0,Math.floor(Number(routerUser.limitBytesTotal)||0)),usedBytes=Math.max(0,Math.floor(Number(routerUser.bytesIn)||0))+Math.max(0,Math.floor(Number(routerUser.bytesOut)||0)),remainingBytes=currentLimit>0?Math.max(0,currentLimit-usedBytes):0;stackedQuota+=remainingBytes;}
    }
    const comment=expiry?"Exp: "+stamp(expiry):packageConfig.comment;
@@ -933,7 +937,7 @@ async function manualRenew(req,res){
    await client.query("INSERT INTO hotspot_renewal_operations(id,voucher_id,payload,status,next_attempt_at) VALUES($1::uuid,$2::bigint,$3::jsonb,'pending',NOW()+INTERVAL '5 minutes')",[operationId,voucher.id,JSON.stringify(payload)]);
    return payload;
   });
-  await hotspotRenewalOperations.applyRouterRenewal(prepared);
+  await hotspotRenewalOperations.applyRouterRenewal(prepared, mikrotikService, SLOW_ROUTER_TIMEOUTS);
   const routerMarked=await db.query("UPDATE hotspot_renewal_operations SET router_applied=true,attempts=attempts+1,last_error=NULL,next_attempt_at=NOW(),updated_at=NOW() WHERE id=$1::uuid AND status='pending' RETURNING id",[operationId]);
   if(!routerMarked.rows?.length)throw new Error("RouterOS renewal was applied but its PostgreSQL operation record could not be marked.");
   const renewed=await db.withTransaction(async client=>{

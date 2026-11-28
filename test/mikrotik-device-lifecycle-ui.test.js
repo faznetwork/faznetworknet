@@ -124,6 +124,6 @@ test('MikroTik modal moves focus out before Bootstrap hides it', () => {
 
 test('manual RouterOS connection checks use a bounded request timeout', () => {
   assert.ok(adminView.includes('requestController=new AbortController()'));
-  assert.ok(adminView.includes('setTimeout(()=>requestController.abort(),15000)'));
+  assert.ok(adminView.includes('setTimeout(()=>requestController.abort(),120000)'));
   assert.ok(adminView.includes("status==='unreachable'") || adminView.includes("body.status==='unreachable'"));
 });

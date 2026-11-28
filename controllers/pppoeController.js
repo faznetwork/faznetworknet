@@ -4,6 +4,11 @@ const {logAuditAction,getAdminId,getIpAddress}=require("../utils/auditLogger");
 const { normalizeUsername, createActiveSessionMap, findActiveSession } = require("../utils/activeSessionMatching");
 const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 
+// The tunnel path to the router is slow: the RouterOS handshake alone can
+// exceed the service's 10s defaults. Router-touching ACTIONS pass this 30s
+// handshake + 30s operation budget; display/list paths never pass it.
+const SLOW_ROUTER_TIMEOUTS=Object.freeze({operationTimeoutMs:30000,handshakeTimeoutMs:30000});
+
 function errorResponse(res, error) {
   console.error("[PPPoE API]", error);
   const message = error?.message || "PPPoE operation failed.";
@@ -511,7 +516,7 @@ async function toggleUser(req, res) {
     const username = clean(req.body.username, 100);
     const disabled = normalizeBoolean(req.body.disabled);
     if (!username) return res.status(400).json({ success: false, error: "Username is required." });
-    await mikrotikService.toggleSecret(username, disabled);
+    await mikrotikService.toggleSecret(username, disabled, SLOW_ROUTER_TIMEOUTS);
     await db.query("UPDATE pppoe_users SET disabled=$1, updated_at=NOW() WHERE username=$2", [disabled, username]);
     res.json({ success: true, username, disabled });
   } catch (error) {
@@ -523,7 +528,7 @@ async function kickUser(req, res) {
   try {
     const username = clean(req.body.username, 100);
     if (!username) return res.status(400).json({ success: false, error: "Username is required." });
-    const result = await mikrotikService.kickActiveUser(username);
+    const result = await mikrotikService.kickActiveUser(username, SLOW_ROUTER_TIMEOUTS);
     if (result.kicked) {
       const found = await db.query("SELECT id,router_id FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1", [username]);
       const row = found.rows[0] || null;

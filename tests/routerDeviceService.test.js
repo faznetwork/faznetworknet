@@ -48,7 +48,10 @@ test('encodes and decodes RouterOS variable-length sentence words', () => {
   assert.equal(decoded.remaining.length, 0);
 });
 
-test('rejects missing credentials and enforces a maximum five-second timeout', () => {
+test('rejects missing credentials and enforces a maximum thirty-second timeout', () => {
   assert.throws(() => validateConfig(valid({ password: '' })), /password/i);
-  assert.throws(() => validateConfig(valid({ timeout: 6000 })), /5000/i);
+  // The tunnel path to the router is slow: the RouterOS handshake alone can
+  // exceed the old 5s cap, so the maximum is 30s now.
+  assert.equal(validateConfig(valid({ timeout: 30000 })).timeout, 30000);
+  assert.throws(() => validateConfig(valid({ timeout: 30001 })), /30000/i);
 });

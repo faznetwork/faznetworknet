@@ -5,7 +5,7 @@ const tls = require('node:tls');
 const http = require('node:http');
 const https = require('node:https');
 
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 30000;
 
 function inputError(message) {
   return Object.assign(new Error(message), { statusCode: 400, errorCode: 'VALIDATION_ERROR', routerStatus: 'validation_error' });
@@ -33,7 +33,7 @@ function validateConfig(input) {
   if (!username || username.length > 160) throw inputError('RouterOS username is required.');
   if (!password || password.length > 1024) throw inputError('RouterOS password is required and must be at most 1024 characters.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('Port must be an integer between 1 and 65535.');
-  if (!Number.isInteger(timeout) || timeout < 500 || timeout > DEFAULT_TIMEOUT_MS) throw inputError('Timeout must be between 500 and 5000 ms.');
+  if (!Number.isInteger(timeout) || timeout < 500 || timeout > DEFAULT_TIMEOUT_MS) throw inputError('Timeout must be between 500 and 30000 ms.');
   const api_type = String(input.api_type || '').trim().toLowerCase();
   if (api_type && !['native_api', 'rest_api'].includes(api_type)) throw inputError('API type must be native_api or rest_api.');
   return { host, username, password, port, timeout, api_type };
@@ -46,7 +46,7 @@ function classifyError(error) {
     return { status: 'auth_failed', code: 'INVALID_CREDENTIALS', message: 'RouterOS rejected the credentials or the account lacks the required api/read policy.' };
   }
   if (/ETIMEDOUT|TIMEOUT|ABORT_ERR/.test(code) || error?.name === 'AbortError' || /timed? ?out|timeout|operation was aborted|aborted/i.test(message)) {
-    return { status: 'offline', code: 'TIMEOUT', message: 'Router did not respond within 5 seconds. Check forwarding, routing and firewall rules.' };
+    return { status: 'offline', code: 'TIMEOUT', message: 'Router did not respond within 30 seconds. Check forwarding, routing and firewall rules.' };
   }
   if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|EPIPE/.test(code) || /connection refused|socket hang up|host not found/i.test(message)) {
     return { status: 'offline', code: 'PORT_UNREACHABLE', message: 'Port is unreachable. Check the forwarded port, NAT and firewall rules.' };
@@ -286,7 +286,7 @@ async function testNativeWithApplicationClient(config, timeout) {
       user: config.username,
       password: config.password,
       timeout
-    });
+    }, { handshakeTimeoutMs: timeout, operationTimeoutMs: timeout });
     return {
       status: 'online',
       identity: result.routerName,

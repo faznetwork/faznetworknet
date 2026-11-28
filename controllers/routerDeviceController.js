@@ -202,7 +202,7 @@ exports.testSavedDevice = async (req, res) => {
       api_port: router.api_port,
       username: router.username,
       password: credentials.decrypt(router.password_encrypted),
-      timeout: Math.min(Number(router.timeout_ms) || 5000, 5000),
+      timeout: 30000,
       api_type: router.api_type
     });
     await db.query("UPDATE router_devices SET status='online',last_synced=NOW(),updated_at=NOW() WHERE id=$1", [id])
